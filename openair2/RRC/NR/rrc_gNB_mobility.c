@@ -376,8 +376,8 @@ void nr_rrc_finalize_ho(gNB_RRC_UE_t *ue)
   ue->ho_context = NULL;
 }
 
-void nr_HO_F1_trigger_telnet(gNB_RRC_INST *rrc, uint32_t rrc_ue_id)
-{
+void nr_HO_F1_trigger_telnet(gNB_RRC_INST *rrc, uint32_t rrc_ue_id, uint64_t target_du_id) // changed to have a designated target du instead of a random/close cell one
+{ 
   rrc_gNB_ue_context_t *ue_context_p = rrc_gNB_get_ue_context(rrc, rrc_ue_id);
   if (ue_context_p == NULL) {
     LOG_E(NR_RRC, "cannot find UE context for UE ID %d\n", rrc_ue_id);
@@ -390,11 +390,25 @@ void nr_HO_F1_trigger_telnet(gNB_RRC_INST *rrc, uint32_t rrc_ue_id)
     LOG_E(NR_RRC, "cannot get source gNB-DU with assoc_id %d for UE %u\n", ue_data.du_assoc_id, ue->rrc_ue_id);
     return;
   }
+  
+  nr_rrc_du_container_t *target_du = NULL;
+  if (target_du_id == 0) {
+  
+    target_du = find_target_du(rrc, source_du->assoc_id);
+    LOG_I(NR_RRC, "Target DU ID is not specified, using the next available DU with assoc_id %d and du id %ld for UE %u \n", target_du->assoc_id, target_du->setup_req->gNB_DU_id, ue->rrc_ue_id);
+    if (target_du == NULL) {
+      LOG_E(NR_RRC, "No target gNB-DU found. Handover for UE %u aborted.\n", ue->rrc_ue_id);
+      return;
+    }
+  }
 
-  nr_rrc_du_container_t *target_du = find_target_du(rrc, source_du->assoc_id);
-  if (target_du == NULL) {
-    LOG_E(NR_RRC, "No target gNB-DU found. Handover for UE %u aborted.\n", ue->rrc_ue_id);
-    return;
+  else {
+    target_du = get_du_by_du_id(rrc, target_du_id);
+    if (target_du == NULL) {
+      LOG_E(NR_RRC, "No target gNB-DU found with DU ID %ld. Handover for UE %u aborted.\n", target_du_id, ue->rrc_ue_id);
+      return;
+    }
+    LOG_I(NR_RRC, "Triggering F1 handover for UE %u from source DU %ld to target DU %ld\n", ue->rrc_ue_id, source_du->setup_req->gNB_DU_id, target_du->setup_req->gNB_DU_id);
   }
 
   nr_rrc_trigger_f1_ho(rrc, ue, source_du, target_du);

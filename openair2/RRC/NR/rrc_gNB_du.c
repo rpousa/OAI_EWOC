@@ -629,6 +629,16 @@ nr_rrc_du_container_t *get_du_by_assoc_id(gNB_RRC_INST *rrc, sctp_assoc_t assoc_
   return RB_FIND(rrc_du_tree, &rrc->dus, &e);
 }
 
+nr_rrc_du_container_t *get_du_by_du_id(gNB_RRC_INST *rrc, uint64_t du_id)
+{
+  nr_rrc_du_container_t *du = NULL;
+  RB_FOREACH(du, rrc_du_tree, &rrc->dus) {
+    if (du_id == du->setup_req->gNB_DU_id)
+      return du;
+  }
+  return NULL;
+}
+
 /* \brief find DU by cell ID. Note: currently the CU is limited to one cell per
  * DU, hence here, DU == cell. Modify this to look up a specific cell. */
 nr_rrc_du_container_t *get_du_by_cell_id(gNB_RRC_INST *rrc, uint64_t cell_id)
