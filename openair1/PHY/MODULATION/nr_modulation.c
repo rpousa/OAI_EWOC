@@ -765,9 +765,8 @@ void nr_layer_precoder_simd(const int n_layers,
       // Multiplication and shift
       const simde__m256i reals =
           simde_mm256_srai_epi32(simde_mm256_madd_epi16(x, w_c), 15); // (int32_t) .r = (x.r * w.r - x.i * w.i) >> 15
-      const simde__m256i imags = simde_mm256_slli_epi32(
-          simde_mm256_madd_epi16(x, w_s),
-          1); // (int32_t) .i = (x.r * w.i + x.i * w.r) << 1, since higher 16 bit of each 32 bit is taken by blend_epi16
+      const simde__m256i imags =
+          simde_mm256_slli_epi32(simde_mm256_madd_epi16(x, w_s),  1); // (int32_t) .i = (x.r * w.i + x.i * w.r) << 1, since higher 16 bit of each 32 bit is taken by blend_epi16
 
       // Re-arrange to match c16_t format
       const simde__m256i produ = simde_mm256_blend_epi16(reals, imags, 0xAA);

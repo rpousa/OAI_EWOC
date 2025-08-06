@@ -369,64 +369,59 @@ NR_pdsch_dmrs_t get_dl_dmrs_params(const NR_ServingCellConfigCommon_t *scc,
 
 NR_ControlResourceSet_t *get_coreset(gNB_MAC_INST *nrmac,
                                      NR_ServingCellConfigCommon_t *scc,
-                                     void *bwp,
-                                     NR_SearchSpace_t *ss,
-                                     NR_SearchSpace__searchSpaceType_PR ss_type) {
-
-  NR_ControlResourceSetId_t coreset_id = *ss->controlResourceSetId;
-
-  if (ss_type == NR_SearchSpace__searchSpaceType_PR_common) { // common search space
-    NR_ControlResourceSet_t *coreset;
-    if(coreset_id == 0) {
-      coreset =  nrmac->sched_ctrlCommon->coreset; // this is coreset 0
-    } else if (bwp) {
-      coreset = ((NR_BWP_Downlink_t*)bwp)->bwp_Common->pdcch_ConfigCommon->choice.setup->commonControlResourceSet;
-    } else if (scc->downlinkConfigCommon->initialDownlinkBWP->pdcch_ConfigCommon->choice.setup->commonControlResourceSet) {
-      coreset = scc->downlinkConfigCommon->initialDownlinkBWP->pdcch_ConfigCommon->choice.setup->commonControlResourceSet;
-    } else {
-      coreset = NULL;
-    }
-
-    if (coreset) AssertFatal(coreset_id == coreset->controlResourceSetId,
-			     "ID of common ss coreset does not correspond to id set in the "
-			     "search space\n");
-    return coreset;
-  } else {
-    const int n = ((NR_BWP_DownlinkDedicated_t*)bwp)->pdcch_Config->choice.setup->controlResourceSetToAddModList->list.count;
+                                     NR_BWP_DownlinkDedicated_t *bwp_dedicated,
+                                     NR_ControlResourceSetId_t coreset_id)
+{
+  if (coreset_id == 0) {
+    return nrmac->sched_ctrlCommon->coreset; // this is coreset 0
+  }
+  if (bwp_dedicated) {
+    const int n = bwp_dedicated->pdcch_Config->choice.setup->controlResourceSetToAddModList->list.count;
     for (int i = 0; i < n; i++) {
-      NR_ControlResourceSet_t *coreset =
-          ((NR_BWP_DownlinkDedicated_t*)bwp)->pdcch_Config->choice.setup->controlResourceSetToAddModList->list.array[i];
-      if (coreset_id == coreset->controlResourceSetId) {
+      NR_ControlResourceSet_t *coreset = bwp_dedicated->pdcch_Config->choice.setup->controlResourceSetToAddModList->list.array[i];
+      if (coreset->controlResourceSetId == coreset_id) {
         return coreset;
       }
     }
-    AssertFatal(0, "Couldn't find coreset with id %ld\n", coreset_id);
+    AssertFatal(false, "Couldn't find CORESET with id %ld in BWP_DownlinkDedicated\n", coreset_id);
   }
+  if (scc->downlinkConfigCommon->initialDownlinkBWP->pdcch_ConfigCommon->choice.setup->commonControlResourceSet) {
+    NR_ControlResourceSet_t *coreset =
+        scc->downlinkConfigCommon->initialDownlinkBWP->pdcch_ConfigCommon->choice.setup->commonControlResourceSet;
+    if (coreset->controlResourceSetId == coreset_id) {
+      return coreset;
+    }
+    AssertFatal(false, "Couldn't find CORESET with id %ld in commonControlResourceSet\n", coreset_id);
+  }
+  AssertFatal(false, "Couldn't find coreset with id %ld\n", coreset_id);
 }
 
 static NR_SearchSpace_t *get_searchspace(NR_ServingCellConfigCommon_t *scc,
-                                         NR_BWP_DownlinkDedicated_t *bwp_Dedicated,
+                                         NR_BWP_DownlinkDedicated_t *bwp_dedicated,
                                          NR_SearchSpace__searchSpaceType_PR target_ss)
 {
-  int n = 0;
-  if(bwp_Dedicated)
-    n = bwp_Dedicated->pdcch_Config->choice.setup->searchSpacesToAddModList->list.count;
-  else
-    n = scc->downlinkConfigCommon->initialDownlinkBWP->pdcch_ConfigCommon->choice.setup->commonSearchSpaceList->list.count;
+  if (bwp_dedicated) {
+    const int n = bwp_dedicated->pdcch_Config->choice.setup->searchSpacesToAddModList->list.count;
+    for (int i = 0; i < n; i++) {
+      NR_SearchSpace_t *ss = bwp_dedicated->pdcch_Config->choice.setup->searchSpacesToAddModList->list.array[i];
+      if (ss->searchSpaceType->present == target_ss) {
+        AssertFatal(ss->controlResourceSetId, "searchSpaceId %ld has a NULL controlResourceSetId\n", ss->searchSpaceId);
+        return ss;
+      }
+    }
+    AssertFatal(false, "Couldn't find an adequate SearchSpace for target SearchSpace %d in BWP_DownlinkDedicated\n", target_ss);
+  }
 
-  for (int i=0;i<n;i++) {
-    NR_SearchSpace_t *ss = NULL;
-    if(bwp_Dedicated)
-      ss = bwp_Dedicated->pdcch_Config->choice.setup->searchSpacesToAddModList->list.array[i];
-    else
-      ss = scc->downlinkConfigCommon->initialDownlinkBWP->pdcch_ConfigCommon->choice.setup->commonSearchSpaceList->list.array[i];
-    AssertFatal(ss->controlResourceSetId != NULL, "ss->controlResourceSetId is null\n");
-    AssertFatal(ss->searchSpaceType != NULL, "ss->searchSpaceType is null\n");
+  const int n = scc->downlinkConfigCommon->initialDownlinkBWP->pdcch_ConfigCommon->choice.setup->commonSearchSpaceList->list.count;
+  for (int i = 0; i < n; i++) {
+    NR_SearchSpace_t *ss =
+        scc->downlinkConfigCommon->initialDownlinkBWP->pdcch_ConfigCommon->choice.setup->commonSearchSpaceList->list.array[i];
     if (ss->searchSpaceType->present == target_ss) {
+      AssertFatal(ss->controlResourceSetId, "searchSpaceId %ld has a NULL controlResourceSetId\n", ss->searchSpaceId);
       return ss;
     }
   }
-  AssertFatal(0, "Couldn't find an adequate searchspace bwp_Dedicated %p\n",bwp_Dedicated);
+  AssertFatal(false, "Couldn't find an adequate SearchSpace for target SearchSpace %d in ServingCellConfigCommon\n", target_ss);
 }
 
 NR_sched_pdcch_t set_pdcch_structure(gNB_MAC_INST *gNB_mac,
@@ -762,10 +757,7 @@ NR_pusch_dmrs_t get_ul_dmrs_params(const NR_ServingCellConfigCommon_t *scc,
                                        tda_info->startSymbolIndex,
                                        scc->dmrs_TypeA_Position);
 
-  uint8_t num_dmrs_symb = 0;
-  for(int i = tda_info->startSymbolIndex; i < tda_info->startSymbolIndex + tda_info->nrOfSymbols; i++)
-    num_dmrs_symb += (dmrs.ul_dmrs_symb_pos >> i) & 1;
-  dmrs.num_dmrs_symb = num_dmrs_symb;
+  dmrs.num_dmrs_symb = count_bits64_with_mask(dmrs.ul_dmrs_symb_pos, tda_info->startSymbolIndex, tda_info->nrOfSymbols);
   dmrs.N_PRB_DMRS = dmrs.num_dmrs_cdm_grps_no_data * (dmrs.dmrs_config_type == 0 ? 6 : 4);
   return dmrs;
 }
@@ -2594,7 +2586,7 @@ void configure_UE_BWP(gNB_MAC_INST *nr_mac,
 
     // setting PDCCH related structures for sched_ctrl
     sched_ctrl->search_space = get_searchspace(scc, bwpd, target_ss);
-    sched_ctrl->coreset = get_coreset(nr_mac, scc, bwpd, sched_ctrl->search_space, target_ss);
+    sched_ctrl->coreset = get_coreset(nr_mac, scc, bwpd, *sched_ctrl->search_space->controlResourceSetId);
 
     sched_ctrl->sched_pdcch = set_pdcch_structure(nr_mac,
                                                   sched_ctrl->search_space,
@@ -2635,7 +2627,7 @@ void configure_UE_BWP(gNB_MAC_INST *nr_mac,
     }
     AssertFatal(sched_ctrl->search_space != NULL, "SearchSpace cannot be null for RA\n");
 
-    sched_ctrl->coreset = get_coreset(nr_mac, scc, dl_bwp, sched_ctrl->search_space, NR_SearchSpace__searchSpaceType_PR_common);
+    sched_ctrl->coreset = get_coreset(nr_mac, scc, bwpd, *sched_ctrl->search_space->controlResourceSetId);
     NR_COMMON_channels_t *cc = &nr_mac->common_channels[0];
     int ssb_index = cc->ssb_index[UE->UE_beam_index];
     sched_ctrl->sched_pdcch = set_pdcch_structure(nr_mac,

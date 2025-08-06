@@ -389,8 +389,8 @@ into the RLC via `enqueue_rlc_data_req()`, or (f1ap) sends a GTP message
 through the GTP API.
 
 In the DU in DL, assuming the GTP-U tunnel exists, GTP decapsulates the packet
-and calls the reception call back `du_rlc_data_req()`, which calls
-`enqueue_rlc_data_req()` in turn.
+and calls the reception call back `nr_rlc_data_req()`, which enqueues the
+packet into the UE's RLC buffer.
 
 ## Tunnel Setup
 

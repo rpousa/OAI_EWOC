@@ -283,9 +283,8 @@ void set_r_pucch_parms(int rsetindex,
 /* find coreset within the search space */
 NR_ControlResourceSet_t *get_coreset(gNB_MAC_INST *nrmac,
                                      NR_ServingCellConfigCommon_t *scc,
-                                     void *bwp,
-                                     NR_SearchSpace_t *ss,
-                                     NR_SearchSpace__searchSpaceType_PR ss_type);
+                                     NR_BWP_DownlinkDedicated_t *bwp_dedicated,
+                                     NR_ControlResourceSetId_t coreset_id);
 
 long get_K2(NR_PUSCH_TimeDomainResourceAllocationList_t *tdaList,
             int time_domain_assignment,

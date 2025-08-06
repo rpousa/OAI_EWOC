@@ -62,7 +62,7 @@
 		<always_exec>true</always_exec>
 		<physim_test>nr_ulsim</physim_test>
 		<physim_time_threshold>100</physim_time_threshold>
-		<physim_run_args>-n1000 -s30 -S30.2 -m5 -r106 -R106 -C10 -P --loader.ldpc.shlibversion _t2 --nrLDPC_coding_t2.dpdk_dev d8:00.0 --nrLDPC_coding_t2.dpdk_core_list 11-12</physim_run_args>
+		<physim_run_args>-n1000 -s30 -S30.2 -m5 -r106 -R106 -C10 -P --loader.ldpc.shlibversion _t2 --nrLDPC_coding_t2.dpdk_dev af:00.0 --nrLDPC_coding_t2.dpdk_core_list 11-12</physim_run_args>
 	</testCase>
 
 	<testCase id="010121">
@@ -80,7 +80,7 @@
 		<always_exec>true</always_exec>
 		<physim_test>nr_ulsim</physim_test>
 		<physim_time_threshold>150</physim_time_threshold>
-		<physim_run_args>-n1000 -s30 -S30.2 -m15 -r106 -R106 -C10 -P --loader.ldpc.shlibversion _t2 --nrLDPC_coding_t2.dpdk_dev d8:00.0 --nrLDPC_coding_t2.dpdk_core_list 11-12</physim_run_args>
+		<physim_run_args>-n1000 -s30 -S30.2 -m15 -r106 -R106 -C10 -P --loader.ldpc.shlibversion _t2 --nrLDPC_coding_t2.dpdk_dev af:00.0 --nrLDPC_coding_t2.dpdk_core_list 11-12</physim_run_args>
 	</testCase>
 
 	<testCase id="010131">
@@ -98,7 +98,7 @@
                 <always_exec>true</always_exec>
                 <physim_test>nr_ulsim</physim_test>
                 <physim_time_threshold>250</physim_time_threshold>
-                <physim_run_args>-n1000 -s30 -S30.2 -m25 -r106 -R106 -C10 -P --loader.ldpc.shlibversion _t2 --nrLDPC_coding_t2.dpdk_dev d8:00.0 --nrLDPC_coding_t2.dpdk_core_list 11-12</physim_run_args>
+                <physim_run_args>-n1000 -s30 -S30.2 -m25 -r106 -R106 -C10 -P --loader.ldpc.shlibversion _t2 --nrLDPC_coding_t2.dpdk_dev af:00.0 --nrLDPC_coding_t2.dpdk_core_list 11-12</physim_run_args>
         </testCase>
 
         <testCase id="010211">
@@ -116,7 +116,7 @@
                 <always_exec>true</always_exec>
                 <physim_test>nr_ulsim</physim_test>
                 <physim_time_threshold>150</physim_time_threshold>
-                <physim_run_args>-n1000 -s30 -S30.2 -m5 -r273 -R273 -C10 -P --loader.ldpc.shlibversion _t2 --nrLDPC_coding_t2.dpdk_dev d8:00.0 --nrLDPC_coding_t2.dpdk_core_list 11-12</physim_run_args>
+                <physim_run_args>-n1000 -s30 -S30.2 -m5 -r273 -R273 -C10 -P --loader.ldpc.shlibversion _t2 --nrLDPC_coding_t2.dpdk_dev af:00.0 --nrLDPC_coding_t2.dpdk_core_list 11-12</physim_run_args>
 	</testCase>
 
 	<testCase id="010221">
@@ -134,7 +134,7 @@
                 <always_exec>true</always_exec>
                 <physim_test>nr_ulsim</physim_test>
                 <physim_time_threshold>350</physim_time_threshold>
-                <physim_run_args>-n1000 -s30 -S30.2 -m15 -r273 -R273 -C10 -P --loader.ldpc.shlibversion _t2 --nrLDPC_coding_t2.dpdk_dev d8:00.0 --nrLDPC_coding_t2.dpdk_core_list 11-12</physim_run_args>
+                <physim_run_args>-n1000 -s30 -S30.2 -m15 -r273 -R273 -C10 -P --loader.ldpc.shlibversion _t2 --nrLDPC_coding_t2.dpdk_dev af:00.0 --nrLDPC_coding_t2.dpdk_core_list 11-12</physim_run_args>
         </testCase>
 
         <testCase id="010231">
@@ -152,7 +152,7 @@
                 <always_exec>true</always_exec>
                 <physim_test>nr_ulsim</physim_test>
                 <physim_time_threshold>550</physim_time_threshold>
-                <physim_run_args>-n1000 -s30 -S30.2 -m25 -r273 -R273 -C10 -P --loader.ldpc.shlibversion _t2 --nrLDPC_coding_t2.dpdk_dev d8:00.0 --nrLDPC_coding_t2.dpdk_core_list 11-12</physim_run_args>
+                <physim_run_args>-n1000 -s30 -S30.2 -m25 -r273 -R273 -C10 -P --loader.ldpc.shlibversion _t2 --nrLDPC_coding_t2.dpdk_dev af:00.0 --nrLDPC_coding_t2.dpdk_core_list 11-12</physim_run_args>
         </testCase>
 
         <testCase id="010311">
@@ -170,7 +170,7 @@
                 <always_exec>true</always_exec>
                 <physim_test>nr_ulsim</physim_test>
                 <physim_time_threshold>250</physim_time_threshold>
-                <physim_run_args>-n1000 -s30 -S30.2 -m5 -r273 -R273 -C10 -W2 -z2 -y2 -P --loader.ldpc.shlibversion _t2 --nrLDPC_coding_t2.dpdk_dev d8:00.0 --nrLDPC_coding_t2.dpdk_core_list 11-12</physim_run_args>
+                <physim_run_args>-n1000 -s30 -S30.2 -m5 -r273 -R273 -C10 -W2 -z2 -y2 -P --loader.ldpc.shlibversion _t2 --nrLDPC_coding_t2.dpdk_dev af:00.0 --nrLDPC_coding_t2.dpdk_core_list 11-12</physim_run_args>
         </testCase>
 
         <testCase id="010321">
@@ -188,7 +188,7 @@
                 <always_exec>true</always_exec>
                 <physim_test>nr_ulsim</physim_test>
                 <physim_time_threshold>650</physim_time_threshold>
-                <physim_run_args>-n1000 -s30 -S30.2 -m15 -r273 -R273 -C10 -W2 -z2 -y2 -P --loader.ldpc.shlibversion _t2 --nrLDPC_coding_t2.dpdk_dev d8:00.0 --nrLDPC_coding_t2.dpdk_core_list 11-12</physim_run_args>
+                <physim_run_args>-n1000 -s30 -S30.2 -m15 -r273 -R273 -C10 -W2 -z2 -y2 -P --loader.ldpc.shlibversion _t2 --nrLDPC_coding_t2.dpdk_dev af:00.0 --nrLDPC_coding_t2.dpdk_core_list 11-12</physim_run_args>
         </testCase>
 
         <testCase id="010331">
@@ -206,7 +206,7 @@
                 <always_exec>true</always_exec>
                 <physim_test>nr_ulsim</physim_test>
                 <physim_time_threshold>1100</physim_time_threshold>
-                <physim_run_args>-n1000 -s30 -S30.2 -m25 -r273 -R273 -C10 -W2 -z2 -y2 -P --loader.ldpc.shlibversion _t2 --nrLDPC_coding_t2.dpdk_dev d8:00.0 --nrLDPC_coding_t2.dpdk_core_list 11-12</physim_run_args>
+                <physim_run_args>-n1000 -s30 -S30.2 -m25 -r273 -R273 -C10 -W2 -z2 -y2 -P --loader.ldpc.shlibversion _t2 --nrLDPC_coding_t2.dpdk_dev af:00.0 --nrLDPC_coding_t2.dpdk_core_list 11-12</physim_run_args>
         </testCase>
 
 </testCaseList>

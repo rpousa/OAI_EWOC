@@ -105,8 +105,8 @@
 
   <testCase id="000100">
     <class>Iperf</class>
-    <desc>iperf (DL/20Mbps/UDP)(30 sec)(single-ue profile)</desc>
-    <iperf_args>-u -b 20M -t 30 -i 1 -R</iperf_args>
+    <desc>iperf (DL/30Mbps/UDP)(30 sec)</desc>
+    <iperf_args>-u -b 30M -t 30 -i 1 -R</iperf_args>
     <id>oai_ue_caracal</id>
     <svr_id>oc-cn5g</svr_id>
     <iperf_packetloss_threshold>25</iperf_packetloss_threshold>
@@ -115,8 +115,8 @@
 
   <testCase id="000200">
     <class>Iperf</class>
-    <desc>iperf (UL/5Mbps/UDP)(30 sec)(single-ue profile)</desc>
-    <iperf_args>-u -b 5M -t 30 -i 1 </iperf_args>
+    <desc>iperf (UL/20Mbps/UDP)(30 sec)</desc>
+    <iperf_args>-u -b 20M -t 30 -i 1 </iperf_args>
     <id>oai_ue_caracal</id>
     <svr_id>oc-cn5g</svr_id>
     <iperf_packetloss_threshold>25</iperf_packetloss_threshold>

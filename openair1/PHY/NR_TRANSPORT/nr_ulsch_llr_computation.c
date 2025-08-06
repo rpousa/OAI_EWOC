@@ -39,13 +39,13 @@
 #endif
 
 void nr_ulsch_compute_llr(int32_t *rxdataF_comp,
-                          int32_t *ul_ch_mag,
-                          int32_t *ul_ch_magb,
-                          int32_t *ul_ch_magc,
+                          c16_t *ul_ch_mag,
+                          c16_t *ul_ch_magb,
+                          c16_t *ul_ch_magc,
                           int16_t *ulsch_llr,
                           uint32_t nb_re,
-                          uint8_t  symbol,
-                          uint8_t  mod_order)
+                          uint8_t symbol,
+                          uint8_t mod_order)
 {
   switch(mod_order) {
     case 2:
@@ -390,12 +390,7 @@ void nr_ulsch_qpsk_qpsk(c16_t *stream0_in, c16_t *stream1_in, int16_t *stream0_o
 #endif
 }
 
-
-
 #ifdef USE_128BIT
-
-static const int16_t ones[8] __attribute__((aligned(16))) = {0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff};
-
 // calculate interference magnitude
 // tmp_result = ones in shorts corr. to interval 2<=x<=4, tmp_result2 interval < 2, tmp_result3 interval 4<x<6 and tmp_result4
 // interval x>6
@@ -409,7 +404,7 @@ static inline simde__m128i interference_abs_64qam_epi16(simde__m128i psi,
                                                         simde__m128i c7) 
 {
   simde__m128i tmp_result  = simde_mm_cmpgt_epi16(int_two_ch_mag, psi);
-  simde__m128i tmp_result3 = simde_mm_xor_si128(tmp_result, (*(simde__m128i *)&ones[0]));
+  simde__m128i tmp_result3 = simde_mm_xor_si128(tmp_result, allones128());
   simde__m128i tmp_result2 = simde_mm_cmpgt_epi16(int_ch_mag, psi);
   tmp_result  = simde_mm_xor_si128(tmp_result, tmp_result2);
   simde__m128i tmp_result4 = simde_mm_cmpgt_epi16(psi, int_three_ch_mag);
@@ -437,7 +432,7 @@ static inline simde__m128i prodsum_psi_a_epi16(simde__m128i psi_r, simde__m128i 
 static inline simde__m128i interference_abs_epi16(simde__m128i psi, simde__m128i int_ch_mag, simde__m128i c1, simde__m128i c2)
 {
   simde__m128i tmp_result = simde_mm_cmplt_epi16(psi, int_ch_mag);
-  simde__m128i tmp_result2 = simde_mm_xor_si128(tmp_result, (*(simde__m128i *)&ones[0]));
+  simde__m128i tmp_result2 = simde_mm_xor_si128(tmp_result,allones128());
   tmp_result = simde_mm_and_si128(tmp_result, c1);
   tmp_result2 = simde_mm_and_si128(tmp_result2, c2);
   return simde_mm_or_si128(tmp_result, tmp_result2);
@@ -492,9 +487,6 @@ static inline simde__m128i max_epi16(simde__m128i m0, simde__m128i m1, simde__m1
 
 #else
 
-static const int16_t ones256[16] __attribute__((aligned(32))) = {0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff,
-                                                                 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff};
-
 // calculate interference magnitude
 // tmp_result = ones in shorts corr. to interval 2<=x<=4, tmp_result2 interval < 2, tmp_result3 interval 4<x<6 and tmp_result4
 // interval x>6
@@ -508,7 +500,7 @@ static inline simde__m256i interference_abs_64qam_epi16_256(simde__m256i psi,
                                                             simde__m256i c7)
 {
   simde__m256i tmp_result = simde_mm256_cmpgt_epi16(int_two_ch_mag, psi);
-  simde__m256i tmp_result3 = simde_mm256_xor_si256(tmp_result, (*(simde__m256i *)&ones256[0]));
+  simde__m256i tmp_result3 = simde_mm256_xor_si256(tmp_result, allones256());
   simde__m256i tmp_result2 = simde_mm256_cmpgt_epi16(int_ch_mag, psi);
   tmp_result = simde_mm256_xor_si256(tmp_result, tmp_result2);
   simde__m256i tmp_result4 = simde_mm256_cmpgt_epi16(psi, int_three_ch_mag);
@@ -536,7 +528,7 @@ static inline simde__m256i prodsum_psi_a_epi16_256(simde__m256i psi_r, simde__m2
 static inline simde__m256i interference_abs_epi16_256(simde__m256i psi, simde__m256i int_ch_mag, simde__m256i c1, simde__m256i c2)
 {
   simde__m256i tmp_result = simde_mm256_cmpgt_epi16(int_ch_mag, psi);
-  simde__m256i tmp_result2 = simde_mm256_xor_si256(tmp_result, (*(simde__m256i *)&ones256[0]));
+  simde__m256i tmp_result2 = simde_mm256_xor_si256(tmp_result,  allones256());
   tmp_result = simde_mm256_and_si256(tmp_result, c1);
   tmp_result2 = simde_mm256_and_si256(tmp_result2, c2);
   return simde_mm256_or_si256(tmp_result, tmp_result2);

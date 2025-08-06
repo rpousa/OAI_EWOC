@@ -147,12 +147,12 @@ ltebox-nepes:
 
 amarisoft_ue:
   Host: amariue
-  InitScript: /root/lteue-linux-2025-03-15/lteue /root/oaicicd/ran_sa_aw2s_asue/aw2s-multi-00102-20.cfg &
+  InitScript: /root/lteue-linux-2025-03-15/lteue /root/oaicicd/ran_sa_aw2s_asue_20MHz/aw2s-multi-00102-20.cfg &
   TermScript: /root/lteue-linux-2025-03-15/ws.js -t 10 127.0.0.1:9002 '{"message":"quit"}' || killall -KILL lteue-avx2
   NetworkScript: ip netns exec ue1 ip a show dev pdn0
 amarisoft_ue_2x2:
   Host: amariue
-  InitScript: /root/lteue-linux-2025-03-15/lteue /root/oaicicd/ran_sa_aw2s_asue_2x2/aw2s-multi-00102-2x2-v2.cfg &
+  InitScript: /root/lteue-linux-2025-03-15/lteue /root/oaicicd/ran_sa_aw2s_asue_20MHz_2x2/aw2s-multi-00102-2x2-v2.cfg &
   TermScript: /root/lteue-linux-2025-03-15/ws.js -t 10 127.0.0.1:9002 '{"message":"quit"}' || killall -KILL lteue-avx2
   NetworkScript: ip netns exec ue1 ip a show dev pdn0
 amarisoft_ue_fhi72:
@@ -298,6 +298,15 @@ rfsim5g_ue:
   NetworkScript: docker exec rfsim5g-oai-nr-ue ip a show dev oaitun_ue1
   CmdPrefix: docker exec rfsim5g-oai-nr-ue
   IF: oaitun_ue1
+  AttachScript: docker start rfsim5g-oai-nr-ue
+  DetachScript: docker stop rfsim5g-oai-nr-ue
+  MTU: 1500
+# for tests with second PDU session ID 2, needs to match requested PDU session name
+rfsim5g_ue_pdu_2:
+  Host: "%%current_host%%"
+  NetworkScript: docker exec rfsim5g-oai-nr-ue ip a show dev oaitun_ue1p2
+  CmdPrefix: docker exec rfsim5g-oai-nr-ue
+  IF: oaitun_ue1p2
   AttachScript: docker start rfsim5g-oai-nr-ue
   DetachScript: docker stop rfsim5g-oai-nr-ue
   MTU: 1500

@@ -38,12 +38,9 @@
 #include "transport_proto_ue.h"
 #include "PHY/sse_intrin.h"
 
-//#define DEBUG_LLR_SIC
-
-const int16_t zeros[8] __attribute__((aligned(16))) = {0, 0, 0, 0, 0, 0, 0, 0};
-const int16_t ones[8] __attribute__((aligned(16))) = {0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff};
+// #define DEBUG_LLR_SIC
 //==============================================================================================
-// Auxiliary Makros
+//  Auxiliary Makros
 
 // calculates psi_a = psi_r*a_r + psi_i*a_i
 #define prodsum_psi_a_epi16(psi_r, a_r, psi_i, a_i, psi_a) \
@@ -54,18 +51,18 @@ const int16_t ones[8] __attribute__((aligned(16))) = {0xffff, 0xffff, 0xffff, 0x
   simde__m128i psi_a = simde_mm_adds_epi16(tmp_result, tmp_result2);
 
 // calculate interference magnitude
-#define interference_abs_epi16(psi, int_ch_mag, int_mag, c1, c2)             \
-  tmp_result = simde_mm_cmplt_epi16(psi, int_ch_mag);                        \
-  tmp_result2 = simde_mm_xor_si128(tmp_result, (*(simde__m128i *)&ones[0])); \
-  tmp_result = simde_mm_and_si128(tmp_result, c1);                           \
-  tmp_result2 = simde_mm_and_si128(tmp_result2, c2);                         \
+#define interference_abs_epi16(psi, int_ch_mag, int_mag, c1, c2) \
+  tmp_result = simde_mm_cmplt_epi16(psi, int_ch_mag);            \
+  tmp_result2 = simde_mm_xor_si128(tmp_result, ones);            \
+  tmp_result = simde_mm_and_si128(tmp_result, c1);               \
+  tmp_result2 = simde_mm_and_si128(tmp_result2, c2);             \
   simde__m128i int_mag = simde_mm_or_si128(tmp_result, tmp_result2);
 
 // calculate interference magnitude
 // tmp_result = ones in shorts corr. to interval 2<=x<=4, tmp_result2 interval < 2, tmp_result3 interval 4<x<6 and tmp_result4 interval x>6
 #define interference_abs_64qam_epi16(psi, int_ch_mag, int_two_ch_mag, int_three_ch_mag, a, c1, c3, c5, c7) \
   tmp_result = simde_mm_cmplt_epi16(psi, int_two_ch_mag);                                                  \
-  tmp_result3 = simde_mm_xor_si128(tmp_result, (*(simde__m128i *)&ones[0]));                               \
+  tmp_result3 = simde_mm_xor_si128(tmp_result, ones);                                                      \
   tmp_result2 = simde_mm_cmplt_epi16(psi, int_ch_mag);                                                     \
   tmp_result = simde_mm_xor_si128(tmp_result, tmp_result2);                                                \
   tmp_result4 = simde_mm_cmpgt_epi16(psi, int_three_ch_mag);                                               \
@@ -1123,6 +1120,8 @@ void qpsk_qam16(int16_t *stream0_in,
     oai_mm_separate_real_imag_parts(&ch_mag_int, NULL, xmm2, xmm3);
 
     simde__m128i tmp_result, tmp_result2;
+  //generate a const of all ff in case the compiler doesn't optimize it inside the loop
+    const simde__m128i ones = allones128();
     // calculate optimal interference amplitudes
     interference_abs_epi16(psi_r_p1_p1 , ch_mag_int, a_r_p1_p1 , ONE_OVER_SQRT_10_Q15, THREE_OVER_SQRT_10);
     interference_abs_epi16(psi_i_p1_p1 , ch_mag_int, a_i_p1_p1 , ONE_OVER_SQRT_10_Q15, THREE_OVER_SQRT_10);
@@ -1351,6 +1350,8 @@ void qpsk_qam64(short *stream0_in,
     two_ch_mag_int_with_sigma2   = ch_mag_int; // *4
     three_ch_mag_int_with_sigma2 = simde_mm_adds_epi16(ch_mag_int_with_sigma2, two_ch_mag_int_with_sigma2); // *6
     simde__m128i tmp_result, tmp_result2, tmp_result3, tmp_result4;
+    //generate a const of all ff in case the compiler doesn't optimize it inside the loop
+    const simde__m128i ones = allones128();
     interference_abs_64qam_epi16(psi_r_p1_p1, ch_mag_int_with_sigma2, two_ch_mag_int_with_sigma2, three_ch_mag_int_with_sigma2, a_r_p1_p1, ONE_OVER_SQRT_2_42, THREE_OVER_SQRT_2_42, FIVE_OVER_SQRT_2_42,
                                  SEVEN_OVER_SQRT_2_42);
     interference_abs_64qam_epi16(psi_i_p1_p1, ch_mag_int_with_sigma2, two_ch_mag_int_with_sigma2, three_ch_mag_int_with_sigma2, a_i_p1_p1, ONE_OVER_SQRT_2_42, THREE_OVER_SQRT_2_42, FIVE_OVER_SQRT_2_42,
@@ -2081,6 +2082,8 @@ void qam16_qam16(short *stream0_in,
     simde__m128i y0_p_3_3 = simde_mm_adds_epi16(y0r_three_over_sqrt10, y0i_three_over_sqrt10);
     simde__m128i y0_m_3_3 = simde_mm_subs_epi16(y0r_three_over_sqrt10, y0i_three_over_sqrt10);
     simde__m128i tmp_result, tmp_result2;
+    //generate a const of all ff in case the compiler doesn't optimize it inside the loop
+    const simde__m128i ones = allones128();
     // Compute optimal interfering symbol magnitude
     interference_abs_epi16(psi_r_p1_p1 ,ch_mag_int,a_r_p1_p1,ONE_OVER_SQRT_10_Q15, THREE_OVER_SQRT_10);
     interference_abs_epi16(psi_i_p1_p1 ,ch_mag_int,a_i_p1_p1,ONE_OVER_SQRT_10_Q15, THREE_OVER_SQRT_10);
@@ -2597,6 +2600,8 @@ void qam16_qam64(int16_t *stream0_in,
     ch_mag_int_with_sigma2       = simde_mm_srai_epi16(ch_mag_int, 1); // *2
     two_ch_mag_int_with_sigma2   = ch_mag_int; // *4
     simde__m128i tmp_result, tmp_result2, tmp_result3, tmp_result4;
+    //generate a const of all ff in case the compiler doesn't optimize it inside the loop
+    const simde__m128i ones = allones128();
     three_ch_mag_int_with_sigma2 = simde_mm_adds_epi16(ch_mag_int_with_sigma2, two_ch_mag_int_with_sigma2); // *6
 
     interference_abs_64qam_epi16(psi_r_p1_p1 ,ch_mag_int_with_sigma2, two_ch_mag_int_with_sigma2, three_ch_mag_int_with_sigma2, a_r_p1_p1,ONE_OVER_SQRT_2_42, THREE_OVER_SQRT_2_42,FIVE_OVER_SQRT_2_42,
@@ -4927,6 +4932,8 @@ void qam64_qam16(short *stream0_in,
     simde__m128i y0_m_7_5 = simde_mm_subs_epi16(y0r_seven_over_sqrt_21, y0i_five_over_sqrt_21);
     simde__m128i y0_m_7_7 = simde_mm_subs_epi16(y0r_seven_over_sqrt_21, y0i_seven_over_sqrt_21);
     simde__m128i tmp_result, tmp_result2;
+    //generate a const of all ff in case the compiler doesn't optimize it inside the loop
+    const simde__m128i ones = allones128();
     interference_abs_epi16(psi_r_p7_p7, ch_mag_int, a_r_p7_p7, ONE_OVER_SQRT_10_Q15, THREE_OVER_SQRT_10);
     interference_abs_epi16(psi_r_p7_p5, ch_mag_int, a_r_p7_p5, ONE_OVER_SQRT_10_Q15, THREE_OVER_SQRT_10);
     interference_abs_epi16(psi_r_p7_p3, ch_mag_int, a_r_p7_p3, ONE_OVER_SQRT_10_Q15, THREE_OVER_SQRT_10);
@@ -6425,6 +6432,8 @@ void qam64_qam64(short *stream0_in,
     two_ch_mag_int_with_sigma2   = ch_mag_int; // *4
     three_ch_mag_int_with_sigma2 = simde_mm_adds_epi16(ch_mag_int_with_sigma2, two_ch_mag_int_with_sigma2); // *6
     simde__m128i tmp_result, tmp_result2, tmp_result3, tmp_result4;
+    //generate a const of all ff in case the compiler doesn't optimize it inside the loop
+    const simde__m128i ones = allones128();
     interference_abs_64qam_epi16(psi_r_p7_p7, ch_mag_int_with_sigma2, two_ch_mag_int_with_sigma2, three_ch_mag_int_with_sigma2, a_r_p7_p7, ONE_OVER_SQRT_2_42, THREE_OVER_SQRT_2_42, FIVE_OVER_SQRT_2_42,
                                  SEVEN_OVER_SQRT_2_42);
     interference_abs_64qam_epi16(psi_r_p7_p5, ch_mag_int_with_sigma2, two_ch_mag_int_with_sigma2, three_ch_mag_int_with_sigma2, a_r_p7_p5, ONE_OVER_SQRT_2_42, THREE_OVER_SQRT_2_42, FIVE_OVER_SQRT_2_42,

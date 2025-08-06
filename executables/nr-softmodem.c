@@ -261,9 +261,9 @@ static int create_gNB_tasks(ngran_node_t node_type, configmodule_interface_t *cf
   RC.nrrrc = calloc(1, sizeof(*RC.nrrrc));
   RC.nrrrc[0] = RCconfig_NRRRC();
 
-  if (!get_softmodem_params()->nsa && !(node_type == ngran_gNB_DU)) {
+  if (node_type != ngran_gNB_DU) {
     // we start pdcp in both cuup (for drb) and cucp (for srb)
-    init_pdcp();
+    nr_pdcp_layer_init();
   }
 
   if (get_softmodem_params()->nsa) { //&& !NODE_IS_DU(node_type)
@@ -511,12 +511,6 @@ static  void wait_nfapi_init(char *thread_name)
     pthread_cond_wait( &nfapi_sync_cond, &nfapi_sync_mutex );
 
   pthread_mutex_unlock(&nfapi_sync_mutex);
-}
-
-void init_pdcp(void) {
-  if (!NODE_IS_DU(get_node_type())) {
-    nr_pdcp_layer_init();
-  }
 }
 
 #ifdef E2_AGENT

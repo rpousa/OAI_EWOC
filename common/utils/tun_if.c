@@ -120,7 +120,7 @@ static bool setInterfaceParameter(int sock_fd, const char *ifn, int af, const ch
 {
   DevAssert(af == AF_INET || af == AF_INET6);
   struct ifreq ifr = {0};
-  strncpy(ifr.ifr_name, ifn, sizeof(ifr.ifr_name));
+  strncpy(ifr.ifr_name, ifn, sizeof(ifr.ifr_name) - 1);
   struct in6_ifreq ifr6 = {0};
 
   void *ioctl_opt = NULL;
@@ -167,7 +167,7 @@ static bool change_interface_state(int sock_fd, const char *ifn, if_action_t if_
   const char *action = if_action == INTERFACE_DOWN ? "DOWN" : "UP";
 
   struct ifreq ifr = {0};
-  strncpy(ifr.ifr_name, ifn, sizeof(ifr.ifr_name));
+  strncpy(ifr.ifr_name, ifn, sizeof(ifr.ifr_name) - 1);
 
   /* get flags of this interface: see netdevice(7) */
   bool success = ioctl(sock_fd, SIOCGIFFLAGS, (caddr_t)&ifr) == 0;

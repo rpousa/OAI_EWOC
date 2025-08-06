@@ -310,9 +310,6 @@ void mac_top_init_gNB(ngran_node_t node_type,
     nr_rlc_op_mode_t mode = NODE_IS_MONOLITHIC(node_type) ? NR_RLC_OP_MODE_MONO_GNB : NR_RLC_OP_MODE_SPLIT_GNB;
     int success = nr_rlc_module_init(mode);
     AssertFatal(success == 0,"Could not initialize RLC layer\n");
-
-    // These should be out of here later
-    if (get_softmodem_params()->usim_test == 0 ) nr_pdcp_layer_init();
   } else {
     RC.nrmac = NULL;
   }

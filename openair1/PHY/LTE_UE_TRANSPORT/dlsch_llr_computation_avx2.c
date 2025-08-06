@@ -37,40 +37,21 @@
 
 #if defined(__x86_64__)
 
- static const int16_t ones256[16] __attribute__((aligned(32))) = {0xffff,
-                                                                  0xffff,
-                                                                  0xffff,
-                                                                  0xffff,
-                                                                  0xffff,
-                                                                  0xffff,
-                                                                  0xffff,
-                                                                  0xffff,
-                                                                  0xffff,
-                                                                  0xffff,
-                                                                  0xffff,
-                                                                  0xffff,
-                                                                  0xffff,
-                                                                  0xffff,
-                                                                  0xffff,
-                                                                  0xffff};
-
-
- // Auxiliary Makros
-
+ // Auxiliary Macros
  // calculate interference magnitude
 #define interference_abs_epi16(psi, int_ch_mag, int_mag, c1, c2)                   \
-  tmp_result = simde_mm256_cmpgt_epi16(int_ch_mag, psi);                           \
-  tmp_result2 = simde_mm256_xor_si256(tmp_result, (*(simde__m256i *)&ones256[0])); \
-  tmp_result = simde_mm256_and_si256(tmp_result, c1);                              \
-  tmp_result2 = simde_mm256_and_si256(tmp_result2, c2);                            \
-  const simde__m256i int_mag = simde_mm256_or_si256(tmp_result, tmp_result2);
+   tmp_result = simde_mm256_cmpgt_epi16(int_ch_mag, psi);                           \
+   tmp_result2 = simde_mm256_xor_si256(tmp_result, ff256); \
+   tmp_result = simde_mm256_and_si256(tmp_result, c1);                              \
+   tmp_result2 = simde_mm256_and_si256(tmp_result2, c2);                            \
+   const simde__m256i int_mag = simde_mm256_or_si256(tmp_result, tmp_result2);
 
  // calculate interference magnitude
  // tmp_result = ones in shorts corr. to interval 2<=x<=4, tmp_result2 interval < 2, tmp_result3 interval 4<x<6 and tmp_result4
  // interval x>6
 #define interference_abs_64qam_epi16(psi, int_ch_mag, int_two_ch_mag, int_three_ch_mag, a, c1, c3, c5, c7) \
   tmp_result = simde_mm256_cmpgt_epi16(int_two_ch_mag, psi);                                               \
-  tmp_result3 = simde_mm256_xor_si256(tmp_result, (*(simde__m256i *)&ones256[0]));                         \
+  tmp_result3 = simde_mm256_xor_si256(tmp_result, ff256);                         \
   tmp_result2 = simde_mm256_cmpgt_epi16(int_ch_mag, psi);                                                  \
   tmp_result = simde_mm256_xor_si256(tmp_result, tmp_result2);                                             \
   tmp_result4 = simde_mm256_cmpgt_epi16(psi, int_three_ch_mag);                                            \
@@ -195,7 +176,8 @@ void qam64_qam16_avx2(short *stream0_in,
 
   int i,j;
   uint32_t len256 = (length)>>3;
-
+  //generate a const of all ff in case the compiler doesn't optimize it inside the loop
+  const simde__m256i ff256 = allones256();
   for (i=0; i<len256; i+=2) {
 
     // Get rho
@@ -1676,6 +1658,8 @@ void qam64_qam64_avx2(int32_t *stream0_in,
 
   int i,j;
   uint32_t len256 = (length)>>3;
+  //generate a const of all ff in case the compiler doesn't optimize it inside the loop
+  const simde__m256i ff256 = allones256();
 
   for (i=0; i<len256; i+=2) {
 

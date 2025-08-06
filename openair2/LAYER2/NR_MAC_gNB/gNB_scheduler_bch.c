@@ -686,7 +686,8 @@ static void other_sib_sched_control(module_id_t module_idP,
   }
 
   AssertFatal(nr_of_candidates > 0, "nr_of_candidates is 0\n");
-  NR_ControlResourceSet_t *coreset = get_coreset(gNB_mac, scc, NULL, ss, NR_SearchSpace__searchSpaceType_PR_common);
+  AssertFatal(ss->controlResourceSetId, "ss->controlResourceSetId is NULL\n");
+  NR_ControlResourceSet_t *coreset = get_coreset(gNB_mac, scc, NULL, *ss->controlResourceSetId);
   if (!gNB_mac->sched_pdcch_otherSI) {
     gNB_mac->sched_pdcch_otherSI = calloc(1, sizeof(*gNB_mac->sched_pdcch_otherSI));
     *gNB_mac->sched_pdcch_otherSI = set_pdcch_structure(gNB_mac, ss, coreset, scc, NULL, type0_PDCCH_CSS_config);

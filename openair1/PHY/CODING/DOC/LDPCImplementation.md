@@ -1,6 +1,6 @@
 # LDPC coding implementation
 The LDPC encoder and decoder are implemented in a shared library, dynamically loaded at run-time using the [oai shared library loader](file://../../../../common/utils/DOC/loader.md).
-Two types of library are available with two different interfaces. There are libraries implementing the encoder and decoder of code segments and libraries implementing the encoder and decoder of slots.
+Two types of library are available with two different interfaces. There are libraries implementing the encoder and decoder of slots and libraries implementing the encoder and decoder of code segments.
 
 ## LDPC slot coding
 The interface of the library is defined in [nrLDPC_coding_interface.h](file://../nrLDPC_coding/nrLDPC_coding_interface.h).
@@ -108,11 +108,12 @@ Libraries implementing the slotwise LDPC coding must be named `libldpc<_version>
 `libldpc_xdma.so` is completed.
 
 ## LDPC segment coding
-The interface of the library is defined in [nrLDPC_defs.h](file://../nrLDPC_defs.h).
-The code loading the LDPC library is in [nrLDPC_load.c](file://../nrLDPC_load.c), in function `load_nrLDPClib`, which must be called at init time.
+The interface of the library is defined in [nrLDPC_defs.h](file://../nrLDPC_defs.h) as typedefs of the functions of the interface.
+The name of the functions implementing these typedefs can be found in [nrLDPC_extern.h](file://../nrLDPC_extern.h).
 
 LDPC segment coding libraries are not loaded directly by OAI but are statically linked in libraries implementing the LDPC slot coding interface using an adaptation layer between the slot coding interface and the segment coding interface.  
-This way, these libraries can be loaded to implement the slot coding interface as well as the segment coding interface in `ldpctest`.
+This way, these libraries can be loaded to implement the slot coding interface as well as the segment coding interface in `ldpctest`.  
+`ldpctest` therefore loads directly the segment coding interface with the loader implemented in [nrLDPC_load.c](file://../nrLDPC_load.c) as function `load_nrLDPClib`.
 
 ### Selecting the LDPC library at run time
 
@@ -137,7 +138,7 @@ loading `libldpc_cl.so` instead of `libldpc.so`:
 
 `make ldpc_cl`
 
-This command creates the `libldpc_cl.so` shared library. To perform this build successfully, only the OpenCL header `(/usr/include/CL/opencl.h)` and library `(/usr/lib/x86_64-linux-gnu/libOpenCL.so)`are required, they implement OpenCL API support which is not hardware dependent.
+This command creates the `libldpc_cl.so` shared library. To perform this build successfully, only the OpenCL header `/usr/include/CL/opencl.h` and library `/usr/lib/x86_64-linux-gnu/libOpenCL.so` are required, they implement OpenCL API support which is not hardware dependent.
 
 ```
 Scanning dependencies of target nrLDPC_decoder_kernels_CL
@@ -303,10 +304,15 @@ log init done
 
 
 ### LDPC libraries
-Libraries implementing the LDPC algorithms must be named `libldpc<_version>.so`, they must implement three functions: `nrLDPC_initcall` `nrLDPC_decod` and `nrLDPC_encod`. The prototypes for these functions is defined in [nrLDPC_defs.h](file://nrLDPC_defs.h).
+The prototypes for the functions of the interface are defined in [nrLDPC_defs.h](file://nrLDPC_defs.h) as typedefs.
+Libraries implementing the LDPC algorithms must be named `libldpc<_version>.so`, they must implement four functions with the names and types:
+* `LDPCinit` implementing type `LDPC_initfunc_t *`
+* `LDPCshutdown` implementing type `LDPC_shutdownfunc_t *`
+* `LDPCdecoder` implementing type `LDPC_decoderfunc_t *`
+* `LDPCencoder` implementing type `LDPC_encoderfunc_t *`
 
-`libldpc_cuda.so`has been tested with the `ldpctest` executable, usage from the softmodem's has to be tested.
+`libldpc_cuda.so` has been tested with the `ldpctest` executable, usage from the softmodem's has to be tested.
 
-`libldpc_cl.so`is under development.
+`libldpc_cl.so` is under development.
 
 [oai Wikis home](https://gitlab.eurecom.fr/oai/openairinterface5g/wikis/home)

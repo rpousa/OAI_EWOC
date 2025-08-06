@@ -72,7 +72,6 @@ static void _nas_signal_handler(int signal);
 
 static void _nas_clean(user_api_id_t *user_api_id, int net_fd);
 
-uint8_t usim_test = 0;
 // FIXME user must be set up with right itti message instance
 // FIXME allocate user and initialize its fields
 nas_user_t *user = NULL;

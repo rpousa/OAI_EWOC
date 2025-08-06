@@ -238,14 +238,6 @@ void nr_ue_decode_mib(NR_UE_MAC_INST_t *mac, int cc_id)
   mac->ssb_subcarrier_offset = ssb_subcarrier_offset;
   mac->dmrs_TypeA_Position = mac->mib->dmrs_TypeA_Position;
 
-  if (get_softmodem_params()->phy_test)
-    mac->state = UE_CONNECTED;
-  else if (mac->state == UE_NOT_SYNC) {
-    if (IS_SA_MODE(get_softmodem_params()) && mac->get_sib1)
-      mac->state = UE_RECEIVING_SIB;
-    else
-      mac->state = UE_PERFORMING_RA;
-  }
 }
 
 static void configure_ratematching_csi(fapi_nr_dl_config_dlsch_pdu_rel15_t *dlsch_pdu,

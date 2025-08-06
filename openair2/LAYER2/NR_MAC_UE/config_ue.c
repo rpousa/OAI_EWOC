@@ -1000,6 +1000,12 @@ static void update_mib_conf(NR_MIB_t *target, NR_MIB_t *source)
   target->intraFreqReselection = source->intraFreqReselection;
 }
 
+static bool is_cset0_present(frequency_range_t const fr, uint8_t const kssb)
+{
+  // TS 38.213 4.1 defines if CORESET 0 is present or not based on Kssb
+  return (fr == FR1) ? (kssb < 24) : (kssb < 12);
+}
+
 void nr_rrc_mac_config_req_mib(module_id_t module_id, int cc_idP, NR_MIB_t *mib, int sched_sib, bool barred)
 {
   NR_UE_MAC_INST_t *mac = get_mac_inst(module_id);
@@ -1018,11 +1024,25 @@ void nr_rrc_mac_config_req_mib(module_id_t module_id, int cc_idP, NR_MIB_t *mib,
   update_mib_conf(mac->mib, mib);
   mac->phy_config.Mod_id = module_id;
   mac->phy_config.CC_id = cc_idP;
-  if (sched_sib == 1)
-    mac->get_sib1 = true;
-  else if (sched_sib > 1)
-    mac->get_otherSI[sched_sib - 2] = true;
+
   nr_ue_decode_mib(mac, cc_idP);
+
+  if (sched_sib == 1) {
+    bool const is_c0 = is_cset0_present(mac->frequency_range, mac->ssb_subcarrier_offset);
+    mac->get_sib1 = is_c0;
+    AssertFatal(is_c0, "RRC scheduling SIB1 reception but MIB indicates no SIB1 present in current cell\n");
+  } else if (sched_sib > 1)
+    mac->get_otherSI[sched_sib - 2] = true;
+
+  if (get_softmodem_params()->phy_test)
+    mac->state = UE_CONNECTED;
+  else if (mac->state == UE_NOT_SYNC) {
+    if (IS_SA_MODE(get_softmodem_params()) && mac->get_sib1)
+      mac->state = UE_RECEIVING_SIB;
+    else
+      mac->state = UE_PERFORMING_RA;
+  }
+
   ret = pthread_mutex_unlock(&mac->if_mutex);
   AssertFatal(!ret, "mutex failed %d\n", ret);
 }

@@ -835,11 +835,13 @@ def finalizeSlaveJob(jobName) {
         selector: lastCompleted())
       if (fileExists(fileName)) {
         sh "sed -i -e 's#TEMPLATE_BUILD_TIME#${JOB_TIMESTAMP}#' ${fileName}"
-        archiveArtifacts artifacts: fileName
-        // BUILD_URL is like  http://server:port/jenkins/job/foo/15/
-        // no need to add a prefixed '/'
-        artifactUrl += 'artifact/' + fileName
+      } else {
+        sh "echo \"could not copy results from ${jobName}, please check pipeline ${BUILD_URL}\" > ${fileName}"
       }
+      archiveArtifacts artifacts: fileName
+      // BUILD_URL is like  http://server:port/jenkins/job/foo/15/
+      // no need to add a prefixed '/'
+      artifactUrl += 'artifact/' + fileName
     }
     artifactUrl = "\n * [${jobName}](${artifactUrl})"
     return artifactUrl

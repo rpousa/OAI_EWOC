@@ -154,7 +154,6 @@ int main(int argc, char **argv)
   int ssb_scan_threads = 0;
 
   channel_desc_t *gNB2UE;
-  get_softmodem_params()->usim_test = 1;
 
   //uint8_t extended_prefix_flag=0;
   //int8_t interf1=-21,interf2=-21;

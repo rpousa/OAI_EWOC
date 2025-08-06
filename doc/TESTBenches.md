@@ -23,6 +23,7 @@
 | matix         | Matix                 | gNB (n77)            | N310                                                  |
 | gracehopper1-oai | Gracehopper1       | gNB (n78, PNF/Nvidia CUBB + VNF) | Foxconn RU, _Nvidia Aerial integration_   |
 | gracehopper3-oai | Gracehopper3       | build                | --                                                    |
+| acamas        | Acamas                | 4G and 5G rfsimulator| --                                                    |
 
 Note: The available resources, and their current usage, is indicated here:
 - [Lockable resources of jenkins-oai](https://jenkins-oai.eurecom.fr/lockable-resources/):
@@ -178,11 +179,11 @@ information on how the images are built.
   - see [`./physical-simulators.md`](./physical-simulators.md) for an overview
 - [RAN-RF-Sim-Test-4G](https://jenkins-oai.eurecom.fr/job/RAN-RF-Sim-Test-4G/)
   ~4G-LTE
-  - cacofonix (eNB, lteUE, OAI EPC)
+  - acamas (eNB, lteUE, OAI EPC)
   - uses RFsimulator, for FDD 5, 10, 20MHz with core, 5MHz noS1
 - [RAN-RF-Sim-Test-5G](https://jenkins-oai.eurecom.fr/job/RAN-RF-Sim-Test-5G/)
   ~5G-NR ~nrUE
-  - cacofonix (gNB, nrUE, OAI 5GC)
+  - acamas (gNB, nrUE, OAI 5GC)
   - uses RFsimulator, TDD 40MHz, FDD 40MHz, F1 split
 - [RAN-SA-AW2S-CN5G](https://jenkins-oai.eurecom.fr/job/RAN-SA-AW2S-CN5G/)
   ~5G-NR

@@ -30,11 +30,10 @@
     310000
     800813
     330101
-    800814
     330102
-    800815
     330103
     310001
+    400001
     350000
     370001
     370000
@@ -145,6 +144,13 @@
     <svr_id>sabox-nepes</svr_id>
     <iperf_packetloss_threshold>10</iperf_packetloss_threshold>
     <iperf_bitrate_threshold>95</iperf_bitrate_threshold>
+  </testCase>
+
+  <testCase id="400001">
+    <class>Custom_Command</class>
+    <desc>Check UE is on dedicated BWP ID 1</desc>
+    <node>ofqot</node>
+    <command>echo ci get_current_bwp | nc -N 127.0.0.1 9091 | grep 'DL BWP ID 1 (dedicated) UL BWP ID 1 (dedicated)'</command>
   </testCase>
 
   <testCase id="370001">

@@ -252,6 +252,12 @@ static __attribute__((always_inline)) inline int count_bits64(uint64_t v)
   return __builtin_popcountll(v);
 }
 
+static __attribute__((always_inline)) inline int count_bits64_with_mask(uint64_t v, int start, int num)
+{
+  uint64_t mask = ((1LL << num) - 1) << start;
+  return count_bits64(v & mask);
+}
+
 uint64_t reverse_bits(uint64_t in, int n_bits);
 void reverse_bits_u8(uint8_t const* in, size_t sz, uint8_t* out);
 

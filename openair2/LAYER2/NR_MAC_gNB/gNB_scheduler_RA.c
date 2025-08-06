@@ -293,9 +293,7 @@ static void schedule_nr_MsgA_pusch(NR_UplinkConfigCommon_t *uplinkConfigCommon,
   pusch_pdu->mcs_index = msgA_PUSCH_Resource->msgA_MCS_r16;
   pusch_pdu->qam_mod_order = nr_get_Qm_dl(pusch_pdu->mcs_index, pusch_pdu->mcs_table);
 
-  int num_dmrs_symb = 0;
-  for (int i = 10; i < 10 + 3; i++)
-    num_dmrs_symb += (pusch_pdu->ul_dmrs_symb_pos >> i) & 1;
+  int num_dmrs_symb = count_bits64_with_mask(pusch_pdu->ul_dmrs_symb_pos, 10, 3);
   AssertFatal(pusch_pdu->mcs_index <= 28, "Exceeding MCS limit for MsgA PUSCH\n");
   int R = nr_get_code_rate_ul(pusch_pdu->mcs_index, pusch_pdu->mcs_table);
   pusch_pdu->target_code_rate = R;
@@ -820,9 +818,7 @@ static void nr_generate_Msg3_retransmission(module_id_t module_idP,
     uint16_t *vrb_map_UL = &nr_mac->common_channels[CC_id].vrb_map_UL[beam_ul.idx][buffer_index * MAX_BWP_SIZE];
 
     NR_pusch_dmrs_t dmrs_info = get_ul_dmrs_params(scc, ul_bwp, &tda_info, 1);
-    int num_dmrs_symb = 0;
-    for(int i = tda_info.startSymbolIndex; i < tda_info.startSymbolIndex + tda_info.nrOfSymbols; i++)
-      num_dmrs_symb += (dmrs_info.ul_dmrs_symb_pos >> i) & 1;
+    int num_dmrs_symb = count_bits64_with_mask(dmrs_info.ul_dmrs_symb_pos, tda_info.startSymbolIndex, tda_info.nrOfSymbols);
     int TBS = 0, mcsindex = 0, R = 0, Qm = 0;
     while(TBS < 7) {  // TBS for msg3 is 7 bytes (except for RRCResumeRequest1 currently not implemented)
       mcsindex++;
@@ -1157,9 +1153,7 @@ static void nr_add_msg3(module_id_t module_idP, int CC_id, frame_t frameP, slot_
 
   NR_tda_info_t tda_info = get_ul_tda_info(ul_bwp, 0, NR_SearchSpace__searchSpaceType_PR_common, TYPE_TC_RNTI_, ra->Msg3_tda_id);
   NR_pusch_dmrs_t dmrs_info = get_ul_dmrs_params(scc, ul_bwp, &tda_info, 1);
-  int num_dmrs_symb = 0;
-  for(int i = tda_info.startSymbolIndex; i < tda_info.startSymbolIndex + tda_info.nrOfSymbols; i++)
-    num_dmrs_symb += (dmrs_info.ul_dmrs_symb_pos >> i) & 1;
+  int num_dmrs_symb = count_bits64_with_mask(dmrs_info.ul_dmrs_symb_pos, tda_info.startSymbolIndex, tda_info.nrOfSymbols);
   int TBS = 0, mcsindex = 0, R = 0, Qm = 0;
   while(TBS < 7) {  // TBS for msg3 is 7 bytes (except for RRCResumeRequest1 currently not implemented)
     mcsindex++;

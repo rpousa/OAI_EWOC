@@ -576,7 +576,6 @@ int main(int argc, char *argv[])
 
   get_softmodem_params()->phy_test = 1;
   get_softmodem_params()->do_ra = 0;
-  get_softmodem_params()->usim_test = 1;
 
   if (snr1set == 0)
     snr1 = snr0 + 10;
@@ -847,14 +846,12 @@ int main(int argc, char *argv[])
 
   uint8_t  length_dmrs = pusch_len1;
   uint16_t l_prime_mask = get_l_prime(nb_symb_sch, mapping_type, add_pos, length_dmrs, start_symbol, NR_MIB__dmrs_TypeA_Position_pos2);
-  uint16_t number_dmrs_symbols = get_dmrs_symbols_in_slot(l_prime_mask, nb_symb_sch, start_symbol);
+  int number_dmrs_symbols = count_bits64_with_mask(l_prime_mask, start_symbol, nb_symb_sch);
   uint8_t  nb_re_dmrs = (dmrs_config_type == pusch_dmrs_type1) ? 6 : 4;
 
   uint32_t tbslbrm = 0;
   if (ilbrm)
-    tbslbrm = nr_compute_tbslbrm(mcs_table,
-                                 N_RB_UL,
-                                 precod_nbr_layers);
+    tbslbrm = nr_compute_tbslbrm(mcs_table, N_RB_UL, precod_nbr_layers);
 
   if ((UE->frame_parms.nb_antennas_tx==4)&&(precod_nbr_layers==4))
     num_dmrs_cdm_grps_no_data = 2;

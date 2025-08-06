@@ -34,7 +34,6 @@ source "$THIS_SCRIPT_PATH"/tools/build_helper
 set_openair_env
 
 # Variables for UE data generation
-gen_nvram_path=$OPENAIR_DIR/cmake_targets/ran_build/build
 conf_nvram_path=$OPENAIR_DIR/openair3/NAS/TOOLS/ue_eurecom_test_sfr.conf
 
 HW=""
@@ -93,8 +92,6 @@ Options:
   Makes the NR UE softmodem
 --UE-conf-nvram [configuration file]
    Specify conf_nvram_path (default \"$conf_nvram_path\")
---UE-gen-nvram [output path]
-   Specify gen_nvram_path (default \"$gen_nvram_path\")
 -w | --hardware
    USRP, BLADERF, LMSSDR, IRIS, SIMU, AW2SORI, AERIAL, None (Default)
    Adds this RF board support (in external packages installation and in compilation)
@@ -244,7 +241,7 @@ function main() {
             shift;;
        --UE)
             UE=1
-            TARGET_LIST="$TARGET_LIST lte-uesoftmodem"
+            TARGET_LIST="$TARGET_LIST lte-uesoftmodem conf2uedata usim nvram"
             echo_info "Will compile UE"
             shift;;
        --nrUE)
@@ -258,9 +255,6 @@ function main() {
             shift;;
        --UE-conf-nvram)
             conf_nvram_path=$(readlink -f "$2")
-            shift 2;;
-       --UE-gen-nvram)
-            gen_nvram_path=$(readlink -f "$2")
             shift 2;;
        -w | --hardware)
             case "$2" in
@@ -513,18 +507,7 @@ function main() {
     fi
 
     if [ "$UE" = 1 ] ; then
-
-      echo_info "Compiling UE specific part"
-
-      [ "$CLEAN" = "1" ] && rm -rf $DIR/nas_sim_tools/build
-      mkdir -p $DIR/nas_sim_tools/build
-      cd $DIR/nas_sim_tools/build
-
-      ${CMAKE_CMD% *} ..
-      compilations nas_sim_tools usim.txt "usim" "${BUILD_TOOL_OPT}"
-      compilations nas_sim_tools nvram.txt "nvram" "${BUILD_TOOL_OPT}"
-      compilations nas_sim_tools conf2uedata.txt "conf2uedata" "${BUILD_TOOL_OPT}"
-
+      echo_info "Generate LTE USIM default sim content UE specific part"
       # generate USIM data
       if [ -f conf2uedata ]; then
         install_nas_tools $conf_nvram_path $DIR/$BUILD_DIR/build "$DIR/$BUILD_DIR/build/conf2uedata.txt"

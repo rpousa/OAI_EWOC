@@ -42,6 +42,7 @@ Description Implements the utility used to generate data stored in the
 #include <stdbool.h>
 #include <getopt.h>
 
+#include "log.h"
 #include "conf_parser.h"
 #include "display.h"
 
@@ -104,6 +105,7 @@ int main (int argc, char * const argv[])
     _display_usage(argv[0]);
     exit(EXIT_SUCCESS);
   }
+  logInit();
 
   /* compute default data directory if no output_dir is given */
   if ( output_dir == NULL ) {

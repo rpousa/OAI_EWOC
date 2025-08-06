@@ -39,8 +39,10 @@
 #include "nfapi/oai_integration/vendor_ext.h"
 #include "assertions.h"
 #include <time.h>
+#include <sys/time.h>
 #include <stdint.h>
 #include <openair1/PHY/TOOLS/phy_scope_interface.h>
+#include "PHY/log_tools.h"
 
 //#define DEBUG_RXDATA
 //#define SRS_IND_DEBUG
@@ -425,6 +427,68 @@ static int nr_ulsch_procedures(PHY_VARS_gNB *gNB, int frame_rx, int slot_rx, boo
         crc_valid = true;
       }
     }
+#if T_TRACER
+    if (T_ACTIVE(T_GNB_PHY_UL_PAYLOAD_RX_BITS)) {
+      // capture Rx Payload via T-Tracer for both CRC valid and invalid cases
+      // Get Time Stamp for T-tracer messages
+      char trace_rx_payload_time_stamp_str[30];
+      get_time_stamp_usec(trace_rx_payload_time_stamp_str);
+      // trace_rx_payload_time_stamp_str = 8 bytes timestamp = YYYYMMDD
+      //                      + 9 bytes timestamp = HHMMSSMMM
+
+      // Log GNB_PHY_UL_PAYLOAD_RX_BITS using T-Tracer if activated
+      // FORMAT = int,frame : int,slot : int,datetime_yyyymmdd : int,datetime_hhmmssmmm :
+      // int,frame_type : int,freq_range : int,subcarrier_spacing : int,cyclic_prefix : int,symbols_per_slot :
+      // int,Nid_cell : int,rnti :
+      // int,rb_size : int,rb_start : int,start_symbol_index : int,nr_of_symbols :
+      // int,qam_mod_order : int,mcs_index : int,mcs_table : int,nrOfLayers :
+      // int,transform_precoding : int,dmrs_config_type : int,ul_dmrs_symb_pos :  int,number_dmrs_symbols : int,dmrs_port :
+      // int,dmrs_nscid : int,nb_antennas_rx : int,number_of_bits : buffer,data
+
+      NR_DL_FRAME_PARMS *frame_parms = &gNB->frame_parms;
+      int dmrs_port = get_dmrs_port(0, pusch_pdu->dmrs_ports);
+      // int num_bytes = rdata->Kr_bytes - (ulsch_harq->F >> 3) - ((ulsch_harq->C > 1) ? 3 : 0);
+      // printf("num_bytes %d, len with CRC %d, data len %d\n", num_bytes, lenWithCrc(1, rdata->A), rdata->A);
+      //  calculate the number of dmrs symbols in the slot
+      int number_dmrs_symbols = 0;
+      for (int l = pusch_pdu->start_symbol_index; l < pusch_pdu->start_symbol_index + pusch_pdu->nr_of_symbols; l++)
+        number_dmrs_symbols += ((pusch_pdu->ul_dmrs_symb_pos) >> l) & 0x01;
+
+      // Log GNB_PHY_UL_PAYLOAD_RX_BITS using T-Tracer if activated
+      T(T_GNB_PHY_UL_PAYLOAD_RX_BITS,
+        T_INT((int)ulsch->frame),
+        T_INT((int)ulsch->slot),
+        T_INT((int)split_time_stamp_and_convert_to_int(trace_rx_payload_time_stamp_str, 0, 8)),
+        T_INT((int)split_time_stamp_and_convert_to_int(trace_rx_payload_time_stamp_str, 8, 9)),
+        T_INT((int)frame_parms->frame_type), // Frame type (0 FDD, 1 TDD)  frame_structure
+        T_INT((int)frame_parms->freq_range), // Frequency range (0 FR1, 1 FR2)
+        T_INT((int)pusch_pdu->subcarrier_spacing), // Subcarrier spacing (0 15kHz, 1 30kHz, 2 60kHz)
+        T_INT((int)pusch_pdu->cyclic_prefix), // Normal or extended prefix (0 normal, 1 extended)
+        T_INT((int)frame_parms->symbols_per_slot), // Number of symbols per slot
+        T_INT((int)frame_parms->Nid_cell),
+        T_INT((int)pusch_pdu->rnti),
+        T_INT((int)pusch_pdu->rb_size),
+        T_INT((int)pusch_pdu->rb_start),
+        T_INT((int)pusch_pdu->start_symbol_index), // start_ofdm_symbol
+        T_INT((int)pusch_pdu->nr_of_symbols), // num_ofdm_symbols
+        T_INT((int)pusch_pdu->qam_mod_order), // modulation
+        T_INT((int)pusch_pdu->mcs_index), // mcs
+        T_INT((int)pusch_pdu->mcs_table), // mcs_table_index
+        T_INT((int)pusch_pdu->nrOfLayers), // num_layer
+        T_INT((int)pusch_pdu->transform_precoding), // transformPrecoder_enabled = 0, transformPrecoder_disabled = 1
+        T_INT((int)pusch_pdu->dmrs_config_type), // dmrs_resource_map_config: pusch_dmrs_type1 = 0, pusch_dmrs_type2 = 1
+        T_INT((int)pusch_pdu->ul_dmrs_symb_pos), // used to derive the DMRS symbol positions
+        T_INT((int)number_dmrs_symbols),
+        // dmrs_start_ofdm_symbol
+        // dmrs_duration_num_ofdm_symbols
+        // dmrs_num_add_positions
+        T_INT((int)dmrs_port), // dmrs_antenna_port
+        T_INT((int)pusch_pdu->scid), // dmrs_nscid
+        T_INT((int)frame_parms->nb_antennas_rx), // rx antenna
+        T_INT(((ulsch_harq->TBS) << 3)), // number_of_bits
+        T_BUFFER((uint8_t *)((ulsch_harq->b)), ((ulsch_harq->TBS) << 3) / 8)); // data
+    }
+#endif
 
     nfapi_nr_crc_t *crc = &UL_INFO->crc_ind.crc_list[UL_INFO->crc_ind.number_crcs++];
     nfapi_nr_rx_data_pdu_t *pdu = &UL_INFO->rx_ind.pdu_list[UL_INFO->rx_ind.number_of_pdus++];
@@ -821,10 +885,8 @@ int phy_procedures_gNB_uespec_RX(PHY_VARS_gNB *gNB, int frame_rx, int slot_rx, N
     AssertFatal(ulsch_harq != NULL, "harq_pid %d is not allocated\n", ulsch->harq_pid);
     if ((ulsch->active == true) && (ulsch->frame == frame_rx) && (ulsch->slot == slot_rx) && (ulsch->handled == 0)) {
       LOG_D(PHY, "PUSCH ID %d with RNTI %x detection started in frame %d slot %d\n", ULSCH_id, ulsch->rnti, frame_rx, slot_rx);
-  
-      int num_dmrs = 0;
-      for (int s = 0; s < NR_NUMBER_OF_SYMBOLS_PER_SLOT; s++)
-        num_dmrs += (ulsch_harq->ulsch_pdu.ul_dmrs_symb_pos >> s) & 1;
+      nfapi_nr_pusch_pdu_t *pdu = &ulsch_harq->ulsch_pdu;
+      int num_dmrs = count_bits64_with_mask(pdu->ul_dmrs_symb_pos, 0, NR_NUMBER_OF_SYMBOLS_PER_SLOT);
 
 #ifdef DEBUG_RXDATA
       NR_DL_FRAME_PARMS *frame_parms = &gNB->frame_parms;
@@ -832,7 +894,6 @@ int phy_procedures_gNB_uespec_RX(PHY_VARS_gNB *gNB, int frame_rx, int slot_rx, N
       int slot_offset = frame_parms->get_samples_slot_timestamp(slot_rx, frame_parms, 0);
       slot_offset -= ru->N_TA_offset;
       int32_t sample_offset = gNB->common_vars.debugBuff_sample_offset;
-      nfapi_nr_pusch_pdu_t *pdu = &ulsch_harq->ulsch_pdu;
       int16_t *buf = (int16_t *)&gNB->common_vars.debugBuff[offset];
       buf[0] = (int16_t)ulsch->rnti;
       buf[1] = (int16_t)pdu->rb_size;

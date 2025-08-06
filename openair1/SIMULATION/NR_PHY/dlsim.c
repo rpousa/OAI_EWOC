@@ -654,7 +654,6 @@ printf("%d\n", slot);
   InitSinLUT();
 
   get_softmodem_params()->phy_test = 1;
-  get_softmodem_params()->usim_test = 1;
   get_softmodem_params()->do_ra = 0;
   IS_SOFTMODEM_DLSIM = true;
 
@@ -1239,11 +1238,11 @@ printf("%d\n", slot);
         int16_t *UE_llr = (int16_t*)UE->phy_sim_pdsch_llr;
 
         TBS                  = dlsch0->dlsch_config.TBS;//rel15->TBSize[0];
-        uint16_t length_dmrs = get_num_dmrs(rel15->dlDmrsSymbPos);
-        uint16_t nb_rb       = rel15->rbSize;
-        uint8_t  nb_re_dmrs  = rel15->dmrsConfigType == NFAPI_NR_DMRS_TYPE1 ? 6*dlsch0->dlsch_config.n_dmrs_cdm_groups : 4*dlsch0->dlsch_config.n_dmrs_cdm_groups;
-        uint8_t  mod_order   = rel15->qamModOrder[0];
-        uint8_t  nb_symb_sch = rel15->NrOfSymbols;
+        uint16_t length_dmrs = get_num_dmrs(dlsch0->dlsch_config.dlDmrsSymbPos);
+        uint16_t nb_rb       = dlsch0->dlsch_config.number_rbs;
+        uint8_t  nb_re_dmrs  = dlsch0->dlsch_config.dmrsConfigType == NFAPI_NR_DMRS_TYPE1 ? 6*dlsch0->dlsch_config.n_dmrs_cdm_groups : 4*dlsch0->dlsch_config.n_dmrs_cdm_groups;
+        uint8_t  mod_order   = dlsch0->dlsch_config.qamModOrder;
+        uint8_t  nb_symb_sch = dlsch0->dlsch_config.number_symbols;
         uint32_t unav_res = ptrsSymbPerSlot * ptrsRePerSymb;
         available_bits = nr_get_G(nb_rb, nb_symb_sch, nb_re_dmrs, length_dmrs, unav_res, mod_order, rel15->nrOfLayers);
         if (pdu_bit_map & 0x1) {
@@ -1253,9 +1252,8 @@ printf("%d\n", slot);
         }
 
         for (i = 0; i < available_bits; i++) {
-          if(((gNB_dlsch->harq_process.f[i] == 0) && (UE_llr[i] <= 0)) ||
-             ((gNB_dlsch->harq_process.f[i] == 1) && (UE_llr[i] >= 0)))
-          {
+          const uint8_t current_bit = (gNB_dlsch->harq_process.f[i / 8] & (1 << (i & 7))) >> (i & 7);
+          if (((current_bit == 0) && (UE_llr[i] <= 0)) || ((current_bit == 1) && (UE_llr[i] >= 0))) {
             if (errors_scrambling[round] == 0) {
               LOG_D(PHY,"First bit in error in unscrambling = %d\n",i);
             }
@@ -1368,23 +1366,38 @@ printf("%d\n", slot);
       if (UE->frame_parms.nb_antennas_rx>1)
         LOG_M("rxsig1.m", "rxs1", UE->common_vars.rxdata[1], frame_length_complex_samples, dec, op_format);
       LOG_M("rxF0.m", "rxF0", UE->phy_sim_rxdataF, frame_parms->samples_per_slot_wCP, dec, op_format);
-      LOG_M("rxF_ext.m", "rxFe", UE->phy_sim_pdsch_rxdataF_ext, g_rbSize * 12 * 14, dec, op_format);
       const uint32_t numReSym = (g_rbSize * 12 + 15) & (~15);
-      const uint32_t numValidReSym = g_rbSize * 12;
-      {
-        const int s = rel15->StartSymbolIndex;
-        const int n = rel15->NrOfSymbols;
-        for (int i = s; i < s + n; i++) {
-          char fName[50];
-          snprintf(fName, sizeof(fName), "chestF0_ext_s%d.m", i);
-          LOG_M(fName,
-                "chF0_ext",
-                ((c16_t *)UE->phy_sim_pdsch_dl_ch_estimates_ext) + (i * numReSym),
-                numValidReSym,
-                dec,
-                op_format);
-          snprintf(fName, sizeof(fName), "rxF_comp_s%d.m", i);
-          LOG_M(fName, "rxFc", ((c16_t *)UE->phy_sim_pdsch_rxdataF_comp) + (i * numReSym), numValidReSym, dec, op_format);
+      for (int l = 0; l < g_nrOfLayers; l++) {
+        for (int r = 0; r < n_rx; r++) {
+          const int s = rel15->StartSymbolIndex;
+          const int n = rel15->NrOfSymbols;
+          for (int i = s; i < s + n; i++) {
+            const uint32_t dmrsBitMap = phy_data.dlsch[0].dlsch_config.dlDmrsSymbPos;
+            const uint32_t dmrsCfg = phy_data.dlsch[0].dlsch_config.dmrsConfigType;
+            const uint32_t nrb = phy_data.dlsch[0].dlsch_config.number_rbs;
+            const uint32_t ncdmg = phy_data.dlsch[0].dlsch_config.n_dmrs_cdm_groups;
+            const uint32_t numValidReSym = ((dmrsBitMap >> i) & 1)
+                                              ? ((dmrsCfg == NFAPI_NR_DMRS_TYPE1) ? nrb * (12 - 6 * ncdmg) : nrb * (12 - 4 * ncdmg))
+                                              : (nrb * 12);
+            char fName[50];
+            snprintf(fName, sizeof(fName), "chestF_ext_l%d_r%d_s%d.m", l, r, i);
+            uint32_t buff_offset = (i * g_nrOfLayers * n_rx * numReSym) + (l * n_rx * numReSym) + (r * numReSym);
+            LOG_M(fName,
+                  "chF0_ext",
+                  ((c16_t *)UE->phy_sim_pdsch_dl_ch_estimates_ext) + buff_offset,
+                  numValidReSym,
+                  dec,
+                  op_format);
+            snprintf(fName, sizeof(fName), "rxF_comp_l%d_s%d.m", l, i);
+            LOG_M(fName, "rxFc", ((c16_t *)UE->phy_sim_pdsch_rxdataF_comp) + (l * NR_SYMBOLS_PER_SLOT * numReSym) + (i * numReSym), numValidReSym, dec, op_format);
+            if (l == 0) {
+              snprintf(fName, sizeof(fName), "rxF_ext_r%d_s%d.m", r, i);
+              buff_offset = (i * n_rx * numReSym) + (r * numReSym);
+              LOG_M(fName, "rxFext", ((c16_t *)UE->phy_sim_pdsch_rxdataF_ext) + buff_offset, numValidReSym, dec, op_format);
+            }
+            snprintf(fName, sizeof(fName), "chestF0_s%d.m", i);
+            LOG_M(fName, "chF0", ((c16_t *)UE->phy_sim_pdsch_dl_ch_estimates) + i * frame_parms->ofdm_symbol_size, nrb*12, dec, op_format);
+          }
         }
       }
       LOG_M("chestF0.m", "chF0", UE->phy_sim_pdsch_dl_ch_estimates, frame_parms->ofdm_symbol_size * 14, dec, op_format);

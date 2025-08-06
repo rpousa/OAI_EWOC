@@ -8,7 +8,7 @@
 #endif
 
 /* maximum number of arguments for the T macro */
-#define T_MAX_ARGS 32
+#define T_MAX_ARGS 72
 
 enum event_arg_type {
   EVENT_INT,

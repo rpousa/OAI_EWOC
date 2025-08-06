@@ -66,7 +66,6 @@ extern "C"
 #define CONFIG_HLP_CLK           "tells hardware to use a clock reference (0:internal, 1:external, 2:gpsdo)\n"
 #define CONFIG_HLP_TME           "tells hardware to use a time reference (0:internal, 1:external, 2:gpsdo)\n"
 #define CONFIG_HLP_TUNE_OFFSET   "LO tuning offset to use in Hz\n"
-#define CONFIG_HLP_USIM          "use XOR autentication algo in case of test usim mode\n"
 #define CONFIG_HLP_NOSNGLT       "Disables single-thread mode in lte-softmodem\n"
 #define CONFIG_HLP_DLF           "Set the downlink frequency for all component carriers\n"
 #define CONFIG_HLP_ULF           "Set the uplink frequency offset for all component carriers\n"
@@ -134,7 +133,6 @@ extern "C"
 #define TIMING_SOURCE       softmodem_params.timing_source
 #define TUNE_OFFSET         softmodem_params.tune_offset
 #define SEND_DMRSSYNC       softmodem_params.send_dmrs_sync
-#define USIM_TEST           softmodem_params.usim_test
 #define CHEST_FREQ          softmodem_params.chest_freq
 #define CHEST_TIME          softmodem_params.chest_time
 #define NFAPI               softmodem_params.nfapi
@@ -156,7 +154,6 @@ extern int usrp_tx_thread;
   {"phy-test",              CONFIG_HLP_PHYTST,        PARAMFLAG_BOOL, .iptr=&PHY_TEST,                        .defintval=0,             TYPE_INT,    0},  \
   {"do-ra",                 CONFIG_HLP_DORA,          PARAMFLAG_BOOL, .iptr=&DO_RA,                           .defintval=0,             TYPE_INT,    0},  \
   {"sl-mode",               CONFIG_HLP_SL_MODE,       0,              .u8ptr=&SL_MODE,                        .defintval=0,             TYPE_UINT8,  0},  \
-  {"usim-test",             CONFIG_HLP_USIM,          PARAMFLAG_BOOL, .u8ptr=&USIM_TEST,                      .defintval=0,             TYPE_UINT8,  0},  \
   {"clock-source",          CONFIG_HLP_CLK,           0,              .uptr=&CLOCK_SOURCE,                    .defintval=0,             TYPE_UINT,   0},  \
   {"time-source",           CONFIG_HLP_TME,           0,              .uptr=&TIMING_SOURCE,                   .defintval=0,             TYPE_UINT,   0},  \
   {"tune-offset",           CONFIG_HLP_TUNE_OFFSET,   0,              .dblptr=&TUNE_OFFSET,                   .defintval=0,             TYPE_DOUBLE, 0},  \
@@ -195,7 +192,6 @@ extern int usrp_tx_thread;
 
 // clang-format off
 #define CMDLINE_PARAMS_CHECK_DESC {         \
-    { .s5 = { NULL } },                     \
     { .s5 = { NULL } },                     \
     { .s5 = { NULL } },                     \
     { .s5 = { NULL } },                     \
@@ -324,7 +320,6 @@ typedef struct {
   int            phy_test;
   int            do_ra;
   uint8_t        sl_mode;
-  uint8_t        usim_test;
   int            emulate_rf;
   int            chain_offset;
   int            numerology;

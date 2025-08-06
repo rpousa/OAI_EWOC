@@ -46,8 +46,6 @@
 #include <openair2/RRC/LTE/rrc_proto.h>
 #include "executables/softmodem-common.h"
 
-extern void openair_rrc_top_init_ue( int eMBMS_active, char *uecap_xer, uint8_t cba_group_active, uint8_t HO_active);
-
 void dl_phy_sync_success(module_id_t module_idP, frame_t frameP, unsigned char eNB_index, uint8_t first_sync) { //init as MR
   LOG_D(MAC, "[UE %d] Frame %d: PHY Sync to eNB_index %d successful \n",
         module_idP, frameP, eNB_index);

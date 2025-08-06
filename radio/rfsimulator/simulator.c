@@ -218,7 +218,7 @@ static buffer_t *allocCirBuf(rfsimulator_state_t *bridge, int sock)
              sizeofArray(modelname),
              "rfsimu_channel_%s%d",
              (bridge->role == SIMU_ROLE_SERVER) ? "ue" : "enB",
-             bridge->nb_cnx);
+             bridge->nb_cnx - 1);
     ptr->channel_model = find_channel_desc_fromname(modelname); // path_loss in dB
     if (!ptr->channel_model) {
       // Use legacy method to find channel model - this will use the same channel model for all clients

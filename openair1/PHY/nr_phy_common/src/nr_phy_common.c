@@ -43,17 +43,17 @@ void init_byte2bit16(void)
 }
 
 simde__m128i byte2m128i[256];
-void init_byte2m128i(void) {
-
-  for (int s=0;s<256;s++) {
-    byte2m128i[s] = simde_mm_insert_epi16(byte2m128i[s],(1-2*(s&1)),0);
-    byte2m128i[s] = simde_mm_insert_epi16(byte2m128i[s],(1-2*((s>>1)&1)),1);
-    byte2m128i[s] = simde_mm_insert_epi16(byte2m128i[s],(1-2*((s>>2)&1)),2);
-    byte2m128i[s] = simde_mm_insert_epi16(byte2m128i[s],(1-2*((s>>3)&1)),3);
-    byte2m128i[s] = simde_mm_insert_epi16(byte2m128i[s],(1-2*((s>>4)&1)),4);
-    byte2m128i[s] = simde_mm_insert_epi16(byte2m128i[s],(1-2*((s>>5)&1)),5);
-    byte2m128i[s] = simde_mm_insert_epi16(byte2m128i[s],(1-2*((s>>6)&1)),6);
-    byte2m128i[s] = simde_mm_insert_epi16(byte2m128i[s],(1-2*((s>>7)&1)),7);
+void init_byte2m128i(void)
+{
+  for (int s = 0; s < 256; s++) {
+    byte2m128i[s] = simde_mm_insert_epi16(byte2m128i[s], (1 - 2 * (s & 1)), 0);
+    byte2m128i[s] = simde_mm_insert_epi16(byte2m128i[s], (1 - 2 * ((s >> 1) & 1)), 1);
+    byte2m128i[s] = simde_mm_insert_epi16(byte2m128i[s], (1 - 2 * ((s >> 2) & 1)), 2);
+    byte2m128i[s] = simde_mm_insert_epi16(byte2m128i[s], (1 - 2 * ((s >> 3) & 1)), 3);
+    byte2m128i[s] = simde_mm_insert_epi16(byte2m128i[s], (1 - 2 * ((s >> 4) & 1)), 4);
+    byte2m128i[s] = simde_mm_insert_epi16(byte2m128i[s], (1 - 2 * ((s >> 5) & 1)), 5);
+    byte2m128i[s] = simde_mm_insert_epi16(byte2m128i[s], (1 - 2 * ((s >> 6) & 1)), 6);
+    byte2m128i[s] = simde_mm_insert_epi16(byte2m128i[s], (1 - 2 * ((s >> 7) & 1)), 7);
   }
 }
 
@@ -71,17 +71,12 @@ void init_delay_table(uint16_t ofdm_symbol_size,
   }
 }
 
-int16_t saturating_sub(int16_t a, int16_t b)
+static inline c16_t saturating_sub(c16_t a, c16_t b)
 {
-  int32_t result = (int32_t)a - (int32_t)b;
-
-  if (result < INT16_MIN) {
-    return INT16_MIN;
-  } else if (result > INT16_MAX) {
-    return INT16_MAX;
-  } else {
-    return (int16_t)result;
-  }
+  c32_t tmp = {a.r - abs(b.r), a.i - abs(b.i)};
+  tmp = (c32_t){min(tmp.r, INT16_MAX), min(tmp.i, INT16_MAX)};
+  c16_t tmp2 = (c16_t){max(tmp.r, -INT16_MAX), max(tmp.i, -INT16_MAX)};
+  return tmp2;
 }
 
 //----------------------------------------------------------------------------------------------
@@ -101,23 +96,21 @@ void nr_qpsk_llr(int32_t *rxdataF_comp, int16_t *llr, uint32_t nb_re)
 // 16-QAM
 //----------------------------------------------------------------------------------------------
 
-void nr_16qam_llr(int32_t *rxdataF_comp, int32_t *ch_mag_in, int16_t *llr, uint32_t nb_re)
+void nr_16qam_llr(int32_t *rxdataF_comp, c16_t *ch_mag_in, int16_t *llr, uint32_t nb_re)
 {
   simde__m256i *rxF_256 = (simde__m256i *)rxdataF_comp;
-  simde__m256i *ch_mag = (simde__m256i *)ch_mag_in;
+  simde__m256i *ch_mag256 = (simde__m256i *)ch_mag_in;
   int64_t *llr_64 = (int64_t *)llr;
 
 #ifndef USE_128BIT
-  simde__m256i xmm0, xmm1, xmm2;
-
   for (int i = 0; i < (nb_re >> 3); i++) {
     // registers of even index in xmm0-> |y_R|, registers of odd index in xmm0-> |y_I|
-    xmm0 = simde_mm256_abs_epi16(*rxF_256);
+    simde__m256i xmm0 = protected_abs256(*rxF_256);
     // registers of even index in xmm0-> |y_R|-|h|^2, registers of odd index in xmm0-> |y_I|-|h|^2
-    xmm0 = simde_mm256_subs_epi16(*ch_mag, xmm0);
+    xmm0 = simde_mm256_subs_epi16(*ch_mag256, xmm0);
 
-    xmm1 = simde_mm256_unpacklo_epi32(*rxF_256, xmm0);
-    xmm2 = simde_mm256_unpackhi_epi32(*rxF_256, xmm0);
+    simde__m256i xmm1 = simde_mm256_unpacklo_epi32(*rxF_256, xmm0);
+    simde__m256i xmm2 = simde_mm256_unpackhi_epi32(*rxF_256, xmm0);
 
     // xmm1 |1st 2ed 3rd 4th  9th 10th 13rd 14th|
     // xmm2 |5th 6th 7th 8th 11st 12ed 15th 16th|
@@ -131,20 +124,20 @@ void nr_16qam_llr(int32_t *rxdataF_comp, int32_t *ch_mag_in, int16_t *llr, uint3
     *llr_64++ = simde_mm256_extract_epi64(xmm2, 2);
     *llr_64++ = simde_mm256_extract_epi64(xmm2, 3);
     rxF_256++;
-    ch_mag++;
+    ch_mag256++;
   }
 
   nb_re &= 0x7;
 #endif
 
   simde__m128i *rxF_128 = (simde__m128i *)rxF_256;
-  simde__m128i *ch_mag_128 = (simde__m128i *)ch_mag;
+  simde__m128i *ch_mag_128 = (simde__m128i *)ch_mag256;
   simde__m128i *llr_128 = (simde__m128i *)llr_64;
 
   // Each iteration does 4 RE (gives 16 16bit-llrs)
   for (int i = 0; i < (nb_re >> 2); i++) {
     // registers of even index in xmm0-> |y_R|, registers of odd index in xmm0-> |y_I|
-    simde__m128i xmm0 = simde_mm_abs_epi16(*rxF_128);
+    simde__m128i xmm0 = protected_abs128(*rxF_128);
     // registers of even index in xmm0-> |y_R|-|h|^2, registers of odd index in xmm0-> |y_I|-|h|^2
     xmm0 = simde_mm_subs_epi16(*ch_mag_128, xmm0);
 
@@ -157,18 +150,13 @@ void nr_16qam_llr(int32_t *rxdataF_comp, int32_t *ch_mag_in, int16_t *llr, uint3
 
 
   nb_re &= 0x3;
-  int16_t *rxDataF_i16 = (int16_t *)rxF_128;
-  int16_t *ch_mag_i16 = (int16_t *)ch_mag_128;
-  int16_t *llr_i16 = (int16_t *)llr_128;
+  c16_t *rxDataF = (c16_t *)rxF_128;
+  c16_t *ch_mag = (c16_t *)ch_mag_128;
+  c16_t *llr_tail = (c16_t *)llr_128;
   for (uint i = 0U; i < nb_re; i++) {
-    int16_t real = rxDataF_i16[2 * i];
-    int16_t imag = rxDataF_i16[2 * i + 1];
-    int16_t mag_real = ch_mag_i16[2 * i];
-    int16_t mag_imag = ch_mag_i16[2 * i + 1];
-    llr_i16[4 * i] = real;
-    llr_i16[4 * i + 1] = imag;
-    llr_i16[4 * i + 2] = saturating_sub(mag_real, abs(real));
-    llr_i16[4 * i + 3] = saturating_sub(mag_imag, abs(imag));
+    c16_t tmp = *rxDataF++;
+    *llr_tail++ = tmp;
+    *llr_tail++ = saturating_sub(*ch_mag++, tmp);
   }
 }
 
@@ -176,7 +164,7 @@ void nr_16qam_llr(int32_t *rxdataF_comp, int32_t *ch_mag_in, int16_t *llr, uint3
 // 64-QAM
 //----------------------------------------------------------------------------------------------
 
-void nr_64qam_llr(int32_t *rxdataF_comp, int32_t *ch_mag, int32_t *ch_mag2, int16_t *llr, uint32_t nb_re)
+void nr_64qam_llr(int32_t *rxdataF_comp, c16_t *ch_mag, c16_t *ch_mag2, int16_t *llr, uint32_t nb_re)
 {
   simde__m256i *rxF = (simde__m256i *)rxdataF_comp;
 
@@ -184,15 +172,14 @@ void nr_64qam_llr(int32_t *rxdataF_comp, int32_t *ch_mag, int32_t *ch_mag2, int1
   simde__m256i *ch_magb = (simde__m256i *)ch_mag2;
 
   int32_t *llr_32 = (int32_t *)llr;
-
 #ifndef USE_128BIT
   for (int i = 0; i < (nb_re >> 3); i++) {
     simde__m256i xmm0 = simde_mm256_loadu_si256(rxF);
     // registers of even index in xmm0-> |y_R|, registers of odd index in xmm0-> |y_I|
-    simde__m256i xmm1 = simde_mm256_abs_epi16(xmm0);
+    simde__m256i xmm1 = protected_abs256(xmm0);
     // registers of even index in xmm0-> |y_R|-|h|^2, registers of odd index in xmm0-> |y_I|-|h|^2
     xmm1 = simde_mm256_subs_epi16(*ch_maga, xmm1);
-    simde__m256i xmm2 = simde_mm256_abs_epi16(xmm1);
+    simde__m256i xmm2 = protected_abs256(xmm1);
     xmm2 = simde_mm256_subs_epi16(*ch_magb, xmm2);
     // xmm0 |1st 4th 7th 10th 13th 16th 19th 22ed|
     // xmm1 |2ed 5th 8th 11th 14th 17th 20th 23rd|
@@ -244,9 +231,9 @@ void nr_64qam_llr(int32_t *rxdataF_comp, int32_t *ch_mag, int32_t *ch_mag2, int1
   for (int i = 0; i < (nb_re >> 2); i++) {
     simde__m128i xmm0, xmm1, xmm2;
     xmm0 = *rxF_128;
-    xmm1 = simde_mm_abs_epi16(xmm0);
+    xmm1 = protected_abs128(xmm0);
     xmm1 = simde_mm_subs_epi16(*ch_mag_128, xmm1);
-    xmm2 = simde_mm_abs_epi16(xmm1);
+    xmm2 = protected_abs128(xmm1);
     xmm2 = simde_mm_subs_epi16(*ch_magb_128, xmm2);
 
     *llr_32++ = simde_mm_extract_epi32(xmm0, 0);
@@ -268,27 +255,19 @@ void nr_64qam_llr(int32_t *rxdataF_comp, int32_t *ch_mag, int32_t *ch_mag2, int1
 
   nb_re &= 0x3;
 
-  int16_t *rxDataF_i16 = (int16_t *)rxF_128;
-  int16_t *ch_mag_i16 = (int16_t *)ch_mag_128;
-  int16_t *ch_magb_i16 = (int16_t *)ch_magb_128;
-  int16_t *llr_i16 = (int16_t *)llr_32;
+  c16_t *rxDataF = (c16_t *)rxF_128;
+  c16_t *ch_mag_tail = (c16_t *)ch_mag_128;
+  c16_t *ch_magb_tail = (c16_t *)ch_magb_128;
+  c16_t *llr_tail = (c16_t *)llr_32;
   for (int i = 0; i < nb_re; i++) {
-    int16_t real = rxDataF_i16[2 * i];
-    int16_t imag = rxDataF_i16[2 * i + 1];
-    int16_t mag_real = ch_mag_i16[2 * i];
-    int16_t mag_imag = ch_mag_i16[2 * i + 1];
-    llr_i16[6 * i] = real;
-    llr_i16[6 * i + 1] = imag;
-    llr_i16[6 * i + 2] = saturating_sub(mag_real, abs(real));
-    llr_i16[6 * i + 3] = saturating_sub(mag_imag, abs(imag));
-    int16_t mag_realb = ch_magb_i16[2 * i];
-    int16_t mag_imagb = ch_magb_i16[2 * i + 1];
-    llr_i16[6 * i + 4] = saturating_sub(mag_realb, abs(llr_i16[6 * i + 2]));
-    llr_i16[6 * i + 5] = saturating_sub(mag_imagb, abs(llr_i16[6 * i + 3]));
+    *llr_tail++ = *rxDataF;
+    c16_t tmp = saturating_sub(*ch_mag_tail++, *rxDataF++);
+    *llr_tail++ = tmp;
+    *llr_tail++ = saturating_sub(*ch_magb_tail++, tmp);
   }
 }
 
-void nr_256qam_llr(int32_t *rxdataF_comp, int32_t *ch_mag, int32_t *ch_mag2, int32_t *ch_mag3, int16_t *llr, uint32_t nb_re)
+void nr_256qam_llr(int32_t *rxdataF_comp, c16_t *ch_mag, c16_t *ch_mag2, c16_t *ch_mag3, int16_t *llr, uint32_t nb_re)
 {
   simde__m256i *rxF_256 = (simde__m256i *)rxdataF_comp;
   simde__m256i *llr256 = (simde__m256i *)llr;
@@ -297,26 +276,24 @@ void nr_256qam_llr(int32_t *rxdataF_comp, int32_t *ch_mag, int32_t *ch_mag2, int
   simde__m256i *ch_magb = (simde__m256i *)ch_mag2;
   simde__m256i *ch_magc = (simde__m256i *)ch_mag3;
 #ifndef USE_128BIT
-  simde__m256i xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6;
-
   for (int i = 0; i < (nb_re >> 3); i++) {
     // registers of even index in xmm0-> |y_R|, registers of odd index in xmm0-> |y_I|
-    xmm0 = simde_mm256_abs_epi16(*rxF_256);
+    simde__m256i xmm0 = protected_abs256(*rxF_256);
     // registers of even index in xmm0-> |y_R|-|h|^2, registers of odd index in xmm0-> |y_I|-|h|^2
     xmm0 = simde_mm256_subs_epi16(*ch_maga, xmm0);
     //  xmmtmpD2 contains 16 LLRs
-    xmm1 = simde_mm256_abs_epi16(xmm0);
+    simde__m256i xmm1 = protected_abs256(xmm0);
     xmm1 = simde_mm256_subs_epi16(*ch_magb, xmm1); // contains 16 LLRs
-    xmm2 = simde_mm256_abs_epi16(xmm1);
+    simde__m256i xmm2 = protected_abs256(xmm1);
     xmm2 = simde_mm256_subs_epi16(*ch_magc, xmm2); // contains 16 LLRs
     // rxF[i] A0 A1 A2 A3 A4 A5 A6 A7 bits 7,6
     // xmm0   B0 B1 B2 B3 B4 B5 B6 B7 bits 5,4
     // xmm1   C0 C1 C2 C3 C4 C5 C6 C7 bits 3,2
     // xmm2   D0 D1 D2 D3 D4 D5 D6 D7 bits 1,0
-    xmm3 = simde_mm256_unpacklo_epi32(*rxF_256, xmm0); // A0 B0 A1 B1 A4 B4 A5 B5
-    xmm4 = simde_mm256_unpackhi_epi32(*rxF_256, xmm0); // A2 B2 A3 B3 A6 B6 A7 B7
-    xmm5 = simde_mm256_unpacklo_epi32(xmm1, xmm2); // C0 D0 C1 D1 C4 D4 C5 D5
-    xmm6 = simde_mm256_unpackhi_epi32(xmm1, xmm2); // C2 D2 C3 D3 C6 D6 C7 D7
+    simde__m256i xmm3 = simde_mm256_unpacklo_epi32(*rxF_256, xmm0); // A0 B0 A1 B1 A4 B4 A5 B5
+    simde__m256i xmm4 = simde_mm256_unpackhi_epi32(*rxF_256, xmm0); // A2 B2 A3 B3 A6 B6 A7 B7
+    simde__m256i xmm5 = simde_mm256_unpacklo_epi32(xmm1, xmm2); // C0 D0 C1 D1 C4 D4 C5 D5
+    simde__m256i xmm6 = simde_mm256_unpackhi_epi32(xmm1, xmm2); // C2 D2 C3 D3 C6 D6 C7 D7
 
     xmm0 = simde_mm256_unpacklo_epi64(xmm3, xmm5); // A0 B0 C0 D0 A4 B4 C4 D4
     xmm1 = simde_mm256_unpackhi_epi64(xmm3, xmm5); // A1 B1 C1 D1 A5 B5 C5 D5
@@ -341,16 +318,15 @@ void nr_256qam_llr(int32_t *rxdataF_comp, int32_t *ch_mag, int32_t *ch_mag2, int
   simde__m128i *ch_maga_128 = (simde__m128i *)ch_maga;
   simde__m128i *ch_magb_128 = (simde__m128i *)ch_magb;
   simde__m128i *ch_magc_128 = (simde__m128i *)ch_magc;
-
   for (int i = 0; i < (nb_re >> 2); i++) {
     simde__m128i xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6;
     // registers of even index in xmm0-> |y_R|, registers of odd index in xmm0-> |y_I|
-    xmm0 = simde_mm_abs_epi16(*rxF_128);
+    xmm0 = protected_abs128(*rxF_128);
     // registers of even index in xmm0-> |y_R|-|h|^2, registers of odd index in xmm0-> |y_I|-|h|^2
     xmm0 = simde_mm_subs_epi16(*ch_maga_128, xmm0);
-    xmm1 = simde_mm_abs_epi16(xmm0);
+    xmm1 = protected_abs128(xmm0);
     xmm1 = simde_mm_subs_epi16(*ch_magb_128, xmm1); // contains 8 LLRs
-    xmm2 = simde_mm_abs_epi16(xmm1);
+    xmm2 = protected_abs128(xmm1);
     xmm2 = simde_mm_subs_epi16(*ch_magc_128, xmm2); // contains 8 LLRs
     // rxF[i] A0 A1 A2 A3
     // xmm0   B0 B1 B2 B3
@@ -372,30 +348,20 @@ void nr_256qam_llr(int32_t *rxdataF_comp, int32_t *ch_mag, int32_t *ch_mag2, int
     ch_magc_128++;
   }
 
-  if (nb_re & 3) {
-    for (int i = 0; i < (nb_re & 0x3); i++) {
-      int16_t *rxDataF_i16 = (int16_t *)rxF_128;
-      int16_t *ch_mag_i16 = (int16_t *)ch_maga_128;
-      int16_t *ch_magb_i16 = (int16_t *)ch_magb_128;
-      int16_t *ch_magc_i16 = (int16_t *)ch_magc_128;
-      int16_t *llr_i16 = (int16_t *)llr_128;
-      int16_t real = rxDataF_i16[2 * i + 0];
-      int16_t imag = rxDataF_i16[2 * i + 1];
-      int16_t mag_real = ch_mag_i16[2 * i];
-      int16_t mag_imag = ch_mag_i16[2 * i + 1];
-      llr_i16[8 * i] = real;
-      llr_i16[8 * i + 1] = imag;
-      llr_i16[8 * i + 2] = saturating_sub(mag_real, abs(real));
-      llr_i16[8 * i + 3] = saturating_sub(mag_imag, abs(imag));
-      int16_t magb_real = ch_magb_i16[2 * i];
-      int16_t magb_imag = ch_magb_i16[2 * i + 1];
-      llr_i16[8 * i + 4] = saturating_sub(magb_real, abs(llr_i16[8 * i + 2]));
-      llr_i16[8 * i + 5] = saturating_sub(magb_imag, abs(llr_i16[8 * i + 3]));
-      int16_t magc_real = ch_magc_i16[2 * i];
-      int16_t magc_imag = ch_magc_i16[2 * i + 1];
-      llr_i16[8 * i + 6] = saturating_sub(magc_real, abs(llr_i16[8 * i + 4]));
-      llr_i16[8 * i + 7] = saturating_sub(magc_imag, abs(llr_i16[8 * i + 5]));
-    }
+  nb_re &= 0x3;
+  c16_t *rxDataF = (c16_t *)rxF_128;
+  c16_t *ch_mag_tail = (c16_t *)ch_maga_128;
+  c16_t *ch_magb_tail = (c16_t *)ch_magb_128;
+  c16_t *ch_magc_tail = (c16_t *)ch_magc_128;
+  c16_t *llr_tail = (c16_t *)llr_128;
+  for (int i = 0; i < nb_re; i++) {
+    c16_t tmp = *rxDataF++;
+    *llr_tail++ = tmp;
+    c16_t tmp1 = saturating_sub(*ch_mag_tail++, tmp);
+    *llr_tail++ = tmp1;
+    c16_t tmp2 = saturating_sub(*ch_magb_tail++, tmp1);
+    *llr_tail++ = tmp2;
+    *llr_tail++ = saturating_sub(*ch_magc_tail++, tmp2);
   }
 }
 

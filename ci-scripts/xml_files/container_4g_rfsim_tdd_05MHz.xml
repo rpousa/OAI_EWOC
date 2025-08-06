@@ -108,9 +108,9 @@
                 <class>Ping</class>
                 <desc>Ping Traffic-Gen from LTE-UE</desc>
                 <id>rfsim4g_ue</id>
-                <nodes>cacofonix</nodes>
+                <nodes>acamas</nodes>
                 <svr_id>rfsim4g_ext_dn</svr_id>
-                <svr_node>cacofonix</svr_node>
+                <svr_node>acamas</svr_node>
                 <ping_args>-c 20</ping_args>
                 <ping_packetloss_threshold>5</ping_packetloss_threshold>
         </testCase>
@@ -119,9 +119,9 @@
                 <class>Ping</class>
                 <desc>Ping LTE-UE from Traffic-Gen</desc>
                 <id>rfsim4g_ext_dn</id>
-                <nodes>cacofonix</nodes>
+                <nodes>acamas</nodes>
                 <svr_id>rfsim4g_ue</svr_id>
-                <svr_node>cacofonix</svr_node>
+                <svr_node>acamas</svr_node>
                 <ping_args>-c 20</ping_args>
                 <ping_packetloss_threshold>5</ping_packetloss_threshold>
         </testCase>
@@ -130,9 +130,9 @@
                 <class>Iperf</class>
                 <desc>Iperf UDP DL</desc>
                 <id>rfsim4g_ue</id>
-                <nodes>cacofonix</nodes>
+                <nodes>acamas</nodes>
                 <svr_id>rfsim4g_ext_dn</svr_id>
-                <svr_node>cacofonix</svr_node>
+                <svr_node>acamas</svr_node>
                 <iperf_args>-u -t 30 -b 2M -R</iperf_args>
                 <iperf_packetloss_threshold>25</iperf_packetloss_threshold>
                 <iperf_bitrate_threshold>80</iperf_bitrate_threshold>
@@ -142,9 +142,9 @@
                 <class>Iperf</class>
                 <desc>Iperf UDP UL</desc>
                 <id>rfsim4g_ue</id>
-                <nodes>cacofonix</nodes>
+                <nodes>acamas</nodes>
                 <svr_id>rfsim4g_ext_dn</svr_id>
-                <svr_node>cacofonix</svr_node>
+                <svr_node>acamas</svr_node>
                 <iperf_args>-u -t 30 -b 1M</iperf_args>
                 <iperf_packetloss_threshold>25</iperf_packetloss_threshold>
                 <iperf_bitrate_threshold>80</iperf_bitrate_threshold>

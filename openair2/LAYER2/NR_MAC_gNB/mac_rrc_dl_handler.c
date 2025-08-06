@@ -94,7 +94,7 @@ bool DURecvCb(protocol_ctxt_t *ctxt_pP,
   // The buffer comes from the stack in gtp-u thread, we have a make a separate buffer to enqueue in a inter-thread message queue
   uint8_t *sdu = malloc16(sdu_buffer_sizeP);
   memcpy(sdu, sdu_buffer_pP, sdu_buffer_sizeP);
-  du_rlc_data_req(ctxt_pP, srb_flagP, rb_idP, muiP, confirmP, sdu_buffer_sizeP, sdu);
+  nr_rlc_data_req(ctxt_pP, srb_flagP, rb_idP, muiP, sdu_buffer_sizeP, sdu);
   return true;
 }
 

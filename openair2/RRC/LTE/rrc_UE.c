@@ -2892,9 +2892,13 @@ int decode_BCCH_DLSCH_Message(
         if ((ctxt_pP->frame % 2) == 0) {
           // even frame
           if ((UE_rrc_inst[ctxt_pP->module_id].Info[eNB_index].SIStatus&1) == 0) {
+            if (!UE_rrc_inst[ctxt_pP->module_id].sib1[eNB_index]) {
+              LOG_E(PHY,"UE_rrc_inst[%d].sib1[%d] is null, allocating\n", ctxt_pP->module_id, eNB_index);
+              openair_rrc_ue_init(ctxt_pP->module_id, eNB_index);
+            }
             LTE_SystemInformationBlockType1_t *sib1 = UE_rrc_inst[ctxt_pP->module_id].sib1[eNB_index];
-            memcpy( (void *)sib1,
-                    (void *)&bcch_message->message.choice.c1.choice.systemInformationBlockType1,
+            memcpy( sib1,
+                    &bcch_message->message.choice.c1.choice.systemInformationBlockType1,
                     sizeof(LTE_SystemInformationBlockType1_t) );
             LOG_D( RRC, "[UE %"PRIu8"] Decoding First SIB1\n", ctxt_pP->module_id );
             decode_SIB1( ctxt_pP, eNB_index, rsrq, rsrp );

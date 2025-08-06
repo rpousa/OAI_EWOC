@@ -163,7 +163,7 @@ extern "C" {
   __attribute__((always_inline)) inline c16_t c16conj(const c16_t a) {
     return (c16_t) {
       .r =  a.r,
-      .i = (int16_t)-a.i
+      .i =  (int16_t)-a.i
     };
   }
 
@@ -530,6 +530,20 @@ static inline void multadd_cpx_vector(const c16_t *x1, const c16_t *x2, c16_t *y
     simde__m128i result = oai_mm_cpx_mult(x1_128[i], x2_128[i], output_shift);
     y_128[i] = simde_mm_adds_epi16(y_128[i], result);
   }
+}
+
+static const int16_t ones_epi16[16] __attribute__((aligned(32))) = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+static inline simde__m256i protected_abs256(const simde__m256i in)
+{
+  const simde__m256i no32768 =
+      simde_mm256_adds_epi16(simde_mm256_subs_epi16(in, *(simde__m256i *)ones_epi16), *(simde__m256i *)ones_epi16);
+  return simde_mm256_abs_epi16(no32768);
+}
+
+static inline simde__m128i protected_abs128(const simde__m128i in)
+{
+  const simde__m128i no32768 = simde_mm_adds_epi16(simde_mm_subs_epi16(in, *(simde__m128i *)ones_epi16), *(simde__m128i *)ones_epi16);
+  return simde_mm_abs_epi16(no32768);
 }
 
 // lte_dfts.c
@@ -918,6 +932,16 @@ c32_t dot_product(const c16_t *x,
 
 void oai_mm_separate_real_imag_parts(simde__m128i *out_re, simde__m128i *out_im, simde__m128i in0, simde__m128i in1);
 void oai_mm256_separate_real_imag_parts(simde__m256i *out_re, simde__m256i *out_im, simde__m256i in0, simde__m256i in1);
+
+// generates vpcmpeqd ymm0, ymm0, ymm0
+static inline simde__m256i allones256(void)
+{
+  return simde_mm256_set1_epi64x(-1);
+}
+static inline simde__m128i allones128(void)
+{
+  return simde_mm_set1_epi32(-1);
+}
 
 void InitSinLUT(void);
 
