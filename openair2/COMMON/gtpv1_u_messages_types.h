@@ -37,8 +37,6 @@
 
 #define GTPV1U_REQ(mSGpTR)    (mSGpTR)->ittiMsg.gtpv1uReq
 
-#define GTPV1U_DU_BUFFER_REPORT_REQ(mSGpTR)    (mSGpTR)->ittiMsg.NRGtpv1uBufferReportReq
-
 #define GTPV1U_ALL_TUNNELS_TEID (teid_t)0xFFFFFFFF
 
 typedef struct gtpv1u_enb_create_x2u_tunnel_req_s {
@@ -187,12 +185,5 @@ typedef struct gtpv1u_gnb_delete_tunnel_resp_s {
   uint8_t                status;               ///< Status of NGU endpoint deleteion (Failed = 0xFF or Success = 0x0)
   teid_t                 gnb_NGu_teid;         ///< local NGU Tunnel Endpoint Identifier to be deleted
 } gtpv1u_gnb_delete_tunnel_resp_t;
-
-
-typedef struct gtpv1u_DU_buffer_report_req_s {
-  uint32_t               buffer_availability;
-  ue_id_t                ue_id;
-  int         pdusession_id;
-} gtpv1u_DU_buffer_report_req_t;
 
 #endif /* GTPV1_U_MESSAGES_TYPES_H_ */

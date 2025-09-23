@@ -25,6 +25,8 @@
 #include "subscribe-mplane.h"
 #include "config-mplane.h"
 #include "xml/get-xml.h"
+#include "yang/get-yang.h"
+#include "yang/create-yang-config.h"
 
 #include <libyang/libyang.h>
 #include <nc_client.h>
@@ -94,11 +96,14 @@ bool init_mplane(ru_session_list_t *ru_session_list)
 
   char **ru_ip_addrs = gpd(fhip, nump, ORAN_CONFIG_RU_IP_ADDR)->strlistptr;
   int num_rus = gpd(fhip, nump, ORAN_CONFIG_RU_IP_ADDR)->numelt;
+  char **ru_usernames = gpd(fhip, nump, ORAN_CONFIG_RU_USERNAME)->strlistptr;
+  int num_ru_users = gpd(fhip, nump, ORAN_CONFIG_RU_USERNAME)->numelt;
   char **du_mac_addr = gpd(fhip, nump, ORAN_CONFIG_DU_ADDR)->strlistptr;
   int num_dus = gpd(fhip, nump, ORAN_CONFIG_DU_ADDR)->numelt;
   int32_t *vlan_tag = gpd(fhip, nump, ORAN_CONFIG_VLAN_TAG)->iptr;
   int num_vlan_tags = gpd(fhip, nump, ORAN_CONFIG_VLAN_TAG)->numelt;
 
+  AssertError(num_rus == num_ru_users, return false, "[MPLANE] Number of RUs should be equal to the number of users, one for each.\n");
   AssertError(num_dus == num_vlan_tags, return false, "[MPLANE] Number of DU MAC addresses should be equal to the number of VLAN tags.\n");
  
   int num_cu_planes = num_dus / num_rus;
@@ -110,6 +115,8 @@ bool init_mplane(ru_session_list_t *ru_session_list)
     ru_session->session = NULL;
     ru_session->ru_ip_add = calloc(strlen(ru_ip_addrs[i]) + 1, sizeof(char));
     memcpy(ru_session->ru_ip_add, ru_ip_addrs[i], strlen(ru_ip_addrs[i]) + 1);
+    ru_session->username = calloc(strlen(ru_usernames[i]) + 1, sizeof(char));
+    memcpy(ru_session->username, ru_usernames[i], strlen(ru_usernames[i]) + 1);
 
     // store DU MAC addresses and VLAN tags
     ru_session->ru_mplane_config.num_cu_planes = num_cu_planes;
@@ -175,15 +182,21 @@ bool manage_ru(ru_session_t *ru_session, const openair0_config_t *oai, const siz
   success = get_uplane_info(operational_ds, &ru_session->ru_mplane_config);
   AssertError(success, return false, "[MPLANE] Unable to get U-plane info from RU operational datastore.\n");
 
+  // Performance Management
+  success = get_pm_object_list(operational_ds, &ru_session->pm_stats);
+  AssertError(success, return false, "[MPLANE] Unable to retrieve performance measurement names from RU \"%s\".\n", ru_session->ru_ip_add);
+
+  success = load_yang_models(ru_session, operational_ds);
+  AssertError(success, return false, "[MPLANE] Unable to load yang models.\n");
+
   if (ru_session->ru_notif.ptp_state) {
-    success = edit_config_mplane(ru_session, operational_ds, oai, num_rus);
-    AssertError(success, return false, "[MPLANE] Unable to edit the RU configuration.\n");
+    char *content = NULL;
+    success = configure_ru_from_yang(ru_session, oai, num_rus, &content);
+    AssertError(success, return false, "[MPLANE] Unable to create content for <edit-config> RPC for start-up procedure.\n");
 
-    success = validate_config_mplane(ru_session);
-    AssertError(success, return false, "[MPLANE] Unable to validate the RU configuration.\n");
-
-    success = commit_config_mplane(ru_session);
-    AssertError(success, return false, "[MPLANE] Unable to commit the RU configuration.\n");
+    success = edit_val_commmit_rpc(ru_session, content);
+    AssertError(success, return false, "[MPLANE] Unable to continue.\n");
+    free(content);
   }
 
   const char *usage_state = get_ru_xml_node(operational_ds, "usage-state");
@@ -200,6 +213,18 @@ bool manage_ru(ru_session_t *ru_session, const openair0_config_t *oai, const siz
 
   free(operational_ds);
   free(watchdog_answer);
+
+  return true;
+}
+
+bool pm_conf(ru_session_t *ru_session, const char *active)
+{
+  char *content = get_pm_content(ru_session, active);
+
+  bool success = edit_val_commmit_rpc(ru_session, content);
+  AssertError(success, return false, "[MPLANE] Cannot continue.\n");
+
+  free(content);
 
   return true;
 }

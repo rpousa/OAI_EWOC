@@ -37,6 +37,17 @@
 
 typedef uint32_t channel_t;
 
+void nr_mac_rrc_meas_ind_ue(module_id_t module_id, uint32_t gNB_index, uint16_t Nid_cell, bool csi_meas, bool is_neighboring_cell, uint8_t rsrp_dBm)
+{
+  MessageDef *message_p = itti_alloc_new_message(TASK_MAC_UE, 0, NR_RRC_MAC_MEAS_DATA_IND);
+  NR_RRC_MAC_MEAS_DATA_IND(message_p).gnb_index = gNB_index;
+  NR_RRC_MAC_MEAS_DATA_IND(message_p).Nid_cell = Nid_cell;
+  NR_RRC_MAC_MEAS_DATA_IND(message_p).is_csi_meas = csi_meas;
+  NR_RRC_MAC_MEAS_DATA_IND(message_p).is_neighboring_cell = is_neighboring_cell;
+  NR_RRC_MAC_MEAS_DATA_IND(message_p).rsrp_dBm = rsrp_dBm;
+  itti_send_msg_to_task(TASK_RRC_NRUE, GNB_MODULE_ID_TO_INSTANCE(module_id), message_p);
+}
+
 void nr_mac_rrc_sync_ind(const module_id_t module_id, const frame_t frame, const bool in_sync)
 {
   MessageDef *message_p = itti_alloc_new_message(TASK_MAC_UE, 0, NR_RRC_MAC_SYNC_IND);
@@ -121,42 +132,40 @@ void nr_mac_rrc_data_ind_ue(const module_id_t module_id,
   }
 }
 
-void process_msg_rcc_to_mac(MessageDef *msg)
+void process_msg_rcc_to_mac(nr_mac_rrc_message_t *msg, int instance_id)
 {
-  instance_t ue_id = ITTI_MSG_DESTINATION_INSTANCE(msg);
-  switch (ITTI_MSG_ID(msg)) {
+  switch (msg->payload_type) {
     case NR_MAC_RRC_CONFIG_RESET:
-      nr_rrc_mac_config_req_reset(ue_id, NR_MAC_RRC_CONFIG_RESET(msg).cause);
+      nr_rrc_mac_config_req_reset(instance_id, msg->payload.config_reset.cause);
       break;
     case NR_MAC_RRC_CONFIG_CG:
-      nr_rrc_mac_config_req_cg(ue_id, 0, NR_MAC_RRC_CONFIG_CG(msg).cellGroupConfig, NR_MAC_RRC_CONFIG_CG(msg).UE_NR_Capability);
-      asn1cFreeStruc(asn_DEF_NR_CellGroupConfig, NR_MAC_RRC_CONFIG_CG(msg).cellGroupConfig);
+      nr_rrc_mac_config_req_cg(instance_id, 0, msg->payload.config_cg.cellGroupConfig, msg->payload.config_cg.UE_NR_Capability);
+      asn1cFreeStruc(asn_DEF_NR_CellGroupConfig, msg->payload.config_cg.cellGroupConfig);
       break;
     case NR_MAC_RRC_CONFIG_MIB:
-      nr_rrc_mac_config_req_mib(ue_id,
+      nr_rrc_mac_config_req_mib(instance_id,
                                 0,
-                                NR_MAC_RRC_CONFIG_MIB(msg).bcch->message.choice.mib,
-                                NR_MAC_RRC_CONFIG_MIB(msg).get_sib,
-                                NR_MAC_RRC_CONFIG_MIB(msg).access_barred);
-      ASN_STRUCT_FREE(asn_DEF_NR_BCCH_BCH_Message, NR_MAC_RRC_CONFIG_MIB(msg).bcch);
+                                msg->payload.config_mib.bcch->message.choice.mib,
+                                msg->payload.config_mib.get_sib,
+                                msg->payload.config_mib.access_barred);
+      ASN_STRUCT_FREE(asn_DEF_NR_BCCH_BCH_Message, msg->payload.config_mib.bcch);
       break;
     case NR_MAC_RRC_CONFIG_SIB1: {
-      NR_SIB1_t *sib1 = NR_MAC_RRC_CONFIG_SIB1(msg).sib1;
-      bool can_start_ra = NR_MAC_RRC_CONFIG_SIB1(msg).can_start_ra;
-      nr_rrc_mac_config_req_sib1(ue_id, 0, sib1, can_start_ra);
-      SEQUENCE_free(&asn_DEF_NR_SIB1, NR_MAC_RRC_CONFIG_SIB1(msg).sib1, ASFM_FREE_EVERYTHING);
+      NR_SIB1_t *sib1 = msg->payload.config_sib1.sib1;
+      bool can_start_ra = msg->payload.config_sib1.can_start_ra;
+      nr_rrc_mac_config_req_sib1(instance_id, 0, sib1, can_start_ra);
+      SEQUENCE_free(&asn_DEF_NR_SIB1, msg->payload.config_sib1.sib1, ASFM_FREE_EVERYTHING);
     } break;
     case NR_MAC_RRC_CONFIG_OTHER_SIB: {
-      bool can_start_ra = NR_MAC_RRC_CONFIG_OTHER_SIB(msg).can_start_ra;
-      nr_rrc_mac_config_other_sib(ue_id, NR_MAC_RRC_CONFIG_OTHER_SIB(msg).sib19, can_start_ra);
+      bool can_start_ra = msg->payload.config_other_sib.can_start_ra;
+      nr_rrc_mac_config_other_sib(instance_id, msg->payload.config_other_sib.sib19, can_start_ra);
     } break;
     case NR_MAC_RRC_RESUME_RB:
-      nr_rrc_mac_resume_rb(ue_id, NR_MAC_RRC_RESUME_RB(msg).is_srb, NR_MAC_RRC_RESUME_RB(msg).rb_id);
+      nr_rrc_mac_resume_rb(instance_id, msg->payload.resume_rb.is_srb, msg->payload.resume_rb.rb_id);
       break;
     default:
-      LOG_E(NR_MAC, "Unexpected msg from RRC: %d\n", ITTI_MSG_ID(msg));
+      LOG_E(NR_MAC, "Unexpected msg from RRC: %d\n", msg->payload_type);
   }
-  itti_free(ITTI_MSG_ORIGIN_ID(msg), msg);
 }
 
 void nr_mac_rrc_inactivity_timer_ind(const module_id_t mod_id)

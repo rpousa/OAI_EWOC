@@ -221,9 +221,7 @@ In the CU file:
   ignored, but we recommend to put `0.0.0.0` ("any")
 - Ports should match the ones in the DU config, but for simplicity and
   standards-conformity, simply set all to 2152:
-  - `local_s_portc` in CU should match `remote_n_portc` in DU
   - `local_s_portd` in CU should match `remote_n_portd` in DU
-  - `remote_s_portc` in CU should match `local_n_portc` in DU
   - `remote_s_portd` in CU should match `local_n_portd` in DU
 
 In the DU file:

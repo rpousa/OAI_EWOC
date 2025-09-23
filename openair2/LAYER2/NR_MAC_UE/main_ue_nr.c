@@ -38,7 +38,7 @@
 #include "nr_rlc/nr_rlc_oai_api.h"
 #include "RRC/NR_UE/rrc_proto.h"
 #include <pthread.h>
-static NR_UE_MAC_INST_t *nr_ue_mac_inst; 
+static NR_UE_MAC_INST_t *nr_ue_mac_inst[MAX_NUM_NR_UE_INST] = {0};
 
 void send_srb0_rrc(int ue_id, const uint8_t *sdu, sdu_size_t sdu_len, void *data)
 {
@@ -70,6 +70,7 @@ void nr_ue_init_mac(NR_UE_MAC_INST_t *mac)
   mac->p_Max_alt = INT_MIN;
   mac->msg3_C_RNTI = false;
   mac->ntn_ta.ntn_params_changed = false;
+  initNotifiedFIFO(&mac->input_nf);
   reset_mac_inst(mac);
 
   // need to inizialize because might not been setup (optional timer)
@@ -124,37 +125,38 @@ NR_UE_L2_STATE_t nr_ue_get_sync_state(module_id_t mod_id)
   return mac->state;
 }
 
-NR_UE_MAC_INST_t *nr_l2_init_ue(int nb_inst)
+NR_UE_MAC_INST_t *nr_l2_init_ue(int instance_id)
 {
-  //init mac here
-  nr_ue_mac_inst = (NR_UE_MAC_INST_t *)calloc(nb_inst, sizeof(NR_UE_MAC_INST_t));
-  AssertFatal(nr_ue_mac_inst, "Couldn't allocate %d instances of MAC module\n", nb_inst);
+  AssertFatal(instance_id < MAX_NUM_NR_UE_INST, "instance_id %d is out of range\n", instance_id);
+  AssertFatal(nr_ue_mac_inst[instance_id] == NULL, "MAC instance %d already initialized\n", instance_id);
+  nr_ue_mac_inst[instance_id] = calloc_or_fail(1, sizeof(NR_UE_MAC_INST_t));
 
-  for (int j = 0; j < nb_inst; j++) {
-    NR_UE_MAC_INST_t *mac = &nr_ue_mac_inst[j];
-    mac->ue_id = j;
-    nr_ue_init_mac(mac);
-    int ret = pthread_mutex_init(&mac->if_mutex, NULL);
-    AssertFatal(ret == 0, "Mutex init failed\n");
-    nr_ue_mac_default_configs(mac);
-    if (IS_SA_MODE(get_softmodem_params()))
-      ue_init_config_request(mac, get_slots_per_frame_from_scs(get_softmodem_params()->numerology));
+  NR_UE_MAC_INST_t *mac = nr_ue_mac_inst[instance_id];
+  mac->ue_id = instance_id;
+  nr_ue_init_mac(mac);
+  int ret = pthread_mutex_init(&mac->if_mutex, NULL);
+  AssertFatal(ret == 0, "Mutex init failed\n");
+  nr_ue_mac_default_configs(mac);
+  if (IS_SA_MODE(get_softmodem_params()))
+    ue_init_config_request(mac, get_slots_per_frame_from_scs(get_softmodem_params()->numerology));
+
+  static bool initialized = false;
+  if (!initialized) {
+    int rc = nr_rlc_module_init(NR_RLC_OP_MODE_UE);
+    AssertFatal(rc == 0, "Could not initialize RLC layer\n");
+    initialized = true;
   }
 
-  int rc = nr_rlc_module_init(NR_RLC_OP_MODE_UE);
-  AssertFatal(rc == 0, "Could not initialize RLC layer\n");
+  nr_rlc_activate_srb0(instance_id, NULL, send_srb0_rrc);
 
-  for (int j = 0; j < nb_inst; j++) {
-    nr_rlc_activate_srb0(j, NULL, send_srb0_rrc);
-  }
-
-  return (nr_ue_mac_inst);
+  return nr_ue_mac_inst[instance_id];
 }
 
 NR_UE_MAC_INST_t *get_mac_inst(module_id_t module_id)
 {
-  NR_UE_MAC_INST_t *mac = &nr_ue_mac_inst[(int)module_id];
-  AssertFatal(mac, "Couldn't get MAC inst %d\n", module_id);
+  AssertFatal(module_id < MAX_NUM_NR_UE_INST, "module_id %d is out of range\n", module_id);
+  NR_UE_MAC_INST_t *mac = nr_ue_mac_inst[module_id];
+  if (mac == NULL) return NULL;
   AssertFatal(mac->ue_id == module_id, "MAC ID %d doesn't match with input %d\n", mac->ue_id, module_id);
   return mac;
 }
@@ -196,6 +198,7 @@ void reset_mac_inst(NR_UE_MAC_INST_t *nr_mac)
 
   // stop any ongoing RACH procedure
   if (nr_mac->ra.RA_active) {
+    nr_mac->msg3_C_RNTI = false;
     nr_mac->ra.ra_state = nrRA_UE_IDLE;
     nr_mac->ra.RA_active = false;
   }
@@ -299,7 +302,7 @@ void release_mac_configuration(NR_UE_MAC_INST_t *mac, NR_UE_MAC_reset_cause_t ca
     release_ul_BWP(mac, i);
 
   memset(&mac->ssb_measurements, 0, sizeof(mac->ssb_measurements));
-  memset(&mac->csirs_measurements, 0, sizeof(mac->csirs_measurements));
+  memset(&mac->l1_measurements, 0, sizeof(mac->l1_measurements));
   memset(&mac->ul_time_alignment, 0, sizeof(mac->ul_time_alignment));
   for (int i = mac->TAG_list.count; i > 0 ; i--)
     asn_sequence_del(&mac->TAG_list, i - 1, 1);

@@ -30,7 +30,7 @@ const uint8_t **crc24c_generator_matrix(uint16_t payloadSizeBits)
   uint8_t temp1[crcPolynomialSize], temp2[crcPolynomialSize];
 
   uint8_t **crc_generator_matrix =
-      malloc(payloadSizeBits * sizeof(uint8_t *) + payloadSizeBits * crcPolynomialSize * sizeof(uint8_t));
+      malloc_or_fail(payloadSizeBits * sizeof(uint8_t *) + payloadSizeBits * crcPolynomialSize * sizeof(uint8_t));
   if (crc_generator_matrix)
     for (int i = 0; i < payloadSizeBits; i++)
       crc_generator_matrix[i] = ((uint8_t *)&crc_generator_matrix[payloadSizeBits]) + i * crcPolynomialSize;

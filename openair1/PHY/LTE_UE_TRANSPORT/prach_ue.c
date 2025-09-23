@@ -63,7 +63,6 @@ int32_t generate_prach( PHY_VARS_UE *ue, uint8_t eNB_id, uint8_t subframe, uint1
   int16_t Ncp;
   uint8_t n_ra_prb;
   uint16_t NCS;
-  uint16_t *prach_root_sequence_map;
   uint16_t preamble_offset,preamble_shift;
   uint16_t preamble_index0,n_shift_ra,n_shift_ra_bar;
   uint16_t d_start=-1,numshift;
@@ -72,11 +71,7 @@ int32_t generate_prach( PHY_VARS_UE *ue, uint8_t eNB_id, uint8_t subframe, uint1
   //uint8_t f_ra,t1_ra;
   uint16_t N_ZC = (prach_fmt<4)?839:139;
   uint8_t not_found;
-  int k;
-  int16_t *Xu;
   uint16_t u;
-  int32_t Xu_re,Xu_im;
-  uint16_t offset,offset2;
   int prach_start;
   int i, prach_len;
   uint16_t first_nonzero_root_idx=0;
@@ -109,7 +104,7 @@ int32_t generate_prach( PHY_VARS_UE *ue, uint8_t eNB_id, uint8_t subframe, uint1
                                   ue->frame_parms.prach_config_common.prach_ConfigInfo.prach_ConfigIndex,
                                   ue->frame_parms.prach_config_common.prach_ConfigInfo.prach_FreqOffset,
                                   tdd_mapindex, Nf);
-  prach_root_sequence_map = (prach_fmt<4) ? prach_root_sequence_map0_3 : prach_root_sequence_map4;
+  const uint16_t *prach_root_sequence_map = (prach_fmt < 4) ? prach_root_sequence_map0_3 : prach_root_sequence_map4;
   /*
   // this code is not part of get_prach_prb_offset
   if (frame_type == TDD) { // TDD
@@ -215,20 +210,6 @@ int32_t generate_prach( PHY_VARS_UE *ue, uint8_t eNB_id, uint8_t subframe, uint1
 #endif
   //  nsymb = (frame_parms->Ncp==0) ? 14:12;
   //  subframe_offset = (unsigned int)frame_parms->ofdm_symbol_size*subframe*nsymb;
-  k = (12*n_ra_prb) - 6*ue->frame_parms.N_RB_UL;
-
-  if (k<0)
-    k+=ue->frame_parms.ofdm_symbol_size;
-
-  k*=12;
-  k+=13;
-  Xu = (int16_t *)ue->X_u[preamble_offset-first_nonzero_root_idx];
-  /*
-    k+=(12*ue->frame_parms.first_carrier_offset);
-    if (k>(12*ue->frame_parms.ofdm_symbol_size))
-    k-=(12*ue->frame_parms.ofdm_symbol_size);
-  */
-  k*=2;
 
   switch (ue->frame_parms.N_RB_UL) {
     case 6:
@@ -259,20 +240,26 @@ int32_t generate_prach( PHY_VARS_UE *ue, uint8_t eNB_id, uint8_t subframe, uint1
 
       break;
   }
+  {
+    int k = (12 * n_ra_prb) - 6 * ue->frame_parms.N_RB_UL;
 
-  for (offset=0,offset2=0; offset<N_ZC; offset++,offset2+=preamble_shift) {
-    if (offset2 >= N_ZC)
-      offset2 -= N_ZC;
+    if (k < 0)
+      k += ue->frame_parms.ofdm_symbol_size;
 
-    Xu_re = (((int32_t)Xu[offset<<1]*amp)>>15);
-    Xu_im = (((int32_t)Xu[1+(offset<<1)]*amp)>>15);
-    prachF[k++]= ((Xu_re*ru[offset2<<1]) - (Xu_im*ru[1+(offset2<<1)]))>>15;
-    prachF[k++]= ((Xu_im*ru[offset2<<1]) + (Xu_re*ru[1+(offset2<<1)]))>>15;
+    k *= 12;
+    k += 13;
+    c16_t *Xu_ue = ue->X_u[preamble_offset - first_nonzero_root_idx];
+    c16_t *complex_prachF = (c16_t *)prachF;
+    for (int offset = 0, offset2 = 0; offset < N_ZC; offset++, offset2 += preamble_shift) {
+      if (offset2 >= N_ZC)
+        offset2 -= N_ZC;
+      c16_t Xu = c16mulRealShift(*Xu_ue++, amp, 15);
+      complex_prachF[k++] = c16mulShift(Xu, root_unit[offset2], 15);
 
-    if (k==(12*2*ue->frame_parms.ofdm_symbol_size))
-      k=0;
+      if (k == 12 * ue->frame_parms.ofdm_symbol_size)
+        k = 0;
+    }
   }
-
   switch (prach_fmt) {
     case 0:
       Ncp = 3168;

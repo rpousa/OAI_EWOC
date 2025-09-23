@@ -88,7 +88,6 @@ extern int nfapi_sync_var;
 extern int sync_var;
 
 nfapi_tx_request_pdu_t *tx_request_pdu[1023][10][10]; // [frame][subframe][max_num_pdus]
-nfapi_nr_pdu_t *tx_data_request[1023][20][10]; //[frame][slot][max_num_pdus]
 uint8_t tx_pdus[32][8][4096];
 
 nfapi_ue_release_request_body_t release_rntis;

@@ -37,15 +37,11 @@ set_openair_env
 conf_nvram_path=$OPENAIR_DIR/openair3/NAS/TOOLS/ue_eurecom_test_sfr.conf
 
 HW=""
-VERBOSE_COMPILE=0
-RUN_GROUP=0
-TEST_CASE_GROUP=""
 BUILD_DIR=ran_build
-BUILD_DOXYGEN=0
 DISABLE_HARDWARE_DEPENDENCY="False"
 CMAKE_BUILD_TYPE="RelWithDebInfo"
 CMAKE_CMD="$CMAKE"
-OPTIONAL_LIBRARIES="telnetsrv enbscope uescope nrscope ldpc_cuda ldpc_t2 ldpc_xdma websrv oai_iqplayer imscope imscope_record"
+OPTIONAL_LIBRARIES="telnetsrv enbscope uescope nrscope ldpc_cuda ldpc_aal ldpc_xdma websrv oai_iqplayer imscope imscope_record"
 TARGET_LIST=""
 BUILD_TOOL_OPT="-j$(nproc)"
 
@@ -99,14 +95,8 @@ Options:
    Selects the transport protocol type, options: None, Ethernet, benetel4g, benetel5g, oran_fhlib_5g, oran_fhlib_5g_mplane, WLS
 -P | --phy_simulators
    Makes the unitary tests Layer 1 simulators
--s | --check
-   runs a set of auto-tests based on simulators and several compilation tests
---run-group 
-   runs only specified test cases specified here. This flag is only valid with -s
 -V | --vcd
    Adds a debgging facility to the binary files: GUI with major internal synchronization events
---verbose-compile
-   Shows detailed compilation instructions in makefile
 --build-doxygen
    Builds doxygen based documentation.
 --trace-asn1c-enc-dec
@@ -117,8 +107,6 @@ Options:
    Disables the T tracer.
 --disable-hardware-dependency
    Disable HW dependency during installation
---ue-autotest-trace
-   Enable specific traces for UE autotest framework
 --ue-trace
    Enable traces for UE debugging
 --ue-timing
@@ -319,28 +307,14 @@ function main() {
             TARGET_LIST="$TARGET_LIST dlsim ulsim ldpctest polartest smallblocktest nr_pbchsim nr_dlschsim nr_ulschsim nr_dlsim nr_ulsim nr_pucchsim nr_prachsim nr_psbchsim"
             echo_info "Will compile dlsim, ulsim, ..."
             shift;;
-       -s | --check)
-            OAI_TEST=1
-            echo_info "Will run auto-tests"
-            shift;;
-       --run-group)
-            RUN_GROUP=1
-            TEST_CASE_GROUP=$2
-            echo_info "executing test cases only in group: $TEST_CASE_GROUP"
-            shift 2;;
        -V | --vcd)
             echo_info "Setting gtk-wave output"
             CMAKE_CMD="$CMAKE_CMD -DENABLE_VCD_FIFO=True"
             shift;;
-       --verbose-compile)
-            VERBOSE_COMPILE=1
-            echo_info "Will compile with verbose instructions"
-            shift;;
        --build-doxygen)
            CMAKE_CMD="$CMAKE_CMD -DGENERATE_DOXYGEN=ON"
-	   TARGET_LIST="$TARGET_LIST doc"
-           BUILD_DOXYGEN=1
-           echo_info "Will build doxygen support"
+           TARGET_LIST="$TARGET_LIST doc"
+           echo_info "Will build Doxygen documentation: $DIR/$BUILD_DIR/build/doc/html/index.html"
            shift;;     
        --enable-LTTNG)
             CMAKE_CMD="$CMAKE_CMD -DENABLE_LTTNG=ON -DT_TRACER=OFF"
@@ -354,10 +328,6 @@ function main() {
        --disable-hardware-dependency)
             echo_info "Disabling hardware dependency for compiling software"
             DISABLE_HARDWARE_DEPENDENCY="True"
-            shift 1;;
-       --ue-autotest-trace)
-            CMAKE_CMD="$CMAKE_CMD -DUE_AUTOTEST_TRACE=True"
-            echo_info "Enabling autotest specific trace for UE"
             shift 1;;
        --ue-trace)
             CMAKE_CMD="$CMAKE_CMD -DUE_DEBUG_TRACE=False"
@@ -487,7 +457,7 @@ function main() {
     # add some default libraries that should always be built
     # for eNB, gNB, UEs, simulators
     if [[ $gNB == 1 || $eNB == 1 || $UE == 1 || $nrUE == 1 || $SIMUS_PHY == 1 || $RU == 1 ]]; then
-      TARGET_LIST="$TARGET_LIST params_libconfig coding rfsimulator dfts params_yaml vrtsim"
+      TARGET_LIST="$TARGET_LIST params_libconfig coding rfsimulator dfts params_yaml vrtsim rf_emulator"
     fi
 
     mkdir -p $DIR/$BUILD_DIR/build
@@ -498,13 +468,10 @@ function main() {
     CMAKE_CMD="$CMAKE_CMD ../../.."
     echo_info "Running \"$CMAKE_CMD\""
     eval $CMAKE_CMD
-    compilations $BUILD_DIR all.txt "$TARGET_LIST" "${BUILD_TOOL_OPT}"
-    ###################
-    # Doxygen Support #
-    ###################
-    if [ "$BUILD_DOXYGEN" = "1" ] ; then
-	echo_info "Built Doxygen based documentation. The documentation file is located here: $DIR/$BUILD_DIR/build/doc/html/index.html"
-    fi
+    cmd="$CMAKE --build . --target ${TARGET_LIST} -- ${BUILD_TOOL_OPT}"
+    echo_info "Running \"${cmd}\"" $green
+    eval $cmd
+    ret=$?
 
     if [ "$UE" = 1 ] ; then
       echo_info "Generate LTE USIM default sim content UE specific part"
@@ -517,26 +484,7 @@ function main() {
     fi
   fi
 
-
-  ##############
-  # Auto-tests #
-  ##############
-  if [ "$OAI_TEST" = "1" ] ; then
-    echo_info "The log file for the autotest script for debugging is located here: $OPENAIR_DIR/cmake_targets/autotests/log/autotests.log "
-    echo_info "The results of autotests results is located here: $OPENAIR_DIR/cmake_targets/autotests/log/results_autotests.xml "
-    echo_info "You can hit CTRL-C at any time to terminate the autotests..."
-    rm -fr $OPENAIR_DIR/cmake_targets/autotests/log
-    mkdir -p $OPENAIR_DIR/cmake_targets/autotests/log
-    if [ "$RUN_GROUP" -eq "1" ]; then
-        $OPENAIR_DIR/cmake_targets/autotests/run_exec_autotests.bash -g "$TEST_CASE_GROUP" >& $OPENAIR_DIR/cmake_targets/autotests/log/autotests.log
-    else
-        $OPENAIR_DIR/cmake_targets/autotests/run_exec_autotests.bash >& $OPENAIR_DIR/cmake_targets/autotests/log/autotests.log
-    fi
-    wait
-  else
-    echo_success "BUILD SHOULD BE SUCCESSFUL"
-  fi
-
+  echo_success "BUILD SHOULD BE SUCCESSFUL"
 }
 
 main "$@"

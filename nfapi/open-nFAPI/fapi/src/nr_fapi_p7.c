@@ -2308,7 +2308,7 @@ uint8_t unpack_nr_srs_report_tlv_value(nfapi_srs_report_tlv_t *report_tlv, uint8
     }
   }
 #else
-  const uint16_t last_idx = ((report_tlv->length + 3) / 4) - 1;
+  const int16_t last_idx = ((report_tlv->length + 3) / 4) - 1;
   for (int i = 0; i < last_idx; i++) {
     if (!pull32(ppReadPackedMsg, &report_tlv->value[i], end)) {
       return 0;

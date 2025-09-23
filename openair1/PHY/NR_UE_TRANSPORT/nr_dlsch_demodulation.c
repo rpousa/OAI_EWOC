@@ -80,7 +80,7 @@ unsigned char offset_mumimo_llr_drange[29][3]={{8,8,8},{7,7,7},{7,7,7},{7,7,7},{
 /* compute the MMSE up to 4x4 matrices */
 static void nr_dlsch_mmse(uint32_t rx_size_symbol,
                           unsigned char n_rx,
-                          unsigned char n_tx, // number of layer
+                          unsigned char nl, // number of layer
                           int32_t rxdataF_comp[][n_rx][rx_size_symbol * NR_SYMBOLS_PER_SLOT],
                           c16_t dl_ch_mag[][n_rx][rx_size_symbol],
                           c16_t dl_ch_magb[][n_rx][rx_size_symbol],
@@ -193,20 +193,6 @@ static void nr_dlsch_channel_compensation(uint32_t rx_size_symbol,
                                           unsigned char output_shift,
                                           PHY_NR_MEASUREMENTS *measurements);
 
-/** \brief This function computes the average channel level over all allocated RBs and antennas (TX/RX) in order to compute output shift for compensated signal
-    @param dl_ch_estimates_ext Channel estimates in allocated RBs
-    @param frame_parms Pointer to frame descriptor
-    @param avg Pointer to average signal strength
-    @param pilots_flag Flag to indicate pilots in symbol
-    @param nb_rb Number of allocated RBs
-*/
-static void nr_dlsch_channel_level(uint32_t rx_size_symbol,
-                                   int32_t dl_ch_estimates_ext[][rx_size_symbol],
-                                   uint8_t n_rx,
-                                   uint8_t n_tx,
-                                   int32_t avg[MAX_ANT][MAX_ANT],
-                                   uint32_t len);
-
 void nr_dlsch_scale_channel(uint32_t rx_size_symbol,
                             int32_t dl_ch_estimates_ext[][rx_size_symbol],
                             NR_DL_FRAME_PARMS *frame_parms,
@@ -217,7 +203,7 @@ void nr_dlsch_scale_channel(uint32_t rx_size_symbol,
                             uint32_t len,
                             unsigned short nb_rb);
 static void nr_dlsch_detection_mrc(uint32_t rx_size_symbol,
-                                   short n_tx,
+                                   short nl,
                                    short n_rx,
                                    int32_t rxdataF_comp[][n_rx][rx_size_symbol * NR_SYMBOLS_PER_SLOT],
                                    int ***rho,
@@ -538,25 +524,25 @@ int nr_rx_pdsch(PHY_VARS_NR_UE *ue,
     //----------------------------------------------------------
     start_meas_nr_ue_phy(ue, DLSCH_CHANNEL_LEVEL_STATS);
     if (first_symbol_flag) {
-      int32_t avg[MAX_ANT][MAX_ANT] = {};
+      int32_t avg[nl * n_rx];
       if (nb_re_pdsch)
-        nr_dlsch_channel_level(rx_size_symbol, dl_ch_estimates_ext, frame_parms->nb_antennas_rx, nl, avg, nb_re_pdsch);
+        nr_channel_level(0, rx_size_symbol, (c16_t (*)[rx_size_symbol])dl_ch_estimates_ext, n_rx, nl, avg, nb_re_pdsch);
       else
         LOG_E(NR_PHY, "Average channel level is 0: nb_rb_pdsch = %d, nb_re_pdsch = %d\n", nb_rb_pdsch, nb_re_pdsch);
       int avgs = 0;
       int32_t median[MAX_ANT][MAX_ANT];
-      for (int aatx = 0; aatx < nl; aatx++)
+      for (int l = 0; l < nl; l++)
         for (int aarx = 0; aarx < n_rx; aarx++) {
-          avgs = cmax(avgs, avg[aatx][aarx]);
-          LOG_D(PHY, "nb_rb %d avg_%d_%d Power per SC is %d\n", nb_rb_pdsch, aarx, aatx, avg[aatx][aarx]);
+          avgs = cmax(avgs, avg[l * n_rx + aarx]);
+          LOG_D(PHY, "nb_rb %d avg_%d_%d Power per SC is %d\n", nb_rb_pdsch, aarx, l, avg[l * n_rx + aarx]);
           LOG_D(PHY, "avgs Power per SC is %d\n", avgs);
-          median[aatx][aarx] = avg[aatx][aarx];
+          median[l][aarx] = avg[l * n_rx + aarx];
         }
       if (nl > 1) {
         nr_dlsch_channel_level_median(rx_size_symbol, dl_ch_estimates_ext, median, nl, n_rx, nb_re_pdsch);
-        for (int aatx = 0; aatx < nl; aatx++) {
+        for (int l = 0; l < nl; l++) {
           for (int aarx = 0; aarx < n_rx; aarx++) {
-            avgs = cmax(avgs, median[aatx][aarx]);
+            avgs = cmax(avgs, median[l][aarx]);
           }
         }
       }
@@ -795,53 +781,6 @@ int nr_rx_pdsch(PHY_VARS_NR_UE *ue,
   return (0);
 }
 
-void nr_dlsch_deinterleaving(uint8_t symbol,
-                             uint8_t start_symbol,
-                             uint16_t L,
-                             uint16_t *llr,
-                             uint16_t *llr_deint,
-                             uint16_t nb_rb_pdsch)
-{
-
-  uint32_t bundle_idx, N_bundle, R, C, r,c;
-  int32_t m,k;
-  uint8_t nb_re;
-
-  R=2;
-  N_bundle = nb_rb_pdsch/L;
-  C=N_bundle/R;
-
-  uint32_t bundle_deint[N_bundle];
-  memset(bundle_deint, 0 , sizeof(bundle_deint));
-
-  printf("N_bundle %u L %d nb_rb_pdsch %d\n",N_bundle, L,nb_rb_pdsch);
-
-  if (symbol==start_symbol)
-	  nb_re = 6;
-  else
-	  nb_re = 12;
-
-
-  AssertFatal(llr!=NULL,"nr_dlsch_deinterleaving: FATAL llr is Null\n");
-
-
-  for (c =0; c< C; c++){
-	  for (r=0; r<R;r++){
-		  bundle_idx = r*C+c;
-		  bundle_deint[bundle_idx] = c*R+r;
-		  //printf("c %u r %u bundle_idx %u bundle_deinter %u\n", c, r, bundle_idx, bundle_deint[bundle_idx]);
-	  }
-  }
-
-  for (k=0; k<N_bundle;k++)
-  {
-	  for (m=0; m<nb_re*L;m++){
-		  llr_deint[bundle_deint[k]*nb_re*L+m]= llr[k*nb_re*L+m];
-		  //printf("k %d m %d bundle_deint %d llr_deint %d\n", k, m, bundle_deint[k], llr_deint[bundle_deint[k]*nb_re*L+m]);
-	  }
-  }
-}
-
 //==============================================================================================
 // Pre-processing for LLR computation
 //==============================================================================================
@@ -1028,41 +967,6 @@ void nr_dlsch_scale_channel(uint32_t rx_size_symbol,
         dl_ch128+=3;
 
       }
-    }
-  }
-}
-
-
-/** @brief This function computes the average channel level over all allocated RBs
- *         and antennas (TX/RX) in order to compute output shift for compensated signal
-    @param rx_size_symbol
-    @param dl_ch_estimates_ext Channel estimates in allocated RBs
-    @param n_rx number of antennas in RX
-    @param n_tx number of antennas in TX
-    @param avg Pointer to average signal strength
-    @param len Number of allocated PDSCH REs
-*/
-void nr_dlsch_channel_level(uint32_t rx_size_symbol,
-                            int32_t dl_ch_estimates_ext[][rx_size_symbol],
-                            uint8_t n_rx,
-                            uint8_t n_tx,
-                            int32_t avg[MAX_ANT][MAX_ANT],
-                            uint32_t len)
-{
-  int16_t x = factor2(len);
-  int16_t y = (len) >> x;
-
-  uint32_t nb_rb_0 = len / NR_NB_SC_PER_RB + ((len % NR_NB_SC_PER_RB) ? 1 : 0);
-  LOG_D(NR_PHY, "nb_rb_0 %d len %d = %d * 2^(%d)\n", nb_rb_0, len, y, x);
-
-  for (int aatx = 0; aatx < n_tx; aatx++) {
-    for (int aarx = 0; aarx < n_rx; aarx++) {
-
-      simde__m128i *dl_ch128 = (simde__m128i *)dl_ch_estimates_ext[(aatx * n_rx) + aarx];
-
-      //compute average level
-      avg[aatx][aarx] = simde_mm_average(dl_ch128, nb_rb_0 * 12, x, y);
-      //LOG_D(PHY, "Channel level: %d\n", avg[aatx][aarx]);
     }
   }
 }
@@ -1552,7 +1456,7 @@ static void nr_dlsch_mmse(uint32_t rx_size_symbol,
                           int length,
                           uint32_t noise_var)
 {
-  uint32_t nb_rb_0 = length / 12 + ((length % 12) ? 1 : 0);
+  uint32_t nb_rb_0 = (length + 11) / 12;
   c16_t determ_fin[12 * nb_rb_0] __attribute__((aligned(32)));
 
   ///Allocate H^*H matrix elements and sub elements
@@ -1609,7 +1513,7 @@ static void nr_dlsch_mmse(uint32_t rx_size_symbol,
                     determ_fin, // determin
                     nb_rb_0,
                     fp_flag, // fixed point flag
-                    shift - (fp_flag == 1 ? 2 : 0)); // the out put is Q15
+                    shift - (fp_flag == 1 ? 1 : 0)); // the out put is Q15
 
   // multiply Matrix inversion pf H_h_H by the rx signal vector
   c16_t outtemp[12 * nb_rb_0] __attribute__((aligned(32)));
@@ -1627,7 +1531,7 @@ static void nr_dlsch_mmse(uint32_t rx_size_symbol,
                            (c16_t *)(rxdataF_comp[ctx][0] + symbol * rx_size_symbol),
                            outtemp,
                            sizeofArray(outtemp),
-                           shift - (fp_flag == 1 ? 2 : 0));
+                           shift - (fp_flag == 1 ? 1 : 0));
       nr_a_sum_b(rxdataF_zforcing[rtx], outtemp, nb_rb_0); // a = a + b
     }
 #ifdef DEBUG_DLSCH_DEMOD
@@ -1678,13 +1582,9 @@ static void nr_dlsch_mmse(uint32_t rx_size_symbol,
       dl_ch_mag128b_0[0] = mmtmpD2;
       dl_ch_mag128r_0[0] = mmtmpD2;
 
-      dl_ch_mag128_0[0] = simde_mm_mulhi_epi16(dl_ch_mag128_0[0],QAM_amp128);
-      dl_ch_mag128_0[0] = simde_mm_slli_epi16(dl_ch_mag128_0[0],1);
-
-      dl_ch_mag128b_0[0] = simde_mm_mulhi_epi16(dl_ch_mag128b_0[0],QAM_amp128b);
-      dl_ch_mag128b_0[0] = simde_mm_slli_epi16(dl_ch_mag128b_0[0],1);
-      dl_ch_mag128r_0[0] = simde_mm_mulhi_epi16(dl_ch_mag128r_0[0],QAM_amp128r);
-      dl_ch_mag128r_0[0] = simde_mm_slli_epi16(dl_ch_mag128r_0[0],1);
+      dl_ch_mag128_0[0] = simde_mm_mulhrs_epi16(dl_ch_mag128_0[0], QAM_amp128);
+      dl_ch_mag128b_0[0] = simde_mm_mulhrs_epi16(dl_ch_mag128b_0[0],QAM_amp128b);
+      dl_ch_mag128r_0[0] = simde_mm_mulhrs_epi16(dl_ch_mag128r_0[0],QAM_amp128r);
 
       determ_fin_128 += 1;
       dl_ch_mag128_0 += 1;

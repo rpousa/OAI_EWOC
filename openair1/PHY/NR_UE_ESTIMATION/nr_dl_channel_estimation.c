@@ -19,6 +19,7 @@
  *      contact@openairinterface.org
  */
 
+#include "nr_common.h"
 #include <string.h>
 #include "SCHED_NR_UE/defs.h"
 #include "nr_estimation.h"
@@ -448,12 +449,15 @@ int nr_prs_channel_estimation(uint8_t gNB_id,
     peak_estimator(&chT_interpol[rxAnt][0], NR_PRS_IDFT_OVERSAMP_FACTOR * frame_params->ofdm_symbol_size, &prs_toa, &ch_pwr, mean_val);
 
     // adjusting the rx_gains for channel peak power
-    ch_pwr_dbm = 10 * log10(ch_pwr) + 30 - SQ15_SQUARED_NORM_FACTOR_DB - ((int)openair0_cfg[0].rx_gain[0] - (int)openair0_cfg[0].rx_gain_offset[0]) - dB_fixed(frame_params->ofdm_symbol_size);
+    ch_pwr_dbm = 10 * log10(ch_pwr) + 30 - SQ15_SQUARED_NORM_FACTOR_DB
+                 - ((int)ue->openair0_cfg[0].rx_gain[0] - (int)ue->openair0_cfg[0].rx_gain_offset[0])
+                 - dB_fixed(frame_params->ofdm_symbol_size);
 
-    prs_meas[rxAnt]->rsrp_dBm =
-        10 * log10(prs_meas[rxAnt]->rsrp) + 30 - SQ15_SQUARED_NORM_FACTOR_DB - ((int)openair0_cfg[0].rx_gain[0] - (int)openair0_cfg[0].rx_gain_offset[0]) - dB_fixed(ue->frame_parms.ofdm_symbol_size);
+    prs_meas[rxAnt]->rsrp_dBm = 10 * log10(prs_meas[rxAnt]->rsrp) + 30 - SQ15_SQUARED_NORM_FACTOR_DB
+                                - ((int)ue->openair0_cfg[0].rx_gain[0] - (int)ue->openair0_cfg[0].rx_gain_offset[0])
+                                - dB_fixed(ue->frame_parms.ofdm_symbol_size);
 
-    //prs measurements
+    // prs measurements
     prs_meas[rxAnt]->gNB_id     = gNB_id;
     prs_meas[rxAnt]->sfn        = proc->frame_rx;
     prs_meas[rxAnt]->slot       = proc->nr_slot_rx;
@@ -1258,6 +1262,7 @@ int nr_pdsch_channel_estimation(PHY_VARS_NR_UE *ue,
                                 unsigned short scrambling_id,
                                 unsigned short BWPStart,
                                 uint8_t config_type,
+                                int n_dmrs_cdm_groups,
                                 uint16_t rb_offset,
                                 unsigned short bwp_start_subcarrier,
                                 unsigned short nb_rb_pdsch,
@@ -1291,8 +1296,10 @@ int nr_pdsch_channel_estimation(PHY_VARS_NR_UE *ue,
 
   c16_t pilot[3280] __attribute__((aligned(16)));
   // Note: pilot returned by the following function is already the complex conjugate of the transmitted DMRS
+  float beta_dmrs_pdsch = get_beta_dmrs(n_dmrs_cdm_groups, config_type == NFAPI_NR_DMRS_TYPE2);
+  int16_t dmrs_scaling = (int16_t)((1 / beta_dmrs_pdsch) * (1 << 14));
   const uint32_t *gold = nr_gold_pdsch(fp->N_RB_DL, fp->symbols_per_slot, scrambling_id, nscid, slot, symbol);
-  nr_pdsch_dmrs_rx(ue, slot, gold, pilot, 1000 + p, 0, nb_rb_pdsch + rb_offset, config_type);
+  nr_pdsch_dmrs_rx(ue, slot, gold, pilot, 1000 + p, 0, nb_rb_pdsch + rb_offset, config_type, dmrs_scaling);
 
   delay_t delay = {0};
 

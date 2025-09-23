@@ -58,7 +58,7 @@ RUN /bin/sh oaienv && \
     mkdir -p log && \
     scl enable gcc-toolset-13 "\
     ./build_oai \
-      --gNB \
+      --ninja --gNB \
       --build-lib 'telnetsrv enbscope uescope nrscope' \
       -t oran_fhlib_5g --cmake-opt -Dxran_LOCATION=/opt/phy/fhi_lib/lib \
       --build-e2 --cmake-opt -DKPM_VERSION=$KPM_VERSION --cmake-opt -DE2AP_VERSION=$E2AP_VERSION" &&\

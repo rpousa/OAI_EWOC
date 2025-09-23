@@ -26,6 +26,6 @@
 
 #include <libyang/libyang.h>
 
-bool load_yang_models(ru_session_t *ru_session, const char *buffer, struct ly_ctx **ctx);
+bool load_yang_models(ru_session_t *ru_session, const char *buffer);
 
 #endif /* GET_MPLANE_YANG_MODELS_H */

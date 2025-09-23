@@ -80,6 +80,8 @@ void nr_rlc_reconfigure_entity(int ue_id, int lc_id, NR_RLC_Config_t *rlc_Config
 
 int nr_rlc_get_available_tx_space(const int ue_id, const logical_chan_id_t channel_idP);
 
+int nr_rlc_tx_list_occupancy(int ue_id, logical_chan_id_t lcid);
+
 void nr_rlc_activate_avg_time_to_tx(const int ue_id, const logical_chan_id_t channel_id, const bool is_on);
 
 void nr_rlc_srb_recv_sdu(const int ue_id, const logical_chan_id_t channel_id, unsigned char *buf, int size);

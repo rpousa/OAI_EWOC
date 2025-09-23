@@ -121,8 +121,6 @@ int32_t         uplink_frequency_offset[MAX_NUM_CCs][4];
 uint64_t        sidelink_frequency[MAX_NUM_CCs][4];
 
 // UE and OAI config variables
-
-openair0_config_t openair0_cfg[MAX_CARDS];
 int16_t           node_synch_ref[MAX_NUM_CCs];
 int               otg_enabled;
 double            cpuf;
@@ -249,42 +247,42 @@ void set_options(int CC_id, PHY_VARS_NR_UE *UE){
 
 }
 
-void init_openair0()
+void init_openair0(PHY_VARS_NR_UE *ue)
 {
   int card;
   int freq_off = 0;
-  NR_DL_FRAME_PARMS *frame_parms = &PHY_vars_UE_g[0][0]->frame_parms;
+  NR_DL_FRAME_PARMS *frame_parms = &ue->frame_parms;
   bool is_sidelink = (get_softmodem_params()->sl_mode) ? true : false;
   if (is_sidelink)
-    frame_parms = &PHY_vars_UE_g[0][0]->SL_UE_PHY_PARAMS.sl_frame_params;
+    frame_parms = &ue->SL_UE_PHY_PARAMS.sl_frame_params;
 
   for (card=0; card<MAX_CARDS; card++) {
+    openair0_config_t *cfg = &ue->openair0_cfg[card];
     uint64_t dl_carrier, ul_carrier;
-    openair0_cfg[card].configFilename    = NULL;
-    openair0_cfg[card].threequarter_fs   = frame_parms->threequarter_fs;
-    openair0_cfg[card].sample_rate       = frame_parms->samples_per_subframe * 1e3;
-    openair0_cfg[card].samples_per_frame = frame_parms->samples_per_frame;
+    cfg->configFilename    = NULL;
+    cfg->sample_rate       = frame_parms->samples_per_subframe * 1e3;
+    cfg->samples_per_frame = frame_parms->samples_per_frame;
 
     if (frame_parms->frame_type==TDD)
-      openair0_cfg[card].duplex_mode = duplex_mode_TDD;
+      cfg->duplex_mode = duplex_mode_TDD;
     else
-      openair0_cfg[card].duplex_mode = duplex_mode_FDD;
+      cfg->duplex_mode = duplex_mode_FDD;
 
-    openair0_cfg[card].Mod_id = 0;
-    openair0_cfg[card].num_rb_dl = frame_parms->N_RB_DL;
-    openair0_cfg[card].clock_source = get_softmodem_params()->clock_source;
-    openair0_cfg[card].time_source = get_softmodem_params()->timing_source;
-    openair0_cfg[card].tune_offset = get_softmodem_params()->tune_offset;
-    openair0_cfg[card].tx_num_channels = min(4, frame_parms->nb_antennas_tx);
-    openair0_cfg[card].rx_num_channels = min(4, frame_parms->nb_antennas_rx);
+    cfg->Mod_id = 0;
+    cfg->num_rb_dl = frame_parms->N_RB_DL;
+    cfg->clock_source = get_softmodem_params()->clock_source;
+    cfg->time_source = get_softmodem_params()->timing_source;
+    cfg->tune_offset = get_softmodem_params()->tune_offset;
+    cfg->tx_num_channels = min(4, frame_parms->nb_antennas_tx);
+    cfg->rx_num_channels = min(4, frame_parms->nb_antennas_rx);
 
     LOG_I(PHY,
           "HW: Configuring card %d, sample_rate %f, tx/rx num_channels %d/%d, duplex_mode %s\n",
           card,
-          openair0_cfg[card].sample_rate,
-          openair0_cfg[card].tx_num_channels,
-          openair0_cfg[card].rx_num_channels,
-          duplex_mode_txt[openair0_cfg[card].duplex_mode]);
+          cfg->sample_rate,
+          cfg->tx_num_channels,
+          cfg->rx_num_channels,
+          duplex_mode_txt[cfg->duplex_mode]);
 
     if (is_sidelink) {
       dl_carrier = frame_parms->dl_CarrierFreq;
@@ -292,16 +290,18 @@ void init_openair0()
     } else
       nr_get_carrier_frequencies(PHY_vars_UE_g[0][0], &dl_carrier, &ul_carrier);
 
-    nr_rf_card_config_freq(&openair0_cfg[card], ul_carrier, dl_carrier, freq_off);
+    nr_rf_card_config_freq(cfg, ul_carrier, dl_carrier, freq_off);
 
-    nr_rf_card_config_gain(&openair0_cfg[card], rx_gain_off);
+    nr_rf_card_config_gain(cfg, rx_gain_off);
 
-    openair0_cfg[card].configFilename = get_softmodem_params()->rf_config_file;
+    cfg->configFilename = get_softmodem_params()->rf_config_file;
 
-    if (get_nrUE_params()->usrp_args) openair0_cfg[card].sdr_addrs = get_nrUE_params()->usrp_args;
-    if (get_nrUE_params()->tx_subdev) openair0_cfg[card].tx_subdev = get_nrUE_params()->tx_subdev;
-    if (get_nrUE_params()->rx_subdev) openair0_cfg[card].rx_subdev = get_nrUE_params()->rx_subdev;
-
+    if (get_nrUE_params()->usrp_args)
+      cfg->sdr_addrs = get_nrUE_params()->usrp_args;
+    if (get_nrUE_params()->tx_subdev)
+      cfg->tx_subdev = get_nrUE_params()->tx_subdev;
+    if (get_nrUE_params()->rx_subdev)
+      cfg->rx_subdev = get_nrUE_params()->rx_subdev;
   }
 }
 
@@ -327,9 +327,11 @@ static void trigger_stop(int sig)
 static void trigger_deregistration(int sig)
 {
   if (!stop_immediately && IS_SA_MODE(get_softmodem_params())) {
-    MessageDef *msg = itti_alloc_new_message(TASK_NAS_NRUE, 0, NAS_DEREGISTRATION_REQ);
-    NAS_DEREGISTRATION_REQ(msg).cause = AS_DETACH;
-    itti_send_msg_to_task(TASK_NAS_NRUE, 0, msg);
+    for (int ue_inst = 0; ue_inst < NB_UE_INST; ue_inst++) {
+      MessageDef *msg = itti_alloc_new_message(TASK_NAS_NRUE, ue_inst, NAS_DEREGISTRATION_REQ);
+      NAS_DEREGISTRATION_REQ(msg).cause = AS_DETACH;
+      itti_send_msg_to_task(TASK_NAS_NRUE, ue_inst, msg);
+    }
     stop_immediately = true;
     static const char m[] = "Press ^C again to trigger immediate shutdown\n";
     __attribute__((unused)) int unused = write(STDOUT_FILENO, m, sizeof(m) - 1);
@@ -387,7 +389,6 @@ int main(int argc, char **argv)
   }
   //set_softmodem_sighandler();
   CONFIG_SETRTFLAG(CONFIG_NOEXITONHELP);
-  memset(openair0_cfg,0,sizeof(openair0_config_t)*MAX_CARDS);
   memset(tx_max_power,0,sizeof(int)*MAX_NUM_CCs);
   // initialize logging
   logInit();
@@ -426,12 +427,11 @@ int main(int argc, char **argv)
   char *pckg = strdup(OAI_PACKAGE_VERSION);
   LOG_I(HW, "Version: %s\n", pckg);
 
-  PHY_vars_UE_g = malloc(sizeof(*PHY_vars_UE_g) * NB_UE_INST);
+  PHY_vars_UE_g = calloc_or_fail(NB_UE_INST, sizeof(*PHY_vars_UE_g));
   for (int inst = 0; inst < NB_UE_INST; inst++) {
-    PHY_vars_UE_g[inst] = malloc(sizeof(*PHY_vars_UE_g[inst]) * MAX_NUM_CCs);
+    PHY_vars_UE_g[inst] = calloc_or_fail(MAX_NUM_CCs, sizeof(*PHY_vars_UE_g[inst]));
     for (int CC_id = 0; CC_id < MAX_NUM_CCs; CC_id++) {
-      PHY_vars_UE_g[inst][CC_id] = malloc(sizeof(*PHY_vars_UE_g[inst][CC_id]));
-      memset(PHY_vars_UE_g[inst][CC_id], 0, sizeof(*PHY_vars_UE_g[inst][CC_id]));
+      PHY_vars_UE_g[inst][CC_id] = calloc_or_fail(1, sizeof(*PHY_vars_UE_g[inst][CC_id]));
       // All instances use the same coding interface
       PHY_vars_UE_g[inst][CC_id]->nrLDPC_coding_interface = nrLDPC_coding_interface;
     }
@@ -499,12 +499,14 @@ int main(int argc, char **argv)
                                     get_softmodem_params()->numerology,
                                     nr_band);
         } else {
-	  MessageDef *msg = NULL;
-	  do {
-	    itti_poll_msg(TASK_MAC_UE, &msg);
-	    if (msg)
-	      process_msg_rcc_to_mac(msg);
-	  } while (msg);
+          do {
+            notifiedFIFO_elt_t *elt = pollNotifiedFIFO(&mac->input_nf);
+            if (!elt) {
+              break;
+            }
+            process_msg_rcc_to_mac(NotifiedFifoData(elt), inst);
+            delNotifiedFIFO_elt(elt);
+          } while (true);
           fapi_nr_config_request_t *nrUE_config = &UE[CC_id]->nrUE_config;
           nr_init_frame_parms_ue(&UE[CC_id]->frame_parms, nrUE_config, mac->nr_band);
         }
@@ -539,10 +541,10 @@ int main(int argc, char **argv)
                                     get_nrUE_params()->ofdm_offset_divisor);
           sl_ue_phy_init(UE[CC_id]);
         }
+        init_openair0(UE[CC_id]);
       }
     }
 
-    init_openair0();
     lock_memory_to_ram();
 
     if (IS_SOFTMODEM_DOSCOPE) {

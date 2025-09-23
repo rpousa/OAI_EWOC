@@ -17,10 +17,12 @@ Analog beamforming implementation also allows to enable distributed antenna syst
 A set of parameters in configuration files controls the implementation of analog beamforming and instructs the scheduler on how to behave in such scenarios. Since most notably this technique in 5G is employed in FR2, the configuration file example currently available is a RFsim one for band 261. [Config file example](../ci-scripts/conf_files/gnb.sa.band261.u3.32prb.rfsim.conf)
 
 In the `MACRLC` section of configuration files, there are three new parameters: `set_analog_beamforming`, `beam_duration` and `beams_per_period`. The explanation of these parameters is here provided:
-- `set_analog_beamforming` can be set to 1 or 0 to activate or desactivate analog beamforming (default value is 0)
+- `set_analog_beamforming` can be set a value equal to 1 or 2 to activate or 0 to desactivate analog beamforming (default value is 0)
 - `beam_duration` is the number of slots (currently minimum duration of a beam) the scheduler is tied to a beam (default value is 1)
 - `beams_per_period` is the number of concurrent beams the RU can handle in the beam duration (default value is 1)
 - `beam_weights` is a vector field containing the set of beam indices to be provided by the OAI L1 to the RU is also required. In current implementation, the number of beam indices should be equal to the number of SSBs transmitted
+
+Setting analog beamforming to 1 or 2 changes the way FAPI beam index is treated. By setting 1, we instruct L1 to look up in Hi-PHY preconfigured DBM beam index. By setting 2, we instruct L2 to directly signal to Lo-PHY the beam index (e.g. over 7.2x fronthaul).
 
 DAS is enabled by setting to 1 the parameter `enable_das` in the L1 section of the configuration file. In case of DAS enabled, the field `beam_weights` in `MACRLC` section can be omitted.
 

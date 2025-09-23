@@ -95,8 +95,9 @@ can proceed as follows:
 - in `vnf.conf`
   * modify `MACRLCs` section to configure south-bound nFAPI transport
   * delete `L1s`, `RUs`, and radio-specific sections.
-  * in `gNBs` section, increase the `ra_ResponseWindow` by one to extend the RA
-    window: this is necessary because the PNF triggers the scheduler in the VNF
+  * in `gNBs` section, select a sufficiently large `ra_ResponseWindow` if a UE
+    does not connect with a message that the response window timed out:
+    this is necessary because the PNF triggers the scheduler in the VNF
     in advance, which might make the RA window more likely to run out
 - copy `monolithic.conf`, which will be your PNF file (`pnf.conf`)
 - in `pnf.conf`
@@ -170,7 +171,7 @@ After installing WLS, you can run the build command as shown below:
 
 #### How to run OAI PNF with OAI VNF
 
-Refer to the above steps in [Quickstart](.#quickstart), but run the PNF first as it is the WLS "master".
+Refer to the above steps in [Quickstart](#quickstart), but run the PNF first as it is the WLS "master".
 
 #### How to run OAI PNF with OSC/Radisys O-DU
 

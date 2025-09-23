@@ -393,9 +393,7 @@ int get_ul_slot_offset(const frame_structure_t *fs, int idx, bool count_mixed)
   return ul_slot_idxs[ul_slot_idx_in_period] + period_idx * fs->numb_slots_period;
 }
 
-static void config_common(gNB_MAC_INST *nrmac,
-                          const nr_mac_config_t *config,
-                          NR_ServingCellConfigCommon_t *scc)
+static void config_common(gNB_MAC_INST *nrmac, const nr_mac_config_t *config, NR_ServingCellConfigCommon_t *scc)
 {
   nfapi_nr_config_request_scf_t *cfg = &nrmac->config[0];
   nrmac->common_channels[0].ServingCellConfigCommon = scc;
@@ -713,7 +711,7 @@ static void config_common(gNB_MAC_INST *nrmac,
   cfg->pmi_list = init_DL_MIMO_codebook(nrmac, pdsch_AntennaPorts);
 
   int nb_beams = config->nb_bfw[1]; // number of beams
-  if (nrmac->beam_info.beam_allocation) {
+  if (nrmac->beam_info.beam_mode == PRECONFIGURED_BEAM_IDX) {
     LOG_I(NR_MAC, "Configuring analog beamforming in config_request message\n");
     cfg->analog_beamforming_ve.num_beams_period_vendor_ext.tl.tag = NFAPI_NR_FAPI_NUM_BEAMS_PERIOD_VENDOR_EXTENSION_TAG;
     cfg->analog_beamforming_ve.num_beams_period_vendor_ext.value = nrmac->beam_info.beams_per_period;
@@ -736,11 +734,44 @@ static void config_common(gNB_MAC_INST *nrmac,
       cfg->num_tlv++;
     }
   }
+
+  if (IS_SA_MODE(get_softmodem_params())) {
+    int bw = frequencyInfoDL->scs_SpecificCarrierList.list.array[0]->carrierBandwidth;
+    uint64_t bw_khz = (12 * bw) * (15 << mu);
+    uint64_t carr_dl = (cfg->carrier_config.dl_frequency.value + bw_khz / 2) * 1000;
+    uint64_t carr_ul = (cfg->carrier_config.uplink_frequency.value + bw_khz / 2) * 1000;
+    int prb_offset = (frequency_range == FR1) ?
+                     cfg->ssb_table.ssb_offset_point_a.value >> scs :
+                     cfg->ssb_table.ssb_offset_point_a.value >> (scs - 2);
+    int sc_offset = (frequency_range == FR1) ?
+                    cfg->ssb_table.ssb_subcarrier_offset.value >> scs :
+                    cfg->ssb_table.ssb_subcarrier_offset.value;
+    if (cfg->carrier_config.dl_frequency.value != cfg->carrier_config.uplink_frequency.value) {
+      LOG_I(NR_MAC,
+            "Command line parameters for OAI UE: -C %lu --CO %ld -r %d --numerology %d --band %ld --ssb %d %s\n",
+            carr_dl,
+            carr_ul - carr_dl,
+            bw,
+            mu,
+            band,
+            12 * prb_offset + sc_offset,
+            get_softmodem_params()->threequarter_fs ? "-E" : "");
+    } else {
+      LOG_I(NR_MAC,
+            "Command line parameters for OAI UE: -C %lu -r %d --numerology %d --band %ld --ssb %d %s\n",
+            carr_dl,
+            bw,
+            mu,
+            band,
+            12 * prb_offset + sc_offset,
+            get_softmodem_params()->threequarter_fs ? "-E" : "");
+    }
+  }
 }
 
 static void initialize_beam_information(NR_beam_info_t *beam_info, int mu, int slots_per_frame)
 {
-  if (!beam_info->beam_allocation)
+  if (beam_info->beam_mode == NO_BEAM_MODE)
     return;
 
   int size = mu == 0 ? slots_per_frame << 1 : slots_per_frame;
@@ -801,6 +832,28 @@ static void config_sched_ctrlCommon(gNB_MAC_INST *nr_mac)
   nr_mac->cset0_bwp_size = type0_PDCCH_CSS_config.num_rbs;
 }
 
+/**
+ * \brief Initializes the UL TDA information at the scheduler, as used for
+ * every UE in UL. This just copies the information from the SCC into a smaller
+ * list. Note that this list should not be modified, as get_num_ul_tda() and
+ * nr_rrc_config_ul_tda() are designed to work in sync (get_num_ul_tda()
+ * assumes an ordering, output by nr_rrc_config_ul_tda()).
+ */
+static void init_ul_tda_info(const NR_PUSCH_TimeDomainResourceAllocationList_t *l, seq_arr_t *sa_tda)
+{
+  DevAssert(l->list.count > 0 && l->list.count <= 16);
+  DevAssert(seq_arr_size(sa_tda) == 0);
+
+  for (int i = 0; i < l->list.count; ++i) {
+    NR_PUSCH_TimeDomainResourceAllocation_t *t = l->list.array[i];
+    DevAssert(t->k2);
+    NR_tda_info_t tda = { .mapping_type = typeB, .k2 = *t->k2, .valid_tda = true };
+    SLIV2SL(t->startSymbolAndLength, &tda.startSymbolIndex, &tda.nrOfSymbols);
+    LOG_I(NR_MAC, "TDA index %d: start %d length %d k2 %ld\n", i, tda.startSymbolIndex, tda.nrOfSymbols, tda.k2);
+    seq_arr_push_back(sa_tda, &tda, sizeof(tda));
+  }
+}
+
 void nr_mac_config_scc(gNB_MAC_INST *nrmac, NR_ServingCellConfigCommon_t *scc, const nr_mac_config_t *config)
 {
   DevAssert(nrmac != NULL);
@@ -817,7 +870,7 @@ void nr_mac_config_scc(gNB_MAC_INST *nrmac, NR_ServingCellConfigCommon_t *scc, c
   nrmac->vrb_map_UL_size = size;
 
   int num_beams = 1;
-  if(nrmac->beam_info.beam_allocation)
+  if(nrmac->beam_info.beam_mode != NO_BEAM_MODE)
     num_beams = nrmac->beam_info.beams_per_period;
   for (int i = 0; i < num_beams; i++) {
     nrmac->common_channels[0].vrb_map_UL[i] = calloc(size * MAX_BWP_SIZE, sizeof(uint16_t));
@@ -834,7 +887,7 @@ void nr_mac_config_scc(gNB_MAC_INST *nrmac, NR_ServingCellConfigCommon_t *scc, c
   LOG_D(NR_MAC, "Configuring common parameters from NR ServingCellConfig\n");
 
   config_common(nrmac, config, scc);
-  fapi_beam_index_allocation(scc, nrmac);
+  fapi_beam_index_allocation(scc, config, nrmac);
 
   if (NFAPI_MODE == NFAPI_MONOLITHIC) {
     // nothing to be sent in the other cases
@@ -847,6 +900,9 @@ void nr_mac_config_scc(gNB_MAC_INST *nrmac, NR_ServingCellConfigCommon_t *scc, c
 
   if (IS_SA_MODE(get_softmodem_params()))
     config_sched_ctrlCommon(nrmac);
+
+  seq_arr_init(&nrmac->ul_tda, sizeof(NR_tda_info_t));
+  init_ul_tda_info(scc->uplinkConfigCommon->initialUplinkBWP->pusch_ConfigCommon->choice.setup->pusch_TimeDomainAllocationList, &nrmac->ul_tda);
 }
 
 bool nr_mac_configure_other_sib(gNB_MAC_INST *nrmac, int num_cu_sib, const f1ap_sib_msg_t cu_sib[num_cu_sib])

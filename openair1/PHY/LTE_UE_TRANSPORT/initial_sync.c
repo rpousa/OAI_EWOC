@@ -482,13 +482,6 @@ int initial_sync(PHY_VARS_UE *ue, runmode_t mode) {
     LOG_I(PHY, "[UE%d] In synch, rx_offset %d samples\n",ue->Mod_id, ue->rx_offset);
 
     if (ue->UE_scan_carrier == 0) {
-#if UE_AUTOTEST_TRACE
-      LOG_I(PHY,"[UE  %d] AUTOTEST Cell Sync : frame = %d, rx_offset %d, freq_offset %d \n",
-            ue->Mod_id,
-            ue->proc.proc_rxtx[0].frame_rx,
-            ue->rx_offset,
-            ue->common_vars.freq_offset );
-#endif
       // send sync status to higher layers later when timing offset converge to target timing
       generate_pcfich_reg_mapping(frame_parms);
       generate_phich_reg_mapping(frame_parms);

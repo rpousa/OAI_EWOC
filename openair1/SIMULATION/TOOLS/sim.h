@@ -77,6 +77,8 @@ typedef struct {
   struct complexd **a;
   ///interpolated (sample-spaced) channel impulse response. size(ch) = (n_tx * n_rx) * channel_length. ATTENTION: the dimensions of ch are the transposed ones of a. This is to allow the use of BLAS when applying the correlation matrices to the state.
   struct complexd **ch;
+  ///Same as above but single precision
+  struct complexf **ch_ps;
   ///Sampled frequency response (90 kHz resolution)
   struct complexd **chF;
   ///Maximum path delay in mus.

@@ -37,7 +37,6 @@ RAN_CONTEXT_t RC;
 THREAD_STRUCT thread_struct;
 uint64_t downlink_frequency[MAX_NUM_CCs][4];
 int32_t uplink_frequency_offset[MAX_NUM_CCs][4];
-int asn1_xer_print;
 int oai_exit = 0;
 instance_t CUuniqInstance = 0;
 

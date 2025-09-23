@@ -70,15 +70,13 @@
   <testCase id="800813">
     <class>Create_Workspace</class>
     <desc>Create new Workspace</desc>
-    <eNB_instance>0</eNB_instance>
-    <eNB_serverId>0</eNB_serverId>
+    <node>avra</node>
   </testCase>
   <testCase id="020000">
     <class>Deploy_Object</class>
     <desc>Deploy gNB (TDD/Band78/20MHz/aw2s) in a container</desc>
+    <node>avra</node>
     <yaml_path>ci-scripts/yaml_files/sa_aw2s_2x2_gnb</yaml_path>
-    <eNB_instance>0</eNB_instance>
-    <eNB_serverId>0</eNB_serverId>
   </testCase>
 
   <testCase id="001000">
@@ -268,16 +266,15 @@
     <class>Undeploy_Object</class>
     <always_exec>true</always_exec>
     <desc>Undeploy gNB</desc>
+    <node>avra</node>
     <yaml_path>ci-scripts/yaml_files/sa_aw2s_2x2_gnb</yaml_path>
-    <eNB_instance>0</eNB_instance>
-    <eNB_serverId>0</eNB_serverId>
   </testCase>
 
   <testCase id="333333">
     <class>Clean_Test_Server_Images</class>
     <always_exec>true</always_exec>
     <desc>Clean Test Images on Test Server</desc>
-    <svr_id>0</svr_id>
+    <node>avra</node>
     <images>oai-gnb-aw2s</images>
   </testCase>
 

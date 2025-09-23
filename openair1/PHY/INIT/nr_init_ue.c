@@ -519,17 +519,6 @@ static void sl_generate_psbch_dmrs_qpsk_sequences(PHY_VARS_NR_UE *UE, struct com
     idx = (((sl_dmrs_sequence[(m << 1) >> 5]) >> ((m << 1) & 0x1f)) & 3);
     modulated_dmrs_sym[m].r = mod_table[idx].r;
     modulated_dmrs_sym[m].i = mod_table[idx].i;
-
-#ifdef SL_DEBUG_INIT_DATA
-    printf("m:%d gold seq: %d b0-b1: %d-%d DMRS Symbols: %d %d\n",
-           m,
-           sl_dmrs_sequence[(m << 1) >> 5],
-           (((sl_dmrs_sequence[(m << 1) >> 5]) >> ((m << 1) & 0x1f)) & 1),
-           (((sl_dmrs_sequence[((m << 1) + 1) >> 5]) >> (((m << 1) + 1) & 0x1f)) & 1),
-           modulated_dmrs_sym[m].r,
-           modulated_dmrs_sym[m].i);
-    printf("idx:%d, qpsk_table.r:%d, qpsk_table.i:%d\n", idx, mod_table[idx].r, mod_table[idx].i);
-#endif
   }
 
 #ifdef SL_DUMP_INIT_SAMPLES

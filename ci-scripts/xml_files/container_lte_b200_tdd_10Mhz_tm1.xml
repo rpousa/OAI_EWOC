@@ -42,7 +42,7 @@ Replaces xml_files/enb_usrp210_band40_test_10mhz_tm1.xml
     <testCase id="111110">
         <class>Pull_Local_Registry</class>
         <desc>Pull Images from Local Registry</desc>
-        <svr_id>0</svr_id>
+        <node>starsky</node>
         <images>oai-enb</images>
     </testCase>
     <testCase id="100000">
@@ -61,15 +61,13 @@ Replaces xml_files/enb_usrp210_band40_test_10mhz_tm1.xml
     <testCase id="800813">
         <class>Create_Workspace</class>
         <desc>Create new Workspace for server 0</desc>
-        <eNB_instance>0</eNB_instance>
-        <eNB_serverId>0</eNB_serverId>
+        <node>starsky</node>
     </testCase>
     <testCase id="030114">
         <class>Deploy_Object</class>
         <desc>Deploy eNB (TDD/Band40/10MHz/B200) in a container</desc>
+        <node>starsky</node>
         <yaml_path>ci-scripts/yaml_files/lte_b200_tdd_10Mhz_tm1</yaml_path>
-        <eNB_instance>0</eNB_instance>
-        <eNB_serverId>0</eNB_serverId>
     </testCase>
 
     <testCase id="000001">
@@ -82,9 +80,8 @@ Replaces xml_files/enb_usrp210_band40_test_10mhz_tm1.xml
         <class>Undeploy_Object</class>
         <always_exec>true</always_exec>
         <desc>Undeploy eNB</desc>
+        <node>starsky</node>
         <yaml_path>ci-scripts/yaml_files/lte_b200_tdd_10Mhz_tm1</yaml_path>
-        <eNB_instance>0</eNB_instance>
-        <eNB_serverId>0</eNB_serverId>
     </testCase>
 
     <testCase id="040101">
@@ -215,7 +212,7 @@ Replaces xml_files/enb_usrp210_band40_test_10mhz_tm1.xml
         <class>Clean_Test_Server_Images</class>
         <always_exec>true</always_exec>
         <desc>Clean Test Images on Test Server</desc>
-        <svr_id>0</svr_id>
+        <node>starsky</node>
         <images>oai-enb</images>
     </testCase>
 

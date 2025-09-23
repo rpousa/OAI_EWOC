@@ -1993,6 +1993,7 @@ int get_narrowband_index(int N_RB_UL,int rb) {
 
     default:
       AssertFatal(1==0,"Impossible N_RB_UL %d\n",N_RB_UL);
+      return 0;
       break;
   }
 }
@@ -2128,6 +2129,7 @@ int get_first_rb_in_narrowband(int N_RB_UL,
 
     default:
       AssertFatal(1==0,"Impossible N_RB_UL %d\n",N_RB_UL);
+      return 0;
       break;
   }
 }

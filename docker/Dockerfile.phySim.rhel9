@@ -98,7 +98,7 @@ RUN ldconfig && \
 WORKDIR /opt/oai-physim/
 
 COPY --from=phy-sim-build \
-    /oai-ran/cmake_targets/ran_build/build/openair1/PHY/CODING/tests/CTestTestfile.cmake \
+    /oai-ran/cmake_targets/ran_build/build/openair1/SIMULATION/tests/CTestTestfile.cmake \
     /opt/oai-physim/
 
 #CMD ["sleep", "infinity"]

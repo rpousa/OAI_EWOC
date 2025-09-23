@@ -28,27 +28,24 @@ import cls_cmd
 import cls_oai_html
 import cls_analysis
 import constants as CONST
+from cls_ci_helper import archiveArtifact
 
-LOG_PATH_PHYSIM = 'phy_sim_logs'
 DPDK_PATH = '/opt/dpdk-t2-22.11.0'
 
 class Native():
 
-	def Build(test_case, HTML, host, directory, options):
-		logging.debug(f'Building on server: {host}')
+	def Build(ctx, node, test_case, HTML, directory, options):
+		logging.debug(f'Building on server: {node}')
 		HTML.testCase_id = test_case
 
-		with cls_cmd.getConnection(host) as ssh:
+		with cls_cmd.getConnection(node) as ssh:
 			base = f"{directory}/cmake_targets"
-			ret = ssh.run(f"C_INCLUDE_PATH={DPDK_PATH}/include/ PKG_CONFIG_PATH={DPDK_PATH}/lib64/pkgconfig/ {base}/build_oai {options} > {base}/log/build_oai.log", timeout=900)
+			ret = ssh.run(f"C_INCLUDE_PATH={DPDK_PATH}/include/ PKG_CONFIG_PATH={DPDK_PATH}/lib64/pkgconfig/ {base}/build_oai {options} > {base}/build_oai.log", timeout=900)
 			success = ret.returncode == 0
-			logs = ssh.run(f"cat {base}/log/build_oai.log", silent=True)
-			logging.debug(f"build finished with code {ret.returncode}, output:\n{logs.stdout}")
+			logs = ssh.run(f"cat {base}/build_oai.log", silent=True)
+			logging.debug(f"build finished with code {ret.returncode}")
 
-			# create log directory, and copy build logs
-			target = f"{base}/build_log_{test_case}/"
-			ssh.run(f"mkdir -p {target}")
-			ssh.run(f"mv {base}/log/* {target}")
+			archiveArtifact(ssh, ctx, f'{base}/build_oai.log')
 
 			# check if build artifacts are there
 			# NOTE: build_oai should fail with exit code if it could not build, but it does not
@@ -66,20 +63,4 @@ class Native():
 		else:
 			logging.error('\u001B[1m Building OAI Failed\u001B[0m')
 			HTML.CreateHtmlTestRow(options, 'KO', CONST.ALL_PROCESSES_OK)
-		return success
-
-	def Run_Physim(HTML, host, directory, options, physim_test, threshold):
-		logging.debug(f'Runnin {physim_test} on server: {host}')
-		workSpacePath = f'{directory}/cmake_targets'
-		os.system(f'mkdir -p ./{LOG_PATH_PHYSIM}')
-		runLogFile=f'physim_{HTML.testCase_id}.log'
-		with cls_cmd.getConnection(host) as cmd:
-			cmd.run(f'sudo LD_LIBRARY_PATH=.:{DPDK_PATH}/lib64/ {workSpacePath}/ran_build/build/{physim_test} {options} >> {workSpacePath}/{runLogFile}')
-			cmd.copyin(src=f'{workSpacePath}/{runLogFile}', tgt=f'{LOG_PATH_PHYSIM}/{runLogFile}')
-		success, msg = cls_analysis.Analysis.analyze_physim(f'{LOG_PATH_PHYSIM}/{runLogFile}', physim_test, options, threshold)
-		if success:
-			HTML.CreateHtmlTestRowQueue(options, 'OK', [msg])
-		else:
-			logging.error(msg)
-			HTML.CreateHtmlTestRowQueue(options, 'KO', [msg])
 		return success

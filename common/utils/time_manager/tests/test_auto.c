@@ -143,7 +143,7 @@ static int client_server(char *program_name, bool iq_samples_time_source)
   /* wait a little bit so that server is ready to accept clients
    * (this is hackish)
    */
-  usleep(100);
+  usleep(1000);
 
   /* start client */
   client = fork();
@@ -188,7 +188,7 @@ static int run_sub_client_server(bool iq_samples_time_source)
      * wait a bit for client to be there otherwise server
      * may finish too early
      */
-    usleep(100);
+    usleep(100*1000);
 
     /* let's pretend we have 2000 samples per second */
     for (int i = 0; i < 1000; i++) {

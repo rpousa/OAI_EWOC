@@ -33,7 +33,7 @@ static void free_match_list(char **match_list, size_t count)
   free(match_list);
 }
 
-static void fix_benetel_setting(xran_mplane_t *xran_mplane, const uint32_t interface_mtu, const int16_t first_iq_width, const int max_num_ant)
+static void fix_benetel_setting(xran_mplane_t *xran_mplane, const uint32_t interface_mtu, const int16_t first_iq_width, const int max_num_ant, const char *model_name)
 {
   if (interface_mtu == 1500) {
     MP_LOG_I("Interface MTU %d unreliable/not correctly reported by Benetel O-RU, hardcoding to 9600.\n", interface_mtu);
@@ -50,6 +50,14 @@ static void fix_benetel_setting(xran_mplane_t *xran_mplane, const uint32_t inter
   }
 
   xran_mplane->prach_offset = max_num_ant;
+
+  if (strcasecmp(model_name, "RAN550") == 0) {
+    xran_mplane->max_tx_gain = 24.0;
+  } else if (strcasecmp(model_name, "RAN650") == 0) {
+    xran_mplane->max_tx_gain = 35.0;
+  } else {
+    assert(false && "[MPLANE] Unknown Benetel model name.\n");
+  }
 }
 
 bool get_config_for_xran(const char *buffer, const int max_num_ant, xran_mplane_t *xran_mplane)
@@ -61,7 +69,7 @@ bool get_config_for_xran(const char *buffer, const int max_num_ant, xran_mplane_
   xran_mplane->ru_mac_addr = get_ru_xml_node(buffer, "mac-address"); // TODO: support for VVDN, as it defines multiple MAC addresses
 
   // MTU
-  const uint32_t interface_mtu = (uint32_t)atoi(get_ru_xml_node(buffer, "interface-mtu"));
+  const uint32_t interface_mtu = (uint32_t)atoi(get_ru_xml_node(buffer, "l2-mtu"));
 
   // IQ bitwidth
   char **match_list = NULL;
@@ -91,8 +99,25 @@ bool get_config_for_xran(const char *buffer, const int max_num_ant, xran_mplane_
   // RU port ID
   xran_mplane->ru_port = 0;
 
+  // Frame structure
+  match_list = NULL;
+  count = 0;
+  get_ru_xml_list(buffer, "supported-frame-structures", &match_list, &count);
+  xran_mplane->frame_str = (int16_t)atoi((char *)match_list[0]);
+  free_match_list(match_list, count);
+
+  // Managed delay support
+  const char *managed_delay = get_ru_xml_node(buffer, "managed-delay-support");
+  xran_mplane->managed_delay = (strcasecmp(managed_delay, "NON_MANAGED") == 0) ? false : true;
+
+  // Store the max gain
+  xran_mplane->max_tx_gain = (double)atof(get_ru_xml_node(buffer, "max-gain"));
+
+  // Model name
+  const char *model_name = get_ru_xml_node(buffer, "model-name");
+
   if (strcasecmp(ru_vendor, "BENETEL") == 0 /* || strcmp(ru_vendor, "VVDN-LPRU") == 0 || strcmp(ru_vendor, "Metanoia") == 0 */) {
-    fix_benetel_setting(xran_mplane, interface_mtu, first_iq_width, max_num_ant);
+    fix_benetel_setting(xran_mplane, interface_mtu, first_iq_width, max_num_ant, model_name);
   } else {
     AssertError(false, return false, "[MPLANE] %s RU currently not supported.\n", ru_vendor);
   }
@@ -109,7 +134,8 @@ bool get_config_for_xran(const char *buffer, const int max_num_ant, xran_mplane_
     DU port ID %d\n\
     Band sector ID %d\n\
     CC ID %d\n\
-    RU port ID %d\n",
+    RU port ID %d\n\
+    max Tx gain %.1f\n",
       xran_mplane->ru_mac_addr,
       xran_mplane->mtu,
       xran_mplane->iq_width,
@@ -121,7 +147,8 @@ bool get_config_for_xran(const char *buffer, const int max_num_ant, xran_mplane_
       xran_mplane->du_port,
       xran_mplane->band_sector,
       xran_mplane->ccid,
-      xran_mplane->ru_port);
+      xran_mplane->ru_port,
+      xran_mplane->max_tx_gain);
 
   return true;
 }
@@ -152,6 +179,26 @@ bool get_uplane_info(const char *buffer, ru_mplane_config_t *ru_mplane_config)
   AssertError(rx_carriers->name != NULL, return false, "[MPLANE] Cannot get RX carrier names.\n");
 
   MP_LOG_I("Successfully retrieved all the U-plane info - interface name, TX/RX carrier names, and TX/RX endpoint names.\n");
+
+  return true;
+}
+
+bool get_pm_object_list(const char *buffer, pm_stats_t *pm_stats)
+{
+  const char *ru_vendor = get_ru_xml_node(buffer, "mfg-name");
+  if (strcasecmp(ru_vendor, "BENETEL") == 0) {
+    pm_stats->start_up_timing = false;
+  } else {
+    pm_stats->start_up_timing = true;
+  }
+
+  // Rx window
+  get_ru_xml_list(buffer, "rx-window-objects", &pm_stats->rx_window_meas, &pm_stats->rx_num);
+
+  // Tx
+  get_ru_xml_list(buffer, "tx-stats-objects", &pm_stats->tx_meas, &pm_stats->tx_num);
+
+  MP_LOG_I("Successfully retreived all performance measurement names.\n");
 
   return true;
 }

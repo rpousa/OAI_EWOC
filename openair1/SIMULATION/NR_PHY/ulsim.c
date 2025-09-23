@@ -237,6 +237,8 @@ int main(int argc, char *argv[])
   int max_ldpc_iterations = 5;
   int num_antennas_per_thread = 1;
   uint32_t log_format = 0;
+  int threequarter_fs = 0;
+
   if ((uniqCfg = load_configmodule(argc, argv, CONFIG_ENABLECMDLINEONLY)) == 0) {
     exit_fun("[NR_ULSIM] Error, configuration module init failed\n");
   }
@@ -351,7 +353,7 @@ int main(int argc, char *argv[])
 
     case 'k':
       printf("Setting threequarter_fs_flag\n");
-      openair0_cfg[0].threequarter_fs= 1;
+      threequarter_fs = 1;
       break;
 
     case 'm':
@@ -584,7 +586,7 @@ int main(int argc, char *argv[])
   uint32_t samples;
   get_samplerate_and_bw(mu,
                         N_RB_DL,
-                        openair0_cfg[0].threequarter_fs,
+                        threequarter_fs,
                         &sampling_frequency,
                         &samples,
                         &tx_bandwidth,
@@ -656,6 +658,8 @@ int main(int argc, char *argv[])
                                 .minRXTXTIME = 0,
                                 .do_CSIRS = 0,
                                 .do_SRS = 0,
+                                .num_dlharq = 16,
+                                .num_ulharq = 16,
                                 .force_256qam_off = false,
                                 .timer_config.sr_ProhibitTimer = 0,
                                 .timer_config.sr_TransMax = 64,
@@ -696,19 +700,14 @@ int main(int argc, char *argv[])
   RC.nb_nr_mac_CC = (int*)malloc(RC.nb_nr_macrlc_inst*sizeof(int));
   for (i = 0; i < RC.nb_nr_macrlc_inst; i++)
     RC.nb_nr_mac_CC[i] = 1;
-  mac_top_init_gNB(ngran_gNB, scc, NULL /* scd will be updated further below */, &conf, &rlc_config);
+  mac_top_init_gNB(ngran_gNB, scc, &conf, &rlc_config);
   nr_mac_config_scc(RC.nrmac[0], scc, &conf);
-
-  NR_ServingCellConfig_t *scd = calloc(1,sizeof(NR_ServingCellConfig_t));
-  prepare_scd(scd);
-  /* removes unnecessary BWPs, if any */
-  fix_scd(scd);
 
   NR_UE_NR_Capability_t* UE_Capability_nr = CALLOC(1,sizeof(NR_UE_NR_Capability_t));
   prepare_sim_uecap(UE_Capability_nr, scc, mu, N_RB_UL, 0, mcs_table);
   rnti_t rnti = 0x1234;
   int uid = 0;
-  NR_CellGroupConfig_t *secondaryCellGroup = get_default_secondaryCellGroup(scc, scd, UE_Capability_nr, 0, 1, &conf, uid);
+  NR_CellGroupConfig_t *secondaryCellGroup = get_default_secondaryCellGroup(scc, UE_Capability_nr, 0, 1, &conf, uid);
   secondaryCellGroup->spCellConfig->reconfigurationWithSync = get_reconfiguration_with_sync(rnti, uid, scc);
 
   NR_BCCH_BCH_Message_t *mib = get_new_MIB_NR(scc);
@@ -778,8 +777,7 @@ int main(int argc, char *argv[])
   init_nr_ue_transport(UE);
 
   //Configure UE
-  nr_l2_init_ue(1);
-  NR_UE_MAC_INST_t* UE_mac = get_mac_inst(0);
+  NR_UE_MAC_INST_t* UE_mac = nr_l2_init_ue(0);
 
   ue_init_config_request(UE_mac, get_slots_per_frame_from_scs(mu));
   
@@ -1026,6 +1024,9 @@ int main(int argc, char *argv[])
     reset_meas(&gNB->rx_pusch_init_stats);
     reset_meas(&gNB->rx_pusch_symbol_processing_stats);
     reset_meas(&gNB->ulsch_decoding_stats);
+    reset_meas(&gNB->ts_deinterleave);
+    reset_meas(&gNB->ts_rate_unmatch);
+    reset_meas(&gNB->ts_ldpc_decode);
     reset_meas(&gNB->ulsch_channel_estimation_stats);
     reset_meas(&gNB->pusch_channel_estimation_antenna_processing_stats);
     reset_meas(&gNB->rx_srs_stats);
@@ -1474,8 +1475,8 @@ int main(int argc, char *argv[])
         }
 
         for (i = 0; i < available_bits; i++) {
-          if (((UE->ul_harq_processes[harq_pid].f[i] == 0) && (pusch_vars->llr[i] <= 0))
-              || ((UE->ul_harq_processes[harq_pid].f[i] == 1) && (pusch_vars->llr[i] >= 0))) {
+          const uint8_t current_bit = (UE->ul_harq_processes[harq_pid].f[i / 8] >> (i & 7)) & 1;
+          if (((current_bit == 0) && (pusch_vars->llr[i] <= 0)) || ((current_bit == 1) && (pusch_vars->llr[i] >= 0))) {
             /*if(errors_scrambling == 0)
               printf("\x1B[34m" "[frame %d][trial %d]\t1st bit in error in unscrambling = %d\n" "\x1B[0m", frame, trial, i);*/
             errors_scrambling[round]++;
@@ -1587,6 +1588,9 @@ int main(int argc, char *argv[])
       printStatIndent2(&gNB->rx_pusch_init_stats, "RX PUSCH Initialization time");
       printStatIndent2(&gNB->rx_pusch_symbol_processing_stats, "RX PUSCH Symbol Processing time");
       printStatIndent(&gNB->ulsch_decoding_stats,"ULSCH total decoding time");
+      printStatIndent2(&gNB->ts_deinterleave, "ULSCH segment deinterleaving time");
+      printStatIndent2(&gNB->ts_rate_unmatch, "ULSCH segment rate recovery time");
+      printStatIndent2(&gNB->ts_ldpc_decode, "ULSCH segments decoding time");
 
       printf("\nUE TX\n");
       for (int i = PHY_PROC_TX; i <= OFDM_MOD_STATS; i++) {

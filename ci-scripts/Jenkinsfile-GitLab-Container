@@ -175,6 +175,28 @@ pipeline {
             }
           }
         }
+        stage ("Ubuntu-Jetson-Image-Builder") {
+          steps {
+            script {
+              triggerSlaveJob ('RAN-Ubuntu-Jetson-Image-Builder', 'Ubuntu-Jetson-Image-Builder')
+            }
+          }
+          post {
+            always {
+              script {
+                // Using a unique variable name for each test stage to avoid overwriting on a global variable
+                // due to parallel-time concurrency
+                ubuntuJetsonBuildStatus = finalizeSlaveJob('RAN-Ubuntu-Jetson-Image-Builder')
+              }
+            }
+            failure {
+              script {
+                currentBuild.result = 'FAILURE'
+                failingStages += ubuntuJetsonBuildStatus
+              }
+            }
+          }
+        }
         stage ("RHEL-Cluster-Image-Builder") {
           steps {
             script {
@@ -265,6 +287,29 @@ pipeline {
               script {
                 currentBuild.result = 'FAILURE'
                 failingStages += physim5GStatus
+              }
+            }
+          }
+        }
+        stage ("PhySim-GraceHopper-5G") {
+          when { expression {do5Gtest || do5GUeTest} }
+          steps {
+            script {
+              triggerSlaveJob ('RAN-PhySim-GraceHopper-5G', 'PhySim-GraceHopper-5G')
+            }
+          }
+          post {
+            always {
+              script {
+                // Using a unique variable name for each test stage to avoid overwriting on a global variable
+                // due to parallel-time concurrency
+                physimGH5GStatus = finalizeSlaveJob('RAN-PhySim-GraceHopper-5G')
+              }
+            }
+            failure {
+              script {
+                currentBuild.result = 'FAILURE'
+                failingStages += physimGH5GStatus
               }
             }
           }
@@ -657,6 +702,29 @@ pipeline {
               script {
                 currentBuild.result = 'FAILURE'
                 failingStages += saFHI72Status
+              }
+            }
+          }
+        }
+        stage ("SA-Handover-CN5G") {
+          when { expression {do5Gtest} }
+          steps {
+            script {
+              triggerSlaveJob ('RAN-SA-Handover-CN5G', 'SA-Handover-CN5G')
+            }
+          }
+          post {
+            always {
+              script {
+                // Using a unique variable name for each test stage to avoid overwriting on a global variable
+                // due to parallel-time concurrency
+                saHandoverStatus = finalizeSlaveJob('RAN-SA-Handover-CN5G')
+              }
+            }
+            failure {
+              script {
+                currentBuild.result = 'FAILURE'
+                failingStages += saHandoverStatus
               }
             }
           }

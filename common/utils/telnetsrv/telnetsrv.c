@@ -375,32 +375,32 @@ char *telnet_getvarvalue(telnetshell_vardef_t *var, int varindex)
   char *val;
   switch (var[varindex].vartype) {
     case TELNET_VARTYPE_INT32:
-      val = malloc(64);
+      val = calloc_or_fail(1, 64);
       snprintf(val, 64, "%i", *(int32_t *)(var[varindex].varvalptr));
       break;
 
     case TELNET_VARTYPE_INT64:
-      val = malloc(128);
+      val = calloc_or_fail(1, 128);
       snprintf(val, 128, "%lli", (long long)*(int64_t *)(var[varindex].varvalptr));
       break;
 
     case TELNET_VARTYPE_INT16:
-      val = malloc(16);
+      val = calloc_or_fail(1, 16);
       snprintf(val, 16, "%hi", *(short *)(var[varindex].varvalptr));
       break;
 
     case TELNET_VARTYPE_INT8:
-      val = malloc(16);
+      val = calloc_or_fail(1, 16);
       snprintf(val, 16, "%i", (int)(*(int8_t *)(var[varindex].varvalptr)));
       break;
 
     case TELNET_VARTYPE_UINT:
-      val = malloc(64);
+      val = calloc_or_fail(1, 64);
       snprintf(val, 64, "%u", *(unsigned int *)(var[varindex].varvalptr));
       break;
 
     case TELNET_VARTYPE_DOUBLE:
-      val = malloc(32);
+      val = calloc_or_fail(1, 32);
       snprintf(val, 32, "%g\n", *(double *)(var[varindex].varvalptr));
       break;
 
@@ -409,7 +409,7 @@ char *telnet_getvarvalue(telnetshell_vardef_t *var, int varindex)
       break;
 
     default:
-      val = malloc(64);
+      val = calloc_or_fail(1, 64);
       snprintf(val, 64, "ERR:var %i unknown type", varindex);
       break;
   }
@@ -927,7 +927,7 @@ int add_telnetcmd(char *modulename, telnetshell_vardef_t *var, telnetshell_cmdde
       for (int j = 0; cmd[j].cmdfunc != NULL; j++) {
         if (cmd[j].cmdflags & TELNETSRV_CMDFLAG_PUSHINTPOOLQ) {
           if (afifo == NULL) {
-            afifo = malloc(sizeof(notifiedFIFO_t));
+            afifo = calloc_or_fail(1, sizeof(notifiedFIFO_t));
             initNotifiedFIFO(afifo);
           }
           cmd[j].qptr = afifo;
@@ -956,8 +956,8 @@ int  telnetsrv_checkbuildver(char *mainexec_buildversion, char **shlib_buildvers
 }
 
 int telnetsrv_getfarray(loader_shlibfunc_t  **farray) {
-  int const num_func_tln_srv = 3;	
-  *farray = malloc(sizeof(loader_shlibfunc_t) * num_func_tln_srv);
+  int const num_func_tln_srv = 3;
+  *farray = calloc_or_fail(num_func_tln_srv, sizeof(loader_shlibfunc_t));
   (*farray)[0].fname=TELNET_ADDCMD_FNAME;
   (*farray)[0].fptr=(int (*)(void) )add_telnetcmd;
   (*farray)[1].fname=TELNET_POLLCMDQ_FNAME;

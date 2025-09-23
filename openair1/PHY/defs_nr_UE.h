@@ -336,6 +336,7 @@ typedef struct {
 
 /// Top-level PHY Data Structure for UE
 typedef struct PHY_VARS_NR_UE_s {
+  openair0_config_t openair0_cfg[MAX_CARDS];
   /// \brief Module ID indicator for this instance
   uint8_t Mod_id;
   /// \brief Component carrier ID for this PHY instance

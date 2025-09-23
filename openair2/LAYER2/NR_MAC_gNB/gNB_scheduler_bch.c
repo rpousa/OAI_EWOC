@@ -79,7 +79,7 @@ static void schedule_ssb(frame_t frame,
   dl_config_pdu->ssb_pdu.ssb_pdu_rel15.bchPayloadFlag = 1;
   dl_config_pdu->ssb_pdu.ssb_pdu_rel15.bchPayload = payload;
   dl_config_pdu->ssb_pdu.ssb_pdu_rel15.precoding_and_beamforming.num_prgs = 1;
-  dl_config_pdu->ssb_pdu.ssb_pdu_rel15.precoding_and_beamforming.prg_size = 275; //1 PRG of max size for analogue beamforming
+  dl_config_pdu->ssb_pdu.ssb_pdu_rel15.precoding_and_beamforming.prg_size = 20; //SSB is always 20RBs
   dl_config_pdu->ssb_pdu.ssb_pdu_rel15.precoding_and_beamforming.dig_bf_interfaces = 1;
   dl_config_pdu->ssb_pdu.ssb_pdu_rel15.precoding_and_beamforming.prgs_list[0].pm_idx = 0;
   dl_config_pdu->ssb_pdu.ssb_pdu_rel15.precoding_and_beamforming.prgs_list[0].dig_bf_interface_list[0].beam_idx = beam_index;
@@ -775,7 +775,7 @@ static bool test_other_sib_sched_occasion(int window_pos,
                                           int rel_frame,
                                           int rel_slot)
 {
-  int x = window_pos * window_len;
+  int x = (window_pos - 1) * window_len;
   int T = 8 << period;
   int test_frame = (frame - rel_frame) % MAX_FRAME_NUMBER;
   int si_slot = (x % n_slots_frame) + rel_slot;
@@ -848,7 +848,7 @@ void schedule_nr_other_sib(module_id_t module_idP,
   for (int ssb = 0; ssb < num_ssb; ssb++) {
     for (int i = 0; i < schedInfo->schedulingInfoList.list.count; i++) {
       NR_SchedulingInfo_t *schedulingInfo = schedInfo->schedulingInfoList.list.array[i];
-      if (test_other_sib_sched_occasion(i,
+      if (test_other_sib_sched_occasion(i + 1,
                                         window_length_sl,
                                         schedulingInfo->si_Periodicity,
                                         n_slots_frame,

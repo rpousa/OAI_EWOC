@@ -721,7 +721,7 @@ uint8_t unpack_nr_param_response(uint8_t **ppReadPackedMsg, uint8_t *end, void *
                                 config,
                                 &pNfapiMsg->vendor_extension));
 }
-
+#ifndef ENABLE_AERIAL
 static uint8_t pack_dbt_table_tlv_value(void *tlv, uint8_t **ppWritePackedMsg, uint8_t *end)
 {
   nfapi_nr_dbt_tlv_ve_t *dbt_ve = (nfapi_nr_dbt_tlv_ve_t *)tlv;
@@ -768,7 +768,27 @@ static uint8_t pack_pm_table_tlv_value(void *tlv, uint8_t **ppWritePackedMsg, ui
   }
   return 1;
 }
-
+#endif
+#ifdef ENABLE_10_04
+static uint8_t pack_nr_tdd_table_10_04(void *tlv, uint8_t **ppWritePackedMsg, uint8_t *end)
+{
+  nfapi_nr_tdd_table_tlv_t *tdd_table_tlv = (nfapi_nr_tdd_table_tlv_t *)tlv;
+  nfapi_nr_tdd_table_t *tdd_table = tdd_table_tlv->value;
+#ifndef ENABLE_AERIAL
+  if (!push8(tdd_table->tdd_period.value, ppWritePackedMsg, end)) {
+    return 0;
+  }
+#endif
+  for (int i = 0; i < tdd_table_tlv->slots_per_frame; i++) {
+    for (int k = 0; k < tdd_table_tlv->symbols_per_slot; k++) {
+      if (!push8(tdd_table->max_tdd_periodicity_list[i].max_num_of_symbol_per_slot_list[k].slot_config.value, ppWritePackedMsg, end)) {
+        return 0;
+      }
+    }
+  }
+  return 1;
+}
+#endif
 uint8_t pack_nr_config_request(void *msg, uint8_t **ppWritePackedMsg, uint8_t *end, nfapi_p4_p5_codec_config_t *config)
 {
   uint8_t *pNumTLVFields = (uint8_t *)*ppWritePackedMsg;
@@ -1050,18 +1070,23 @@ uint8_t pack_nr_config_request(void *msg, uint8_t **ppWritePackedMsg, uint8_t *e
                           &pack_uint8_tlv_value);
     numTLVs++;
   }
-
   // END SSB Table
+#endif
+
   // START TDD Table
   if (pNfapiMsg->cell_config.frame_duplex_type.value == 1 /* TDD */) {
-    retval &=
-        pack_nr_tlv(NFAPI_NR_CONFIG_TDD_PERIOD_TAG, &(pNfapiMsg->tdd_table.tdd_period), ppWritePackedMsg, end, &pack_uint8_tlv_value);
-    numTLVs++;
     const uint8_t slotsperframe[5] = {10, 20, 40, 80, 160};
     // Assuming always CP_Normal, because Cyclic prefix is not included in CONFIG.request 10.02, but is present in 10.04
     uint8_t cyclicprefix = 1;
     // 3GPP 38.211 Table 4.3.2.1 & Table 4.3.2.2
     uint8_t number_of_symbols_per_slot = cyclicprefix ? 14 : 12;
+#ifdef ENABLE_10_02
+    retval &= pack_nr_tlv(NFAPI_NR_CONFIG_TDD_PERIOD_TAG,
+                          &(pNfapiMsg->tdd_table.tdd_period),
+                          ppWritePackedMsg,
+                          end,
+                          &pack_uint8_tlv_value);
+    numTLVs++;
     for (int i = 0; i < slotsperframe[pNfapiMsg->ssb_config.scs_common.value]; i++) { // TODO check right number of slots
       for (int k = 0; k < number_of_symbols_per_slot; k++) { // TODO can change?
         retval &= pack_nr_tlv(NFAPI_NR_CONFIG_SLOT_CONFIG_TAG,
@@ -1072,10 +1097,37 @@ uint8_t pack_nr_config_request(void *msg, uint8_t **ppWritePackedMsg, uint8_t *e
         numTLVs++;
       }
     }
-  }
-
-  // END TDD Table
 #endif
+
+#ifdef ENABLE_10_04
+#ifdef ENABLE_AERIAL
+    retval &= pack_nr_tlv(NFAPI_NR_CONFIG_TDD_PERIOD_TAG,
+                          &(pNfapiMsg->tdd_table.tdd_period),
+                          ppWritePackedMsg,
+                          end,
+                          &pack_uint8_tlv_value);
+    numTLVs++;
+
+    nfapi_nr_tdd_table_tlv_t tdd_table_tlv = {.tl.tag = NFAPI_NR_CONFIG_SLOT_CONFIG_TAG, .value = &pNfapiMsg->tdd_table, .slots_per_frame = slotsperframe[pNfapiMsg->ssb_config.scs_common.value], .symbols_per_slot = number_of_symbols_per_slot  };
+    retval &= pack_nr_tlv(NFAPI_NR_CONFIG_SLOT_CONFIG_TAG,
+                      &tdd_table_tlv,
+                      ppWritePackedMsg,
+                      end,
+                      &pack_nr_tdd_table_10_04);
+    numTLVs++;
+#else
+    nfapi_nr_tdd_table_tlv_t tdd_table_tlv = {.tl.tag = NFAPI_NR_CONFIG_TDD_TABLE, .value = &pNfapiMsg->tdd_table, .slots_per_frame = slotsperframe[pNfapiMsg->ssb_config.scs_common.value], .symbols_per_slot = number_of_symbols_per_slot  };
+    retval &= pack_nr_tlv(NFAPI_NR_CONFIG_TDD_TABLE,
+                      &tdd_table_tlv,
+                      ppWritePackedMsg,
+                      end,
+                      &pack_nr_tdd_table_10_04);
+    numTLVs++;
+#endif
+#endif
+  }
+  // END TDD Table
+
   // START Measurement Config
   // SCF222.10.02 Table 3-27 : Contains only one TLV and is currently unused
   pNfapiMsg->measurement_config.rssi_measurement.tl.tag = NFAPI_NR_CONFIG_RSSI_MEASUREMENT_TAG;
@@ -1087,7 +1139,7 @@ uint8_t pack_nr_config_request(void *msg, uint8_t **ppWritePackedMsg, uint8_t *e
                         &pack_uint8_tlv_value);
   numTLVs++;
   // END Measurement Config
-
+#ifndef ENABLE_AERIAL
   // START Digital Beam Table (DBT) PDU
   if (pNfapiMsg->dbt_config.num_dig_beams != 0) {
     nfapi_nr_dbt_tlv_ve_t dbt_tlv = {.tl.tag = NFAPI_NR_CONFIG_BEAMFORMING_TABLE_TAG, .value = pNfapiMsg->dbt_config};
@@ -1103,7 +1155,7 @@ uint8_t pack_nr_config_request(void *msg, uint8_t **ppWritePackedMsg, uint8_t *e
     numTLVs++;
   }
   // is 0xA011 END Precoding Matrix (PM) PDU
-#ifndef ENABLE_AERIAL
+
   // START nFAPI TLVs included in CONFIG.request for IDLE and CONFIGURED states
   retval &= pack_nr_tlv(NFAPI_NR_NFAPI_P7_VNF_ADDRESS_IPV4_TAG,
                         &(pNfapiMsg->nfapi_config.p7_vnf_address_ipv4),
@@ -1264,7 +1316,37 @@ static uint8_t unpack_pm_table_tlv_value(void *tlv, uint8_t **ppReadPackedMsg, u
   }
   return 1;
 }
+#ifdef ENABLE_10_04
+static uint8_t unpack_nr_tdd_table_10_04(void *tlv, uint8_t **ppReadPackedMsg, uint8_t *end)
+{
+  nfapi_nr_tdd_table_tlv_t *tdd_table_tlv = (nfapi_nr_tdd_table_tlv_t *)tlv;
+  nfapi_nr_tdd_table_t *tdd_table = tdd_table_tlv->value;
 
+  if (!(pull8(ppReadPackedMsg, &tdd_table->tdd_period.value, end))) {
+    return 0;
+  }
+  tdd_table->tdd_period.tl.tag = NFAPI_NR_CONFIG_TDD_PERIOD_TAG;
+  const int slots = tdd_table_tlv->slots_per_frame;
+  const int symbols = tdd_table_tlv->symbols_per_slot;
+  if (!tdd_table->max_tdd_periodicity_list) {
+    tdd_table->max_tdd_periodicity_list = calloc(slots, sizeof(*tdd_table->max_tdd_periodicity_list));
+  }
+  for (int slot = 0; slot < slots; slot++) {
+    nfapi_nr_max_tdd_periodicity_t* list = &tdd_table->max_tdd_periodicity_list[slot];
+    if (!list->max_num_of_symbol_per_slot_list) {
+      list->max_num_of_symbol_per_slot_list = calloc(symbols, sizeof(*list->max_num_of_symbol_per_slot_list));
+    }
+    for (int sym = 0; sym < symbols; sym++) {
+      if (!(pull8(ppReadPackedMsg, &list->max_num_of_symbol_per_slot_list[sym].slot_config.value, end))) {
+        return 0;
+      }
+      list->max_num_of_symbol_per_slot_list[sym].slot_config.tl.tag = NFAPI_NR_CONFIG_SLOT_CONFIG_TAG;
+    }
+  }
+
+  return 1;
+}
+#endif
 uint8_t unpack_nr_config_request(uint8_t **ppReadPackedMsg, uint8_t *end, void *msg, nfapi_p4_p5_codec_config_t *config)
 {
   // Helper vars for indexed TLVs
@@ -1272,8 +1354,10 @@ uint8_t unpack_nr_config_request(uint8_t **ppReadPackedMsg, uint8_t *end, void *
   int unused_root_seq_idx = 0;
   int ssb_mask_idx = 0;
   int config_beam_idx = 0;
+#ifdef ENABLE_10_02
   int tdd_periodicity_idx = 0;
   int symbol_per_slot_idx = 0;
+#endif
   int beam_ve_idx = 0;
   nfapi_nr_config_request_scf_t *pNfapiMsg = (nfapi_nr_config_request_scf_t *)msg;
   // unpack TLVs
@@ -1324,7 +1408,16 @@ uint8_t unpack_nr_config_request(uint8_t **ppReadPackedMsg, uint8_t *end, void *
        &(pNfapiMsg->ssb_table.multiple_cells_ss_pbch_in_a_carrier),
        &unpack_uint8_tlv_value},
       {NFAPI_NR_CONFIG_TDD_PERIOD_TAG, &(pNfapiMsg->tdd_table.tdd_period), &unpack_uint8_tlv_value},
+#ifdef ENABLE_10_02
       {NFAPI_NR_CONFIG_SLOT_CONFIG_TAG, NULL, &unpack_uint8_tlv_value},
+#endif
+#ifdef ENABLE_10_04
+#ifdef ENABLE_AERIAL
+      {NFAPI_NR_CONFIG_SLOT_CONFIG_TAG, NULL, &unpack_nr_tdd_table_10_04},
+#else
+      {NFAPI_NR_CONFIG_TDD_TABLE, NULL, &unpack_nr_tdd_table_10_04},
+#endif
+#endif
       {NFAPI_NR_FAPI_NUM_BEAMS_PERIOD_VENDOR_EXTENSION_TAG, &(pNfapiMsg->analog_beamforming_ve.num_beams_period_vendor_ext), &unpack_uint8_tlv_value},
       {NFAPI_NR_FAPI_ANALOG_BF_VENDOR_EXTENSION_TAG, &(pNfapiMsg->analog_beamforming_ve.analog_bf_vendor_ext), &unpack_uint8_tlv_value},
       {NFAPI_NR_FAPI_TOTAL_NUM_BEAMS_VENDOR_EXTENSION_TAG, &(pNfapiMsg->analog_beamforming_ve.total_num_beams_vendor_ext), &unpack_uint8_tlv_value},
@@ -1341,6 +1434,13 @@ uint8_t unpack_nr_config_request(uint8_t **ppReadPackedMsg, uint8_t *end, void *
       {NFAPI_NR_NFAPI_P7_PNF_ADDRESS_IPV6_TAG, &(pNfapiMsg->nfapi_config.p7_pnf_address_ipv6), &unpack_ipv6_address_value},
       {NFAPI_NR_NFAPI_P7_PNF_PORT_TAG, &(pNfapiMsg->nfapi_config.p7_pnf_port), &unpack_uint16_tlv_value}};
 
+#ifdef ENABLE_10_04
+#ifdef ENABLE_AERIAL
+  nfapi_nr_tdd_table_tlv_t tdd_table_tlv = {.tl.tag = NFAPI_NR_CONFIG_SLOT_CONFIG_TAG};
+#else
+  nfapi_nr_tdd_table_tlv_t tdd_table_tlv = {.tl.tag = NFAPI_NR_CONFIG_TDD_TABLE};
+#endif
+#endif
   pull8(ppReadPackedMsg, &pNfapiMsg->num_tlv, end);
 
   pNfapiMsg->vendor_extension = malloc(sizeof(&(pNfapiMsg->vendor_extension)));
@@ -1387,6 +1487,16 @@ uint8_t unpack_nr_config_request(uint8_t **ppReadPackedMsg, uint8_t *end, void *
             unpack_fns[idx].tlv = &generic_tl;
             result = (*unpack_fns[idx].unpack_func)(&pNfapiMsg->pmi_list, ppReadPackedMsg, end);
             break;
+#ifdef ENABLE_10_04
+#ifdef ENABLE_AERIAL
+          case NFAPI_NR_CONFIG_SLOT_CONFIG_TAG:
+#else
+          case NFAPI_NR_CONFIG_TDD_TABLE:
+#endif
+            unpack_fns[idx].tlv = &generic_tl;
+            result = (*unpack_fns[idx].unpack_func)(&tdd_table_tlv, ppReadPackedMsg, end);
+            break;
+#endif
           case NFAPI_NR_CONFIG_NUM_PRACH_FD_OCCASIONS_TAG:
             pNfapiMsg->prach_config.num_prach_fd_occasions.tl.tag = generic_tl.tag;
             pNfapiMsg->prach_config.num_prach_fd_occasions.tl.length = generic_tl.length;
@@ -1413,6 +1523,11 @@ uint8_t unpack_nr_config_request(uint8_t **ppReadPackedMsg, uint8_t *end, void *
                 pNfapiMsg->tdd_table.max_tdd_periodicity_list[i].max_num_of_symbol_per_slot_list =
                     calloc(number_of_symbols_per_slot, sizeof(nfapi_nr_max_num_of_symbol_per_slot_t));
               }
+#ifdef ENABLE_10_04
+              tdd_table_tlv.slots_per_frame = slotsperframe[pNfapiMsg->ssb_config.scs_common.value];
+              tdd_table_tlv.symbols_per_slot = number_of_symbols_per_slot;
+              tdd_table_tlv.value = &pNfapiMsg->tdd_table;
+#endif
             }
             break;
           case NFAPI_NR_CONFIG_PRACH_ROOT_SEQUENCE_INDEX_TAG:
@@ -1531,6 +1646,7 @@ uint8_t unpack_nr_config_request(uint8_t **ppReadPackedMsg, uint8_t *end, void *
                                                     end);
             config_beam_idx++;
             break;
+#ifdef ENABLE_10_02
           case NFAPI_NR_CONFIG_SLOT_CONFIG_TAG:
             unpack_fns[idx].tlv = &(pNfapiMsg->tdd_table.max_tdd_periodicity_list[tdd_periodicity_idx]
                                         .max_num_of_symbol_per_slot_list[symbol_per_slot_idx]
@@ -1551,6 +1667,7 @@ uint8_t unpack_nr_config_request(uint8_t **ppReadPackedMsg, uint8_t *end, void *
               tdd_periodicity_idx++;
             }
             break;
+#endif
           default:
             result = (*unpack_fns[idx].unpack_func)(tl, ppReadPackedMsg, end);
             break;
@@ -1749,22 +1866,23 @@ uint8_t unpack_nr_stop_indication(uint8_t **ppReadPackedMsg, uint8_t *end, void 
 uint8_t pack_nr_error_indication(void *msg, uint8_t **ppWritePackedMsg, uint8_t *end, nfapi_p4_p5_codec_config_t *config)
 {
   nfapi_nr_error_indication_scf_t *pNfapiMsg = (nfapi_nr_error_indication_scf_t *)msg;
-  uint8_t retval = push16(pNfapiMsg->sfn, ppWritePackedMsg, end) != 0;
-  retval &= push16(pNfapiMsg->slot, ppWritePackedMsg, end) != 0;
-  retval &= push8(pNfapiMsg->message_id, ppWritePackedMsg, end);
-  retval &= push8(pNfapiMsg->error_code, ppWritePackedMsg, end);
-
-  retval &= pack_vendor_extension_tlv(pNfapiMsg->vendor_extension, ppWritePackedMsg, end, config);
-  return retval;
+  if (push16(pNfapiMsg->sfn, ppWritePackedMsg, end) && push16(pNfapiMsg->slot, ppWritePackedMsg, end)
+      && push8(pNfapiMsg->message_id, ppWritePackedMsg, end) && push8(pNfapiMsg->error_code, ppWritePackedMsg, end)
+      && pack_vendor_extension_tlv(pNfapiMsg->vendor_extension, ppWritePackedMsg, end, config)) {
+    return 1;
+  } else {
+    return 0;
+  }
 }
 
 uint8_t unpack_nr_error_indication(uint8_t **ppReadPackedMsg, uint8_t *end, void *msg, nfapi_p4_p5_codec_config_t *config)
 {
   nfapi_nr_error_indication_scf_t *pNfapiMsg = (nfapi_nr_error_indication_scf_t *)msg;
-  uint8_t retval = pull16(ppReadPackedMsg, &pNfapiMsg->sfn, end);
-  retval &= pull16(ppReadPackedMsg, &pNfapiMsg->slot, end);
-  retval &= pull8(ppReadPackedMsg, &pNfapiMsg->message_id, end);
-  retval &= pull8(ppReadPackedMsg, &pNfapiMsg->error_code, end);
-  retval &= unpack_nr_tlv_list(NULL, 0, ppReadPackedMsg, end, config, &(pNfapiMsg->vendor_extension));
-  return retval;
+  if (pull16(ppReadPackedMsg, &pNfapiMsg->sfn, end) && pull16(ppReadPackedMsg, &pNfapiMsg->slot, end)
+      && pull8(ppReadPackedMsg, &pNfapiMsg->message_id, end) && pull8(ppReadPackedMsg, &pNfapiMsg->error_code, end)
+      && unpack_nr_tlv_list(NULL, 0, ppReadPackedMsg, end, config, &(pNfapiMsg->vendor_extension))) {
+    return 1;
+  } else {
+    return 0;
+  }
 }

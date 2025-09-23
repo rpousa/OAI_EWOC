@@ -414,7 +414,7 @@ static void UE_synch(void *arg) {
   syncData_t *syncD = (syncData_t *)arg;
   PHY_VARS_NR_UE *UE = syncD->UE;
   UE->is_synchronized = 0;
-  openair0_config_t *cfg0 = &openair0_cfg[UE->rf_map.card];
+  openair0_config_t *cfg0 = &UE->openair0_cfg[UE->rf_map.card];
 
   if (UE->target_Nid_cell != -1) {
     LOG_W(NR_PHY, "Starting re-sync detection for target Nid_cell %i\n", UE->target_Nid_cell);
@@ -523,7 +523,7 @@ static void RU_write(nr_rxtx_thread_data_t *rxtxD, bool sl_tx_action, c16_t **tx
   radio_tx_burst_flag_t flags = TX_BURST_INVALID;
 
   if (UE->received_config_request) {
-    if (openair0_cfg[0].duplex_mode == duplex_mode_FDD || get_softmodem_params()->continuous_tx) {
+    if (UE->openair0_cfg[0].duplex_mode == duplex_mode_FDD || get_softmodem_params()->continuous_tx) {
       flags = TX_BURST_MIDDLE;
     // In case of Sidelink, USRP write needed only in case transmission
     // needs to be done in this slot and not based on tdd ULDL configuration.
@@ -696,8 +696,8 @@ static int handle_sync_req_from_mac(PHY_VARS_NR_UE *UE)
     if (dl_CarrierFreq != fp->dl_CarrierFreq || ul_CarrierFreq != fp->ul_CarrierFreq) {
       fp->dl_CarrierFreq = dl_CarrierFreq;
       fp->ul_CarrierFreq = ul_CarrierFreq;
-      nr_rf_card_config_freq(&openair0_cfg[UE->rf_map.card], ul_CarrierFreq, dl_CarrierFreq, 0);
-      UE->rfdevice.trx_set_freq_func(&UE->rfdevice, &openair0_cfg[0]);
+      nr_rf_card_config_freq(&UE->openair0_cfg[UE->rf_map.card], ul_CarrierFreq, dl_CarrierFreq, 0);
+      UE->rfdevice.trx_set_freq_func(&UE->rfdevice, &UE->openair0_cfg[UE->rf_map.card]);
       init_symbol_rotation(fp);
     }
 
@@ -731,12 +731,14 @@ static int UE_dl_preprocessing(PHY_VARS_NR_UE *UE,
     fp = &UE->SL_UE_PHY_PARAMS.sl_frame_params;
 
   // process what RRC thread sent to MAC
-  MessageDef *msg = NULL;
   do {
-    itti_poll_msg(TASK_MAC_UE, &msg);
-    if (msg)
-      process_msg_rcc_to_mac(msg);
-  } while (msg);
+    notifiedFIFO_elt_t *elt = pollNotifiedFIFO(&get_mac_inst(UE->Mod_id)->input_nf);
+    if (!elt) {
+      break;
+    }
+    process_msg_rcc_to_mac(NotifiedFifoData(elt), UE->Mod_id);
+    delNotifiedFIFO_elt(elt);
+  } while (true);
 
   if (UE->if_inst)
     UE->if_inst->slot_indication(UE->Mod_id, false);
@@ -966,7 +968,7 @@ void *UE_thread(void *arg)
   void *rxp[NB_ANTENNAS_RX];
   enum stream_status_e stream_status = STREAM_STATUS_UNSYNC;
   fapi_nr_config_request_t *cfg = &UE->nrUE_config;
-  int tmp = openair0_device_load(&(UE->rfdevice), &openair0_cfg[0]);
+  int tmp = openair0_device_load(&(UE->rfdevice), &UE->openair0_cfg[0]);
   AssertFatal(tmp == 0, "Could not load the device\n");
   NR_DL_FRAME_PARMS *fp = &UE->frame_parms;
   sl_nr_phy_config_request_t *sl_cfg = NULL;
@@ -1032,12 +1034,10 @@ void *UE_thread(void *arg)
             decoded_frame_rx = UE->SL_UE_PHY_PARAMS.sync_params.DFN;
           else {
             // We must wait the RRC layer decoded the MIB and sent us the frame number
-            MessageDef *msg = NULL;
-            itti_receive_msg(TASK_MAC_UE, &msg);
-            if (msg)
-              process_msg_rcc_to_mac(msg);
-            else
-              LOG_E(PHY, "It seems we arbort while trying to sync\n");
+            notifiedFIFO_elt_t *elt = pullNotifiedFIFO(&mac->input_nf);
+            AssertFatal(elt != NULL, "fifo error while waiting for MIB");
+            process_msg_rcc_to_mac(NotifiedFifoData(elt), UE->Mod_id);
+            delNotifiedFIFO_elt(elt);
             decoded_frame_rx = mac->mib_frame;
           }
           LOG_A(PHY,
@@ -1284,20 +1284,19 @@ void *UE_thread(void *arg)
 
 void init_NR_UE(int nb_inst, char *uecap_file, char *reconfig_file, char *rbconfig_file)
 {
-  NR_UE_RRC_INST_t *rrc_inst = nr_rrc_init_ue(uecap_file, nb_inst, get_nrUE_params()->nb_antennas_tx);
-  NR_UE_MAC_INST_t *mac_inst = nr_l2_init_ue(nb_inst);
-  AssertFatal(mac_inst, "Couldn't allocate MAC module\n");
+  for (int instance_id = 0; instance_id < nb_inst; instance_id++) {
+    NR_UE_RRC_INST_t* rrc = nr_rrc_init_ue(uecap_file, instance_id, get_nrUE_params()->nb_antennas_tx);
+    NR_UE_MAC_INST_t *mac = nr_l2_init_ue(instance_id);
 
-  for (int i = 0; i < nb_inst; i++) {
-    NR_UE_MAC_INST_t *mac = get_mac_inst(i);
-    mac->if_module = nr_ue_if_module_init(i);
+    nr_rrc_set_mac_queue(instance_id, &mac->input_nf);
+    mac->if_module = nr_ue_if_module_init(instance_id);
     AssertFatal(mac->if_module, "can not initialize IF module\n");
     if (!IS_SA_MODE(get_softmodem_params()) && !get_softmodem_params()->sl_mode) {
-      init_nsa_message(&rrc_inst[i], reconfig_file, rbconfig_file);
-      nr_rlc_activate_srb0(mac_inst[i].crnti, NULL, send_srb0_rrc);
+      init_nsa_message(rrc, reconfig_file, rbconfig_file);
+      nr_rlc_activate_srb0(mac->crnti, NULL, send_srb0_rrc);
     }
     //TODO: Move this call to RRC
-    start_sidelink((&rrc_inst[i])->ue_id);
+    start_sidelink(instance_id);
   }
 }
 

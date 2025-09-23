@@ -40,7 +40,6 @@ typedef struct {
   int num_antennas_tx;
   int num_antennas_rx;
   uint64_t timestamp;
-  bool is_connected;
   pthread_mutex_t mutex;
   pthread_cond_t cond;
 } ShmTDIQChannelData;
@@ -48,10 +47,10 @@ typedef struct {
 typedef struct ShmTDIQChannel_s {
   IQChannelType type;
   ShmTDIQChannelData *data;
-  uint64_t last_timestamp;
   char name[256];
   sample_t *tx_iq_data;
   sample_t *rx_iq_data;
+  bool abort;
 } ShmTDIQChannel;
 
 ShmTDIQChannel *shm_td_iq_channel_create(const char *name, int num_tx_ant, int num_rx_ant)
@@ -75,14 +74,12 @@ ShmTDIQChannel *shm_td_iq_channel_create(const char *name, int num_tx_ant, int n
   memset(shm_ptr, 0, total_size);
   shm_ptr->num_antennas_tx = num_tx_ant;
   shm_ptr->num_antennas_rx = num_rx_ant;
-  shm_ptr->is_connected = false;
   ShmTDIQChannel *channel = calloc_or_fail(1, sizeof(ShmTDIQChannel));
   strncpy(channel->name, name, sizeof(channel->name) - 1);
   channel->tx_iq_data = (sample_t *)(shm_ptr + 1);
   channel->rx_iq_data = channel->tx_iq_data + tx_buffer_size / sizeof(sample_t);
   channel->data = shm_ptr;
   channel->type = IQ_CHANNEL_TYPE_SERVER;
-  channel->last_timestamp = 0;
   pthread_mutexattr_t mutex_attr;
   pthread_condattr_t cond_attr;
   int ret = pthread_mutexattr_init(&mutex_attr);
@@ -137,12 +134,10 @@ ShmTDIQChannel *shm_td_iq_channel_connect(const char *name, int timeout_in_secon
   size_t tx_buffer_size = CIRCULAR_BUFFER_SIZE * sizeof(sample_t) * channel->data->num_antennas_tx;
   channel->rx_iq_data = channel->tx_iq_data + tx_buffer_size / sizeof(sample_t);
   channel->type = IQ_CHANNEL_TYPE_CLIENT;
-  channel->last_timestamp = 0;
   while (shm_ptr->magic != SHM_MAGIC_NUMBER) {
     printf("Waiting for server to initialize shared memory\n");
     sleep(1);
   }
-  shm_ptr->is_connected = true;
   close(fd);
   return channel;
 }
@@ -154,9 +149,6 @@ IQChannelErrorType shm_td_iq_channel_tx(ShmTDIQChannel *channel,
                                         const sample_t *tx_iq_data)
 {
   ShmTDIQChannelData *data = channel->data;
-  if (data->is_connected == false) {
-    return CHANNEL_ERROR_NOT_CONNECTED;
-  }
   // timestamp in the past
   uint64_t current_time = data->timestamp;
   if (timestamp < current_time) {
@@ -193,9 +185,6 @@ IQChannelErrorType shm_td_iq_channel_rx(ShmTDIQChannel *channel,
                                         sample_t *tx_iq_data)
 {
   ShmTDIQChannelData *data = channel->data;
-  if (data->is_connected == false) {
-    return CHANNEL_ERROR_NOT_CONNECTED;
-  }
   // timestamp in the future
   uint64_t current_time = data->timestamp;
   if (timestamp > current_time) {
@@ -228,37 +217,54 @@ IQChannelErrorType shm_td_iq_channel_rx(ShmTDIQChannel *channel,
 void shm_td_iq_channel_produce_samples(ShmTDIQChannel *channel, size_t num_samples)
 {
   ShmTDIQChannelData *data = channel->data;
-  if (channel->type != IQ_CHANNEL_TYPE_SERVER) {
-    return;
-  }
-  if (data->is_connected == false) {
-    return;
-  }
   mutexlock(data->mutex);
   data->timestamp += num_samples;
   condbroadcast(data->cond);
   mutexunlock(data->mutex);
 }
 
-void shm_td_iq_channel_wait(ShmTDIQChannel *channel, uint64_t timestamp)
+int shm_td_iq_channel_wait(ShmTDIQChannel *channel, uint64_t timestamp, uint64_t timeout_uS)
 {
   ShmTDIQChannelData *data = channel->data;
-  if (data->is_connected == false) {
-    abort();
-    return;
-  }
-
   size_t current_timestamp = data->timestamp;
   if (current_timestamp >= timestamp) {
-    return;
+    return 0;
   }
-  mutexlock(data->mutex);
-  while (current_timestamp < timestamp) {
-    condwait(data->cond, data->mutex);
-    current_timestamp = data->timestamp;
+  if (timeout_uS == 0) {
+    mutexlock(data->mutex);
+    while (current_timestamp < timestamp && !channel->abort) {
+      condwait(data->cond, data->mutex);
+      current_timestamp = data->timestamp;
+    }
+    mutexunlock(data->mutex);
+  } else {
+    struct timespec ts = {.tv_sec = 0, .tv_nsec = 0};
+    if (clock_gettime(CLOCK_REALTIME, &ts) != 0) {
+      fprintf(stderr, "Error: clock_gettime failed: %s\n", strerror(errno));
+      return 1;
+    }
+    
+    ts.tv_sec += timeout_uS / 1000000; // Convert microseconds to seconds
+    ts.tv_nsec += (timeout_uS % 1000000) * 1000; // Convert remaining microseconds to nanoseconds
+
+    mutexlock(data->mutex);
+    while (current_timestamp < timestamp && !channel->abort) {
+      int ret = pthread_cond_timedwait(&data->cond, &data->mutex, &ts);
+      if (ret == ETIMEDOUT) {
+        fprintf(stderr, "Error: Timed out waiting for samples.\n");
+        mutexunlock(data->mutex);
+        return 1;
+      } else if (ret != 0) {
+        fprintf(stderr, "Error: pthread_cond_timedwait failed: %s\n", strerror(ret));
+        mutexunlock(data->mutex);
+        return 1;
+      } else {
+        current_timestamp = data->timestamp;
+      }
+    }
+    mutexunlock(data->mutex);
   }
-  mutexunlock(data->mutex);
-  return;
+  return 0;
 }
 
 uint64_t shm_td_iq_channel_get_current_sample(const ShmTDIQChannel *channel)
@@ -267,9 +273,18 @@ uint64_t shm_td_iq_channel_get_current_sample(const ShmTDIQChannel *channel)
   return data->timestamp;
 }
 
-bool shm_td_iq_channel_is_connected(const ShmTDIQChannel *channel)
+void shm_td_iq_channel_abort(ShmTDIQChannel *channel)
 {
-  return channel->data->is_connected;
+  ShmTDIQChannelData *data = channel->data;
+  mutexlock(data->mutex);
+  channel->abort = true;
+  condbroadcast(data->cond);
+  mutexunlock(data->mutex);
+}
+
+bool shm_td_iq_channel_is_aborted(const ShmTDIQChannel *channel)
+{
+  return channel->abort;
 }
 
 void shm_td_iq_channel_destroy(ShmTDIQChannel *channel)
@@ -278,9 +293,11 @@ void shm_td_iq_channel_destroy(ShmTDIQChannel *channel)
   size_t tx_buffer_size = CIRCULAR_BUFFER_SIZE * sizeof(sample_t) * data->num_antennas_tx;
   size_t rx_buffer_size = CIRCULAR_BUFFER_SIZE * sizeof(sample_t) * data->num_antennas_rx;
   size_t total_size = sizeof(ShmTDIQChannelData) + tx_buffer_size + rx_buffer_size;
-  munmap(data, total_size);
   if (channel->type == IQ_CHANNEL_TYPE_SERVER) {
+    munmap(data, total_size);
     shm_unlink(channel->name);
+  } else {
+    munmap(data, total_size);
   }
   free(channel);
 }

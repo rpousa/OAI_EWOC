@@ -37,10 +37,10 @@
 #include "PHY/phy_extern_nr_ue.h"
 #include "common/utils/LOG/log.h"
 #include "PHY/sse_intrin.h"
+#include "SCHED_NR_UE/defs.h"
 
-//#define k1 1000
-#define k1 ((long long int) 1000)
-#define k2 ((long long int) (1024-k1))
+#define K1 ((long long int) 512)
+#define K2 ((long long int) (1024-K1))
 
 //#define DEBUG_MEAS_RRC
 //#define DEBUG_MEAS_UE
@@ -136,11 +136,11 @@ void nr_ue_measurements(PHY_VARS_NR_UE *ue,
   if (ue->init_averaging == 0) {
 
     for (gNB_id = 0; gNB_id < ue->n_connected_gNB; gNB_id++)
-      ue->measurements.rx_power_avg[gNB_id] = (int)(((k1*((long long int)(ue->measurements.rx_power_avg[gNB_id]))) + (k2*((long long int)(ue->measurements.rx_power_tot[gNB_id])))) >> 10);
+      ue->measurements.rx_power_avg[gNB_id] = (int)((K1 * ue->measurements.rx_power_avg[gNB_id] + K2 * ue->measurements.rx_power_tot[gNB_id]) >> 10);
 
-    ue->measurements.n0_power_avg = (int)(((k1*((long long int) (ue->measurements.n0_power_avg))) + (k2*((long long int) (ue->measurements.n0_power_tot))))>>10);
+    ue->measurements.n0_power_avg = (int)((K1 * ue->measurements.n0_power_avg + K2 * ue->measurements.n0_power_tot) >> 10);
 
-    LOG_D(PHY, "Noise Power Computation: k1 %lld k2 %lld n0 avg %u n0 tot %u\n", k1, k2, ue->measurements.n0_power_avg, ue->measurements.n0_power_tot);
+    LOG_D(PHY, "Noise Power Computation: K1 %lld K2 %lld n0 avg %u n0 tot %u\n", K1, K2, ue->measurements.n0_power_avg, ue->measurements.n0_power_tot);
 
   } else {
 
@@ -157,7 +157,9 @@ void nr_ue_measurements(PHY_VARS_NR_UE *ue,
     ue->measurements.rx_power_avg_dB[gNB_id] = dB_fixed( ue->measurements.rx_power_avg[gNB_id]);
     ue->measurements.wideband_cqi_tot[gNB_id] = ue->measurements.rx_power_tot_dB[gNB_id] - ue->measurements.n0_power_tot_dB;
     ue->measurements.wideband_cqi_avg[gNB_id] = ue->measurements.rx_power_avg_dB[gNB_id] - dB_fixed(ue->measurements.n0_power_avg);
-    ue->measurements.rx_rssi_dBm[gNB_id] = ue->measurements.rx_power_avg_dB[gNB_id] + 30 - SQ15_SQUARED_NORM_FACTOR_DB - ((int)openair0_cfg[0].rx_gain[0] - (int)openair0_cfg[0].rx_gain_offset[0]) - dB_fixed(ue->frame_parms.ofdm_symbol_size);
+    ue->measurements.rx_rssi_dBm[gNB_id] = ue->measurements.rx_power_avg_dB[gNB_id] + 30 - SQ15_SQUARED_NORM_FACTOR_DB
+                                           - ((int)ue->openair0_cfg[0].rx_gain[0] - (int)ue->openair0_cfg[0].rx_gain_offset[0])
+                                           - dB_fixed(ue->frame_parms.ofdm_symbol_size);
 
     LOG_D(PHY, "[gNB %d] Slot %d, RSSI %d dB (%d dBm/RE), WBandCQI %d dB, rxPwrAvg %d, n0PwrAvg %d\n",
       gNB_id,
@@ -235,7 +237,7 @@ void nr_ue_ssb_rsrp_measurements(PHY_VARS_NR_UE *ue,
   uint32_t rsrp_avg = nr_ue_calculate_ssb_rsrp(fp, proc, rxdataF, symbol_offset, fp->ssb_start_subcarrier);
   float rsrp_db_per_re = 10 * log10(rsrp_avg);
 
-  openair0_config_t *cfg0 = &openair0_cfg[0];
+  openair0_config_t *cfg0 = &ue->openair0_cfg[0];
 
   ue->measurements.ssb_rsrp_dBm[ssb_index] = rsrp_db_per_re + 30 - SQ15_SQUARED_NORM_FACTOR_DB
                                              - ((int)cfg0->rx_gain[0] - (int)cfg0->rx_gain_offset[0])
@@ -253,6 +255,24 @@ void nr_ue_ssb_rsrp_measurements(PHY_VARS_NR_UE *ue,
         ue->measurements.ssb_rsrp_dBm[ssb_index],
         rsrp_db_per_re,
         ue->measurements.ssb_sinr_dB[ssb_index]);
+
+  // Send SS measurements to MAC
+  if (!ue->if_inst || !ue->if_inst->dl_indication)
+    return;
+
+  fapi_nr_l1_measurements_t l1_measurements = {
+    .gNB_index = proc->gNB_id,
+    .meas_type = NFAPI_NR_SS_MEAS,
+    .Nid_cell = ue->frame_parms.Nid_cell,
+    .is_neighboring_cell = false,
+  };
+  int ssb_rsrp_dBm = ue->measurements.ssb_rsrp_dBm[ssb_index];
+  l1_measurements.rsrp_dBm = BOUNDED_EVAL(16, ssb_rsrp_dBm + 157, 113); // TS 38.133 - Table 10.1.6.1-1
+  nr_downlink_indication_t dl_indication = {0};
+  fapi_nr_rx_indication_t rx_ind = {0};
+  nr_fill_dl_indication(&dl_indication, NULL, &rx_ind, proc, ue, NULL);
+  nr_fill_rx_indication(&rx_ind, FAPI_NR_MEAS_IND, ue, NULL, NULL, 1, proc, &l1_measurements, NULL);
+  ue->if_inst->dl_indication(&dl_indication);
 }
 
 // This function computes the received noise power
@@ -271,8 +291,8 @@ void nr_ue_rrc_measurements(PHY_VARS_NR_UE *ue,
   const uint8_t k_length = 8;
   uint8_t l_sss = (ue->symbol_offset + 2) % ue->frame_parms.symbols_per_slot;
   unsigned int ssb_offset = ue->frame_parms.first_carrier_offset + ue->frame_parms.ssb_start_subcarrier;
-  double rx_gain = openair0_cfg[0].rx_gain[0];
-  double rx_gain_offset = openair0_cfg[0].rx_gain_offset[0];
+  double rx_gain = ue->openair0_cfg[0].rx_gain[0];
+  double rx_gain_offset = ue->openair0_cfg[0].rx_gain_offset[0];
 
   ue->measurements.n0_power_tot = 0;
 
@@ -344,7 +364,8 @@ void nr_ue_rrc_measurements(PHY_VARS_NR_UE *ue,
 int nr_sl_psbch_rsrp_measurements(sl_nr_ue_phy_params_t *sl_phy_params,
                                   NR_DL_FRAME_PARMS *fp,
                                   c16_t rxdataF[][fp->samples_per_slot_wCP],
-                                  bool use_SSS)
+                                  bool use_SSS,
+                                  openair0_config_t *openair0_cfg)
 {
   SL_NR_UE_PSBCH_t *psbch_rx = &sl_phy_params->psbch;
   uint8_t numsym = (fp->Ncp) ? SL_NR_NUM_SYMBOLS_SSB_EXT_CP : SL_NR_NUM_SYMBOLS_SSB_NORMAL_CP;

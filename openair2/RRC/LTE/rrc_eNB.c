@@ -7721,9 +7721,6 @@ void *rrc_enb_process_itti_msg(void *notUsed) {
 
     case X2AP_HANDOVER_REQ_ACK: {
       struct rrc_eNB_ue_context_s        *ue_context_p = NULL;
-      x2ap_handover_req_ack_t         *x2ap_handover_req_ack = NULL;
-      hashtable_rc_t                    hash_rc      = HASH_TABLE_KEY_NOT_EXISTS;
-      gtpv1u_ue_data_t                  *gtpv1u_ue_data_p = NULL;
       ue_context_p = rrc_eNB_get_ue_context(RC.rrc[instance], X2AP_HANDOVER_REQ_ACK(msg_p).rnti);
 
       if (ue_context_p == NULL) {
@@ -7737,40 +7734,6 @@ void *rrc_enb_process_itti_msg(void *notUsed) {
 
         if (ue_context_p->ue_context.handover_info->state != HO_REQUEST)
           abort();
-
-      hash_rc = hashtable_get(RC.gtpv1u_data_g->ue_mapping, ue_context_p->ue_context.rnti, (void **)&gtpv1u_ue_data_p);
-
-      /* set target enb gtp teid */
-      if (hash_rc == HASH_TABLE_KEY_NOT_EXISTS) {
-        LOG_E(RRC, "X2AP_HANDOVER_REQ_ACK func(), hashtable_get failed: while getting ue rnti %x in hashtable ue_mapping\n", ue_context_p->ue_context.rnti);
-      } else {
-        uint8_t nb_e_rabs_tobesetup = 0;
-        ebi_t   eps_bearer_id       = 0;
-        int     ip_offset           = 0;
-        in_addr_t  in_addr;
-        x2ap_handover_req_ack = &X2AP_HANDOVER_REQ_ACK(msg_p);
-        nb_e_rabs_tobesetup = x2ap_handover_req_ack->nb_e_rabs_tobesetup;
-        ue_context_p->ue_context.nb_x2u_e_rabs = nb_e_rabs_tobesetup;
-
-          for (int i = 0; i < nb_e_rabs_tobesetup; i++) {
-          ip_offset               = 0;
-          eps_bearer_id = x2ap_handover_req_ack->e_rabs_tobesetup[i].e_rab_id;
-          ue_context_p->ue_context.enb_gtp_x2u_ebi[i] = eps_bearer_id;
-          ue_context_p->ue_context.enb_gtp_x2u_teid[i] = x2ap_handover_req_ack->e_rabs_tobesetup[i].gtp_teid;
-          gtpv1u_ue_data_p->bearers[eps_bearer_id - GTPV1U_BEARER_OFFSET].teid_teNB = x2ap_handover_req_ack->e_rabs_tobesetup[i].gtp_teid;
-
-            if ((x2ap_handover_req_ack->e_rabs_tobesetup[i].eNB_addr.length == 4) || (x2ap_handover_req_ack->e_rabs_tobesetup[i].eNB_addr.length == 20)) {
-            in_addr = *((in_addr_t *)x2ap_handover_req_ack->e_rabs_tobesetup[i].eNB_addr.buffer);
-            ip_offset = 4;
-            gtpv1u_ue_data_p->bearers[eps_bearer_id - GTPV1U_BEARER_OFFSET].tenb_ip_addr = in_addr;
-            ue_context_p->ue_context.enb_gtp_x2u_addrs[i] = x2ap_handover_req_ack->e_rabs_tobesetup[i].eNB_addr;
-          }
-
-            if ((x2ap_handover_req_ack->e_rabs_tobesetup[i].eNB_addr.length == 16) || (x2ap_handover_req_ack->e_rabs_tobesetup[i].eNB_addr.length == 20)) {
-              memcpy(gtpv1u_ue_data_p->bearers[eps_bearer_id - GTPV1U_BEARER_OFFSET].tenb_ip6_addr.s6_addr, &x2ap_handover_req_ack->e_rabs_tobesetup[i].eNB_addr.buffer[ip_offset], 16);
-          }
-        }
-      }
 
       rrc_eNB_process_handoverCommand(instance, ue_context_p, &X2AP_HANDOVER_REQ_ACK(msg_p));
       ue_context_p->ue_context.handover_info->state = HO_PREPARE;

@@ -66,6 +66,8 @@ The UEs that have been tested and confirmed working with Aerial are the followin
 To set up the L1 and install the components manually refer to this [instructions page](https://docs.nvidia.com/aerial/cuda-accelerated-ran/index.html).
 
 **Note**:
+- As of wk36, the L1 must be compiled with the following CMake flag: `-DSCF_FAPI_10_04_SRS=ON` , this is due to the usage
+of the FAPI 10.04 version of the SRS PDU, and RX_Beamforming PDU.
 - To configure the Gigabyte server please refer to these [instructions](https://gitlab.eurecom.fr/oai/openairinterface5g/-/blob/2025.w13/doc/Aerial_FAPI_Split_Tutorial.md)
 - The last release to support the Gigabyte server is **Aerial CUDA-Accelerated RAN 24-1**.
 
@@ -213,8 +215,8 @@ With the nvIPC sources in the project directory, the docker image can be built.
 In order to build the target image (`oai-gnb-aerial`), first you should build a common shared image (`ran-base`)
 ```bash
 ~$ cd ~/openairinterface5g/
-~/openairinterface5g$ docker build . -f docker/Dockerfile.base.ubuntu22 --tag ran-base:latest
-~/openairinterface5g$ docker build . -f docker/Dockerfile.gNB.aerial.ubuntu22 --tag oai-gnb-aerial:latest
+~/openairinterface5g$ docker build . -f docker/Dockerfile.base.ubuntu --tag ran-base:latest
+~/openairinterface5g$ docker build . -f docker/Dockerfile.gNB.aerial.ubuntu --tag oai-gnb-aerial:latest
 ```
 
 
@@ -230,10 +232,10 @@ After preparing the L1 software, the container needs to be committed to create a
 In this file the RU MAC address needs to be specified before commiting the image.
 
 ```bash
-~$ docker commit nv-cubb cubb-build:25-1
+~$ docker commit nv-cubb cubb-build:25-2
 ~$ docker image ls
 ..
-cubb-build                                    25-1                                           824156e0334c   2 weeks ago    23.9GB
+cubb-build                                    25-2                                           824156e0334c   2 weeks ago    23.9GB
 -..
 ```
 

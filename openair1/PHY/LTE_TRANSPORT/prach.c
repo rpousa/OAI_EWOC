@@ -69,8 +69,7 @@ void rx_prach0(PHY_VARS_eNB *eNB,
   uint32_t preamble_shift2;
   uint16_t preamble_index0=0,n_shift_ra=0,n_shift_ra_bar;
   uint16_t d_start=0;
-  uint16_t numshift=0;
-  uint16_t *prach_root_sequence_map;
+  uint16_t numshift = 0;
   uint8_t not_found;
   int k=0;
   uint16_t u;
@@ -221,7 +220,7 @@ void rx_prach0(PHY_VARS_eNB *eNB,
 
   if (eNB) start_meas(&eNB->rx_prach);
 
-  prach_root_sequence_map = (prach_fmt < 4) ? prach_root_sequence_map0_3 : prach_root_sequence_map4;
+  const uint16_t *prach_root_sequence_map = (prach_fmt < 4) ? prach_root_sequence_map0_3 : prach_root_sequence_map4;
   // PDP is oversampled, e.g. 1024 sample instead of 839
   // Adapt the NCS (zero-correlation zones) with oversampling factor e.g. 1024/839
   NCS2 = (N_ZC==839) ? ((NCS<<10)/839) : ((NCS<<8)/139);
@@ -347,20 +346,31 @@ void rx_prach0(PHY_VARS_eNB *eNB,
     }
   }
 
-  if ((eNB==NULL)  && ru->function == NGFI_RRU_IF4p5) {
-    /// **** send_IF4 of rxsigF to RAU **** ///
-    if (br_flag == 1)
-      send_IF4p5(ru, frame_prach, subframe, IF4p5_PRACH+1+ce_level);
-    else
-      send_IF4p5(ru, frame_prach, subframe, IF4p5_PRACH);
-
-    return;
-  } else if (eNB!=NULL) {
-    if (LOG_DEBUGFLAG(DEBUG_PRACH)) {
-      int en = dB_fixed(signal_energy((int32_t *)&rxsigF[0][0],840));
-
-      if ((en > 10)&&(br_flag==1)) LOG_I(PHY,"PRACH (br_flag %d,ce_level %d, n_ra_prb %d, k %d): Frame %d, Subframe %d => %d dB\n",br_flag,ce_level,n_ra_prb,k,frame_prach,subframe,en);
+  if (!eNB) {
+    if (ru->function == NGFI_RRU_IF4p5) {
+      /// **** send_IF4 of rxsigF to RAU **** ///
+      if (br_flag == 1)
+        send_IF4p5(ru, frame_prach, subframe, IF4p5_PRACH + 1 + ce_level);
+      else
+        send_IF4p5(ru, frame_prach, subframe, IF4p5_PRACH);
+    } else {
+      LOG_E(PHY, "inconsistent case\n");
     }
+    return;
+  }
+
+  if (LOG_DEBUGFLAG(DEBUG_PRACH)) {
+    int en = dB_fixed(signal_energy((int32_t *)&rxsigF[0][0], 840));
+    if ((en > 10) && (br_flag == 1))
+      LOG_I(PHY,
+            "PRACH (br_flag %d,ce_level %d, n_ra_prb %d, k %d): Frame %d, Subframe %d => %d dB\n",
+            br_flag,
+            ce_level,
+            n_ra_prb,
+            k,
+            frame_prach,
+            subframe,
+            en);
   }
 
   // in case of RAU and prach received rx_thread wakes up prach
@@ -495,7 +505,7 @@ void rx_prach0(PHY_VARS_eNB *eNB,
       new_dft = 0;
       
       if (br_flag == 1) {
-        Xu=(c16_t *)eNB->X_u_br[ce_level][preamble_offset-first_nonzero_root_idx];
+        Xu = eNB->X_u_br[ce_level][preamble_offset - first_nonzero_root_idx];
         prach_ifft = prach_ifftp[prach_ifft_cnt++];
         
         if (eNB->prach_vars_br.repetition_number[ce_level]==1) memset(prach_ifft,0,((N_ZC==839)?2048:256)*sizeof(int32_t));

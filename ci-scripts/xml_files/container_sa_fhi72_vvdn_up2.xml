@@ -55,21 +55,19 @@
   <testCase id="110000">
     <class>Pull_Local_Registry</class>
     <desc>Pull Images from Local Registry</desc>
-    <svr_id>0</svr_id>
+    <node>cacofonix</node>
     <images>oai-gnb-fhi72</images>
   </testCase>
   <testCase id="800813">
     <class>Create_Workspace</class>
     <desc>Create new Workspace for server 0</desc>
-    <eNB_instance>0</eNB_instance>
-    <eNB_serverId>0</eNB_serverId>
+    <node>cacofonix</node>
   </testCase>
   <testCase id="120000">
     <class>Deploy_Object</class>
     <desc>Deploy gNB (TDD/Band78/100MHz/VVDN) in a container</desc>
+    <node>cacofonix</node>
     <yaml_path>ci-scripts/yaml_files/sa_fhi_7.2_vvdn_gnb</yaml_path>
-    <eNB_instance>0</eNB_instance>
-    <eNB_serverId>0</eNB_serverId>
   </testCase>
 
   <testCase id="102001">
@@ -156,16 +154,15 @@
     <class>Undeploy_Object</class>
     <always_exec>true</always_exec>
     <desc>Undeploy gNB</desc>
+    <node>cacofonix</node>
     <yaml_path>ci-scripts/yaml_files/sa_fhi_7.2_vvdn_gnb</yaml_path>
-    <eNB_instance>0</eNB_instance>
-    <eNB_serverId>0</eNB_serverId>
   </testCase>
 
   <testCase id="777777">
     <class>Clean_Test_Server_Images</class>
     <always_exec>true</always_exec>
     <desc>Clean Test Images on Test Server</desc>
-    <svr_id>0</svr_id>
+    <node>cacofonix</node>
     <images>oai-gnb-fhi72</images>
   </testCase>
 

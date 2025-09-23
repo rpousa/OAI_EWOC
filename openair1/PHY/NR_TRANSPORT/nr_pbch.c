@@ -65,16 +65,6 @@ void nr_generate_pbch_dmrs(uint32_t *gold_pbch_dmrs,
   for (int m=0; m<NR_PBCH_DMRS_LENGTH; m++) {
     idx = (((gold_pbch_dmrs[(m<<1)>>5])>>((m<<1)&0x1f))&3);
     mod_dmrs[m] = nr_qpsk_mod_table[idx];
-#ifdef DEBUG_PBCH_DMRS
-    printf("m %d idx %d gold seq %u b0-b1 %d-%d mod_dmrs %d %d\n",
-           m,
-           idx,
-           gold_pbch_dmrs[(m << 1) >> 5],
-           (((gold_pbch_dmrs[(m << 1) >> 5]) >> ((m << 1) & 0x1f)) & 1),
-           (((gold_pbch_dmrs[((m << 1) + 1) >> 5]) >> (((m << 1) + 1) & 0x1f)) & 1),
-           mod_dmrs[m].r,
-           mod_dmrs[m].i);
-#endif
   }
 
   /// Resource mapping
@@ -165,9 +155,6 @@ static void nr_pbch_encoded_scrambling(uint32_t *pbch_e,
 #ifdef DEBUG_PBCH_ENCODING
   printf("Scrambling params: nushift %d M %d length %d offset %d\n", nushift, M, length, info.offset);
 #endif
-#ifdef DEBUG_PBCH_ENCODING
-  printf("s: %04x\t", s);
-#endif
 
   for (int i = 0; i < length; ++i) {
     if (((i + info.offset) & 0x1f) == 0)
@@ -189,9 +176,6 @@ static uint32_t nr_pbch_scrambling(uint32_t pbch_a_interleaved,
   uint32_t *s = gold_cache(Nid, info.len);
 #ifdef DEBUG_PBCH_ENCODING
   printf("Scrambling params: nushift %d M %d length %d offset %d\n", nushift, M, length, info.offset);
-#endif
-#ifdef DEBUG_PBCH_ENCODING
-  printf("s: %04x\t", s);
 #endif
   int goldIdx = info.goldIdx;
   for (int i = 0; i < length; ++i) {
@@ -280,9 +264,6 @@ void nr_generate_pbch(PHY_VARS_gNB *gNB,
   uint8_t *interleaver = gNB->nr_pbch_interleaver;
   for (int i = 0; i < NR_POLAR_PBCH_PAYLOAD_BITS; i++) {
     pbch_a_interleaved |= ((pbch_a >> i) & 1) << (*(interleaver + i));
-#ifdef DEBUG_PBCH_ENCODING
-    printf("i %d out 0x%08x ilv %d (in>>i)&1) %d\n", i, pbch_a_interleaved, *(interleaver+i), (pbch_a >> i) & 1);
-#endif
   }
 
 #ifdef DEBUG_PBCH_ENCODING

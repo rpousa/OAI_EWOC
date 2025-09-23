@@ -41,8 +41,6 @@ typedef struct e1ap_upcp_inst_s {
   e1ap_net_config_t net_config;
 } e1ap_upcp_inst_t;
 
-extern int asn1_xer_print;
-
 // forward declaration so we don't require E1AP ASN.1 when including this
 // header
 struct E1AP_E1AP_PDU;

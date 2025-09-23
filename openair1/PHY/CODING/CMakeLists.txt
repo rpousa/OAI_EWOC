@@ -32,19 +32,6 @@ add_dependencies(nr_ulschsim ldpc ldpc_orig)
 add_dependencies(nr_dlsim ldpc ldpc_orig)
 add_dependencies(nr_dlschsim ldpc ldpc_orig)
 
-add_custom_target(nrLDPC_decoder_kernels_CL
-                  COMMAND gcc nrLDPC_decoder/nrLDPC_decoder_CL.c -dD -DNRLDPC_KERNEL_SOURCE -E -o ${CMAKE_CURRENT_BINARY_DIR}/nrLDPC_decoder_kernels_CL.clc
-                  SOURCES nrLDPC_decoder/nrLDPC_decoder_CL.c
-                  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-)
-add_library(ldpc_cl MODULE
-            nrLDPC_decoder/nrLDPC_decoder_CL.c
-            nrLDPC_encoder/ldpc_encoder_optim8segmulti.c
-)
-set_target_properties(ldpc_cl PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
-target_link_libraries(ldpc_cl PRIVATE ldpc_segment OpenCL)
-add_dependencies(ldpc_cl nrLDPC_decoder_kernels_CL)
-
 ##############################################
 # Base CUDA setting
 ##############################################
@@ -81,7 +68,3 @@ if (ENABLE_LDPC_CUDA)
 endif()
 
 add_subdirectory(nrLDPC_coding)
-
-if(ENABLE_PHYSIM_TESTS)
-  add_subdirectory(tests)
-endif()

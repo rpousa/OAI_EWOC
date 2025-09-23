@@ -1385,7 +1385,7 @@ void compute_beta(llr_t *alpha,llr_t *beta,llr_t *m_11,llr_t *m_10,unsigned shor
 
 #else
 #ifdef DEBUG_LOGMAP
-    printf("beta0 %u:  %03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d\n",
+    printf("beta0 %d:  %03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d\n",
            (frame_length >> 4),
            simde_mm_extract_epi8(beta_ptr[0], 0),
            simde_mm_extract_epi8(beta_ptr[0], 1),
@@ -1403,7 +1403,7 @@ void compute_beta(llr_t *alpha,llr_t *beta,llr_t *m_11,llr_t *m_10,unsigned shor
            simde_mm_extract_epi8(beta_ptr[0], 13),
            simde_mm_extract_epi8(beta_ptr[0], 14),
            simde_mm_extract_epi8(beta_ptr[0], 15));
-    printf("beta1 %u:  %03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d\n",
+    printf("beta1 %d:  %03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d\n",
            (frame_length >> 4),
            simde_mm_extract_epi8(beta_ptr[1], 0),
            simde_mm_extract_epi8(beta_ptr[1], 1),
@@ -1421,7 +1421,7 @@ void compute_beta(llr_t *alpha,llr_t *beta,llr_t *m_11,llr_t *m_10,unsigned shor
            simde_mm_extract_epi8(beta_ptr[1], 13),
            simde_mm_extract_epi8(beta_ptr[1], 14),
            simde_mm_extract_epi8(beta_ptr[1], 15));
-    printf("beta2 %u:  %03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d\n",
+    printf("beta2 %d:  %03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d\n",
            (frame_length >> 4),
            simde_mm_extract_epi8(beta_ptr[2], 0),
            simde_mm_extract_epi8(beta_ptr[2], 1),
@@ -1439,7 +1439,7 @@ void compute_beta(llr_t *alpha,llr_t *beta,llr_t *m_11,llr_t *m_10,unsigned shor
            simde_mm_extract_epi8(beta_ptr[2], 13),
            simde_mm_extract_epi8(beta_ptr[2], 14),
            simde_mm_extract_epi8(beta_ptr[2], 15));
-    printf("beta3 %u:  %03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d\n",
+    printf("beta3 %d:  %03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d\n",
            (frame_length >> 4),
            simde_mm_extract_epi8(beta_ptr[3], 0),
            simde_mm_extract_epi8(beta_ptr[3], 1),
@@ -1457,7 +1457,7 @@ void compute_beta(llr_t *alpha,llr_t *beta,llr_t *m_11,llr_t *m_10,unsigned shor
            simde_mm_extract_epi8(beta_ptr[3], 13),
            simde_mm_extract_epi8(beta_ptr[3], 14),
            simde_mm_extract_epi8(beta_ptr[3], 15));
-    printf("beta4 %u:  %03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d\n",
+    printf("beta4 %d:  %03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d\n",
            (frame_length >> 4),
            simde_mm_extract_epi8(beta_ptr[4], 0),
            simde_mm_extract_epi8(beta_ptr[4], 1),
@@ -1475,7 +1475,7 @@ void compute_beta(llr_t *alpha,llr_t *beta,llr_t *m_11,llr_t *m_10,unsigned shor
            simde_mm_extract_epi8(beta_ptr[4], 13),
            simde_mm_extract_epi8(beta_ptr[4], 14),
            simde_mm_extract_epi8(beta_ptr[4], 15));
-    printf("beta5 %u:  %03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d\n",
+    printf("beta5 %d:  %03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d\n",
            (frame_length >> 4),
            simde_mm_extract_epi8(beta_ptr[5], 0),
            simde_mm_extract_epi8(beta_ptr[5], 1),
@@ -1493,7 +1493,7 @@ void compute_beta(llr_t *alpha,llr_t *beta,llr_t *m_11,llr_t *m_10,unsigned shor
            simde_mm_extract_epi8(beta_ptr[5], 13),
            simde_mm_extract_epi8(beta_ptr[5], 14),
            simde_mm_extract_epi8(beta_ptr[5], 15));
-    printf("beta6 %u:  %03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d\n",
+    printf("beta6 %d:  %03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d\n",
            (frame_length >> 4),
            simde_mm_extract_epi8(beta_ptr[6], 0),
            simde_mm_extract_epi8(beta_ptr[6], 1),
@@ -1511,7 +1511,7 @@ void compute_beta(llr_t *alpha,llr_t *beta,llr_t *m_11,llr_t *m_10,unsigned shor
            simde_mm_extract_epi8(beta_ptr[6], 13),
            simde_mm_extract_epi8(beta_ptr[6], 14),
            simde_mm_extract_epi8(beta_ptr[6], 15));
-    printf("beta7 %u:  %03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d\n",
+    printf("beta7 %d:  %03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d,%03d\n",
            (frame_length >> 4),
            simde_mm_extract_epi8(beta_ptr[7], 0),
            simde_mm_extract_epi8(beta_ptr[7], 1),

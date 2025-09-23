@@ -64,7 +64,7 @@ There is some general information in the [OpenAirInterface Gitlab Wiki](https://
 - [How to run with E2 agent](../openair2/E2AP/README.md)
 - [How to run the physical simulators](./physical-simulators.md)
 - [How to setup OAI with Nvidia Aerial and Foxconn](./Aerial_FAPI_Split_Tutorial.md)
-- [How to setup OAI with AMD T2 Telco card](./LDPC_T2_OFFLOAD_SETUP.md)
+- [How to setup OAI with LDPC accelerators (Xilinx T2/Intel ACCs)](./LDPC_OFFLOAD_SETUP.md)
 - [How to do a handover](./handover-tutorial.md)
 - [How to setup gNB frequency](./gNB_frequency_setup.md)
 
@@ -118,6 +118,7 @@ Some directories under `radio` contain READMEs:
 - [IQPlayer](../radio/iqplayer/DOC/iqrecordplayer_usage.md), and [general documentation](./iqrecordplayer_usage.md)
 - [fhi_72](../radio/fhi_72/README.md)
 - [vrtsim](../radio/vrtsim/README.md)
+- [rf_emulator](../radio/emulator/README.md)
 
 The other SDRs (AW2S, LimeSDR, ...) have no READMEs.
 
@@ -130,10 +131,14 @@ The other SDRs (AW2S, LimeSDR, ...) have no READMEs.
 # Testing
 
 - [UnitTests.md](./UnitTests.md) explains the unit testing setup
+- Component tests are under `tests/`. Currently, there is a simple CU-UP
+  tester, see the corresponding [README.md](../tests/nr-cuup/README.md).
 - [TESTBenches.md](./TESTBenches.md) lists the CI setup and links to pipelines
+- The CI setup uses a [custom framework](../ci-scripts/README.md) to run
+  end-to-end tests.
 
 # Developer tools
 
 - [formatting](../tools/formatting/README.md) is a clang-format error detection tool
 - [iwyu](../tools/iwyu/README.md) is a tool to detect `#include` errors
-- [docker-dev-env](../tools/docker-dev-env/README.md) is a ubuntu22 docker development environment
+- [docker-dev-env](../tools/docker-dev-env/README.md) is a ubuntu24 docker development environment

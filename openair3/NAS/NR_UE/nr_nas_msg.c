@@ -76,9 +76,7 @@
 #include "key_nas_deriver.h"
 #include "nr-uesoftmodem.h"
 
-#define MAX_NAS_UE 4
-
-static nr_ue_nas_t nr_ue_nas[MAX_NAS_UE] = {0};
+static nr_ue_nas_t nr_ue_nas[MAX_NUM_NR_UE_INST] = {0};
 
 #define FOREACH_STATE(TYPE_DEF)                  \
   TYPE_DEF(NAS_SECURITY_NO_SECURITY_CONTEXT, 0)  \
@@ -676,7 +674,7 @@ static void derive_ue_keys(uint8_t *buf, nr_ue_nas_t *nas)
 
 nr_ue_nas_t *get_ue_nas_info(module_id_t module_id)
 {
-  DevAssert(module_id < MAX_NAS_UE);
+  AssertFatal(module_id < MAX_NUM_NR_UE_INST, "Invalid module_id %d\n", module_id);
   if (!nr_ue_nas[module_id].uicc) {
     nr_ue_nas[module_id].uicc = checkUicc(module_id);
     nr_ue_nas[module_id].UE_id = module_id;

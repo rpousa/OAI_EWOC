@@ -186,8 +186,8 @@ void nr_fill_rx_indication(fapi_nr_rx_indication_t *rx_ind,
         rx->ssb_pdu.decoded_pdu = false;
       }
     } break;
-    case FAPI_NR_CSIRS_IND:
-      memcpy(&rx->csirs_measurements, typeSpecific, sizeof(fapi_nr_csirs_measurements_t));
+    case FAPI_NR_MEAS_IND:
+      memcpy(&rx->l1_measurements, typeSpecific, sizeof(fapi_nr_l1_measurements_t));
       break;
     default:
     break;
@@ -553,6 +553,7 @@ static int nr_ue_pdsch_procedures(PHY_VARS_NR_UE *ue,
                                       dlschCfg->dlDmrsScramblingId,
                                       dlschCfg->BWPStart,
                                       dlschCfg->dmrsConfigType,
+                                      dlschCfg->n_dmrs_cdm_groups,
                                       dlschCfg->rb_offset,
                                       ue->frame_parms.first_carrier_offset + (dlschCfg->BWPStart + dlschCfg->start_rb) * 12,
                                       dlschCfg->number_rbs,
@@ -698,7 +699,7 @@ static uint32_t compute_csi_rm_unav_res(fapi_nr_dl_config_dlsch_pdu_rel15_t *dls
     int num_symb = num_l0[csi_pdu->row - 1];
     for (int s = 0; s < num_symb; s++) {
       int l0_symb = csi_pdu->symb_l0 + s;
-      if (l0_symb >= dlsch_config->start_symbol && l0_symb <= dlsch_config->start_symbol + dlsch_config->number_symbols)
+      if (l0_symb >= dlsch_config->start_symbol && l0_symb < dlsch_config->start_symbol + dlsch_config->number_symbols)
         num_overlap_symb++;
     }
     // check also l1 if relevant
@@ -706,7 +707,7 @@ static uint32_t compute_csi_rm_unav_res(fapi_nr_dl_config_dlsch_pdu_rel15_t *dls
       num_symb += 2;
       for (int s = 0; s < 2; s++) { // two consecutive symbols including l1
         int l1_symb = csi_pdu->symb_l1 + s;
-        if (l1_symb >= dlsch_config->start_symbol && l1_symb <= dlsch_config->start_symbol + dlsch_config->number_symbols)
+        if (l1_symb >= dlsch_config->start_symbol && l1_symb < dlsch_config->start_symbol + dlsch_config->number_symbols)
           num_overlap_symb++;
       }
     }
@@ -1205,13 +1206,6 @@ void pdsch_processing(PHY_VARS_NR_UE *ue, const UE_nr_rxtx_proc_t *proc, nr_phy_
     LOG_D(PHY,"[UE %d] Calculating bitrate Frame %d: total_TBS = %d, total_TBS_last = %d, bitrate %f kbits\n",
           ue->Mod_id,frame_rx,ue->total_TBS[gNB_id],
           ue->total_TBS_last[gNB_id],(float) ue->bitrate[gNB_id]/1000.0);
-
-#if UE_AUTOTEST_TRACE
-    if ((frame_rx % 100 == 0)) {
-      LOG_I(PHY,"[UE  %d] AUTOTEST Metric : UE_DLSCH_BITRATE = %5.2f kbps (frame = %d) \n", ue->Mod_id, (float) ue->bitrate[gNB_id]/1000.0, frame_rx);
-    }
-#endif
-
   }
 
 #ifdef EMOS

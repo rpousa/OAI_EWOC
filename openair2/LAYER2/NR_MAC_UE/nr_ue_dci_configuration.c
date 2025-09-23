@@ -104,11 +104,11 @@ NR_ControlResourceSet_t *ue_get_coreset(const NR_BWP_PDCCH_t *config, const int 
   return coreset;
 }
 
-void config_dci_pdu(NR_UE_MAC_INST_t *mac,
-                    fapi_nr_dl_config_request_t *dl_config,
-                    const int rnti_type,
-                    const int slot,
-                    const NR_SearchSpace_t *ss)
+static void config_dci_pdu(NR_UE_MAC_INST_t *mac,
+                           fapi_nr_dl_config_request_t *dl_config,
+                           const int rnti_type,
+                           const int slot,
+                           const NR_SearchSpace_t *ss)
 {
   const NR_UE_DL_BWP_t *current_DL_BWP = mac->current_DL_BWP;
   const NR_UE_UL_BWP_t *current_UL_BWP = mac->current_UL_BWP;
@@ -385,12 +385,14 @@ bool search_space_monitoring_ocasion_other_si(NR_UE_MAC_INST_t *mac,
   return false;
 }
 
-bool is_window_valid(NR_UE_MAC_INST_t *mac, int window_slots, int abs_slot)
+static bool is_window_valid(NR_UE_MAC_INST_t *mac, int window_slots, int abs_slot, int slots_per_frame)
 {
   if (mac->si_SchedInfo.si_window_start == -1) {
     // out of window
     return false;
-  } else if (abs_slot > mac->si_SchedInfo.si_window_start + window_slots) {
+  } else if ((abs_slot - mac->si_SchedInfo.si_window_start + MAX_FRAME_NUMBER * slots_per_frame)
+                 % (MAX_FRAME_NUMBER * slots_per_frame)
+             >= window_slots) {
     // window expired
     mac->si_SchedInfo.si_window_start = -1;
     return false;
@@ -407,33 +409,18 @@ static bool monitor_dci_for_other_SI(NR_UE_MAC_INST_t *mac,
 {
   // according to 5.2.2.3.2 in 331
   const int abs_slot = frame * slots_per_frame + slot;
+  const si_schedinfo_config_t *config = mac->si_SchedInfo.si_SchedInfo_list.array[si_idx];
+  const int window_slots = 5 << mac->si_SchedInfo.si_WindowLength;
+  const int x = (config->si_WindowPosition - 1) * window_slots;
+  const int T = 8 << config->si_Periodicity; // radio frame periodicity
 
-  si_schedinfo_config_t *config = mac->si_SchedInfo.si_SchedInfo_list.array[si_idx];
-  int window_slots = 5 << mac->si_SchedInfo.si_WindowLength;
-  int x = (config->si_WindowPosition - 1) * window_slots;
-  int T = 8 << config->si_Periodicity; // radio frame periodicity
-  bool check_valid;
-  switch (config->type) {
-    case NR_SI_INFO :
-      if (mac->si_SchedInfo.si_window_start == -1) {
-        if ((frame % T) == (x / slots_per_frame) && (x % slots_per_frame == 0))
-          mac->si_SchedInfo.si_window_start = abs_slot; // in terms of absolute slot number
-      }
-      check_valid = is_window_valid(mac, window_slots, abs_slot);
-      if (check_valid && search_space_monitoring_ocasion_other_si(mac, ss, abs_slot, frame, slot, slots_per_frame))
-        return true;
-      break;
-    case NR_SI_INFO_v1700 :
-      if (mac->si_SchedInfo.si_window_start == -1) {
-        if ((frame % T == floor(x / slots_per_frame)) && (slot == x % slots_per_frame))
-          mac->si_SchedInfo.si_window_start = abs_slot;
-      }
-      if (is_window_valid(mac, window_slots, abs_slot))
-        return search_space_monitoring_ocasion_other_si(mac, ss, abs_slot, frame, slot, slots_per_frame);
-      break;
-    default :
-      AssertFatal(false, "Invalid SI-SchedulingInfo case\n");
+  if (mac->si_SchedInfo.si_window_start == -1) {
+    if ((frame % T) == (x / slots_per_frame) && (slot == x % slots_per_frame))
+      mac->si_SchedInfo.si_window_start = abs_slot; // in terms of absolute slot number
   }
+  if (is_window_valid(mac, window_slots, abs_slot, slots_per_frame))
+    return search_space_monitoring_ocasion_other_si(mac, ss, abs_slot, frame, slot, slots_per_frame);
+
   return false;
 }
 
@@ -502,19 +489,42 @@ void ue_dci_configuration(NR_UE_MAC_INST_t *mac, fapi_nr_dl_config_request_t *dl
       config_dci_pdu(mac, dl_config, rnti_type, slot, ra_SS);
     }
   } else if (mac->state == UE_CONNECTED) {
+    /*
+      In RRC Connected state, the UE monitors for fallback DCI with C-RNTI in common and UE-specific SS.
+      First the UE check all UE specific SS. If no fallback DCI is configured, it configures one of following
+      common SS with the shown priority
+      1. RA SS
+      2. Other SI SS
+      3. Paging SS
+      4. SIB1 SS
+
+      There is a possibility that gNB could configure multiple UE-specific SS for fallback DCI or/and common SS,
+      and in a given slot more than one SS become active. For the moment, we assume such configuration wouldn't happen
+      and hence don't handle it for the sake of implementation simplicity.
+    */
+    bool configured_fallback_dci = false;
     for (int i = 0; i < pdcch_config->list_SS.count; i++) {
       NR_SearchSpace_t *ss = pdcch_config->list_SS.array[i];
-      if (is_ss_monitor_occasion(frame, slot, slots_per_frame, ss))
+      if (is_ss_monitor_occasion(frame, slot, slots_per_frame, ss)) {
         config_dci_pdu(mac, dl_config, TYPE_C_RNTI_, slot, ss);
+        configured_fallback_dci |= (ss->searchSpaceType->present == NR_SearchSpace__searchSpaceType_PR_common);
+      }
     }
-    const NR_SearchSpace_t *ra_SS = get_common_search_space(mac, pdcch_config->ra_SS_id);
-    if (pdcch_config->list_SS.count == 0 && ra_SS) {
-      // If the UE has not been provided a Type3-PDCCH CSS set or a USS set and
-      // the UE has received a C-RNTI and has been provided a Type1-PDCCH CSS set,
-      // the UE monitors PDCCH candidates for DCI format 0_0 and DCI format 1_0
-      // with CRC scrambled by the C-RNTI in the Type1-PDCCH CSS set
-      if (is_ss_monitor_occasion(frame, slot, slots_per_frame, ra_SS))
-        config_dci_pdu(mac, dl_config, TYPE_C_RNTI_, slot, ra_SS);
+    const NR_SearchSpace_t *css = NULL;
+    if (!configured_fallback_dci) {
+#define CSS_VALID_CUR_SLOT(CSS) \
+  ((CSS > -1) && is_ss_monitor_occasion(frame, slot, slots_per_frame, get_common_search_space(mac, CSS)))
+      if (CSS_VALID_CUR_SLOT(pdcch_config->ra_SS_id))
+        css = get_common_search_space(mac, pdcch_config->ra_SS_id);
+      else if (CSS_VALID_CUR_SLOT(pdcch_config->otherSI_SS_id))
+        css = get_common_search_space(mac, pdcch_config->otherSI_SS_id);
+      else if (CSS_VALID_CUR_SLOT(pdcch_config->paging_SS_id))
+        css = get_common_search_space(mac, pdcch_config->paging_SS_id);
+#undef CSS_VALID_CUR_SLOT
+      else
+        css = mac->search_space_zero;
+      AssertFatal(css, "Atleast one CSS should be present in connected state\n");
+      config_dci_pdu(mac, dl_config, TYPE_C_RNTI_, slot, css);
     }
   }
 }

@@ -997,7 +997,7 @@ uint8_t phy_threegpplte_turbo_decoder16(int16_t *y,
 #elif defined(__arm__) || defined(__aarch64__)
   int16x8_t *yp128;
   //  int16x8_t tmp128[(n+8)>>3];
-  int16x8_t tmp, zeros=vdupq_n_s16(0);
+  int16x8_t tmp = {}, zeros = {};
   const uint16_t __attribute__ ((aligned (16))) _Powers[8]=
   { 1, 2, 4, 8, 16, 32, 64, 128};
   uint16x8_t Powers= vld1q_u16(_Powers);

@@ -22,7 +22,7 @@
 -->
 <testCaseList>
   <htmlTabRef>TEST-SA-FR1-N310-2x2-60MHz</htmlTabRef>
-  <htmlTabName>60 MHz 2x2 TDD SA</htmlTabName>
+  <htmlTabName>60 MHz 2x2 TDD SA DSUUU</htmlTabName>
   <htmlTabIcon>tasks</htmlTabIcon>
   <TestCaseRequestedList>
     100000
@@ -80,15 +80,13 @@
   <testCase id="800813">
       <class>Create_Workspace</class>
       <desc>Create new Workspace</desc>
-      <eNB_instance>0</eNB_instance>
-      <eNB_serverId>0</eNB_serverId>
+      <node>matix</node>
   </testCase>
   <testCase id="030101">
       <class>Deploy_Object</class>
       <desc>Deploy gNB (TDD/Band77/60MHz/N310) in a container</desc>
+      <node>matix</node>
       <yaml_path>ci-scripts/yaml_files/5g_sa_n310_2x2_60MHz</yaml_path>
-      <eNB_instance>0</eNB_instance>
-      <eNB_serverId>0</eNB_serverId>
       <num_attempts>3</num_attempts>
   </testCase>
 
@@ -116,8 +114,8 @@
 
   <testCase id="071000">
     <class>Iperf</class>
-    <desc>iperf (DL/200Mbps/UDP)(30 sec)(single-ue profile)</desc>
-    <iperf_args>-u -b 200M -t 30 -R</iperf_args>
+    <desc>iperf (DL/150Mbps/UDP)(30 sec)(single-ue profile)</desc>
+    <iperf_args>-u -b 150M -t 30 -R</iperf_args>
     <svr_id>matix-cn5g</svr_id>
     <id>up2</id>
     <iperf_packetloss_threshold>25</iperf_packetloss_threshold>
@@ -126,8 +124,8 @@
 
   <testCase id="071001">
     <class>Iperf</class>
-    <desc>iperf (UL/180Mbps/UDP)(30 sec)(single-ue profile)</desc>
-    <iperf_args>-u -b 180M -t 30</iperf_args>
+    <desc>iperf (UL/250Mbps/UDP)(30 sec)(single-ue profile)</desc>
+    <iperf_args>-u -b 250M -t 30</iperf_args>
     <svr_id>matix-cn5g</svr_id>
     <id>up2</id>
     <iperf_packetloss_threshold>10</iperf_packetloss_threshold>
@@ -146,19 +144,18 @@
     <class>Undeploy_Object</class>
     <always_exec>true</always_exec>
     <desc>Undeploy gNB</desc>
+    <node>matix</node>
     <yaml_path>ci-scripts/yaml_files/5g_sa_n310_2x2_60MHz</yaml_path>
-    <eNB_instance>0</eNB_instance>
-    <eNB_serverId>0</eNB_serverId>
     <services>oai-gnb</services>
-    <d_retx_th>10,100,100,100</d_retx_th>
-    <u_retx_th>10,100,100,100</u_retx_th>
+    <d_retx_th>15,100,100,100</d_retx_th>
+    <u_retx_th>20,100,100,100</u_retx_th>
   </testCase>
 
   <testCase id="333333">
     <class>Clean_Test_Server_Images</class>
     <always_exec>true</always_exec>
     <desc>Clean Test Images on Test Server</desc>
-    <svr_id>0</svr_id>
+    <node>matix</node>
     <images>oai-gnb</images>
   </testCase>
 

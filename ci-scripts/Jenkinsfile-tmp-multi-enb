@@ -81,34 +81,7 @@ pipeline {
                       echo "no LockResources given"
                       allParametersPresent = false
                     }
-                    // 1st eNB parameters
-                    if (params.eNB_IPAddress == null) {
-                        allParametersPresent = false
-                    }
                     if (params.eNB_SourceCodePath == null) {
-                        allParametersPresent = false
-                    }
-                    if (params.eNB_Credentials == null) {
-                        allParametersPresent = false
-                    }
-                    // 2nd eNB parameters
-                    if (params.eNB1_IPAddress == null) {
-                        allParametersPresent = false
-                    }
-                    if (params.eNB1_SourceCodePath == null) {
-                        allParametersPresent = false
-                    }
-                    if (params.eNB1_Credentials == null) {
-                        allParametersPresent = false
-                    }
-                    // 3rd eNB parameters
-                    if (params.eNB2_IPAddress == null) {
-                        allParametersPresent = false
-                    }
-                    if (params.eNB2_SourceCodePath == null) {
-                        allParametersPresent = false
-                    }
-                    if (params.eNB2_Credentials == null) {
                         allParametersPresent = false
                     }
                     // the following 4 parameters should be pushed by the master trigger
@@ -181,27 +154,21 @@ pipeline {
                                 }
                             }
                         }
-                        withCredentials([
-                            [$class: 'UsernamePasswordMultiBinding', credentialsId: "${params.eNB_Credentials}", usernameVariable: 'eNB_Username', passwordVariable: 'eNB_Password'],
-                            [$class: 'UsernamePasswordMultiBinding', credentialsId: "${params.eNB1_Credentials}", usernameVariable: 'eNB1_Username', passwordVariable: 'eNB1_Password'],
-                            [$class: 'UsernamePasswordMultiBinding', credentialsId: "${params.eNB2_Credentials}", usernameVariable: 'eNB2_Username', passwordVariable: 'eNB2_Password'],
-                        ]) {
-                            sh "python3 main.py --mode=InitiateHtml --ranRepository=${eNB_Repository} --ranBranch=${eNB_Branch} --ranCommitID=${eNB_CommitID} --ranAllowMerge=${eNB_AllowMergeRequestProcess} --ranTargetBranch=${eNB_TargetBranch} ${mainPythonAllXmlFiles}"
-                            String[] myXmlTestSuite = testXMLFile.split("\\r?\\n")
-                            for (xmlFile in myXmlTestSuite) {
-                                if (fileExists(xmlFile)) {
-                                    try {
-                                      timeout (time: 60, unit: 'MINUTES') {
-                                        sh "python3 main.py --mode=TesteNB --ranRepository=${eNB_Repository} --ranBranch=${eNB_Branch} --ranCommitID=${eNB_CommitID} --ranAllowMerge=${eNB_AllowMergeRequestProcess} --ranTargetBranch=${eNB_TargetBranch} --eNBIPAddress=${params.eNB_IPAddress} --eNBUserName=${eNB_Username} --eNBPassword=${eNB_Password} --eNBSourceCodePath=${params.eNB_SourceCodePath} --eNB1IPAddress=${params.eNB1_IPAddress} --eNB1UserName=${eNB1_Username} --eNB1Password=${eNB1_Password} --eNB1SourceCodePath=${params.eNB1_SourceCodePath} --eNB2IPAddress=${params.eNB2_IPAddress} --eNB2UserName=${eNB2_Username} --eNB2Password=${eNB2_Password} --eNB2SourceCodePath=${params.eNB2_SourceCodePath} --XMLTestFile=${xmlFile}"
-                                      }
-                                    } catch (Exception e) {
-                                        currentBuild.result = 'FAILURE'
-                                        buildStageStatus = false
-                                    }
+                        sh "python3 main.py --mode=InitiateHtml --ranRepository=${eNB_Repository} --ranBranch=${eNB_Branch} --ranCommitID=${eNB_CommitID} --ranAllowMerge=${eNB_AllowMergeRequestProcess} --ranTargetBranch=${eNB_TargetBranch} ${mainPythonAllXmlFiles}"
+                        String[] myXmlTestSuite = testXMLFile.split("\\r?\\n")
+                        for (xmlFile in myXmlTestSuite) {
+                            if (fileExists(xmlFile)) {
+                                try {
+                                  timeout (time: 60, unit: 'MINUTES') {
+                                    sh "python3 main.py --mode=TesteNB --ranRepository=${eNB_Repository} --ranBranch=${eNB_Branch} --ranCommitID=${eNB_CommitID} --ranAllowMerge=${eNB_AllowMergeRequestProcess} --ranTargetBranch=${eNB_TargetBranch} --eNBSourceCodePath=${params.eNB_SourceCodePath} --XMLTestFile=${xmlFile}"
+                                  }
+                                } catch (Exception e) {
+                                    currentBuild.result = 'FAILURE'
+                                    buildStageStatus = false
                                 }
                             }
-                            sh "python3 main.py --mode=FinalizeHtml --finalStatus=${buildStageStatus} --eNBIPAddress=${params.eNB_IPAddress} --eNBUserName=${eNB_Username} --eNBPassword=${eNB_Password}"
                         }
+                        sh "python3 main.py --mode=FinalizeHtml --finalStatus=${buildStageStatus}"
                     }
                 }
             }
@@ -211,46 +178,18 @@ pipeline {
                 stage('Terminate eNB') {
                     steps {
                         echo '\u2705 \u001B[32mTerminate eNB\u001B[0m'
-                        withCredentials([
-                            [$class: 'UsernamePasswordMultiBinding', credentialsId: "${params.eNB_Credentials}", usernameVariable: 'eNB_Username', passwordVariable: 'eNB_Password']
-                        ]) {
-                            sh "python3 ci-scripts/main.py --mode=TerminateeNB --eNBIPAddress=${params.eNB_IPAddress} --eNBUserName=${eNB_Username} --eNBPassword=${eNB_Password}"
-                        }
+                        sh "python3 ci-scripts/main.py --mode=TerminateeNB"
                     }
                 }
             }
         }
         stage('Log Collection') {
             parallel {
-                stage('Log Collection (eNB - Build)') {
-                    steps {
-                        withCredentials([
-                             [$class: 'UsernamePasswordMultiBinding', credentialsId: "${params.eNB_Credentials}", usernameVariable: 'eNB_Username', passwordVariable: 'eNB_Password']
-                        ]) {
-                            echo '\u2705 \u001B[32mLog Collection (eNB - Build)\u001B[0m'
-                            sh "python3 ci-scripts/main.py --mode=LogCollectBuild --eNBIPAddress=${params.eNB_IPAddress} --eNBUserName=${eNB_Username} --eNBPassword=${eNB_Password} --eNBSourceCodePath=${params.eNB_SourceCodePath}"
-
-                            echo '\u2705 \u001B[32mLog Transfer (eNB - Build)\u001B[0m'
-                            sh "sshpass -p \'${eNB_Password}\' scp -o 'StrictHostKeyChecking no' -o 'ConnectTimeout 10' ${eNB_Username}@${params.eNB_IPAddress}:${eNB_SourceCodePath}/cmake_targets/build.log.zip ./build.log.${env.BUILD_ID}.zip || true"
-                        }
-                        script {
-                            if(fileExists("build.log.${env.BUILD_ID}.zip")) {
-                                archiveArtifacts "build.log.${env.BUILD_ID}.zip"
-                            }
-                        }
-                    }
-                }
                 stage('Log Collection (eNB - Run)') {
                     steps {
-                        withCredentials([
-                             [$class: 'UsernamePasswordMultiBinding', credentialsId: "${params.eNB_Credentials}", usernameVariable: 'eNB_Username', passwordVariable: 'eNB_Password']
-                        ]) {
-                            echo '\u2705 \u001B[32mLog Collection (eNB - Run)\u001B[0m'
-                            sh "python3 ci-scripts/main.py --mode=LogCollecteNB --eNBIPAddress=${params.eNB_IPAddress} --eNBUserName=${eNB_Username} --eNBPassword=${eNB_Password} --eNBSourceCodePath=${params.eNB_SourceCodePath} --BuildId=${env.BUILD_ID}"
+                        echo '\u2705 \u001B[32mLog Collection (eNB - Run)\u001B[0m'
+                        sh "python3 ci-scripts/main.py --mode=LogCollecteNB --eNBSourceCodePath=${params.eNB_SourceCodePath} --BuildId=${env.BUILD_ID}"
 
-                            echo '\u2705 \u001B[32mLog Transfer (eNB - Run)\u001B[0m'
-                            sh "sshpass -p \'${eNB_Password}\' scp -o 'StrictHostKeyChecking no' -o 'ConnectTimeout 10' ${eNB_Username}@${params.eNB_IPAddress}:${eNB_SourceCodePath}/cmake_targets/enb.log.zip ./enb.log.${env.BUILD_ID}.zip || true"
-                        }
                         script {
                             if(fileExists("enb.log.${env.BUILD_ID}.zip")) {
                                 archiveArtifacts "enb.log.${env.BUILD_ID}.zip"

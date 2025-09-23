@@ -930,7 +930,7 @@ uint8_t phy_threegpplte_turbo_decoder8(int16_t *y,
 #elif defined(__arm__) || defined(__aarch64__)
   int8x16_t *yp128;
   int8x16_t tmp128[(n+8)>>3];
-  int8x16_t tmp, zeros=vdupq_n_s8(0);
+  int8x16_t tmp = {}, zeros = {};
   const uint8_t __attribute__ ((aligned (16))) _Powers[16]=
   { 1, 2, 4, 8, 16, 32, 64, 128, 1, 2, 4, 8, 16, 32, 64, 128 };
   // Set the powers of 2 (do it once for all, if applicable)
