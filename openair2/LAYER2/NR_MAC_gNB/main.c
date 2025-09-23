@@ -126,24 +126,37 @@ size_t dump_mac_stats(gNB_MAC_INST *gNB, char *output, size_t strlen, bool reset
     NR_UE_sched_ctrl_t *sched_ctrl = &UE->UE_sched_ctrl;
     NR_mac_stats_t *stats = &UE->mac_stats;
     const int avg_rsrp = stats->num_rsrp_meas > 0 ? stats->cumul_rsrp / stats->num_rsrp_meas : 0;
+    const int avg_sinrx10 = stats->num_sinr_meas > 0 ? stats->cumul_sinrx10 / stats->num_sinr_meas : 0;
 
     output += snprintf(output, end - output, "UE RNTI %04x CU-UE-ID ", UE->rnti);
     if (du_exists_f1_ue_data(UE->rnti)) {
       f1_ue_data_t ued = du_get_f1_ue_data(UE->rnti);
       output += snprintf(output, end - output, "%d", ued.secondary_ue);
     } else {
-      output += snprintf(output, end-output, "(none)");
+      output += snprintf(output, end - output, "(none)");
     }
 
     bool in_sync = !sched_ctrl->ul_failure;
     output += snprintf(output,
                        end - output,
-                       " %s PH %d dB PCMAX %d dBm, average RSRP %d (%d meas)\n",
+                       " %s PH %d dB PCMAX %d dBm",
                        in_sync ? "in-sync" : "out-of-sync",
                        sched_ctrl->ph,
-                       sched_ctrl->pcmax,
-                       avg_rsrp,
-                       stats->num_rsrp_meas);
+                       sched_ctrl->pcmax);
+
+    if (stats->num_rsrp_meas)
+      output += snprintf(output, end - output, ", average RSRP %d (%d meas)", avg_rsrp, stats->num_rsrp_meas);
+
+    if (stats->num_sinr_meas) {
+      output += snprintf(output,
+                         end - output,
+                         ", average SINR %d.%d (%d meas)",
+                         avg_sinrx10 / 10,
+                         avg_sinrx10 % 10,
+                         stats->num_sinr_meas);
+    }
+
+    output += snprintf(output, end - output, "\n");
 
     if(sched_ctrl->CSI_report.cri_ri_li_pmi_cqi_report.print_report)
       output += snprintf(output,
@@ -168,15 +181,18 @@ size_t dump_mac_stats(gNB_MAC_INST *gNB, char *output, size_t strlen, bool reset
 
     output += snprintf(output,
                        end - output,
-                       ", dlsch_errors %"PRIu64", pucch0_DTX %d, BLER %.5f MCS (%d) %d\n",
+                       ", dlsch_errors %"PRIu64", pucch0_DTX %d, BLER %.5f MCS (%d) %d CCE fail %d\n",
                        stats->dl.errors,
                        stats->pucch0_DTX,
                        sched_ctrl->dl_bler_stats.bler,
                        UE->current_DL_BWP.mcsTableIdx,
-                       sched_ctrl->dl_bler_stats.mcs);
+                       sched_ctrl->dl_bler_stats.mcs,
+                       sched_ctrl->dl_cce_fail);
     if (reset_rsrp) {
       stats->num_rsrp_meas = 0;
       stats->cumul_rsrp = 0;
+      stats->num_sinr_meas = 0;
+      stats->cumul_sinrx10 = 0;
     }
     output += snprintf(output,
                        end - output,
@@ -187,7 +203,7 @@ size_t dump_mac_stats(gNB_MAC_INST *gNB, char *output, size_t strlen, bool reset
 
     output += snprintf(output,
                        end - output,
-                       ", ulsch_errors %"PRIu64", ulsch_DTX %d, BLER %.5f MCS (%d) %d (Qm %d deltaMCS %d dB) NPRB %d  SNR %d.%d dB\n",
+                       ", ulsch_errors %"PRIu64", ulsch_DTX %d, BLER %.5f MCS (%d) %d (Qm %d deltaMCS %d dB) NPRB %d  SNR %d.%d dB CCE fail %d\n",
                        stats->ul.errors,
                        stats->ulsch_DTX,
                        sched_ctrl->ul_bler_stats.bler,
@@ -197,7 +213,8 @@ size_t dump_mac_stats(gNB_MAC_INST *gNB, char *output, size_t strlen, bool reset
                        UE->mac_stats.deltaMCS,
                        UE->mac_stats.NPRB,
                        sched_ctrl->pusch_snrx10 / 10,
-                       sched_ctrl->pusch_snrx10 % 10);
+                       sched_ctrl->pusch_snrx10 % 10,
+                       sched_ctrl->ul_cce_fail);
     output += snprintf(output,
                        end - output,
                        "UE %04x: MAC:    TX %14"PRIu64" RX %14"PRIu64" bytes\n",
@@ -238,13 +255,9 @@ static void mac_rrc_init(gNB_MAC_INST *mac, ngran_node_t node_type)
 
 void mac_top_init_gNB(ngran_node_t node_type,
                       NR_ServingCellConfigCommon_t *scc,
-                      NR_ServingCellConfig_t *scd,
                       const nr_mac_config_t *config,
                       const nr_rlc_configuration_t *default_rlc_config)
 {
-  module_id_t     i;
-  gNB_MAC_INST    *nrmac;
-
   AssertFatal(RC.nb_nr_macrlc_inst == 1, "what is the point of calling %s() if you don't need exactly one MAC?\n", __func__);
 
   if (RC.nb_nr_macrlc_inst > 0) {
@@ -255,7 +268,7 @@ void mac_top_init_gNB(ngran_node_t node_type,
                 RC.nb_nr_macrlc_inst * sizeof(gNB_MAC_INST *),
                 RC.nb_nr_macrlc_inst, sizeof(gNB_MAC_INST));
 
-    for (i = 0; i < RC.nb_nr_macrlc_inst; i++) {
+    for (module_id_t i = 0; i < RC.nb_nr_macrlc_inst; i++) {
 
       RC.nrmac[i] = (gNB_MAC_INST *) malloc16(sizeof(gNB_MAC_INST));
       
@@ -275,8 +288,6 @@ void mac_top_init_gNB(ngran_node_t node_type,
       RC.nrmac[i]->common_channels[0].ServingCellConfigCommon = scc;
       RC.nrmac[i]->radio_config = *config;
       RC.nrmac[i]->rlc_config = *default_rlc_config;
-
-      RC.nrmac[i]->common_channels[0].pre_ServingCellConfig = scd;
 
       RC.nrmac[i]->first_MIB = true;
       RC.nrmac[i]->num_scheduled_prach_rx = 0;
@@ -315,8 +326,8 @@ void mac_top_init_gNB(ngran_node_t node_type,
   }
 
   // Initialize Linked-List for Active UEs
-  for (i = 0; i < RC.nb_nr_macrlc_inst; i++) {
-    nrmac = RC.nrmac[i];
+  for (module_id_t i = 0; i < RC.nb_nr_macrlc_inst; i++) {
+    gNB_MAC_INST *nrmac = RC.nrmac[i];
     nrmac->if_inst = NR_IF_Module_init(i);
     memset(&nrmac->UE_info, 0, sizeof(nrmac->UE_info));
   }
@@ -331,7 +342,6 @@ void mac_top_destroy_gNB(gNB_MAC_INST *mac)
   NR_COMMON_channels_t *cc = &mac->common_channels[0];
   ASN_STRUCT_FREE(asn_DEF_NR_BCCH_BCH_Message, cc->mib);
   ASN_STRUCT_FREE(asn_DEF_NR_BCCH_DL_SCH_Message, cc->sib1);
-  ASN_STRUCT_FREE(asn_DEF_NR_ServingCellConfig, cc->pre_ServingCellConfig);
   ASN_STRUCT_FREE(asn_DEF_NR_ServingCellConfigCommon, cc->ServingCellConfigCommon);
   NR_UEs_t *UE_info = &mac->UE_info;
   for (int i = 0; i < sizeofArray(UE_info->connected_ue_list); ++i)

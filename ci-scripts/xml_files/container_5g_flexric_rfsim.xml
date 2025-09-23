@@ -51,21 +51,21 @@
         <testCase id="111110">
                 <class>Pull_Local_Registry</class>
                 <desc>Pull Images from Local Registry</desc>
-                <svr_id>0</svr_id>
+                <node>localhost</node>
                 <images>oai-gnb oai-nr-ue</images>
         </testCase>
 
         <testCase id="111111">
                 <class>Pull_Local_Registry</class>
                 <desc>Pull Images from Local Registry</desc>
-                <svr_id>0</svr_id>
+                <node>localhost</node>
                 <images>oai-flexric</images>
         </testCase>
 
         <testCase id="222221">
                 <class>Clean_Test_Server_Images</class>
                 <desc>Clean Test Images on Test Server</desc>
-                <svr_id>0</svr_id>
+                <node>localhost</node>
                 <images>oai-gnb oai-nr-ue</images>
                 <always_exec>true</always_exec>
         </testCase>
@@ -73,7 +73,7 @@
         <testCase id="222222">
                 <class>Clean_Test_Server_Images</class>
                 <desc>Clean Test Images on Test Server</desc>
-                <svr_id>0</svr_id>
+                <node>localhost</node>
                 <images>oai-flexric</images>
                 <always_exec>true</always_exec>
         </testCase>
@@ -88,37 +88,33 @@
         <testCase id="000001">
                 <class>Deploy_Object</class>
                 <desc>Deploy OAI 5G CoreNetwork</desc>
+                <node>localhost</node>
                 <yaml_path>doc/tutorial_resources/oai-cn5g</yaml_path>
                 <services>mysql oai-nrf oai-udr oai-udm oai-ausf oai-amf oai-smf oai-upf oai-ext-dn</services>
-                <eNB_instance>0</eNB_instance>
-                <eNB_serverId>0</eNB_serverId>
         </testCase>
 
         <testCase id="000002">
                 <class>Deploy_Object</class>
                 <desc>Deploy OAI FlexRIC</desc>
+                <node>localhost</node>
                 <yaml_path>ci-scripts/yaml_files/5g_rfsimulator_flexric</yaml_path>
                 <services>oai-flexric</services>
-                <eNB_instance>0</eNB_instance>
-                <eNB_serverId>0</eNB_serverId>
         </testCase>
 
         <testCase id="000003">
                 <class>Deploy_Object</class>
                 <desc>Deploy OAI 5G gNB in RF sim SA</desc>
+                <node>localhost</node>
                 <yaml_path>ci-scripts/yaml_files/5g_rfsimulator_flexric</yaml_path>
                 <services>oai-gnb</services>
-                <eNB_instance>0</eNB_instance>
-                <eNB_serverId>0</eNB_serverId>
         </testCase>
 
         <testCase id="000004">
                 <class>Deploy_Object</class>
                 <desc>Deploy 2 OAI 5G NR-UEs in RF sim SA</desc>
+                <node>localhost</node>
                 <yaml_path>ci-scripts/yaml_files/5g_rfsimulator_flexric</yaml_path>
                 <services>oai-nr-ue oai-nr-ue2</services>
-                <eNB_instance>0</eNB_instance>
-                <eNB_serverId>0</eNB_serverId>
         </testCase>
 
         <testCase id="020005">
@@ -149,55 +145,49 @@
         <testCase id="100001">
                 <class>Undeploy_Object</class>
                 <desc>Undeploy Core Network</desc>
+                <node>localhost</node>
                 <yaml_path>doc/tutorial_resources/oai-cn5g</yaml_path>
-                <eNB_instance>0</eNB_instance>
-                <eNB_serverId>0</eNB_serverId>
                 <always_exec>true</always_exec>
         </testCase>
 
         <testCase id="100002">
                 <class>Undeploy_Object</class>
                 <desc>Undeploy RAN and Flexric</desc>
+                <node>localhost</node>
                 <yaml_path>ci-scripts/yaml_files/5g_rfsimulator_flexric</yaml_path>
-                <eNB_instance>0</eNB_instance>
-                <eNB_serverId>0</eNB_serverId>
                 <always_exec>true</always_exec>
         </testCase>
 
         <testCase id="010000">
                 <class>Deploy_Object</class>
                 <desc>RC monitoring</desc>
+                <node>localhost</node>
                 <yaml_path>ci-scripts/yaml_files/5g_rfsimulator_flexric</yaml_path>
                 <services>xapp-rc-moni</services>
-                <eNB_instance>0</eNB_instance>
-                <eNB_serverId>0</eNB_serverId>
         </testCase>
 
         <testCase id="010001">
                 <class>Deploy_Object</class>
                 <desc>KPM monitoring</desc>
+                <node>localhost</node>
                 <yaml_path>ci-scripts/yaml_files/5g_rfsimulator_flexric</yaml_path>
                 <services>xapp-kpm-moni</services>
-                <eNB_instance>0</eNB_instance>
-                <eNB_serverId>0</eNB_serverId>
         </testCase>
 
         <testCase id="010002">
                 <class>Deploy_Object</class>
                 <desc>KPM monitoring and RC control</desc>
+                <node>localhost</node>
                 <yaml_path>ci-scripts/yaml_files/5g_rfsimulator_flexric</yaml_path>
                 <services>xapp-kpm-rc</services>
-                <eNB_instance>0</eNB_instance>
-                <eNB_serverId>0</eNB_serverId>
         </testCase>
 
         <testCase id="010003">
                 <class>Deploy_Object</class>
                 <desc>Custom SMs monitoring</desc>
+                <node>localhost</node>
                 <yaml_path>ci-scripts/yaml_files/5g_rfsimulator_flexric</yaml_path>
                 <services>xapp-gtp-mac-rlc-pdcp-moni</services>
-                <eNB_instance>0</eNB_instance>
-                <eNB_serverId>0</eNB_serverId>
         </testCase>
 
 </testCaseList>

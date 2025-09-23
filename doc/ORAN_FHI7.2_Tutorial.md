@@ -1235,7 +1235,13 @@ You should be able to connect a UE now.
 
 
 # OAI Management Plane
-We support Configuration Management in OAI gNB, where gNB configures CU-planes, interfaces, TX/RX antennas, and TX/RX carriers for the RU.
+In OAI gNB, we support:
+* Configuration Management: interface(s) creation, configuration of RU CU-planes, Tx/Rx antennas, and Tx/Rx carriers.
+* Performance Management: activation/deactivation of available RU performance measurements and its notification reception with 10s periodicity:
+```bash
+[HW]   [MPLANE] [PM: "192.168.80.9"][RX_ON_TIME  773428][RX_EARLY       0][RX_LATE       0][RX_TOTAL  878881][RX_ON_TIME_C  104744][RX_EARLY_C       0][RX_LATE_C       0][TX_TOTAL  435922]
+```
+
 The reference specifications:
 * `O-RAN.WG4.MP.0-v05.00`
 * `O-RAN.WG4.MP-YANGs-v04.00`
@@ -1375,7 +1381,7 @@ Once the mplane service is successfully enabled on the RU, two new users are bei
 oranbenetel:x:1000:1000::/home/oranbenetel:/bin/sh
 oranext:x:1001:1001::/home/oranext:/bin/sh
 ```
-Create `oranbenetel` home directory:
+OAI gNB requires the `sudo` access group for NETCONF session. In the case of Benetel O-RUs, the corresponding user is `oranbenetel`. Therefore, please create its home directory:
 ```bash
 mkdir /home/oranbenetel && chown oranbenetel:oranbenetel /home/oranbenetel
 ```
@@ -1393,7 +1399,7 @@ The reference gNB configuration file for one Benetel RAN550:
 The reference DU configuration file for two Benetel RAN650:
 [gnb-du.sa.band77.273prb.fhi72.8x8-benetel650_650-mplane.conf](../targets/PROJECTS/GENERIC-NR-5GC/CONF/gnb-du.sa.band77.273prb.fhi72.8x8-benetel650_650-mplane.conf)
 
-In order to run gNB/DU with M-plane, we need to modify the `fhi_72` section in the configuration file.
+In order to run gNB/DU with M-plane, we need to modify Tx gain `att_tx` in RU section, as well as the `fhi_72` section in the configuration file.
 Example for one RU:
 ```bash
 fhi_72 = {
@@ -1404,6 +1410,7 @@ fhi_72 = {
   du_key_pair = ("<path-to>/.ssh/id_rsa.pub", "<path-to>/.ssh/id_rsa");
   du_addr = ("00:11:22:33:44:66", "00:11:22:33:44:67"); # only one needed if one VF configured
   vlan_tag = (9, 9); # only one needed if one VF configured
+  ru_username = ("oranbenetel");
   ru_ip_addr = ("192.168.80.9");
   fh_config = ({
     T1a_cp_dl = (419, 470);
@@ -1423,6 +1430,7 @@ fhi_72 = {
   du_key_pair = ("/home/oaicicd/.ssh/id_rsa.pub", "/home/oaicicd/.ssh/id_rsa");
   du_addr = ("00:11:22:33:44:66", "00:11:22:33:44:67", "00:11:22:33:44:68", "00:11:22:33:44:69"); # only two needed if two VFs configured
   vlan_tag = (9, 9, 11, 11); # only two needed if two VFs configured
+  ru_username = ("oranbenetel", "oranbenetel");
   ru_ip_addr = ("192.168.80.9", "192.168.80.10");
   fh_config = (
 # RAN550 #1
@@ -1451,6 +1459,7 @@ fhi_72 = {
   * `du_key_pair`: ssh public and private keys to authenticate RU with NETCONF
   * `du_addr`: DU MAC address(es) to create CU-plane interface(s) in the RU
   * `vlan_tag`: VLAN U and C plane tags to create CU-plane interface(s) in the RU
+  * `ru_username`: Username with `sudo` access to connect to the RU via M-plane
   * `ru_ip_addr`: RU IP address to connect to the RU via M-plane
   * `dpdk_mem_size`: [*]
   * `dpdk_iova_mode`: [*]
@@ -1557,7 +1566,9 @@ sequenceDiagram
   
   note over du: DU configures xran
   
-  du->ru: 12. DU and RU exchange packets
+  du->ru: 12. DU activates Performance Measurements
+
+  du->ru: 13. DU and RU exchange packets
 ```
 
 
@@ -1596,7 +1607,9 @@ sequenceDiagram
     Band sector ID 0
     CC ID 0
     RU port ID 0
+    max Tx gain 24.0
 [HW]   [MPLANE] Successfully retrieved all the U-plane info - interface name, TX/RX carrier names, and TX/RX endpoint names.
+[HW]   [MPLANE] Successfully retreived all performance measurement names.
 [HW]   [MPLANE] RPC request to RU "192.168.80.9" = <get-schema> for module "ietf-yang-metadata".
 [HW]   [MPLANE] RPC request to RU "192.168.80.9" = <get-schema> for module "yang".
 [HW]   [MPLANE] RPC request to RU "192.168.80.9" = <get-schema> for module "ietf-inet-types".
@@ -1636,6 +1649,59 @@ sequenceDiagram
     <vlan-id xmlns="urn:o-ran:interfaces:1.0">9</vlan-id>
   </interface>
 </interfaces>
+<performance-measurement-objects xmlns="urn:o-ran:performance-management:1.0">
+  <rx-window-measurement-interval>10</rx-window-measurement-interval>
+  <tx-measurement-interval>10</tx-measurement-interval>
+  <notification-interval>10</notification-interval>
+  <rx-window-measurement-objects>
+    <measurement-object>RX_ON_TIME</measurement-object>
+    <active>false</active>
+    <object-unit>RU</object-unit>
+    <report-info>COUNT</report-info>
+  </rx-window-measurement-objects>
+  <rx-window-measurement-objects>
+    <measurement-object>RX_EARLY</measurement-object>
+    <active>false</active>
+    <object-unit>RU</object-unit>
+    <report-info>COUNT</report-info>
+  </rx-window-measurement-objects>
+  <rx-window-measurement-objects>
+    <measurement-object>RX_LATE</measurement-object>
+    <active>false</active>
+    <object-unit>RU</object-unit>
+    <report-info>COUNT</report-info>
+  </rx-window-measurement-objects>
+  <rx-window-measurement-objects>
+    <measurement-object>RX_TOTAL</measurement-object>
+    <active>false</active>
+    <object-unit>RU</object-unit>
+    <report-info>COUNT</report-info>
+  </rx-window-measurement-objects>
+  <rx-window-measurement-objects>
+    <measurement-object>RX_ON_TIME_C</measurement-object>
+    <active>false</active>
+    <object-unit>RU</object-unit>
+    <report-info>COUNT</report-info>
+  </rx-window-measurement-objects>
+  <rx-window-measurement-objects>
+    <measurement-object>RX_EARLY_C</measurement-object>
+    <active>false</active>
+    <object-unit>RU</object-unit>
+    <report-info>COUNT</report-info>
+  </rx-window-measurement-objects>
+  <rx-window-measurement-objects>
+    <measurement-object>RX_LATE_C</measurement-object>
+    <active>false</active>
+    <object-unit>RU</object-unit>
+    <report-info>COUNT</report-info>
+  </rx-window-measurement-objects>
+  <tx-measurement-objects>
+    <measurement-object>TX_TOTAL</measurement-object>
+    <active>false</active>
+    <object-unit>RU</object-unit>
+    <report-info>COUNT</report-info>
+  </tx-measurement-objects>
+</performance-measurement-objects>
 <processing-elements xmlns="urn:o-ran:processing-element:1.0">
   <transport-session-type>ETH-INTERFACE</transport-session-type>
   <ru-elements>
@@ -1729,8 +1795,10 @@ sequenceDiagram
       <iq-bitwidth>9</iq-bitwidth>
       <compression-type>STATIC</compression-type>
     </compression>
-    <cp-length>0</cp-length>
-    <cp-length-other>0</cp-length-other>
+    <frame-structure>193</frame-structure>
+    <cp-type>NORMAL</cp-type>
+    <cp-length>352</cp-length>
+    <cp-length-other>288</cp-length-other>
     <offset-to-absolute-frequency-center>0</offset-to-absolute-frequency-center>
     <e-axcid>
       <o-du-port-bitmask>61440</o-du-port-bitmask>
@@ -1746,8 +1814,10 @@ sequenceDiagram
       <iq-bitwidth>9</iq-bitwidth>
       <compression-type>STATIC</compression-type>
     </compression>
-    <cp-length>0</cp-length>
-    <cp-length-other>0</cp-length-other>
+    <frame-structure>193</frame-structure>
+    <cp-type>NORMAL</cp-type>
+    <cp-length>352</cp-length>
+    <cp-length-other>288</cp-length-other>
     <offset-to-absolute-frequency-center>0</offset-to-absolute-frequency-center>
     <e-axcid>
       <o-du-port-bitmask>61440</o-du-port-bitmask>
@@ -1763,8 +1833,10 @@ sequenceDiagram
       <iq-bitwidth>9</iq-bitwidth>
       <compression-type>STATIC</compression-type>
     </compression>
-    <cp-length>0</cp-length>
-    <cp-length-other>0</cp-length-other>
+    <frame-structure>193</frame-structure>
+    <cp-type>NORMAL</cp-type>
+    <cp-length>352</cp-length>
+    <cp-length-other>288</cp-length-other>
     <offset-to-absolute-frequency-center>0</offset-to-absolute-frequency-center>
     <e-axcid>
       <o-du-port-bitmask>61440</o-du-port-bitmask>
@@ -1780,8 +1852,10 @@ sequenceDiagram
       <iq-bitwidth>9</iq-bitwidth>
       <compression-type>STATIC</compression-type>
     </compression>
-    <cp-length>0</cp-length>
-    <cp-length-other>0</cp-length-other>
+    <frame-structure>193</frame-structure>
+    <cp-type>NORMAL</cp-type>
+    <cp-length>352</cp-length>
+    <cp-length-other>288</cp-length-other>
     <offset-to-absolute-frequency-center>0</offset-to-absolute-frequency-center>
     <e-axcid>
       <o-du-port-bitmask>61440</o-du-port-bitmask>
@@ -1797,9 +1871,15 @@ sequenceDiagram
       <iq-bitwidth>9</iq-bitwidth>
       <compression-type>STATIC</compression-type>
     </compression>
-    <cp-length>0</cp-length>
-    <cp-length-other>0</cp-length-other>
+    <frame-structure>193</frame-structure>
+    <cp-type>NORMAL</cp-type>
+    <cp-length>352</cp-length>
+    <cp-length-other>288</cp-length-other>
     <offset-to-absolute-frequency-center>0</offset-to-absolute-frequency-center>
+    <ul-fft-sampling-offsets>
+      <scs>KHZ_30</scs>
+      <ul-fft-sampling-offset>0</ul-fft-sampling-offset>
+    </ul-fft-sampling-offsets>
     <e-axcid>
       <o-du-port-bitmask>61440</o-du-port-bitmask>
       <band-sector-bitmask>3840</band-sector-bitmask>
@@ -1807,6 +1887,7 @@ sequenceDiagram
       <ru-port-bitmask>15</ru-port-bitmask>
       <eaxc-id>0</eaxc-id>
     </e-axcid>
+    <non-time-managed-delay-enabled>true</non-time-managed-delay-enabled>
   </low-level-rx-endpoints>
   <low-level-rx-endpoints>
     <name>LowLevelRxPrachEndpoint0</name>
@@ -1814,9 +1895,15 @@ sequenceDiagram
       <iq-bitwidth>9</iq-bitwidth>
       <compression-type>STATIC</compression-type>
     </compression>
-    <cp-length>0</cp-length>
-    <cp-length-other>0</cp-length-other>
+    <frame-structure>193</frame-structure>
+    <cp-type>NORMAL</cp-type>
+    <cp-length>352</cp-length>
+    <cp-length-other>288</cp-length-other>
     <offset-to-absolute-frequency-center>0</offset-to-absolute-frequency-center>
+    <ul-fft-sampling-offsets>
+      <scs>KHZ_30</scs>
+      <ul-fft-sampling-offset>0</ul-fft-sampling-offset>
+    </ul-fft-sampling-offsets>
     <e-axcid>
       <o-du-port-bitmask>61440</o-du-port-bitmask>
       <band-sector-bitmask>3840</band-sector-bitmask>
@@ -1824,6 +1911,7 @@ sequenceDiagram
       <ru-port-bitmask>15</ru-port-bitmask>
       <eaxc-id>4</eaxc-id>
     </e-axcid>
+    <non-time-managed-delay-enabled>true</non-time-managed-delay-enabled>
   </low-level-rx-endpoints>
   <low-level-rx-endpoints>
     <name>LowLevelRxEndpoint1</name>
@@ -1831,9 +1919,15 @@ sequenceDiagram
       <iq-bitwidth>9</iq-bitwidth>
       <compression-type>STATIC</compression-type>
     </compression>
-    <cp-length>0</cp-length>
-    <cp-length-other>0</cp-length-other>
+    <frame-structure>193</frame-structure>
+    <cp-type>NORMAL</cp-type>
+    <cp-length>352</cp-length>
+    <cp-length-other>288</cp-length-other>
     <offset-to-absolute-frequency-center>0</offset-to-absolute-frequency-center>
+    <ul-fft-sampling-offsets>
+      <scs>KHZ_30</scs>
+      <ul-fft-sampling-offset>0</ul-fft-sampling-offset>
+    </ul-fft-sampling-offsets>
     <e-axcid>
       <o-du-port-bitmask>61440</o-du-port-bitmask>
       <band-sector-bitmask>3840</band-sector-bitmask>
@@ -1841,6 +1935,7 @@ sequenceDiagram
       <ru-port-bitmask>15</ru-port-bitmask>
       <eaxc-id>1</eaxc-id>
     </e-axcid>
+    <non-time-managed-delay-enabled>true</non-time-managed-delay-enabled>
   </low-level-rx-endpoints>
   <low-level-rx-endpoints>
     <name>LowLevelRxPrachEndpoint1</name>
@@ -1848,9 +1943,15 @@ sequenceDiagram
       <iq-bitwidth>9</iq-bitwidth>
       <compression-type>STATIC</compression-type>
     </compression>
-    <cp-length>0</cp-length>
-    <cp-length-other>0</cp-length-other>
+    <frame-structure>193</frame-structure>
+    <cp-type>NORMAL</cp-type>
+    <cp-length>352</cp-length>
+    <cp-length-other>288</cp-length-other>
     <offset-to-absolute-frequency-center>0</offset-to-absolute-frequency-center>
+    <ul-fft-sampling-offsets>
+      <scs>KHZ_30</scs>
+      <ul-fft-sampling-offset>0</ul-fft-sampling-offset>
+    </ul-fft-sampling-offsets>
     <e-axcid>
       <o-du-port-bitmask>61440</o-du-port-bitmask>
       <band-sector-bitmask>3840</band-sector-bitmask>
@@ -1858,6 +1959,7 @@ sequenceDiagram
       <ru-port-bitmask>15</ru-port-bitmask>
       <eaxc-id>5</eaxc-id>
     </e-axcid>
+    <non-time-managed-delay-enabled>true</non-time-managed-delay-enabled>
   </low-level-rx-endpoints>
   <low-level-rx-endpoints>
     <name>LowLevelRxEndpoint2</name>
@@ -1865,9 +1967,15 @@ sequenceDiagram
       <iq-bitwidth>9</iq-bitwidth>
       <compression-type>STATIC</compression-type>
     </compression>
-    <cp-length>0</cp-length>
-    <cp-length-other>0</cp-length-other>
+    <frame-structure>193</frame-structure>
+    <cp-type>NORMAL</cp-type>
+    <cp-length>352</cp-length>
+    <cp-length-other>288</cp-length-other>
     <offset-to-absolute-frequency-center>0</offset-to-absolute-frequency-center>
+    <ul-fft-sampling-offsets>
+      <scs>KHZ_30</scs>
+      <ul-fft-sampling-offset>0</ul-fft-sampling-offset>
+    </ul-fft-sampling-offsets>
     <e-axcid>
       <o-du-port-bitmask>61440</o-du-port-bitmask>
       <band-sector-bitmask>3840</band-sector-bitmask>
@@ -1875,6 +1983,7 @@ sequenceDiagram
       <ru-port-bitmask>15</ru-port-bitmask>
       <eaxc-id>2</eaxc-id>
     </e-axcid>
+    <non-time-managed-delay-enabled>true</non-time-managed-delay-enabled>
   </low-level-rx-endpoints>
   <low-level-rx-endpoints>
     <name>LowLevelRxPrachEndpoint2</name>
@@ -1882,9 +1991,15 @@ sequenceDiagram
       <iq-bitwidth>9</iq-bitwidth>
       <compression-type>STATIC</compression-type>
     </compression>
-    <cp-length>0</cp-length>
-    <cp-length-other>0</cp-length-other>
+    <frame-structure>193</frame-structure>
+    <cp-type>NORMAL</cp-type>
+    <cp-length>352</cp-length>
+    <cp-length-other>288</cp-length-other>
     <offset-to-absolute-frequency-center>0</offset-to-absolute-frequency-center>
+    <ul-fft-sampling-offsets>
+      <scs>KHZ_30</scs>
+      <ul-fft-sampling-offset>0</ul-fft-sampling-offset>
+    </ul-fft-sampling-offsets>
     <e-axcid>
       <o-du-port-bitmask>61440</o-du-port-bitmask>
       <band-sector-bitmask>3840</band-sector-bitmask>
@@ -1892,6 +2007,7 @@ sequenceDiagram
       <ru-port-bitmask>15</ru-port-bitmask>
       <eaxc-id>6</eaxc-id>
     </e-axcid>
+    <non-time-managed-delay-enabled>true</non-time-managed-delay-enabled>
   </low-level-rx-endpoints>
   <low-level-rx-endpoints>
     <name>LowLevelRxEndpoint3</name>
@@ -1899,9 +2015,15 @@ sequenceDiagram
       <iq-bitwidth>9</iq-bitwidth>
       <compression-type>STATIC</compression-type>
     </compression>
-    <cp-length>0</cp-length>
-    <cp-length-other>0</cp-length-other>
+    <frame-structure>193</frame-structure>
+    <cp-type>NORMAL</cp-type>
+    <cp-length>352</cp-length>
+    <cp-length-other>288</cp-length-other>
     <offset-to-absolute-frequency-center>0</offset-to-absolute-frequency-center>
+    <ul-fft-sampling-offsets>
+      <scs>KHZ_30</scs>
+      <ul-fft-sampling-offset>0</ul-fft-sampling-offset>
+    </ul-fft-sampling-offsets>
     <e-axcid>
       <o-du-port-bitmask>61440</o-du-port-bitmask>
       <band-sector-bitmask>3840</band-sector-bitmask>
@@ -1909,6 +2031,7 @@ sequenceDiagram
       <ru-port-bitmask>15</ru-port-bitmask>
       <eaxc-id>3</eaxc-id>
     </e-axcid>
+    <non-time-managed-delay-enabled>true</non-time-managed-delay-enabled>
   </low-level-rx-endpoints>
   <low-level-rx-endpoints>
     <name>LowLevelRxPrachEndpoint3</name>
@@ -1916,9 +2039,15 @@ sequenceDiagram
       <iq-bitwidth>9</iq-bitwidth>
       <compression-type>STATIC</compression-type>
     </compression>
-    <cp-length>0</cp-length>
-    <cp-length-other>0</cp-length-other>
+    <frame-structure>193</frame-structure>
+    <cp-type>NORMAL</cp-type>
+    <cp-length>352</cp-length>
+    <cp-length-other>288</cp-length-other>
     <offset-to-absolute-frequency-center>0</offset-to-absolute-frequency-center>
+    <ul-fft-sampling-offsets>
+      <scs>KHZ_30</scs>
+      <ul-fft-sampling-offset>0</ul-fft-sampling-offset>
+    </ul-fft-sampling-offsets>
     <e-axcid>
       <o-du-port-bitmask>61440</o-du-port-bitmask>
       <band-sector-bitmask>3840</band-sector-bitmask>
@@ -1926,6 +2055,7 @@ sequenceDiagram
       <ru-port-bitmask>15</ru-port-bitmask>
       <eaxc-id>7</eaxc-id>
     </e-axcid>
+    <non-time-managed-delay-enabled>true</non-time-managed-delay-enabled>
   </low-level-rx-endpoints>
   <tx-array-carriers>
     <name>TxArray0</name>
@@ -1933,7 +2063,7 @@ sequenceDiagram
     <center-of-channel-bandwidth>3950400000</center-of-channel-bandwidth>
     <channel-bandwidth>100000000</channel-bandwidth>
     <active>ACTIVE</active>
-    <gain>0.0</gain>
+    <gain>24.0</gain>
     <downlink-radio-frame-offset>0</downlink-radio-frame-offset>
     <downlink-sfn-offset>0</downlink-sfn-offset>
   </tx-array-carriers>
@@ -1957,7 +2087,7 @@ sequenceDiagram
 [HW]   [MPLANE] Successfully validated candidate datastore for RU "192.168.80.9".
 [HW]   [MPLANE] RPC request to RU "192.168.80.9" = <commit> candidate datastore.
 [HW]   [MPLANE] RPC reply = OK.
-[HW]   [MPLANE] Successfully commited CU-planes configuration into running datastore for RU "192.168.80.9".
+[HW]   [MPLANE] Successfully commited configuration into running datastore for RU "192.168.80.9".
 [HW]   [MPLANE] Usage state = "idle" for RU "192.168.80.9".
 [HW]   [MPLANE] Received notification from RU "192.168.80.9" at (2025-03-29T12:40:23.049085102+00:00)
 {
@@ -2025,9 +2155,71 @@ sequenceDiagram
         "operation": "create"
       },
 ...
-}
-
 [HW]   [MPLANE] RU "192.168.80.9" is now ready.
+[HW]   [MPLANE] RPC request to RU "192.168.80.9" = <edit-config>:
+<performance-measurement-objects xmlns="urn:o-ran:performance-management:1.0">
+  <rx-window-measurement-interval>10</rx-window-measurement-interval>
+  <tx-measurement-interval>10</tx-measurement-interval>
+  <notification-interval>10</notification-interval>
+  <rx-window-measurement-objects>
+    <measurement-object>RX_ON_TIME</measurement-object>
+    <active>true</active>
+    <object-unit>RU</object-unit>
+    <report-info>COUNT</report-info>
+  </rx-window-measurement-objects>
+  <rx-window-measurement-objects>
+    <measurement-object>RX_EARLY</measurement-object>
+    <active>true</active>
+    <object-unit>RU</object-unit>
+    <report-info>COUNT</report-info>
+  </rx-window-measurement-objects>
+  <rx-window-measurement-objects>
+    <measurement-object>RX_LATE</measurement-object>
+    <active>true</active>
+    <object-unit>RU</object-unit>
+    <report-info>COUNT</report-info>
+  </rx-window-measurement-objects>
+  <rx-window-measurement-objects>
+    <measurement-object>RX_TOTAL</measurement-object>
+    <active>true</active>
+    <object-unit>RU</object-unit>
+    <report-info>COUNT</report-info>
+  </rx-window-measurement-objects>
+  <rx-window-measurement-objects>
+    <measurement-object>RX_ON_TIME_C</measurement-object>
+    <active>true</active>
+    <object-unit>RU</object-unit>
+    <report-info>COUNT</report-info>
+  </rx-window-measurement-objects>
+  <rx-window-measurement-objects>
+    <measurement-object>RX_EARLY_C</measurement-object>
+    <active>true</active>
+    <object-unit>RU</object-unit>
+    <report-info>COUNT</report-info>
+  </rx-window-measurement-objects>
+  <rx-window-measurement-objects>
+    <measurement-object>RX_LATE_C</measurement-object>
+    <active>true</active>
+    <object-unit>RU</object-unit>
+    <report-info>COUNT</report-info>
+  </rx-window-measurement-objects>
+  <tx-measurement-objects>
+    <measurement-object>TX_TOTAL</measurement-object>
+    <active>true</active>
+    <object-unit>RU</object-unit>
+    <report-info>COUNT</report-info>
+  </tx-measurement-objects>
+</performance-measurement-objects>
+
+[HW]   [MPLANE] RPC reply = OK.
+[HW]   [MPLANE] Successfully edited the candidate datastore for RU "192.168.80.9".
+[HW]   [MPLANE] RPC request to RU "192.168.80.9" = <validate> candidate datastore.
+[HW]   [MPLANE] RPC reply = OK.
+[HW]   [MPLANE] Successfully validated candidate datastore for RU "192.168.80.9".
+[HW]   [MPLANE] RPC request to RU "192.168.80.9" = <commit> candidate datastore.
+[HW]   [MPLANE] RPC reply = OK.
+[HW]   [MPLANE] Successfully commited configuration into running datastore for RU "192.168.80.9".
+[HW]   [MPLANE] Sucessfully activated PM after start-up procedure for RU "192.168.80.9".
 ```
 </details>
 

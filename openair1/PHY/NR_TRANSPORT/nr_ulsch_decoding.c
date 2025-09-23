@@ -305,6 +305,10 @@ int nr_ulsch_decoding(PHY_VARS_gNB *phy_vars_gNB,
         LOG_D(PHY, "ULSCH %d in error\n", ULSCH_id);
       }
       offset += ((harq_process->K >> 3) - (harq_process->F >> 3) - ((harq_process->C > 1) ? 3 : 0));
+
+      merge_meas(&phy_vars_gNB->ts_deinterleave, &nrLDPC_segment_decoding_parameters.ts_deinterleave);
+      merge_meas(&phy_vars_gNB->ts_rate_unmatch, &nrLDPC_segment_decoding_parameters.ts_rate_unmatch);
+      merge_meas(&phy_vars_gNB->ts_ldpc_decode, &nrLDPC_segment_decoding_parameters.ts_ldpc_decode);
     }
   }
 

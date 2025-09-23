@@ -32,9 +32,7 @@
         <testCase id="000001">
                 <class>Build_Proxy</class>
                 <desc>Build L2sim Proxy Image</desc>
-                <eNB_instance>1</eNB_instance>
-                <eNB_serverId>1</eNB_serverId>
-                <forced_workspace_cleanup>True</forced_workspace_cleanup>
+                <node>localhost</node>
                 <proxy_commit>b64d9bce986b38ca59e8582864ade3fcdd05c0dc</proxy_commit>
         </testCase>
 

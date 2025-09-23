@@ -338,6 +338,11 @@ __attribute__((__visibility__("default"))) int transport_init(openair0_device *d
       if (!ru_ready[i] && ru_session->ru_notif.config_change && ru_session->ru_notif.rx_carrier_state && ru_session->ru_notif.tx_carrier_state) {
         MP_LOG_I("RU \"%s\" is now ready.\n", ru_session->ru_ip_add);
         ru_ready[i] = true;
+        if (!ru_session->pm_stats.start_up_timing) {
+          success = pm_conf(ru_session, "true");
+          if (success)
+            MP_LOG_I("Sucessfully activated PM after start-up procedure for RU \"%s\".\n", ru_session->ru_ip_add);
+        }
       } else {
         all_rus_ready = false;
         break;

@@ -414,7 +414,7 @@ void nr_layer_mapping(int nbCodes,
       }
 
 #ifdef DEBUG_LAYER_MAPPING
-      printf("\nsymb %d/%d\n", i << 3, n_symbs);
+      printf("\nsymb %d/%u\n", i << 3, n_symbs);
       printf(" layer 0:\t");
       for (int j = 0; j < 8 * 6; j += 6) {
         printf("%d %d ", ((int16_t *)&mod[i << 3])[j], ((int16_t *)&mod[i << 3])[j + 1]);

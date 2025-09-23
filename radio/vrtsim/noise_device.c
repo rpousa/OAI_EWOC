@@ -18,6 +18,7 @@
  * For more information about the OpenAirInterface (OAI) Software Alliance:
  *      contact@openairinterface.org
  */
+#include "assertions.h"
 #include <pthread.h>
 #include <errno.h>
 #include "noise_device.h"
@@ -74,7 +75,8 @@ void init_noise_device(float noise_power)
 void free_noise_device(void)
 {
   state.running = false;
-  pthread_join(state.noise_device_thread, NULL);
+  int ret = pthread_join(state.noise_device_thread, NULL);
+  AssertFatal(ret == 0, "pthread_join failed: %d, errno %d (%s)\n", ret, errno, strerror(errno));
 }
 
 void get_noise_vector(float *noise_vector, int length)

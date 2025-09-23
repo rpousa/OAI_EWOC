@@ -77,7 +77,7 @@ int wls_fapi_nr_pnf_start()
   _this = (pnf_t *)(cfg);
   _this->terminate = 0;
   // Init PNF config
-  nfapi_pnf_phy_config_t *phy = (nfapi_pnf_phy_config_t *)malloc(sizeof(nfapi_pnf_phy_config_t));
+  nfapi_pnf_phy_config_t *phy = malloc_or_fail(sizeof(nfapi_pnf_phy_config_t));
   memset(phy, 0, sizeof(nfapi_pnf_phy_config_t));
 
   phy->state = NFAPI_PNF_PHY_IDLE;

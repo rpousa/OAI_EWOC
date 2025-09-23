@@ -48,7 +48,7 @@
   <testCase id="111111">
     <class>Pull_Local_Registry</class>
     <desc>Pull Images from Local Registry</desc>
-    <svr_id>0</svr_id>
+    <node>obelix</node>
     <images>oai-enb</images>
   </testCase>
 
@@ -68,15 +68,13 @@
   <testCase id="800833">
     <class>Create_Workspace</class>
     <desc>Create new Workspace</desc>
-    <eNB_instance>0</eNB_instance>
-    <eNB_serverId>0</eNB_serverId>
+    <node>obelix</node>
   </testCase>
   <testCase id="030101">
     <class>Deploy_Object</class>
     <desc>Deploy eNB (TDD/Band38/2.6Ghz/N3XX) in a container</desc>
+    <node>obelix</node>
     <yaml_path>ci-scripts/yaml_files/lte_n3xx_tdd_2x2_tm1</yaml_path>
-    <eNB_instance>0</eNB_instance>
-    <eNB_serverId>0</eNB_serverId>
   </testCase>
 
   <testCase id="000001">
@@ -142,9 +140,8 @@
     <class>Undeploy_Object</class>
     <always_exec>true</always_exec>
     <desc>Undeploy gNB</desc>
+    <node>obelix</node>
     <yaml_path>ci-scripts/yaml_files/lte_n3xx_tdd_2x2_tm1</yaml_path>
-    <eNB_instance>0</eNB_instance>
-    <eNB_serverId>0</eNB_serverId>
     <!-- <d_retx_th>1,100,100,100</d_retx_th>
 	    <u_retx_th>1,100,100,100</u_retx_th>
 		    ?
@@ -155,7 +152,7 @@
         <class>Clean_Test_Server_Images</class>
         <always_exec>true</always_exec>
         <desc>Clean Test Images</desc>
-        <svr_id>0</svr_id>
+        <node>obelix</node>
         <images>oai-enb</images>
     </testCase>
 

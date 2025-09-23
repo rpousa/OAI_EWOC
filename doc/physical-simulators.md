@@ -18,6 +18,13 @@ Physims are essential for:
 * Regression testing
 * Ensuring correctness before merging new contributions into the repository
 
+These tests are run automatically as part of the following
+pipelines:
+
+- [RAN-PhySim-Cluster-4G](https://jenkins-oai.eurecom.fr/job/RAN-PhySim-Cluster-4G/)
+- [RAN-PhySim-Cluster-5G](https://jenkins-oai.eurecom.fr/job/RAN-PhySim-Cluster-5G/)
+- [RAN-PhySim-GraceHopper-5G](https://jenkins-oai.eurecom.fr/job/RAN-PhySim-GraceHopper-5G/)
+
 ## Examples of Simulators
 
 | Technology | Simulators                                | Description                      |
@@ -31,7 +38,7 @@ Physims are essential for:
 |            | `nr_psbchsim`                             | Sidelink simulation              |
 | Coding     | `ldpctest`, `polartest`, `smallblocktest` | LDPC, Polar, and other FEC tests |
 
-### Source Locations
+## Source Locations
 
 * 4G PHY simulators: `openair1/SIMULATION/LTE_PHY/`
 * 5G PHY simulators: `openair1/SIMULATION/NR_PHY/`
@@ -47,6 +54,9 @@ openair1/SIMULATION/NR_PHY/dlsim.c
 # How to Run Simulators Using `ctest`
 
 ## Option 1: Using CMake
+
+Build the simulators and tests using the dedicated cmake option, then run
+`ctest` which will run all registered tests.
 
 ```bash
 cd openairinterface5g
@@ -67,9 +77,7 @@ cd ran_build/build
 ctest
 ```
 
-# `ctest` Usage Tips
-
-## Useful Options
+## `ctest` Usage Tips
 
 Use the following options to customize test execution:
 
@@ -84,50 +92,77 @@ Use the following options to customize test execution:
 
 For the complete list of `ctest` options, refer to the manual:
 
-```bash
-man ctest
-```
+    man ctest
 
-## Example
+For instance, to run only all run NR ULSCH simulator tests, with 4 jobs in
+parallel, type
 
-```bash
-# Run only NR ULSCH simulator tests, in parallel
-ctest -L nr_ulsch -j 4
-```
+    ctest -L nr_ulschsim -j 4
 
 # Adding a New Physim Test
 
 To define a new test or modify existing ones, update the following file:
 
 ```
-openair1/PHY/CODING/tests/CMakeLists.txt
+openair1/SIMULATION/tests/CMakeLists.txt
 ```
 
-Use the `add_physim_test` macro with the following arguments:
+## `add_physim_test()`
 
-```cmake
-add_physim_test(<test_gen> <test_exec> <test_description> <test_label> <test_cl_options>)
-```
+Use the `add_physim_test()` macro with the following arguments:
 
-### Arguments:
+    add_physim_test(<test_name> <test_description> <test_exec> <test_options>)
 
-* `<test_gen>`: Test generation (e.g., `4g` or `5g`)
-* `<test_exec>`: Name of the test executable (e.g., `nr_prachsim`)
-* `<test_description>`: Description shown in `ctest` output, useful for categorization and indexing.
-* `<test_label>`: Label used for filtering tests (via `-L`), shown in the ctest output summary as a descriptive tag.
-* `<test_cl_options>`: Command line options passed to the test
+where:
+- `<test_name>` can be any name, but the canonical, historical format is to put
+  it `physim.<gen>.<test_exec>.test<XYZ>` where `<gen>` is 4g/5g, and `<XYZ>`
+  is an increasing number
+- `<test_description>` is a human-readable description of the test
+- `<test_exec> <test_options>` is the test invocation, where `<test_exec>` must
+  be a target built by OAI cmake (e.g., `nr_prachsim`), followed by any options.
 
-### Example:
+For instance, a PRACHsim looks like this:
 
-```cmake
-# add_physim_test(<test_gen> <test_exec> <test_description> <test_label> <test_cl_options>)
-add_physim_test(5g nr_prachsim test8 "15kHz SCS, 25 PRBs" -a -s -30 -n 300 -p 99 -R 25 -m 0)
-```
+    add_physim_test(physim.5g.nr_prachsim.test8 "15kHz SCS, 25 PRBs" nr_prachsim -a -s -30 -n 300 -p 99 -R 25 -m 0)
 
-These tests are run automatically as part of the following
-pipelines: [RAN-PhySim-Cluster-4G](https://jenkins-oai.eurecom.fr/job/RAN-PhySim-Cluster-4G/) and [RAN-PhySim-Cluster-5G](https://jenkins-oai.eurecom.fr/job/RAN-PhySim-Cluster-5G/)
+## `add_timed_physim_test()`
 
-### How to rerun failed CI tests using `ctest`
+Use the `add_timed_physim_test()` macro to add a test the same way as with
+`add_physim_test()` above. Additionally, it allows to check for thresholds with
+`check_threshold()`:
+
+    check_threshold(<test_name> <threshold> <condition>)
+
+where:
+- `<test_name>` is any test that must have been added with
+  `add_timed_physim_test()`
+- `<threshold>` is a threshold to check for, e.g., `PHY tx proc`, and
+- `<condition>` a condition to check, e.g. `< 200`
+
+There are two convenience functions to simplify the use of `check_threshold()`:
+
+    check_threshold_range(<test_name> <threshold> LOWER <lower> UPPER <upper>)
+    check_threshold_variance(<test_name> <threshold> AVG <avg> ABS_VAR <abs_var>)
+
+where
+- `<lower>` and `<upper>` are a lower and upper threshold, respectively, where
+  either one or both variables can be provided, and
+- `<avg>` and `<abs_var>` are average and the variation in absolute numbers
+  (not a percentage!) can be provided.
+
+Both functions internally use `check_threshold()`.
+
+Thus upon execution of the test, the test will be run, but additionally ctest
+will check for a match of `PHY tx proc <NUMBER>` (where `<NUMBER> is of format
+`[0-9]+(\.[0-9]+)?`), and a matching number will be checked against condition
+`< 200`.
+
+For instance, this could look like this:
+
+    add_timed_physim_test(physim.5g.nr_dlsim.test3 "Some description" nr_dlsim -P)
+    check_physim_threshold(physim.5g.nr_dlsim.test3 "DLSCH encoding time" "< 50")
+
+# How to rerun failed CI tests using `ctest`
 
 Ctest automatically logs the failed tests in LastTestsFailed.log. This log is archived in
 the CI artifacts and can be reused locally to rerun only those failed tests.
@@ -159,3 +194,11 @@ For legacy support or archival purposes, you can still find this implementation 
 ```bash
 git checkout 2025.w18
 ```
+
+# Unmaintained tests
+
+A few tests dedicated to 4G are unmaintained:
+
+- `mbmssim`
+- `scansim`
+- all simulators of format `www-tmyyyy` (for instance, `dlsim_tm4`)

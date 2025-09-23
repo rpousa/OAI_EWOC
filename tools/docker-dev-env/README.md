@@ -2,7 +2,7 @@
 
 ## Description
 
-This contains bash scripts for managing a ubuntu22 dockerized development enviroment for OAI. No need to install any
+This contains bash scripts for managing a ubuntu24 dockerized development enviroment for OAI. No need to install any
 tools on host machines except for docker
 
  - `bootstrap.sh` - build development environment image and install the following bash aliases in `~/.bash_aliases`:

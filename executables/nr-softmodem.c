@@ -24,7 +24,6 @@
 
 #include "common/config/config_userapi.h"
 #include "common/utils/load_module_shlib.h"
-#include "RRC/LTE/rrc_vars.h"
 #ifdef SMBV
 #include "PHY/TOOLS/smbv.h"
 unsigned short config_frames[4] = {2,9,11,13};
@@ -119,7 +118,6 @@ double rx_gain_off = 0.0;
 
 static int tx_max_power[MAX_NUM_CCs]; /* =  {0,0}*/;
 int chain_offset = 0;
-int emulate_rf = 0;
 int numerology = 0;
 double cpuf;
 
@@ -128,52 +126,6 @@ double cpuf;
 void pdcp_run(const protocol_ctxt_t *const ctxt_pP)
 {
   abort();
-}
-
-/*---------------------BMC: timespec helpers -----------------------------*/
-
-struct timespec min_diff_time = { .tv_sec = 0, .tv_nsec = 0 };
-struct timespec max_diff_time = { .tv_sec = 0, .tv_nsec = 0 };
-
-struct timespec clock_difftime(struct timespec start, struct timespec end) {
-  struct timespec temp;
-
-  if ((end.tv_nsec-start.tv_nsec)<0) {
-    temp.tv_sec = end.tv_sec-start.tv_sec-1;
-    temp.tv_nsec = 1000000000+end.tv_nsec-start.tv_nsec;
-  } else {
-    temp.tv_sec = end.tv_sec-start.tv_sec;
-    temp.tv_nsec = end.tv_nsec-start.tv_nsec;
-  }
-
-  return temp;
-}
-
-void print_difftimes(void)
-{
-  LOG_I(HW, "difftimes min = %lu ns ; max = %lu ns\n", min_diff_time.tv_nsec, max_diff_time.tv_nsec);
-}
-
-void update_difftimes(struct timespec start, struct timespec end) {
-  struct timespec diff_time = { .tv_sec = 0, .tv_nsec = 0 };
-  int             changed = 0;
-  diff_time = clock_difftime(start, end);
-
-  if ((min_diff_time.tv_nsec == 0) || (diff_time.tv_nsec < min_diff_time.tv_nsec)) {
-    min_diff_time.tv_nsec = diff_time.tv_nsec;
-    changed = 1;
-  }
-
-  if ((max_diff_time.tv_nsec == 0) || (diff_time.tv_nsec > max_diff_time.tv_nsec)) {
-    max_diff_time.tv_nsec = diff_time.tv_nsec;
-    changed = 1;
-  }
-
-#if 1
-
-  if (changed) print_difftimes();
-
-#endif
 }
 
 /*------------------------------------------------------------------------*/
@@ -761,6 +713,11 @@ int main( int argc, char **argv ) {
 
   // wait for end of program
   printf("TYPE <CTRL-C> TO TERMINATE\n");
+  // Sleep a while before checking all parameters have been used
+  // Some are used directly in external threads, asynchronously
+  sleep(2);
+  config_check_unknown_cmdlineopt(uniqCfg, CONFIG_CHECKALLSECTIONS);
+
   itti_wait_tasks_end(NULL);
   printf("Returned from ITTI signal handler\n");
 

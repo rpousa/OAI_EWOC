@@ -32,7 +32,9 @@
     120000
     102000
     102001
+    302001
     102002
+    302002
     102003
     102004
     102005
@@ -78,105 +80,117 @@
   <testCase id="100813">
     <class>Create_Workspace</class>
     <desc>Creating new Workspace</desc>
-    <eNB_instance>0</eNB_instance>
-    <eNB_serverId>0</eNB_serverId>
+    <node>avra</node>
   </testCase>
 
   <testCase id="120000">
     <class>Deploy_Object</class>
     <desc>Deploy gNB (TDD/Band78/20MHz/aw2s) in a container</desc>
+    <node>avra</node>
     <yaml_path>ci-scripts/yaml_files/sa_aw2s_gnb</yaml_path>
-    <eNB_instance>0</eNB_instance>
-    <eNB_serverId>0</eNB_serverId>
   </testCase>
 
   <testCase id="102001">
     <class>Attach_UE</class>
-    <desc>Attach UE</desc>
+    <desc>Attach UE 1</desc>
     <id>amarisoft_ue_1</id>
+  </testCase>
+
+  <testCase id="302001">
+    <class>Custom_Command</class>
+    <desc>Verify UE 1 is normal (no RedCap)</desc>
+    <node>avra</node>
+    <command>[ $(docker logs oai-gnb-aw2s | grep -E "UE with RNTI [0-9a-f]{4} is RedCap" | wc -l) -eq 0 ]</command>
   </testCase>
 
   <testCase id="102002">
     <class>Attach_UE</class>
-    <desc>Attach UE</desc>
+    <desc>Attach (RedCap) UE 2</desc>
     <id>amarisoft_ue_2</id>
+  </testCase>
+
+  <testCase id="302002">
+    <class>Custom_Command</class>
+    <desc>Verify UE 2 is RedCap</desc>
+    <node>avra</node>
+    <command>[ $(docker logs oai-gnb-aw2s | grep -m1 -E "UE with RNTI [0-9a-f]{4} is RedCap" | wc -l) -eq 1 ]</command>
   </testCase>
 
   <testCase id="102003">
     <class>Attach_UE</class>
-    <desc>Attach UE</desc>
+    <desc>Attach UE 3</desc>
     <id>amarisoft_ue_3</id>
   </testCase>
 
   <testCase id="102004">
     <class>Attach_UE</class>
-    <desc>Attach UE</desc>
+    <desc>Attach UE 4</desc>
     <id>amarisoft_ue_4</id>
   </testCase>
 
   <testCase id="102005">
     <class>Attach_UE</class>
-    <desc>Attach UE</desc>
+    <desc>Attach (RedCap) UE 5</desc>
     <id>amarisoft_ue_5</id>
   </testCase>
 
   <testCase id="102006">
     <class>Attach_UE</class>
-    <desc>Attach UE</desc>
+    <desc>Attach (RedCap) UE 6</desc>
     <id>amarisoft_ue_6</id>
   </testCase>
 
   <testCase id="102007">
     <class>Attach_UE</class>
-    <desc>Attach UE</desc>
+    <desc>Attach UE 7</desc>
     <id>amarisoft_ue_7</id>
   </testCase>
 
   <testCase id="102008">
     <class>Attach_UE</class>
-    <desc>Attach UE</desc>
+    <desc>Attach UE 8</desc>
     <id>amarisoft_ue_8</id>
   </testCase>
 
   <testCase id="102009">
     <class>Attach_UE</class>
-    <desc>Attach UE</desc>
+    <desc>Attach UE 9</desc>
     <id>amarisoft_ue_9</id>
   </testCase>
 
   <testCase id="102010">
     <class>Attach_UE</class>
-    <desc>Attach UE</desc>
+    <desc>Attach (RedCap) UE 10</desc>
     <id>amarisoft_ue_10</id>
   </testCase>
 
   <testCase id="102011">
     <class>Attach_UE</class>
-    <desc>Attach UE</desc>
+    <desc>Attach (RedCap) UE 11</desc>
     <id>amarisoft_ue_11</id>
   </testCase>
 
   <testCase id="102012">
     <class>Attach_UE</class>
-    <desc>Attach UE</desc>
+    <desc>Attach (RedCap) UE 12</desc>
     <id>amarisoft_ue_12</id>
   </testCase>
 
   <testCase id="102013">
     <class>Attach_UE</class>
-    <desc>Attach UE</desc>
+    <desc>Attach UE 13</desc>
     <id>amarisoft_ue_13</id>
   </testCase>
 
   <testCase id="102014">
     <class>Attach_UE</class>
-    <desc>Attach UE</desc>
+    <desc>Attach UE 14</desc>
     <id>amarisoft_ue_14</id>
   </testCase>
 
   <testCase id="102015">
     <class>Attach_UE</class>
-    <desc>Attach UE</desc>
+    <desc>Attach (RedCap) UE 15</desc>
     <id>amarisoft_ue_15</id>
   </testCase>
 
@@ -233,7 +247,7 @@
 
   <testCase id="102016">
     <class>Attach_UE</class>
-    <desc>Attach UE</desc>
+    <desc>Attach (RedCap) UE 16</desc>
     <id>amarisoft_ue_16</id>
   </testCase>
 
@@ -271,16 +285,15 @@
     <class>Undeploy_Object</class>
     <always_exec>true</always_exec>
     <desc>Undeploy gNB</desc>
+    <node>avra</node>
     <yaml_path>ci-scripts/yaml_files/sa_aw2s_gnb</yaml_path>
-    <eNB_instance>0</eNB_instance>
-    <eNB_serverId>0</eNB_serverId>
   </testCase>
 
   <testCase id="444444">
     <class>Clean_Test_Server_Images</class>
     <always_exec>true</always_exec>
     <desc>Clean Test Images on Test Server</desc>
-    <svr_id>0</svr_id>
+    <node>avra</node>
     <images>oai-gnb-aw2s</images>
   </testCase>
 

@@ -255,7 +255,6 @@ typedef struct RU_proc_t_s {
   int instance_cnt_feptx;
   /// \internal This variable is protected by \ref mutex_ru_thread
   int instance_cnt_ru;
-  int instance_cnt_emulateRF;
   /// pthread structure for RU FH processing thread
   pthread_t pthread_FH;
   pthread_t pthread_FH1;
@@ -271,8 +270,6 @@ typedef struct RU_proc_t_s {
   pthread_t pthread_fep[8];
   /// pthread struct for RU TX FEP worker thread
   pthread_t pthread_feptx;
-  /// pthread struct for emulated RF
-  pthread_t pthread_emulateRF;
   /// pthread structure for asychronous RX/TX processing thread
   pthread_t pthread_asynch_rxtx;
   /// flag to indicate first RX acquisition
@@ -296,8 +293,6 @@ typedef struct RU_proc_t_s {
   pthread_attr_t attr_fep;
   /// pthread attributes for worker feptx thread
   pthread_attr_t attr_feptx;
-  /// pthread attributes for emulated RF
-  pthread_attr_t attr_emulateRF;
   /// scheduling parameters for RU FH thread
   struct sched_param sched_param_FH;
   struct sched_param sched_param_FH1;
@@ -324,8 +319,6 @@ typedef struct RU_proc_t_s {
   pthread_cond_t cond_fep[8];
   /// condition varible for RU TX FEP thread
   pthread_cond_t cond_feptx;
-  /// condition varible for emulated RF
-  pthread_cond_t cond_emulateRF;
   /// condition variable for eNB signal
   pthread_cond_t cond_eNBs;
   /// condition variable for gNB signal
@@ -353,8 +346,6 @@ typedef struct RU_proc_t_s {
   pthread_mutex_t mutex_feptx;
   /// mutex for ru_thread
   pthread_mutex_t mutex_ru;
-  /// mutex for emulated RF thread
-  pthread_mutex_t mutex_emulateRF;
   /// symbol mask for IF4p5 reception per subframe
   uint32_t symbol_mask[10];
   /// time measurements for each subframe
@@ -394,7 +385,6 @@ typedef struct RU_proc_t_s {
   /// pipeline ready state
   int ru_rx_ready;
   int ru_tx_ready;
-  int emulate_rf_busy;
 
   /// structure for precoding thread
   RU_prec_t prec[16];
@@ -407,7 +397,6 @@ typedef enum {
   REMOTE_IF4p5    =3,
   REMOTE_IF1pp    =4,
   MAX_RU_IF_TYPES =5
-                   //EMULATE_RF      =6
 } RU_if_south_t;
 
 
@@ -453,8 +442,6 @@ typedef struct RU_t_s {
   node_function_t function;
   /// Ethernet parameters for fronthaul interface
   eth_params_t eth_params;
-  /// flag to indicate RF emulation mode
-  int emulate_rf;
   /// numerology index
   int numerology;
   /// flag to indicate the RU is in sync with a master reference

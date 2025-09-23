@@ -91,8 +91,8 @@ The function pointers are set once before calling the mapping funcion for
 all symbols based on different parameters. Then the mapping is done for
 each symbol by calling the function pointers.
 */
-static void (*map_dmrs_ptr)(const unsigned int, const c16_t *, c16_t *);
-static void (*map_data_dmrs_ptr)(const unsigned int num_cdm_no_data, const c16_t *, c16_t *);
+typedef void (*map_dmrs_func_t)(const unsigned int, const c16_t *, c16_t *);
+typedef void (*map_data_dmrs_func_t)(const unsigned int, const c16_t *, c16_t *);
 
 /*
 The following set of functions map dmrs and/or data REs in one RB based on
@@ -191,7 +191,9 @@ static void map_over_dc(const unsigned int right_dc,
                         const c16_t **ptrs,
                         const c16_t **dmrs,
                         const c16_t **data,
-                        c16_t **out)
+                        c16_t **out,
+                        map_dmrs_func_t map_data_dmrs_ptr,
+                        map_dmrs_func_t map_dmrs_ptr)
 {
   // if first RE is DC no need to map in this function
   if (right_dc == 0)
@@ -277,7 +279,9 @@ static void map_current_symbol(const nr_phy_pxsch_params_t p,
                                const c16_t *dmrs_seq,
                                const c16_t *ptrs_seq,
                                const c16_t **data,
-                               c16_t *out)
+                               c16_t *out,
+                               map_dmrs_func_t map_dmrs_ptr,
+                               map_data_dmrs_func_t map_data_dmrs_ptr)
 {
   const unsigned int abs_start_rb = p.bwp_start + p.start_rb;
   const unsigned int start_sc = (p.first_sc_offset + abs_start_rb * NR_NB_SC_PER_RB) % p.fft_size;
@@ -297,7 +301,7 @@ static void map_current_symbol(const nr_phy_pxsch_params_t p,
         // map RB at DC
         if (rb_over_dc) {
           // if DC is in middle of RB, the following function handles it.
-          map_over_dc(rb_over_dc, n_cdm, p.fft_size, dmrs_per_rb, data_per_rb, p.delta, 0, NULL, &p_mod_dmrs, NULL, &out_tmp);
+          map_over_dc(rb_over_dc, n_cdm, p.fft_size, dmrs_per_rb, data_per_rb, p.delta, 0, NULL, &p_mod_dmrs, NULL, &out_tmp, map_data_dmrs_ptr, map_dmrs_ptr);
           continue;
         } else {
           // else just move the pointer and following function will map the rb
@@ -315,7 +319,7 @@ static void map_current_symbol(const nr_phy_pxsch_params_t p,
       for (unsigned int rb = 0; rb < p.nb_rb; rb++) {
         if (rb == dc_rb) {
           if (rb_over_dc) {
-            map_over_dc(rb_over_dc, n_cdm, p.fft_size, dmrs_per_rb, data_per_rb, p.delta, 0, NULL, &p_mod_dmrs, &data_tmp, &out_tmp);
+            map_over_dc(rb_over_dc, n_cdm, p.fft_size, dmrs_per_rb, data_per_rb, p.delta, 0, NULL, &p_mod_dmrs, &data_tmp, &out_tmp, map_data_dmrs_ptr, map_dmrs_ptr);
             continue;
           } else {
             out_tmp -= p.fft_size;
@@ -339,7 +343,7 @@ static void map_current_symbol(const nr_phy_pxsch_params_t p,
       if (rb < non_ptrs_rb || ptrs_idx_rb % p.K_ptrs) {
         if (rb == dc_rb) {
           if (rb_over_dc) {
-            map_over_dc(rb_over_dc, n_cdm, p.fft_size, 0, 0, p.delta, 0, NULL, NULL, &data_tmp, &out_tmp);
+            map_over_dc(rb_over_dc, n_cdm, p.fft_size, 0, 0, p.delta, 0, NULL, NULL, &data_tmp, &out_tmp, map_data_dmrs_ptr, map_dmrs_ptr);
             continue;
           } else {
             out_tmp -= p.fft_size;
@@ -351,7 +355,7 @@ static void map_current_symbol(const nr_phy_pxsch_params_t p,
       } else {
         if (rb == dc_rb) {
           if (rb_over_dc) {
-            map_over_dc(rb_over_dc, n_cdm, p.fft_size, 0, 0, p.delta, ptrs_idx_re, &p_mod_ptrs, NULL, &data_tmp, &out_tmp);
+            map_over_dc(rb_over_dc, n_cdm, p.fft_size, 0, 0, p.delta, ptrs_idx_re, &p_mod_ptrs, NULL, &data_tmp, &out_tmp, map_data_dmrs_ptr, map_dmrs_ptr);
             continue;
           } else {
             out_tmp -= p.fft_size;
@@ -370,7 +374,7 @@ static void map_current_symbol(const nr_phy_pxsch_params_t p,
     for (unsigned int rb = 0; rb < p.nb_rb; rb++) {
       if (rb == dc_rb) {
         if (rb_over_dc) {
-          map_over_dc(rb_over_dc, n_cdm, p.fft_size, 0, 0, p.delta, 0, NULL, NULL, &data_tmp, &out_tmp);
+          map_over_dc(rb_over_dc, n_cdm, p.fft_size, 0, 0, p.delta, 0, NULL, NULL, &data_tmp, &out_tmp, map_data_dmrs_ptr, map_dmrs_ptr);
           continue;
         } else {
           out_tmp -= p.fft_size;
@@ -396,7 +400,7 @@ static void dmrs_amp_mult(const uint32_t dmrs_port,
                           const pusch_dmrs_type_t dmrs_type,
                           const unsigned int num_cdm_groups_no_data)
 {
-  float beta_dmrs_pusch = get_beta_dmrs_pusch(num_cdm_groups_no_data, dmrs_type);
+  float beta_dmrs_pusch = get_beta_dmrs(num_cdm_groups_no_data, dmrs_type == pusch_dmrs_type2);
   /* short array that hold amplitude for k_prime = 0 and k_prime = 1 */
   int32_t alpha_dmrs[2] __attribute((aligned(16)));
   for (int_fast8_t i = 0; i < sizeofArray(alpha_dmrs); i++) {
@@ -420,6 +424,8 @@ static void map_symbols(const nr_phy_pxsch_params_t p,
                         c16_t *out)
 {
   // asign the function pointers
+  map_dmrs_func_t map_dmrs_ptr = NULL;
+  map_data_dmrs_func_t map_data_dmrs_ptr = NULL;
   if (p.dmrs_type == pusch_dmrs_type1) {
     map_dmrs_ptr = map_dmrs_type1_cdm1_rb;
     map_data_dmrs_ptr = (p.num_cdm_no_data == 1) ? map_data_dmrs_type1_cdm1_rb : NULL;
@@ -460,7 +466,9 @@ static void map_symbols(const nr_phy_pxsch_params_t p,
                        mod_dmrs_amp,
                        mod_ptrs_amp,
                        &cur_data, // increments every symbol
-                       out + l * p.fft_size);
+                       out + l * p.fft_size,
+                       map_dmrs_ptr,
+                       map_data_dmrs_ptr);
   }
 }
 

@@ -311,9 +311,9 @@ int main(int argc, char **argv)
   int i,aa;//,l;
   double sigma2, sigma2_dB=10, SNR, snr0=-2.0, snr1=2.0;
   uint8_t snr1set=0;
-  float effRate;
+  double effRate;
   //float psnr;
-  float eff_tp_check = 0.7;
+  double eff_tp_check = 0.7;
   uint32_t TBS = 0;
   c16_t **txdata;
   double **s_re,**s_im,**r_re,**r_im;
@@ -547,7 +547,7 @@ int main(int argc, char **argv)
       break;
 
     case 't':
-      eff_tp_check = (float)atoi(optarg)/100;
+      eff_tp_check = atof(optarg) / 100.0;
       break;
 
     case 'w':
@@ -701,6 +701,8 @@ printf("%d\n", slot);
                                 .minRXTXTIME = 6,
                                 .do_CSIRS = 0,
                                 .do_SRS = 0,
+                                .num_dlharq = 16,
+                                .num_ulharq = 16,
                                 .maxMIMO_layers = g_nrOfLayers,
                                 .force_256qam_off = false,
                                 .timer_config.sr_ProhibitTimer = 0,
@@ -743,7 +745,7 @@ printf("%d\n", slot);
   RC.nb_nr_mac_CC = (int*)malloc(RC.nb_nr_macrlc_inst*sizeof(int));
   for (i = 0; i < RC.nb_nr_macrlc_inst; i++)
     RC.nb_nr_mac_CC[i] = 1;
-  mac_top_init_gNB(ngran_gNB, scc, NULL, &conf, &rlc_config);
+  mac_top_init_gNB(ngran_gNB, scc, &conf, &rlc_config);
   gNB_mac = RC.nrmac[0];
   nr_mac_config_scc(RC.nrmac[0], scc, &conf);
 
@@ -791,11 +793,6 @@ printf("%d\n", slot);
   NR_ServingCellConfigCommon_t *scc = secondaryCellGroup->spCellConfig->reconfigurationWithSync->spCellConfigCommon;
   */
 
-  NR_ServingCellConfig_t *scd = calloc(1,sizeof(*scd));
-  prepare_scd(scd);
-  /* removes unnecessary BWPs, if any */
-  fix_scd(scd);
-
   gNB->ap_N1 = pdsch_AntennaPorts.N1;
   gNB->ap_N2 = pdsch_AntennaPorts.N2;
   gNB->ap_XP = pdsch_AntennaPorts.XP;
@@ -806,7 +803,7 @@ printf("%d\n", slot);
   prepare_sim_uecap(UE_Capability_nr, scc, mu, N_RB_DL, g_mcsTableIdx, 0);
   rnti_t rnti = 0x1234;
   int uid = 0;
-  NR_CellGroupConfig_t *secondaryCellGroup = get_default_secondaryCellGroup(scc, scd, UE_Capability_nr, 0, 1, &conf, uid);
+  NR_CellGroupConfig_t *secondaryCellGroup = get_default_secondaryCellGroup(scc, UE_Capability_nr, 0, 1, &conf, uid);
   secondaryCellGroup->spCellConfig->reconfigurationWithSync = get_reconfiguration_with_sync(rnti, uid, scc);
 
   /* -U option modify DMRS */
@@ -924,8 +921,7 @@ printf("%d\n", slot);
 
   init_nr_ue_transport(UE);
 
-  nr_l2_init_ue(1);
-  UE_mac = get_mac_inst(0);
+  UE_mac = nr_l2_init_ue(0);
   ue_init_config_request(UE_mac, get_slots_per_frame_from_scs(mu));
 
   UE->if_inst = nr_ue_if_module_init(0);
@@ -1033,6 +1029,7 @@ printf("%d\n", slot);
     reset_meas(&gNB->dlsch_rate_matching_stats);
     reset_meas(&gNB->dlsch_segmentation_stats);
     reset_meas(&gNB->dlsch_modulation_stats);
+    reset_meas(&gNB->dlsch_precoding_stats);
     reset_meas(&gNB->dlsch_encoding_stats);
     reset_meas(&gNB->dci_generation_stats);
     reset_meas(&gNB->tinput);
@@ -1081,8 +1078,6 @@ printf("%d\n", slot);
       Sched_INFO->sched_response_id = -1;
 
       while (round < num_rounds && !UE_harq_process->decodeResult && !stop) {
-        round_trials[round]++;
-
         clear_nr_nfapi_information(RC.nrmac[0], 0, frame, slot, &Sched_INFO->DL_req, &Sched_INFO->TX_req, &Sched_INFO->UL_dci_req);
         UE_info->UE_sched_ctrl.harq_processes[harq_pid].ndi = !(trial&1);
         UE_info->UE_sched_ctrl.harq_processes[harq_pid].round = round;
@@ -1235,6 +1230,9 @@ printf("%d\n", slot);
         if (dlsch0->last_iteration_cnt >= dlsch0->max_ldpc_iterations)
           n_errors[round]++;
 
+        if (dlsch0->active)
+          round_trials[round]++;
+
         int16_t *UE_llr = (int16_t*)UE->phy_sim_pdsch_llr;
 
         TBS                  = dlsch0->dlsch_config.TBS;//rel15->TBSize[0];
@@ -1266,8 +1264,8 @@ printf("%d\n", slot);
       } // round
 
       if (test_input_bit == NULL) {
-        test_input_bit = (unsigned char *)malloc16(sizeof(unsigned char) * TBS);
-        estimated_output_bit = (unsigned char *)malloc16(sizeof(unsigned char) * TBS);
+        test_input_bit = (unsigned char *)malloc16(8 * rel15->TBSize[0]);
+        estimated_output_bit = (unsigned char *)malloc16(8 * rel15->TBSize[0]);
       }
       for (i = 0; i < TBS; i++) {
 
@@ -1288,12 +1286,12 @@ printf("%d\n", slot);
 	if (n_trials == 1)
 	  printf("errors_bit = %u (trial %d)\n", errors_bit, trial);
       }
-      roundStats += ((float)round);
+      roundStats += round;
       if (UE_harq_process->decodeResult)
-        effRate += ((float)TBS) / round;
+        effRate += ((double)TBS) / round;
     } // noise trials
 
-    roundStats /= ((float)n_trials);
+    roundStats /= n_trials;
 
     for (int r = 0; r < num_rounds; r++) {
       blerStats[r] = (double)n_errors[r] / round_trials[r];
@@ -1316,7 +1314,7 @@ printf("%d\n", slot);
     printf("), Channel BER (%e", berStats[0]);
     for (int r = 1; r < num_rounds; r++)
       printf(",%e", berStats[r]);
-    printf(") Avg round %.2f, Eff Rate %.4f bits/slot, Eff Throughput %.2f, TBS %u bits/slot\n", roundStats, effRate, effRate / TBS * 100, TBS);
+    printf(") Avg round %.2f, Eff Rate %.4f bits/slot, Eff Throughput %.2f, TBS %u bits/slot\n", roundStats, effRate, effRate / (8 * rel15->TBSize[0]) * 100, 8 * rel15->TBSize[0]);
     printf("*****************************************\n");
     printf("\n");
     // writing to csv file
@@ -1324,7 +1322,7 @@ printf("%d\n", slot);
       fprintf(csv_file,"%f,%d/%d,",SNR,n_false_positive,n_trials);
       for (int r = 0; r < num_rounds; r++)
         fprintf(csv_file,"%d/%d,%u/%u,%f,%e,",n_errors[r], round_trials[r], errors_scrambling[r], available_bits * round_trials[r],blerStats[r],berStats[r]);
-      fprintf(csv_file,"%.2f,%.4f,%.2f,%u\n", roundStats, effRate, effRate / TBS * 100, TBS);
+      fprintf(csv_file,"%.2f,%.4f,%.2f,%u\n", roundStats, effRate, effRate / (8 * rel15->TBSize[0]) * 100, 8 * rel15->TBSize[0]);
     }
     if (print_perf==1) {
       printf("\ngNB TX function statistics (per %d us slot, NPRB %d, mcs %d, C %d, block %d)\n",
@@ -1332,7 +1330,7 @@ printf("%d\n", slot);
              g_rbSize,
              g_mcsIndex,
              UE->dl_harq_processes[0][slot].C,
-             msgDataTx->dlsch[0][0].harq_process.pdsch_pdu.pdsch_pdu_rel15.TBSize[0] << 3);
+             8 * rel15->TBSize[0]);
       printDistribution(&gNB->phy_proc_tx,table_tx,"PHY proc tx");
       printStatIndent2(&gNB->dci_generation_stats, "DCI encoding time");
       printStatIndent2(&gNB->dlsch_encoding_stats,"DLSCH encoding time");
@@ -1341,7 +1339,7 @@ printf("%d\n", slot);
       printStatIndent3(&gNB->tprep,"DLSCH LDPC input preparation time");
       printStatIndent3(&gNB->tparity,"DLSCH LDPC parity generation time");
       printStatIndent3(&gNB->toutput,"DLSCH LDPC output generation time");
-      printStatIndent3(&gNB->dlsch_rate_matching_stats,"DLSCH Rate Mataching time");
+      printStatIndent3(&gNB->dlsch_rate_matching_stats,"DLSCH Rate Matching time");
       printStatIndent3(&gNB->dlsch_interleaving_stats,  "DLSCH Interleaving time");
       printStatIndent2(&gNB->dlsch_modulation_stats,"DLSCH modulation time");
       printStatIndent2(&gNB->dlsch_scrambling_stats, "DLSCH scrambling time");
@@ -1406,7 +1404,7 @@ printf("%d\n", slot);
       break;
     }
 
-    if (effRate > (eff_tp_check*TBS)) {
+    if (effRate >= (eff_tp_check * 8 * rel15->TBSize[0])) {
       printf("PDSCH test OK\n");
       ret = 0;
       break;

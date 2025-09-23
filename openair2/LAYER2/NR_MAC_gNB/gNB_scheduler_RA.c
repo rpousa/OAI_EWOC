@@ -368,6 +368,8 @@ void schedule_nr_prach(module_id_t module_idP, frame_t frameP, slot_t slotP)
     // prach is scheduled according to configuration index and tables 6.3.3.2.2 to 6.3.3.2.4
     uint16_t RA_sfn_index = -1;
     frequency_range_t freq_range = get_freq_range_from_arfcn(scc->downlinkConfigCommon->frequencyInfoDL->absoluteFrequencyPointA);
+    const int mu_pusch = scc->uplinkConfigCommon->frequencyInfoUL->scs_SpecificCarrierList.list.array[0]->subcarrierSpacing;
+    const int16_t n_ra_rb = get_N_RA_RB(cfg->prach_config.prach_sub_c_spacing.value, mu_pusch);
     if (get_nr_prach_sched_from_info(cc->prach_info, config_index, frameP, slotP, mu, freq_range, &RA_sfn_index, cc->frame_type)) {
       uint16_t format0 = cc->prach_info.format & 0xff; // first column of format from table
       uint16_t format1 = (cc->prach_info.format >> 8) & 0xff; // second column of format from table
@@ -505,8 +507,8 @@ void schedule_nr_prach(module_id_t module_idP, frame_t frameP, slot_t slotP)
             }
           }
           prach_pdu->num_prach_ocas = num_td_occ;
-          prach_pdu->beamforming.num_prgs = 0;
-          prach_pdu->beamforming.prg_size = 0;
+          prach_pdu->beamforming.num_prgs = 1;
+          prach_pdu->beamforming.prg_size = n_ra_rb;
           prach_pdu->beamforming.dig_bf_interface = num_td_occ;
           prach_pdu->beamforming.prgs_list[0].dig_bf_interface_list[num_td_occ - 1].beam_idx = beam_index;
 
@@ -527,8 +529,6 @@ void schedule_nr_prach(module_id_t module_idP, frame_t frameP, slot_t slotP)
       }
 
       // block resources in vrb_map_UL
-      const int mu_pusch = scc->uplinkConfigCommon->frequencyInfoUL->scs_SpecificCarrierList.list.array[0]->subcarrierSpacing;
-      const int16_t n_ra_rb = get_N_RA_RB(cfg->prach_config.prach_sub_c_spacing.value, mu_pusch);
       // mark PRBs as occupied for current and future slots if prach extends beyond current slot
       int total_prach_slots;
       uint32_t N_dur = cc->prach_info.N_dur;
@@ -856,6 +856,8 @@ static void nr_generate_Msg3_retransmission(module_id_t module_idP,
     }
     if (rbStart > (sched_pusch.bwp_info.bwpSize - ra->msg3_nb_rb)) {
       // cannot find free vrb_map for msg3 retransmission in this slot
+      reset_beam_status(&nr_mac->beam_info, sched_frame, sched_slot, UE->UE_beam_index, slots_frame, beam_ul.new_beam);
+      reset_beam_status(&nr_mac->beam_info, frame, slot, UE->UE_beam_index, slots_frame, beam_dci.new_beam);
       return;
     }
 
@@ -915,10 +917,11 @@ static void nr_generate_Msg3_retransmission(module_id_t module_idP,
                                  ss,
                                  coreset,
                                  &UE->UE_sched_ctrl.sched_pdcch,
-                                 true,
                                  0);
     if (CCEIndex < 0) {
       LOG_E(NR_MAC, "UE %04x cannot find free CCE!\n", UE->rnti);
+      reset_beam_status(&nr_mac->beam_info, sched_frame, sched_slot, UE->UE_beam_index, slots_frame, beam_ul.new_beam);
+      reset_beam_status(&nr_mac->beam_info, frame, slot, UE->UE_beam_index, slots_frame, beam_dci.new_beam);
       return;
     }
 
@@ -1013,18 +1016,10 @@ static bool get_feasible_msg3_tda(const NR_ServingCellConfigCommon_t *scc,
     if (fs->frame_type == TDD && !is_ul_slot(temp_slot, fs))
       continue;
 
-    const tdd_bitmap_t *tdd_slot_bitmap = fs->period_cfg.tdd_slot_bitmap;
     int s = get_slot_idx_in_period(temp_slot, fs);
-    // check if enough symbols in case of mixed slot
+    const tdd_bitmap_t *bm = &fs->period_cfg.tdd_slot_bitmap[s];
     bool is_mixed = is_mixed_slot(s, fs);
-    // if the mixed slot has not enough symbols, skip
-    if (is_mixed && tdd_slot_bitmap[s].num_ul_symbols < 3)
-      continue;
-
-    uint16_t slot_mask =
-        is_mixed ? SL_to_bitmap(NR_NUMBER_OF_SYMBOLS_PER_SLOT - tdd_slot_bitmap[s].num_ul_symbols,
-                                tdd_slot_bitmap[s].num_ul_symbols)
-                 : 0x3fff;
+    uint16_t slot_mask = is_mixed ? SL_to_bitmap(NR_NUMBER_OF_SYMBOLS_PER_SLOT - bm->num_ul_symbols, bm->num_ul_symbols) : 0x3fff;
     long startSymbolAndLength = tda_list->list.array[i]->startSymbolAndLength;
     int start, nr;
     SLIV2SL(startSymbolAndLength, &start, &nr);
@@ -1515,7 +1510,7 @@ static void nr_generate_Msg2(module_id_t module_idP,
   }
 
   uint8_t aggregation_level;
-  int CCEIndex = get_cce_index(nr_mac, CC_id, slotP, 0, &aggregation_level, beam.idx, ss, coreset, &sched_ctrl->sched_pdcch, true, 0);
+  int CCEIndex = get_cce_index(nr_mac, CC_id, slotP, 0, &aggregation_level, beam.idx, ss, coreset, &sched_ctrl->sched_pdcch, 0);
 
   if (CCEIndex < 0) {
     LOG_W(NR_MAC, "UE %04x: %d.%d cannot find free CCE for Msg2!\n", UE->rnti, frameP, slotP);
@@ -1715,7 +1710,6 @@ static void nr_generate_Msg4_MsgB(module_id_t module_idP,
                                  ss,
                                  coreset,
                                  &sched_ctrl->sched_pdcch,
-                                 true,
                                  0);
 
     if (CCEIndex < 0) {
@@ -1743,8 +1737,10 @@ static void nr_generate_Msg4_MsgB(module_id_t module_idP,
                                              TYPE_TC_RNTI_,
                                              coreset->controlResourceSetId,
                                              false);
-    if (!msg4_tda.valid_tda)
+    if (!msg4_tda.valid_tda) {
+      reset_beam_status(&nr_mac->beam_info, frameP, slotP, UE->UE_beam_index, n_slots_frame, beam.new_beam);
       return;
+    }
 
     NR_pdsch_dmrs_t dmrs_info = get_dl_dmrs_params(scc, dl_bwp, &msg4_tda, 1);
     bwp_info_t bwp_info = get_pdsch_bwp_start_size(nr_mac, UE);

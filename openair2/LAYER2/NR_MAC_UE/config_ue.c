@@ -289,8 +289,17 @@ static void calculate_ue_sat_ta(const position_t *position_params,
   // calculate SAT velocity towards UE
   double velocity = (vel_sat.X * dir_sat_ue.X + vel_sat.Y * dir_sat_ue.Y + vel_sat.Z * dir_sat_ue.Z) / distance;
 
+  // calculate SAT acceleration towards UE
+  const double radius_2 = pos_sat.X * pos_sat.X + pos_sat.Y * pos_sat.Y + pos_sat.Z * pos_sat.Z;
+  const double vel_sat_2 = vel_sat.X * vel_sat.X + vel_sat.Y * vel_sat.Y + vel_sat.Z * vel_sat.Z;
+  const double acceleration =
+      -(pos_sat.X * dir_sat_ue.X + pos_sat.Y * dir_sat_ue.Y + pos_sat.Z * dir_sat_ue.Z) * vel_sat_2 / (radius_2 * distance);
+
+  LOG_D(NR_MAC, "Satellite velocity towards UE: %f m/s, acceleration towards UE: %f m/s²\n", velocity, acceleration);
+
   ntn_ta->N_UE_TA_adj = (2 * distance / SPEED_OF_LIGHT) * 1e3; // in ms
   ntn_ta->N_UE_TA_drift = (2 * -velocity / SPEED_OF_LIGHT) * 1e6; // in µs/s
+  ntn_ta->N_UE_TA_drift_variant = (2 * acceleration / SPEED_OF_LIGHT) * 1e6; // in µs/s²
 }
 
 // populate ntn_ta structure from mac
@@ -321,10 +330,12 @@ static void configure_ntn_ta(module_id_t module_id,
       LOG_W(NR_MAC, "NR UE currently supports only ephemerisInfo_r17 of type positionVelocity_r17\n");
       ntn_ta->N_UE_TA_adj = 0;
       ntn_ta->N_UE_TA_drift = 0;
+      ntn_ta->N_UE_TA_drift_variant = 0;
     }
   } else { // Need R - Release if not present
     ntn_ta->N_UE_TA_adj = 0;
     ntn_ta->N_UE_TA_drift = 0;
+    ntn_ta->N_UE_TA_drift_variant = 0;
   }
 
   // handle cellSpecificKoffset_r17
@@ -356,7 +367,8 @@ static void configure_ntn_ta(module_id_t module_id,
   ntn_ta->ntn_params_changed = true;
 
   LOG_D(NR_MAC,
-        "SIB19 Rxd. Epoch SFN: %d, Epoch Subframe: %d, k_offset: %ldms, N_Common_Ta: %fms, drift: %fµs/s, variant %fµs/s², N_UE_TA: %fms, drift: %fµs/s\n",
+        "SIB19 Rxd. Epoch SFN: %d, Epoch Subframe: %d, k_offset: %ldms, N_Common_Ta: %fms, drift: %fµs/s, variant %fµs/s², "
+        "N_UE_TA: %fms, drift: %fµs/s, variant %fµs/s²\n",
         ntn_ta->epoch_sfn,
         ntn_ta->epoch_subframe,
         ntn_ta->cell_specific_k_offset,
@@ -364,7 +376,8 @@ static void configure_ntn_ta(module_id_t module_id,
         ntn_ta->N_common_ta_drift,
         ntn_ta->N_common_ta_drift_variant,
         ntn_ta->N_UE_TA_adj,
-        ntn_ta->N_UE_TA_drift);
+        ntn_ta->N_UE_TA_drift,
+        ntn_ta->N_UE_TA_drift_variant);
 }
 
 static void config_common_ue(NR_UE_MAC_INST_t *mac, NR_ServingCellConfigCommon_t *scc, int cc_idP)
@@ -548,7 +561,7 @@ static void config_common_ue(NR_UE_MAC_INST_t *mac, NR_ServingCellConfigCommon_t
   }
 }
 
-void release_common_ss_cset(NR_BWP_PDCCH_t *pdcch)
+static void release_common_ss_cset(NR_BWP_PDCCH_t *pdcch)
 {
   pdcch->otherSI_SS_id = -1;
   pdcch->ra_SS_id = -1;
@@ -687,8 +700,11 @@ static void modlist_coreset(NR_ControlResourceSet_t *source, NR_ControlResourceS
           if (id == *target->tci_StatesPDCCH_ToAddList->list.array[j])
             break;
         }
-        if (j == target->tci_StatesPDCCH_ToAddList->list.count)
-          ASN_SEQUENCE_ADD(&target->tci_StatesPDCCH_ToAddList->list, source->tci_StatesPDCCH_ToAddList->list.array[i]);
+        if (j == target->tci_StatesPDCCH_ToAddList->list.count) {
+          long *tci_id = calloc(1, sizeof(*tci_id));
+          *tci_id = id;
+          ASN_SEQUENCE_ADD(&target->tci_StatesPDCCH_ToAddList->list, tci_id);
+        }
       }
     } else
       UPDATE_IE(target->tci_StatesPDCCH_ToAddList,
@@ -2664,8 +2680,8 @@ static void configure_BWPs(NR_UE_MAC_INST_t *mac, NR_ServingCellConfig_t *scd)
   if (scd->downlinkBWP_ToReleaseList) {
     for (int i = 0; i < scd->downlinkBWP_ToReleaseList->list.count; i++) {
       for (int j = 0; j < mac->dl_BWPs.count; j++) {
-        if (*scd->downlinkBWP_ToReleaseList->list.array[i] == mac->dl_BWPs.array[i]->bwp_id)
-          release_dl_BWP(mac, i);
+        if (*scd->downlinkBWP_ToReleaseList->list.array[i] == mac->dl_BWPs.array[j]->bwp_id)
+          release_dl_BWP(mac, j);
       }
     }
   }
@@ -2686,8 +2702,8 @@ static void configure_BWPs(NR_UE_MAC_INST_t *mac, NR_ServingCellConfig_t *scd)
     if (scd->uplinkConfig->uplinkBWP_ToReleaseList) {
       for (int i = 0; i < scd->uplinkConfig->uplinkBWP_ToReleaseList->list.count; i++) {
         for (int j = 0; j < mac->ul_BWPs.count; j++) {
-          if (*scd->uplinkConfig->uplinkBWP_ToReleaseList->list.array[i] == mac->ul_BWPs.array[i]->bwp_id)
-            release_ul_BWP(mac, i);
+          if (*scd->uplinkConfig->uplinkBWP_ToReleaseList->list.array[i] == mac->ul_BWPs.array[j]->bwp_id)
+            release_ul_BWP(mac, j);
         }
       }
     }

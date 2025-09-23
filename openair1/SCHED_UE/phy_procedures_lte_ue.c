@@ -4320,13 +4320,6 @@ int phy_procedures_slot_parallelization_UE_RX(PHY_VARS_UE *ue,
     LOG_D(PHY,"[UE %d] Calculating bitrate Frame %d: total_TBS = %d, total_TBS_last = %d, bitrate %f kbits\n",
           ue->Mod_id,frame_rx,ue->total_TBS[eNB_id],
           ue->total_TBS_last[eNB_id],(float) ue->bitrate[eNB_id]/1000.0);
-#if UE_AUTOTEST_TRACE
-
-    if ((frame_rx % 100 == 0)) {
-      LOG_I(PHY,"[UE  %d] AUTOTEST Metric : UE_DLSCH_BITRATE = %5.2f kbps (frame = %d) \n", ue->Mod_id, (float) ue->bitrate[eNB_id]/1000.0, frame_rx);
-    }
-
-#endif
   }
 
   VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME(VCD_SIGNAL_DUMPER_FUNCTIONS_PHY_PROCEDURES_UE_RX, VCD_FUNCTION_OUT);

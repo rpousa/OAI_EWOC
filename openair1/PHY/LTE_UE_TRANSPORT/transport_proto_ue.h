@@ -1649,8 +1649,7 @@ void compute_prach_seq(uint16_t rootSequenceIndex,
                        uint8_t zeroCorrelationZoneConfig,
                        uint8_t highSpeedFlag,
                        frame_type_t frame_type,
-                       uint32_t X_u[64][839]);
-
+                       c16_t X_u[64][839]);
 
 void init_prach_tables(int N_ZC);
 

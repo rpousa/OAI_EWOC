@@ -36,8 +36,8 @@ sudo cp /etc/apt/sources.list "/etc/apt/sources.list.`date`.backup"
 sudo sed -i -E "s/(deb)\ (http:.+)/\1\ [arch=amd64]\ \2/" /etc/apt/sources.list
 
 sudo apt update
-sudo apt install -y gcc-11-aarch64-linux-gnu \
-                    g++-11-aarch64-linux-gnu
+sudo apt install -y gcc-aarch64-linux-gnu \
+                    g++-aarch64-linux-gnu
 
 sudo apt-get install -y \
     libblas-dev:arm64 \
@@ -97,5 +97,5 @@ ninja params_libconfig coding rfsimulator
 # Further information
 
 You can do the above steps using docker, see dockerfiles
-`docker/Dockerfile.base.ubuntu22.cross-arm64` and
-`docker/Dockerfile.build.ubuntu22.cross-arm64` for more information.
+`docker/Dockerfile.base.ubuntu.cross-arm64` and
+`docker/Dockerfile.build.ubuntu.cross-arm64` for more information.

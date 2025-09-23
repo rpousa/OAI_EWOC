@@ -181,7 +181,7 @@ static buffer_t *allocCirBuf(rfsimulator_state_t *bridge, int sock)
   ptr->conn_sock = sock;
   ptr->lastReceivedTS = 0;
   ptr->headerMode = true;
-  ptr->trashingPacket = false;
+  ptr->trashingPacket = true;
   ptr->transferPtr = (char *)&ptr->th;
   ptr->remainToTransfer = sizeof(samplesBlockHeader_t);
   int sendbuff = SEND_BUFF_SIZE;
@@ -733,6 +733,10 @@ static int rfsimulator_write_internal(rfsimulator_state_t *t,
         timestamp,
         timestamp + nsamps,
         signal_energy(samplesVoid[0], nsamps));
+
+  /* trace only first antenna */
+  T(T_USRP_TX_ANT0, T_INT(timestamp), T_BUFFER(samplesVoid[0], sampleToByte(nsamps, 1)));
+
   return nsamps;
 }
 
@@ -976,7 +980,7 @@ static int rfsimulator_read(openair0_device *device, openair0_timestamp *ptimest
   for (int sock = 0; sock < MAX_FD_RFSIMU; sock++) {
     buffer_t *ptr = &t->buf[sock];
 
-    if (ptr->circularBuf) {
+    if (ptr->circularBuf && !ptr->trashingPacket) {
       bool reGenerateChannel = false;
 
       // fixme: when do we regenerate
@@ -987,15 +991,15 @@ static int rfsimulator_read(openair0_device *device, openair0_timestamp *ptimest
       if (t->poll_telnetcmdq)
         t->poll_telnetcmdq(t->telnetcmd_qid, t);
 
-      for (int a = 0; a < nbAnt; a++) { // loop over number of Rx antennas
+      for (int a_rx = 0; a_rx < nbAnt; a_rx++) { // loop over number of Rx antennas
         if (ptr->channel_model != NULL) { // apply a channel model
           if (num_chanmod_channels == 0) {
             memset(temp_array, 0, sizeof(temp_array));
           }
           num_chanmod_channels++;
           rxAddInput(ptr->circularBuf,
-                     temp_array[a],
-                     a,
+                     temp_array[a_rx],
+                     a_rx,
                      ptr->channel_model,
                      nsamps,
                      t->nextRxTstamp,
@@ -1004,7 +1008,7 @@ static int rfsimulator_read(openair0_device *device, openair0_timestamp *ptimest
         } else { // no channel modeling
           int nbAnt_tx = ptr->th.nbAnt; // number of Tx antennas
           int firstIndex = (CirSize + t->nextRxTstamp - t->chan_offset) % CirSize;
-          sample_t *out = (sample_t *)samplesVoid[a];
+          sample_t *out = (sample_t *)samplesVoid[a_rx];
           if (nbAnt_tx == 1 && t->nb_cnx == 1) { // optimized for 1 Tx and 1 UE
             sample_t *firstSample = (sample_t *)&(ptr->circularBuf[firstIndex]);
             if (firstIndex + nsamps > CirSize) {
@@ -1016,16 +1020,16 @@ static int rfsimulator_read(openair0_device *device, openair0_timestamp *ptimest
             }
           } else {
             // SIMD (with simde) optimization might be added here later
-            double H_awgn_mimo[4][4] = {{1.0, 0.2, 0.1, 0.05}, // rx 0
-                                        {0.2, 1.0, 0.2, 0.1}, // rx 1
-                                        {0.1, 0.2, 1.0, 0.2}, // rx 2
-                                        {0.05, 0.1, 0.2, 1.0}}; // rx 3
-
-            LOG_D(HW, "nbAnt_tx %d\n", nbAnt_tx);
+            LOG_D(HW, "nbAnt_tx %d nbAnt %d\n", nbAnt_tx, nbAnt);
+            double H_awgn_mimo_coeff[nbAnt_tx];
+            for (int a_tx = 0; a_tx < nbAnt_tx; a_tx++) {
+              uint32_t ant_diff = abs(a_tx - a_rx);
+              H_awgn_mimo_coeff[a_tx] = ant_diff ? (0.2 / ant_diff) : 1.0;
+            }
             for (int i = 0; i < nsamps; i++) { // loop over nsamps
               for (int a_tx = 0; a_tx < nbAnt_tx; a_tx++) { // sum up signals from nbAnt_tx antennas
-                out[i].r += (short)(ptr->circularBuf[((firstIndex + i) * nbAnt_tx + a_tx) % CirSize].r * H_awgn_mimo[a][a_tx]);
-                out[i].i += (short)(ptr->circularBuf[((firstIndex + i) * nbAnt_tx + a_tx) % CirSize].i * H_awgn_mimo[a][a_tx]);
+                out[i].r += (short)(ptr->circularBuf[((firstIndex + i) * nbAnt_tx + a_tx) % CirSize].r * H_awgn_mimo_coeff[a_tx]);
+                out[i].i += (short)(ptr->circularBuf[((firstIndex + i) * nbAnt_tx + a_tx) % CirSize].i * H_awgn_mimo_coeff[a_tx]);
               } // end for a_tx
             } // end for i (number of samps)
           } // end of 1 tx antenna optimization
@@ -1073,6 +1077,10 @@ static int rfsimulator_read(openair0_device *device, openair0_timestamp *ptimest
         *ptimestamp,
         t->nextRxTstamp,
         signal_energy(samplesVoid[0], nsamps));
+
+  /* trace only first antenna */
+  T(T_USRP_RX_ANT0, T_INT(t->nextRxTstamp), T_BUFFER(samplesVoid[0], sampleToByte(nsamps, 1)));
+
   return nsamps;
 }
 

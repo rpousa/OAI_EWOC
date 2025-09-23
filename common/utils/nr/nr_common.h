@@ -88,6 +88,8 @@ static inline const char *rnti_types(nr_rnti_type_t rr)
 #define NR_NUMBER_OF_SYMBOLS_PER_SLOT_EXTENDED_CP 12
 #define NR_MAX_NB_LAYERS 4 // 8
 
+#define BOUNDED_EVAL(a, b, c) (min(c, max(a, b)))
+
 // Since the IQ samples are represented by SQ15 R+I (see https://en.wikipedia.org/wiki/Q_(number_format)) we need to compensate when
 // calcualting signal energy. Instead of shifting each sample right by 15, we can normalize the result in dB scale once its
 // calcualted. Signal energy is calculated using RMS^2, where each sample is squared before taking the average of the sum, therefore
@@ -174,6 +176,17 @@ typedef struct {
   uint32_t target;
   uint32_t step;
 } NR_timer_t;
+
+typedef struct val_init {
+  int val;
+  bool init;
+} val_init_t;
+
+typedef struct meas_s {
+  uint16_t Nid_cell;
+  val_init_t ss_rsrp_dBm;
+  val_init_t csi_rsrp_dBm;
+} meas_t;
 
 /**
  * @brief To start a timer
@@ -320,15 +333,15 @@ frequency_range_t get_freq_range_from_arfcn(uint32_t arfcn);
 frequency_range_t get_freq_range_from_band(uint16_t band);
 
 /**
- * @brief Calculates the scaling factor for the ratio of PUSCH EPRE to DMRS EPRE.
+ * @brief Calculates the scaling factor for the ratio of PUSCH/PDSCH EPRE to DMRS EPRE.
  *
  * @param num_cdm_groups_no_data The number of CDM groups without data.
- * @param dmrs_type The DMRS type.
- * @return The calculated beta scaling factor for the ratio of PUSCH EPRE to DMRS EPRE.
+ * @param is_type2 true if calculating for DMRS configuration type 2
+ * @return The calculated beta scaling factor for the ratio of PUSCH/PDSCH EPRE to DMRS EPRE.
  *
- * @note The values are derived from TS 38.214 Table 6.2.2-1.
+ * @note The values are the same for PUSCH and PDSCH and are derived from TS 38.214 Table 6.2.2-1./4.1-1
  */
-float get_beta_dmrs_pusch(int num_cdm_groups_no_data, pusch_dmrs_type_t dmrs_type);
+float get_beta_dmrs(int num_cdm_groups_no_data, bool is_type2);
 
 #define CEILIDIV(a,b) ((a+b-1)/b)
 #define ROUNDIDIV(a,b) (((a<<1)+b)/(b<<1))

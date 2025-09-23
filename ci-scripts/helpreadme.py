@@ -52,10 +52,7 @@ def GitSrvHelp(repository,branch,commit,mergeallow,targetbranch):
 	print('  --ranAllowMerge=[Allow Merge Request (with target branch) (true or false)]    -- ' + mergeallow)
 	print('  --ranTargetBranch=[Target Branch in case of a Merge Request]                  -- ' + targetbranch)
 
-def eNBSrvHelp(ipaddr, username, password, sourcepath):
-	print('  --eNBIPAddress=[eNB\'s IP Address]                       -- ' + ipaddr)
-	print('  --eNBUserName=[eNB\'s Login User Name]                   -- ' + username)
-	print('  --eNBPassword=[eNB\'s Login Password]                    -- ' + password)
+def eNBSrvHelp(sourcepath):
 	print('  --eNBSourceCodePath=[eNB\'s Source Code Path]            -- ' + sourcepath)
 
 def XmlHelp(filename):

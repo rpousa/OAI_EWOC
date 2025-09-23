@@ -11,7 +11,7 @@ fi
 
 if ! docker images | grep -q "ran-base"; then
     echo "ran-base:latest image not found. Building the image..."
-    docker build -f ../../docker/Dockerfile.base.ubuntu22 -t ran-base:latest ../../
+    docker build -f ../../docker/Dockerfile.base.ubuntu -t ran-base:latest ../../
 else
     echo "ran-base:latest image found."
 fi

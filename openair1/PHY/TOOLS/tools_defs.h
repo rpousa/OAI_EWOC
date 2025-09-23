@@ -828,6 +828,47 @@ static inline void rotate_cpx_vector(const c16_t *const x, const c16_t *const al
     // log2_amp - increase the output amplitude by a factor 2^log2_amp (default is 0)
     //            WARNING: log2_amp>0 can cause overflow!!
 
+
+#ifdef __aarch64__
+    if (output_shift == 15) { // allows specific NEON instruction
+
+      int16x8_t ar = (int16x8_t)vdupq_n_s16(alpha->r);
+      int16x8_t ai = (int16x8_t)vdupq_n_s16(alpha->i);
+      int16x8_t *y_128 = (int16x8_t *)y;
+      int16x8_t *x_128 = (int16x8_t *)x;
+      for (uint32_t i = 0; i < (N >> 2); i++) {
+        // Split interleaved -> separate real/imag
+        int16x8_t br = vuzp1q_s16(x_128[i], x_128[i]);
+        int16x8_t bi = vuzp2q_s16(x_128[i], x_128[i]);
+
+        // Start with the two “diagonal” products using high-half, doubling, sat:
+        // x = round( (2*ar*br) / 2^16 ), y = round( (2*ar*bi) / 2^16 )
+        int16x8_t real = vqdmulhq_s16(ar, br);
+        int16x8_t imag = vqdmulhq_s16(ar, bi);
+
+        // real -= round( (2*ai*bi) / 2^16 )
+        real = vqrdmlshq_s16(real, ai, bi);
+
+        // imag += round( (2*ai*br) / 2^16 )
+        imag = vqrdmlahq_s16(imag, ai, br);
+
+        // Re-interleave [real, imag]
+        int16x8x2_t z = vzipq_s16(real, imag);
+
+        y_128[i] = z.val[0];
+        /*
+        printf("y : (%d %d) (%d %d) (%d %d) (%d %d)\n",
+                 vgetq_lane_s16(y_128[i],0),
+                 vgetq_lane_s16(y_128[i],1),
+                 vgetq_lane_s16(y_128[i],2),
+                 vgetq_lane_s16(y_128[i],3),
+                 vgetq_lane_s16(y_128[i],4),
+                 vgetq_lane_s16(y_128[i],5),
+                 vgetq_lane_s16(y_128[i],6),
+                 vgetq_lane_s16(y_128[i],7));*/
+      }
+    } else {
+#endif
     uint32_t i; // loop counter
 
     simd_q15_t *y_128, alpha_128;
@@ -859,7 +900,10 @@ static inline void rotate_cpx_vector(const c16_t *const x, const c16_t *const al
               shift));
       // print_ints("y_128[0]=", &y_128[0]);
     }
-#if defined(__x86__) || defined(__x86_64__)
+#ifdef __aarch64__
+    }
+#endif //__aarch64__
+#if defined(__x86_64__) || defined(__i386__)
   }
 #endif
 }

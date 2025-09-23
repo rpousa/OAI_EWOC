@@ -37,9 +37,9 @@ Now pull images.
 
 ```bash
 $ docker pull mysql:8.0
-$ docker pull oaisoftwarealliance/oai-amf:v2.1.9
-$ docker pull oaisoftwarealliance/oai-smf:v2.1.9
-$ docker pull oaisoftwarealliance/oai-upf:v2.1.9
+$ docker pull oaisoftwarealliance/oai-amf:v2.1.10
+$ docker pull oaisoftwarealliance/oai-smf:v2.1.10
+$ docker pull oaisoftwarealliance/oai-upf:v2.1.10
 $ docker pull oaisoftwarealliance/trf-gen-cn5g:focal
 
 $ docker pull oaisoftwarealliance/oai-gnb:develop
@@ -52,7 +52,7 @@ $ docker logout
 
 **CAUTION: 2023/01/27 with the release `v1.5.0` of the `CN5G`, the previous version was not compatible any-more.**
 
-**This new version is working only with the `v2.1.9` of the `CN5G`.**
+**This new version is working only with `v2.1.9` or later of the `CN5G`.**
 
 # 2. Deploy containers #
 

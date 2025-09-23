@@ -117,7 +117,8 @@ int nr_pdsch_dmrs_rx(const PHY_VARS_NR_UE *ue,
                      unsigned short p,
                      unsigned char lp,
                      unsigned short nb_pdsch_rb,
-                     uint8_t config_type)
+                     uint8_t config_type,
+                     int16_t dmrs_scaling)
 {
   typedef int array_of_w[2];
   const array_of_w *wf = (config_type == NFAPI_NR_DMRS_TYPE1) ? wf1 : wf2;
@@ -131,6 +132,7 @@ int nr_pdsch_dmrs_rx(const PHY_VARS_NR_UE *ue,
       for (int i = 0; i < nb_pdsch_rb * ((config_type == NFAPI_NR_DMRS_TYPE1) ? 6 : 4); i++) {
         int w = (wf[p - 1000][i & 1]) * (wt[p - 1000][lp]);
         output[i] = get_modulated(nr_gold_pdsch, i, w == 1);
+        output[i] = c16mulRealShift(output[i], dmrs_scaling, 14);
 
 #ifdef DEBUG_PDSCH
         printf("nr_pdsch_dmrs_rx dmrs config type %d port %d nb_pdsch_rb %d\n", config_type, p, nb_pdsch_rb);

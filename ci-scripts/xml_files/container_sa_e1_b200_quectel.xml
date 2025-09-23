@@ -55,7 +55,7 @@
   <testCase id="333333">
     <class>Pull_Local_Registry</class>
     <desc>Pull Images from Local Registry</desc>
-    <svr_id>0</svr_id>
+    <node>ofqot</node>
     <images>oai-gnb oai-nr-cuup</images>
   </testCase>
 
@@ -84,31 +84,27 @@
   <testCase id="800813">
     <class>Create_Workspace</class>
     <desc>Create new Workspace</desc>
-    <eNB_instance>0</eNB_instance>
-    <eNB_serverId>0</eNB_serverId>
+    <node>ofqot</node>
   </testCase>
   <testCase id="330101">
     <class>Deploy_Object</class>
     <desc>Deploy gNB-CU-CP in a container</desc>
+    <node>ofqot</node>
     <yaml_path>ci-scripts/yaml_files/sa_e1_b200_gnb</yaml_path>
-    <eNB_instance>0</eNB_instance>
-    <eNB_serverId>0</eNB_serverId>
     <services>gnb_cucp</services>
   </testCase>
   <testCase id="330102">
     <class>Deploy_Object</class>
     <desc>Deploy gNB-CU-UP in a container</desc>
+    <node>ofqot</node>
     <yaml_path>ci-scripts/yaml_files/sa_e1_b200_gnb</yaml_path>
-    <eNB_instance>0</eNB_instance>
-    <eNB_serverId>0</eNB_serverId>
     <services>gnb_cuup</services>
   </testCase>
   <testCase id="330103">
     <class>Deploy_Object</class>
     <desc>Deploy gNB-DU (TDD/Band78/40MHz/B200) in a container</desc>
+    <node>ofqot</node>
     <yaml_path>ci-scripts/yaml_files/sa_e1_b200_gnb</yaml_path>
-    <eNB_instance>0</eNB_instance>
-    <eNB_serverId>0</eNB_serverId>
     <services>gnb_du_tdd</services>
   </testCase>
 
@@ -215,9 +211,8 @@
     <class>Undeploy_Object</class>
     <always_exec>true</always_exec>
     <desc>Undeploy CUCP/CU-UP/DU</desc>
+    <node>ofqot</node>
     <yaml_path>ci-scripts/yaml_files/sa_e1_b200_gnb</yaml_path>
-    <eNB_instance>0</eNB_instance>
-    <eNB_serverId>0</eNB_serverId>
     <d_retx_th>10,100,100,100</d_retx_th>
     <u_retx_th>10,100,100,100</u_retx_th>
   </testCase>
@@ -226,7 +221,7 @@
     <class>Clean_Test_Server_Images</class>
     <always_exec>true</always_exec>
     <desc>Clean Test Images on Test Server</desc>
-    <svr_id>0</svr_id>
+    <node>ofqot</node>
     <images>oai-gnb oai-nr-cuup</images>
   </testCase>
 

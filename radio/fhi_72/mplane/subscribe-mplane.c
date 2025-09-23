@@ -54,6 +54,37 @@ static void notif_clb_v1(struct nc_session *session, const struct nc_notif *noti
   recv_notif_v1(notif, answer);
 }
 #elif MPLANE_V2
+static void log_v2_pm_info(const char *ru_ip_add, struct lyd_node_inner *stats)
+{
+  struct lyd_node *child, *field = NULL;
+  size_t len = 0;
+  char *meas_list[8], *count_list[8] = {};
+
+  LY_LIST_FOR(stats->child, child) {
+    // const char *type = child->schema->name; // e.g. "rx-window-stats", "tx-stats"
+    struct lyd_node_inner *stats_inner = (struct lyd_node_inner *)child;
+    LY_LIST_FOR(stats_inner->child, field) {
+      if (strcmp(field->schema->name, "measurement-object") == 0) {
+        meas_list[len] = (char *)lyd_get_value(field);
+      } else if (strcmp(field->schema->name, "count") == 0) {
+        count_list[len] = (char *)lyd_get_value(field);
+        len++;
+      }
+    }
+  }
+
+  MP_LOG_I("[PM: \"%s\"][%s %7s][%s %7s][%s %7s][%s %7s][%s %7s][%s %7s][%s %7s][%s %7s]\n",
+		  ru_ip_add,
+		  meas_list[0], count_list[0],
+		  meas_list[1], count_list[1],
+		  meas_list[2], count_list[2],
+		  meas_list[3], count_list[3],
+		  meas_list[4], count_list[4],
+		  meas_list[5], count_list[5],
+		  meas_list[6], count_list[6],
+		  meas_list[7], count_list[7]);
+}
+
 static void recv_notif_v2(struct lyd_node_inner *op, ru_notif_t *answer)
 {
   const char *notif = op->schema->name;
@@ -92,9 +123,14 @@ static void notif_clb_v2(struct nc_session *session, const struct lyd_node *envp
   char *subs_reply = NULL;
   lyd_print_mem(&subs_reply, op, output_format, LYD_PRINT_WITHSIBLINGS);
   const char *ru_ip_add = nc_session_get_host(session);
+  struct lyd_node_inner *op_inner = (struct lyd_node_inner *)op;
+  if (strcmp(op_inner->schema->name, "measurement-result-stats") == 0) {
+    log_v2_pm_info(ru_ip_add, op_inner);
+    return;
+  }
   MP_LOG_I("Received notification from RU \"%s\" at (%s)\n%s\n", ru_ip_add, ((struct lyd_node_opaq *)lyd_child(envp))->value, subs_reply);
 
-  recv_notif_v2((struct lyd_node_inner *)op, answer);
+  recv_notif_v2(op_inner, answer);
 }
 #endif
 

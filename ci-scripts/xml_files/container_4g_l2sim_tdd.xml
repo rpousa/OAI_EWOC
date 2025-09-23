@@ -44,49 +44,44 @@
         <testCase id="111111">
                 <class>Pull_Local_Registry</class>
                 <desc>Pull Images from Local Registry</desc>
-                <svr_id>0</svr_id>
+                <node>obelix</node>
                 <images>oai-enb oai-lte-ue</images>
         </testCase>
         <testCase id="800813">
                 <class>Create_Workspace</class>
                 <desc>Create new Workspace</desc>
-                <eNB_instance>0</eNB_instance>
-                <eNB_serverId>0</eNB_serverId>
+                <node>localhost</node>
         </testCase>
         <testCase id="000000">
                 <class>Deploy_Object</class>
                 <desc>Deploy Cassandra Database</desc>
+                <node>localhost</node>
                 <yaml_path>ci-scripts/yaml_files/4g_l2sim_fdd</yaml_path>
                 <services>cassandra db_init</services>
-                <eNB_instance>0</eNB_instance>
-                <eNB_serverId>0</eNB_serverId>
         </testCase>
 
         <testCase id="000001">
                 <class>Deploy_Object</class>
                 <desc>Deploy OAI 4G CoreNetwork</desc>
+                <node>localhost</node>
                 <yaml_path>ci-scripts/yaml_files/4g_l2sim_fdd</yaml_path>
                 <services>oai_hss redis magma_mme oai_spgwc oai_spgwu trf_gen</services>
-                <eNB_instance>0</eNB_instance>
-                <eNB_serverId>0</eNB_serverId>
         </testCase>
 
         <testCase id="000002">
                 <class>Deploy_Object</class>
                 <desc>Deploy OAI 4G eNB L2 sim</desc>
+                <node>localhost</node>
                 <yaml_path>ci-scripts/yaml_files/4g_l2sim_fdd</yaml_path>
                 <services>oai_enb</services>
-                <eNB_instance>0</eNB_instance>
-                <eNB_serverId>0</eNB_serverId>
         </testCase>
 
         <testCase id="000003">
                 <class>Deploy_Object</class>
                 <desc>Deploy OAI L2 sim 4G LTE-UE 1 and Proxy</desc>
+                <node>localhost</node>
                 <yaml_path>ci-scripts/yaml_files/4g_l2sim_fdd</yaml_path>
                 <services>proxy oai_ue1</services>
-                <eNB_instance>0</eNB_instance>
-                <eNB_serverId>0</eNB_serverId>
         </testCase>
 
         <testCase id="000004">
@@ -145,6 +140,7 @@
         <testCase id="100001">
                 <class>Undeploy_Object</class>
                 <always_exec>true</always_exec>
+                <node>localhost</node>
                 <desc>Undeploy all OAI 4G stack</desc>
                 <yaml_path>ci-scripts/yaml_files/4g_l2sim_fdd</yaml_path>
         </testCase>
@@ -153,7 +149,7 @@
                 <class>Clean_Test_Server_Images</class>
                 <always_exec>true</always_exec>
                 <desc>Clean Test Images on Test Server</desc>
-                <svr_id>0</svr_id>
+                <node>obelix</node>
                 <images>oai-enb oai-lte-ue</images>
         </testCase>
 

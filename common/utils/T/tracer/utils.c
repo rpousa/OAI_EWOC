@@ -159,7 +159,7 @@ int socket_send(int socket, void *buffer, int size) {
 
 int get_connection(char *addr, int port) {
   int s, t;
-  printf("waiting for connection on %s:%d\n", addr, port);
+  fprintf(stderr, "waiting for connection on %s:%d\n", addr, port);
   s = create_listen_socket(addr, port);
   t = socket_accept(s);
 
@@ -169,7 +169,7 @@ int get_connection(char *addr, int port) {
   }
 
   close(s);
-  printf("connected\n");
+  fprintf(stderr, "connected\n");
   return t;
 }
 
@@ -216,12 +216,12 @@ int try_connect_to(char *addr, int port) {
 
 int connect_to(char *addr, int port) {
   int s;
-  printf("connecting to %s:%d\n", addr, port);
+  fprintf(stderr, "connecting to %s:%d\n", addr, port);
 again:
   s = try_connect_to(addr, port);
 
   if (s == -1) {
-    printf("trying again in 1s\n");
+    fprintf(stderr, "trying again in 1s\n");
     sleep(1);
     goto again;
   }

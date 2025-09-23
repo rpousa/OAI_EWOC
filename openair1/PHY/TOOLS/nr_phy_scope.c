@@ -614,7 +614,7 @@ static void puschThroughtput (OAIgraph_t *graph, scopeData_t *p, int nb_UEs) {
 STATICFORXSCOPE OAI_phy_scope_t *create_phy_scope_gnb(void)
 {
   FL_OBJECT *obj;
-  OAI_phy_scope_t *fdui = calloc(( sizeof *fdui ),1);
+  OAI_phy_scope_t *fdui = calloc_or_fail((sizeof *fdui), 1);
   // Define form
   fdui->phy_scope = fl_bgn_form( FL_NO_BOX, 800, 800 );
   fl_set_form_dblbuffer(fdui->phy_scope, 1);
@@ -739,7 +739,7 @@ static void scopeUpdaterGnb(enum PlotTypeGnbIf plotType, int numElt)
 
 STATICFORXSCOPE void gNBinitScope(scopeParms_t *p)
 {
-  AssertFatal(p->gNB->scopeData = calloc(sizeof(scopeData_t), 1), "");
+  AssertFatal(p->gNB->scopeData = calloc_or_fail(sizeof(scopeData_t), 1), "");
   scopeData_t *scope=(scopeData_t *) p->gNB->scopeData;
   scope->argc=p->argc;
   scope->argv=p->argv;
@@ -998,7 +998,7 @@ static void uePdschThroughput  (scopeGraphData_t **data, OAIgraph_t *graph, PHY_
 STATICFORXSCOPE OAI_phy_scope_t *create_phy_scope_nrue(int ID)
 {
   FL_OBJECT *obj;
-  OAI_phy_scope_t *fdui = calloc(( sizeof *fdui ),1);
+  OAI_phy_scope_t *fdui = calloc_or_fail((sizeof *fdui), 1);
   // Define form
   fdui->phy_scope = fl_bgn_form( FL_NO_BOX, 800, 900 );
   fl_set_form_dblbuffer(fdui->phy_scope, 1);
@@ -1139,7 +1139,7 @@ static void *nrUEscopeThread(void *arg) {
 
 STATICFORXSCOPE void nrUEinitScope(PHY_VARS_NR_UE *ue)
 {
-  AssertFatal(ue->scopeData = calloc(sizeof(scopeData_t), 1), "");
+  AssertFatal(ue->scopeData = calloc_or_fail(sizeof(scopeData_t), 1), "");
   scopeData_t *scope=(scopeData_t *) ue->scopeData;
   scope->copyData = copyData;
 #ifndef WEBSRVSCOPE
@@ -1185,7 +1185,7 @@ static void reset_stats_gNB(FL_OBJECT *button,
 }
 static FD_stats_form *create_form_stats_form(int ID) {
   FL_OBJECT *obj;
-  FD_stats_form *fdui = calloc(( sizeof *fdui ),1);
+  FD_stats_form *fdui = calloc_or_fail(( sizeof *fdui ),1);
   fdui->vdata = fdui->cdata = NULL;
   fdui->ldata = 0;
   fdui->stats_form = fl_bgn_form( FL_NO_BOX, 1115, 900 );

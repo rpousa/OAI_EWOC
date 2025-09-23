@@ -96,7 +96,6 @@ extern "C"
 
 #define CONFIG_HLP_NUMEROLOGY    "adding numerology for 5G\n"
 #define CONFIG_HLP_BAND          "band index\n"
-#define CONFIG_HLP_EMULATE_RF    "Emulated RF enabled(disable by defult)\n"
 #define CONFIG_HLP_PARALLEL_CMD  "three config for level of parallelism 'PARALLEL_SINGLE_THREAD', 'PARALLEL_RU_L1_SPLIT', or 'PARALLEL_RU_L1_TRX_SPLIT'\n"
 #define CONFIG_HLP_WORKER_CMD    "two option for worker 'WORKER_DISABLE' or 'WORKER_ENABLE'\n"
 #define CONFIG_HLP_USRP_THREAD   "having extra thead for usrp tx\n"
@@ -128,7 +127,6 @@ extern "C"
 #define CHAIN_OFFSET        softmodem_params.chain_offset
 #define NUMEROLOGY          softmodem_params.numerology
 #define BAND                softmodem_params.band
-#define EMULATE_RF          softmodem_params.emulate_rf
 #define CLOCK_SOURCE        softmodem_params.clock_source
 #define TIMING_SOURCE       softmodem_params.timing_source
 #define TUNE_OFFSET         softmodem_params.tune_offset
@@ -164,7 +162,6 @@ extern int usrp_tx_thread;
   {"q" ,                    CONFIG_HLP_STMON,         PARAMFLAG_BOOL, .iptr=&cpu_meas_enabled,                     .defintval=0,             TYPE_INT,    0},  \
   {"numerology" ,           CONFIG_HLP_NUMEROLOGY,    0,              .iptr=&NUMEROLOGY,                      .defintval=1,             TYPE_INT,    0},  \
   {"band" ,                 CONFIG_HLP_BAND,          0,              .iptr=&BAND,                            .defintval=78,            TYPE_INT,    0},  \
-  {"emulate-rf" ,           CONFIG_HLP_EMULATE_RF,    PARAMFLAG_BOOL, .iptr=&EMULATE_RF,                      .defintval=0,             TYPE_INT,    0},  \
   {"parallel-config",       CONFIG_HLP_PARALLEL_CMD,  0,              .strptr=&parallel_config,               .defstrval=NULL,          TYPE_STRING, 0},  \
   {"worker-config",         CONFIG_HLP_WORKER_CMD,    0,              .strptr=&worker_config,                 .defstrval=NULL,          TYPE_STRING, 0},  \
   {"noS1",                  CONFIG_HLP_NOS1,          PARAMFLAG_BOOL, .uptr=&noS1,                            .defintval=0,             TYPE_UINT,   0},  \
@@ -192,7 +189,6 @@ extern int usrp_tx_thread;
 
 // clang-format off
 #define CMDLINE_PARAMS_CHECK_DESC {         \
-    { .s5 = { NULL } },                     \
     { .s5 = { NULL } },                     \
     { .s5 = { NULL } },                     \
     { .s5 = { NULL } },                     \
@@ -320,7 +316,6 @@ typedef struct {
   int            phy_test;
   int            do_ra;
   uint8_t        sl_mode;
-  int            emulate_rf;
   int            chain_offset;
   int            numerology;
   int            band;

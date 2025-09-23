@@ -640,7 +640,7 @@ typedef struct {
   /// mbsfn reference symbols
   uint32_t         lte_gold_mbsfn_khz_1dot25_table[10][150];
 
-  uint32_t X_u[64][839];
+  c16_t X_u[64][839];
 
   uint32_t high_speed_flag;
   uint32_t perfect_ce;

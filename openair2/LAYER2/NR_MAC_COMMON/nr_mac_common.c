@@ -1972,49 +1972,6 @@ static const int32_t table_6_4_1_1_3_4_pusch_dmrs_positions_l[12][8] = {
     {0, 3072, -1, -1, 3, 1539, -1, -1}, // 14              // (DMRS l' position)
 };
 
-// TS 38.212
-static const uint16_t table_7_3_1_1_2_2_1layer[28] = {0,  1,  2,  3,  12, 13, 14, 15, 16, 17, 18, 19, 32, 33,
-                                                      34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47};
-static const uint16_t table_7_3_1_1_2_2_2layers[22] = {4,  5,  6,  7,  8,  9,  20, 21, 22, 23, 24,
-                                                       25, 26, 27, 48, 49, 50, 51, 52, 53, 54, 55};
-static const uint16_t table_7_3_1_1_2_2_3layers[7] = {10, 28, 29, 56, 57, 58, 59};
-static const uint16_t table_7_3_1_1_2_2_4layers[5] = {11, 30, 31, 60, 61};
-static const uint16_t table_7_3_1_1_2_2B_1layer[16] = {0, 1, 2, 3, 15, 16, 17, 18, 19, 20, 21, 22, 23, 12, 24, 25};
-static const uint16_t table_7_3_1_1_2_2B_2layers[14] = {4, 5, 6, 7, 8, 9, 13, 26, 27, 28, 29, 30, 31, 32};
-static const uint16_t table_7_3_1_1_2_2B_3layers[3] = {10, 14, 33};
-static const uint16_t table_7_3_1_1_2_2B_4layers[3] = {11, 34, 35};
-static const uint16_t table_7_3_1_1_2_2A_1layer[16] = {0, 1, 2, 3, 12, 13, 14, 15, 16, 17, 18, 19, 20, 10, 21, 22};
-static const uint16_t table_7_3_1_1_2_2A_2layers[14] = {4, 5, 6, 7, 8, 9, 11, 23, 24, 25, 26, 27, 28, 29};
-static const uint16_t table_7_3_1_1_2_3A[16] = {0, 1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 4, 14, 15};
-static const uint16_t table_7_3_1_1_2_4_1layer_fullyAndPartialAndNonCoherent[6] = {0, 1, 3, 4, 5, 6};
-static const uint16_t table_7_3_1_1_2_4_2layers_fullyAndPartialAndNonCoherent[3] = {2, 7, 8};
-static const uint16_t table_7_3_1_1_2_4A_1layer[3] = {0, 1, 3};
-static const uint16_t table_7_3_1_1_2_28[3][15] = {
-    {0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 1, 2, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-};
-static const uint16_t table_7_3_1_1_2_29[3][15] = {
-    {0, 1, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 1, 2, 0, 3, 4, 0, 5, 0, 0, 0, 0, 0, 0, 0},
-    {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 0, 0, 0, 0},
-};
-static const uint16_t table_7_3_1_1_2_30[3][15] = {
-    {0, 1, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 1, 2, 0, 3, 4, 0, 5, 0, 0, 6, 0, 0, 0, 0},
-    {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 0},
-};
-static const uint16_t table_7_3_1_1_2_31[3][15] = {
-    {0, 1, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 1, 2, 0, 3, 4, 0, 5, 0, 0, 6, 0, 0, 0, 0},
-    {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14},
-};
-static const uint16_t table_7_3_1_1_2_32[3][15] = {
-    {0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 1, 2, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-};
-
 // the following tables contain 10 times the value reported in 214 (in line with SCF specification and to avoid fractional values)
 //Table 5.1.3.1-1 of 38.214
 static const uint16_t Table_51311[32][2] = {{2, 1200}, {2, 1570}, {2, 1930}, {2, 2510}, {2, 3080}, {2, 3790}, {2, 4490}, {2, 5260},
@@ -2503,61 +2460,61 @@ static int binomial(int n, int k)
   return c;
 }
 
+int srs_codebook_nb_res(NR_SRS_Config_t *srs_config)
+{
+  int count = 0;
+  for (int i = 0; i < srs_config->srs_ResourceSetToAddModList->list.count; i++) {
+    if (srs_config->srs_ResourceSetToAddModList->list.array[i]->usage == NR_SRS_ResourceSet__usage_codebook)
+      count++;
+  }
+  return count;
+}
+
+int srs_non_codebook_nb_res(NR_SRS_Config_t *srs_config)
+{
+  int count = 0;
+  for (int i = 0; i < srs_config->srs_ResourceSetToAddModList->list.count; i++) {
+    if (srs_config->srs_ResourceSetToAddModList->list.array[i]->usage == NR_SRS_ResourceSet__usage_nonCodebook)
+      count++;
+  }
+  return count;
+}
+
+int srs_binomial_sum(int count, int Lmax)
+{
+  int lmin = 0;
+  int lsum = 0;
+  lmin = count < Lmax ? count : Lmax;
+  for (int k = 1; k <= lmin; k++)
+    lsum += binomial(count, k);
+  return lsum;
+}
+
 // #define DEBUG_SRS_RESOURCE_IND
-uint8_t compute_srs_resource_indicator(long *maxMIMO_Layers,
-                                       NR_PUSCH_Config_t *pusch_Config,
-                                       NR_SRS_Config_t *srs_config,
-                                       nr_srs_feedback_t *srs_feedback,
-                                       uint32_t *val)
+
+static uint8_t compute_srs_resource_indicator_size(long *maxMIMO_Layers, NR_PUSCH_Config_t *pusch_Config, NR_SRS_Config_t *srs_config)
 {
   uint8_t nbits = 0;
-
-  // SRI occupies a number of bits which is dependent upon the uplink transmission scheme, and it is used to determine
-  // the antenna ports and uplink transmission beam to use for PUSCH transmission. In the case of codebook based
-  // transmission, the SRI is used to select between SRS Resources belonging to different antenna panels
-  // (kind of directional antenna). There can be up to 2 SRS Resources (2 antenna panels). In the case of non-codebook
-  // based transmission, the SRI is used to select one or more SRS Resources from a set of N_SRS resources. The number
-  // of SRS Resources selected corresponds to the number of layers (rank) to be transmitted.
-  if (val) {
-    *val = 0;
-  }
-
   if (srs_config && pusch_Config && pusch_Config->txConfig != NULL) {
-
     if (*pusch_Config->txConfig == NR_PUSCH_Config__txConfig_codebook) {
-
 #ifdef DEBUG_SRS_RESOURCE_IND
       LOG_I(NR_MAC, "*pusch_Config->txConfig = NR_PUSCH_Config__txConfig_codebook\n");
 #endif
-
       // TS 38.212 - Section 7.3.1.1.2: SRS resource indicator has ceil(log2(N_SRS)) bits according to
       // Tables 7.3.1.1.2-32, 7.3.1.1.2-32A and 7.3.1.1.2-32B if the higher layer parameter txConfig = codebook,
       // where N_SRS is the number of configured SRS resources in the SRS resource set configured by higher layer
       // parameter srs-ResourceSetToAddModList, and associated with the higher layer parameter usage of value codeBook.
-      int count = 0;
-      for (int i=0; i<srs_config->srs_ResourceSetToAddModList->list.count; i++) {
-        if (srs_config->srs_ResourceSetToAddModList->list.array[i]->usage == NR_SRS_ResourceSet__usage_codebook) {
-          count++;
-        }
-      }
-      if (count>0) {
+      int count = srs_codebook_nb_res(srs_config);
+      if (count > 0)
         nbits = ceil(log2(count));
-        if (val && srs_feedback && count > 1) {
-          *val = table_7_3_1_1_2_32[count-2][srs_feedback->sri];
-        }
-      }
-
 #ifdef DEBUG_SRS_RESOURCE_IND
       LOG_I(NR_MAC, "srs_config->srs_ResourceSetToAddModList->list.count = %i\n", srs_config->srs_ResourceSetToAddModList->list.count);
       LOG_I(NR_MAC, "count = %i\n", count);
 #endif
-
     } else {
-
 #ifdef DEBUG_SRS_RESOURCE_IND
       LOG_I(NR_MAC, "*pusch_Config->txConfig = NR_PUSCH_Config__txConfig_nonCodebook\n");
 #endif
-
       // TS 38.212 - Section 7.3.1.1.2: SRS resource indicator has ceil(log2(sum(k = 1 until min(Lmax,N_SRS) of binomial(N_SRS,k))))
       // bits according to Tables 7.3.1.1.2-28/29/30/31 if the higher layer parameter txConfig = nonCodebook, where
       // N_SRS is the number of configured SRS resources in the SRS resource set configured by higher layer parameter
@@ -2572,68 +2529,29 @@ uint8_t compute_srs_resource_indicator(long *maxMIMO_Layers,
       if (maxMIMO_Layers != NULL)
         Lmax = *maxMIMO_Layers;
       else
-        AssertFatal(1 == 0, "MIMO on PUSCH not supported, maxMIMO_Layers needs to be set to 1\n");
-      int lmin = 0;
-      int lsum = 0;
-      int count = 0;
-      for (int i = 0; i < srs_config->srs_ResourceSetToAddModList->list.count; i++) {
-        if (srs_config->srs_ResourceSetToAddModList->list.array[i]->usage == NR_SRS_ResourceSet__usage_nonCodebook) {
-          count++;
-        }
-      }
-      lmin = count < Lmax ? count : Lmax;
-      for (int k=1;k<=lmin;k++) {
-        lsum += binomial(count,k);
-      }
-      if (lsum>0) {
+        AssertFatal(false, "MIMO on PUSCH not supported, maxMIMO_Layers needs to be set to 1\n");
+      int count = srs_non_codebook_nb_res(srs_config);
+      int lsum = srs_binomial_sum(count, Lmax);
+      if (lsum > 0)
         nbits = ceil(log2(lsum));
-        if (val && srs_feedback && nbits > 0) {
-          switch(Lmax) {
-            case 1:
-              *val = table_7_3_1_1_2_28[count-2][srs_feedback->sri];
-              break;
-            case 2:
-              *val = table_7_3_1_1_2_29[count-2][srs_feedback->sri];
-              break;
-            case 3:
-              *val = table_7_3_1_1_2_30[count-2][srs_feedback->sri];
-              break;
-            case 4:
-              *val = table_7_3_1_1_2_31[count-2][srs_feedback->sri];
-              break;
-            default:
-              LOG_E(NR_MAC, "%s (%d) - Invalid Lmax %d\n", __FUNCTION__, __LINE__, Lmax);
-          }
-        }
-      }
-
 #ifdef DEBUG_SRS_RESOURCE_IND
       LOG_I(NR_MAC, "srs_config->srs_ResourceSetToAddModList->list.count = %i\n", srs_config->srs_ResourceSetToAddModList->list.count);
       LOG_I(NR_MAC, "count = %i\n", count);
       LOG_I(NR_MAC, "Lmax = %i\n", Lmax);
       LOG_I(NR_MAC, "lsum = %i\n", lsum);
 #endif
-
     }
   }
-
   return nbits;
 }
 
-uint8_t compute_precoding_information(NR_PUSCH_Config_t *pusch_Config,
-                                      NR_SRS_Config_t *srs_config,
-                                      dci_field_t srs_resource_indicator,
-                                      nr_srs_feedback_t *srs_feedback,
-                                      const uint8_t *nrOfLayers,
-                                      int *tpmi,
-                                      uint32_t *val)
+static uint8_t compute_precoding_info_size(NR_PUSCH_Config_t *pusch_Config,
+                                           NR_SRS_Config_t *srs_config,
+                                           dci_field_t srs_resource_indicator)
 {
   // It is only applicable to codebook based transmission. This field occupies 0 bits for non-codebook based
   // transmission. It also occupies 0 bits for codebook based transmission using a single antenna port.
   uint8_t nbits = 0;
-  if (val) {
-    *val = 0;
-  }
 
   uint8_t pusch_antenna_ports = get_pusch_nb_antenna_ports(pusch_Config, srs_config, srs_resource_indicator);
   if (!pusch_Config
@@ -2645,7 +2563,6 @@ uint8_t compute_precoding_information(NR_PUSCH_Config_t *pusch_Config,
   long max_rank = *pusch_Config->maxRank;
   long *ul_FullPowerTransmission = pusch_Config->ext1 ? pusch_Config->ext1->ul_FullPowerTransmission_r16 : NULL;
   long *codebookSubset = pusch_Config->codebookSubset;
-  int ul_tpmi = tpmi ? *tpmi : srs_feedback ? srs_feedback->tpmi : -1;
 
   if (pusch_antenna_ports == 2) {
 
@@ -2658,23 +2575,11 @@ uint8_t compute_precoding_information(NR_PUSCH_Config_t *pusch_Config,
       //   of higher layer parameter codebookSubset;
       if (ul_FullPowerTransmission && *ul_FullPowerTransmission == NR_PUSCH_Config__ext1__ul_FullPowerTransmission_r16_fullpowerMode1) {
         nbits = 2;
-        if (val && srs_feedback) {
-          AssertFatal(ul_tpmi <= 2,"TPMI %d is invalid!\n", ul_tpmi);
-          *val = ul_tpmi;
-        }
       } else {
         if (codebookSubset && *codebookSubset == NR_PUSCH_Config__codebookSubset_nonCoherent) {
           nbits = 1;
-          if (val && srs_feedback) {
-            AssertFatal(ul_tpmi <= 1,"TPMI %d is invalid!\n", ul_tpmi);
-            *val = ul_tpmi;
-          }
         } else {
           nbits = 3;
-          if (val && srs_feedback) {
-            AssertFatal(ul_tpmi <= 5,"TPMI %d is invalid!\n", ul_tpmi);
-            *val = ul_tpmi;
-          }
         }
       }
     } else {
@@ -2685,27 +2590,11 @@ uint8_t compute_precoding_information(NR_PUSCH_Config_t *pusch_Config,
       //   fullpowerMode1, transform precoder is disabled, maxRank=2, and codebookSubset=nonCoherent;
       if (ul_FullPowerTransmission && *ul_FullPowerTransmission == NR_PUSCH_Config__ext1__ul_FullPowerTransmission_r16_fullpowerMode1) {
         nbits = 2;
-        if (val && srs_feedback) {
-          AssertFatal((*nrOfLayers==1 && ul_tpmi <= 2) || (*nrOfLayers==2 && ul_tpmi == 0),
-                      "TPMI %d is invalid!\n", ul_tpmi);
-          *val = *nrOfLayers==1 ? table_7_3_1_1_2_4A_1layer[ul_tpmi] : 2;
-        }
       } else {
         if (codebookSubset && *codebookSubset == NR_PUSCH_Config__codebookSubset_nonCoherent) {
           nbits = 2;
-          if (val && srs_feedback) {
-            AssertFatal((*nrOfLayers==1 && ul_tpmi <= 1) || (*nrOfLayers==2 && ul_tpmi == 0),
-                        "TPMI %d is invalid!\n", ul_tpmi);
-            *val = *nrOfLayers==1 ? ul_tpmi : 2;
-          }
         } else {
           nbits = 4;
-          if (val && srs_feedback) {
-            AssertFatal((*nrOfLayers==1 && ul_tpmi <= 5) || (*nrOfLayers==2 && ul_tpmi <= 2),
-                        "TPMI %d is invalid!\n", ul_tpmi);
-            *val = *nrOfLayers==1 ? table_7_3_1_1_2_4_1layer_fullyAndPartialAndNonCoherent[ul_tpmi] :
-                                    table_7_3_1_1_2_4_2layers_fullyAndPartialAndNonCoherent[ul_tpmi];
-          }
         }
       }
     }
@@ -2722,37 +2611,16 @@ uint8_t compute_precoding_information(NR_PUSCH_Config_t *pusch_Config,
       if (ul_FullPowerTransmission && *ul_FullPowerTransmission == NR_PUSCH_Config__ext1__ul_FullPowerTransmission_r16_fullpowerMode1) {
         if (codebookSubset && *codebookSubset == NR_PUSCH_Config__codebookSubset_nonCoherent) {
           nbits = 3;
-          if (val && srs_feedback) {
-            AssertFatal(ul_tpmi <= 3 || ul_tpmi == 13, "TPMI %d is invalid!\n", ul_tpmi);
-          }
         } else {
           nbits = 4;
-          if (val && srs_feedback) {
-            AssertFatal(ul_tpmi <= 15, "TPMI %d is invalid!\n", ul_tpmi);
-          }
-        }
-        if (val && srs_feedback) {
-          *val = table_7_3_1_1_2_3A[ul_tpmi];
         }
       } else {
         if (codebookSubset && *codebookSubset == NR_PUSCH_Config__codebookSubset_nonCoherent) {
           nbits = 2;
-          if (val && srs_feedback) {
-            AssertFatal(ul_tpmi <= 3, "TPMI %d is invalid!\n", ul_tpmi);
-          }
         } else if (codebookSubset && *codebookSubset == NR_PUSCH_Config__codebookSubset_partialAndNonCoherent) {
           nbits = 4;
-          if (val && srs_feedback) {
-            AssertFatal(ul_tpmi <= 11, "TPMI %d is invalid!\n", ul_tpmi);
-          }
         } else {
           nbits = 5;
-          if (val && srs_feedback) {
-            AssertFatal(ul_tpmi <= 27, "TPMI %d is invalid!\n", ul_tpmi);
-          }
-        }
-        if (val && srs_feedback) {
-          *val = ul_tpmi;
         }
       }
     } else {
@@ -2769,99 +2637,26 @@ uint8_t compute_precoding_information(NR_PUSCH_Config_t *pusch_Config,
         if (max_rank == 2) {
           if (codebookSubset && *codebookSubset == NR_PUSCH_Config__codebookSubset_nonCoherent) {
             nbits = 4;
-            if (val && srs_feedback) {
-              AssertFatal((*nrOfLayers==1 && (ul_tpmi <= 3 || ul_tpmi==13)) || (*nrOfLayers==2 && ul_tpmi <= 6),
-                          "TPMI %d is invalid!\n", ul_tpmi);
-            }
           } else {
             nbits = 5;
-            if (val && srs_feedback) {
-              AssertFatal((*nrOfLayers==1 && ul_tpmi <= 15) || (*nrOfLayers==2 && ul_tpmi <= 13),
-                          "TPMI %d is invalid!\n", ul_tpmi);
-            }
-          }
-          if (val && srs_feedback) {
-            *val = *nrOfLayers==1 ? table_7_3_1_1_2_2A_1layer[ul_tpmi] : table_7_3_1_1_2_2A_2layers[ul_tpmi];
           }
         } else {
           if (codebookSubset && *codebookSubset == NR_PUSCH_Config__codebookSubset_nonCoherent) {
             nbits = 4;
-            if (val && srs_feedback) {
-              AssertFatal((*nrOfLayers==1 && (ul_tpmi <= 3 || ul_tpmi == 13)) || (*nrOfLayers==2 && ul_tpmi <= 6) ||
-                          (*nrOfLayers==3 && ul_tpmi <= 1) || (*nrOfLayers==4 && ul_tpmi == 0),
-                          "TPMI %d is invalid!\n", ul_tpmi);
-            }
           } else {
             nbits = 6;
-            if (val && srs_feedback) {
-              AssertFatal((*nrOfLayers==1 && ul_tpmi <= 15) || (*nrOfLayers==2 && ul_tpmi <= 13) ||
-                          (*nrOfLayers==3 && ul_tpmi <= 2) || (*nrOfLayers==4 && ul_tpmi <= 2),
-                          "TPMI %d is invalid!\n", ul_tpmi);
-            }
-          }
-          if (val && srs_feedback) {
-            switch (*nrOfLayers) {
-              case 1:
-                *val = table_7_3_1_1_2_2B_1layer[ul_tpmi];
-                break;
-              case 2:
-                *val = table_7_3_1_1_2_2B_2layers[ul_tpmi];
-                break;
-              case 3:
-                *val = table_7_3_1_1_2_2B_3layers[ul_tpmi];
-                break;
-              case 4:
-                *val = table_7_3_1_1_2_2B_4layers[ul_tpmi];
-                break;
-              default:
-                LOG_E(NR_MAC,"Number of layers %d is invalid!\n", *nrOfLayers);
-            }
           }
         }
       } else {
         if (codebookSubset && *codebookSubset == NR_PUSCH_Config__codebookSubset_nonCoherent) {
           nbits = 4;
-          if (val && srs_feedback) {
-            AssertFatal((*nrOfLayers==1 && ul_tpmi <= 3) || (*nrOfLayers==2 && ul_tpmi <= 5) ||
-                        (*nrOfLayers==3 && ul_tpmi == 0) || (*nrOfLayers==4 && ul_tpmi == 0),
-                        "TPMI %d is invalid!\n", ul_tpmi);
-          }
         } else if (codebookSubset && *codebookSubset == NR_PUSCH_Config__codebookSubset_partialAndNonCoherent) {
           nbits = 5;
-          if (val && srs_feedback) {
-            AssertFatal((*nrOfLayers==1 && ul_tpmi <= 11) || (*nrOfLayers==2 && ul_tpmi <= 13) ||
-                        (*nrOfLayers==3 && ul_tpmi <= 2) || (*nrOfLayers==4 && ul_tpmi <= 2),
-                        "TPMI %d is invalid!\n", ul_tpmi);
-          }
         } else {
           nbits = 6;
-          if (val && srs_feedback) {
-            AssertFatal((*nrOfLayers==1 && ul_tpmi <= 28) || (*nrOfLayers==2 && ul_tpmi <= 22) ||
-                        (*nrOfLayers==3 && ul_tpmi <= 7) || (*nrOfLayers==4 && ul_tpmi <= 5),
-                        "TPMI %d is invalid!\n", ul_tpmi);
-          }
-        }
-        if (val && srs_feedback) {
-          switch (*nrOfLayers) {
-            case 1:
-              *val = table_7_3_1_1_2_2_1layer[ul_tpmi];
-              break;
-            case 2:
-              *val = table_7_3_1_1_2_2_2layers[ul_tpmi];
-              break;
-            case 3:
-              *val = table_7_3_1_1_2_2_3layers[ul_tpmi];
-              break;
-            case 4:
-              *val = table_7_3_1_1_2_2_4layers[ul_tpmi];
-              break;
-            default:
-              LOG_E(NR_MAC,"Number of layers %d is invalid!\n", *nrOfLayers);
-          }
         }
       }
     }
-
   }
   return nbits;
 }
@@ -3100,12 +2895,11 @@ uint16_t nr_dci_size(const NR_UE_DL_BWP_t *DL_BWP,
       }
       // SRS resource indicator
       dci_pdu->srs_resource_indicator.nbits =
-          compute_srs_resource_indicator(sc_info->maxMIMO_Layers_PUSCH, pusch_Config, srs_config, NULL, NULL);
+          compute_srs_resource_indicator_size(sc_info->maxMIMO_Layers_PUSCH, pusch_Config, srs_config);
       size += dci_pdu->srs_resource_indicator.nbits;
       LOG_D(NR_MAC, "dci_pdu->srs_resource_indicator.nbits %d\n", dci_pdu->srs_resource_indicator.nbits);
       // Precoding info and number of layers
-      dci_pdu->precoding_information.nbits =
-          compute_precoding_information(pusch_Config, srs_config, dci_pdu->srs_resource_indicator, NULL, NULL, NULL, NULL);
+      dci_pdu->precoding_information.nbits = compute_precoding_info_size(pusch_Config, srs_config, dci_pdu->srs_resource_indicator);
       size += dci_pdu->precoding_information.nbits;
       LOG_D(NR_MAC, "dci_pdu->precoding_informaiton.nbits=%d\n", dci_pdu->precoding_information.nbits);
       // Antenna ports

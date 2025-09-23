@@ -469,7 +469,7 @@ static void deliver_pdu_drb_gnb(void *deliver_pdu_data, ue_id_t ue_id, int rb_id
   if (NODE_IS_CU(node_type)) {
     LOG_D(PDCP, "%s() (drb %d) sending message to gtp size %d\n", __func__, rb_id, size);
     extern instance_t CUuniqInstance;
-    gtpv1uSendDirect(CUuniqInstance, ue_id, rb_id, (uint8_t *)buf, size, false, false);
+    gtpv1uSendDirectWithNRUSeqNum(CUuniqInstance, ue_id, rb_id, (uint8_t *)buf, size);
   } else {
     uint8_t *memblock = malloc16(size);
     memcpy(memblock, buf, size);
@@ -1071,4 +1071,58 @@ int nr_pdcp_get_num_ues(ue_id_t *ue_list, int len)
   nr_pdcp_manager_unlock(nr_pdcp_ue_manager);
   
   return num_ues;
+}
+
+void nr_pdcp_count_update(ue_id_t ue_id,
+                          rb_id_t drb_id,
+                          nr_pdcp_count_t dl_count,
+                          nr_pdcp_count_t ul_count,
+                          int sn_size)
+{
+  nr_pdcp_manager_lock(nr_pdcp_ue_manager);
+
+  nr_pdcp_ue_t *ue = nr_pdcp_manager_get_ue(nr_pdcp_ue_manager, ue_id);
+  if (ue == NULL) {
+    LOG_E(PDCP, "UE %ld not found in PDCP manager\n", ue_id);
+    nr_pdcp_manager_unlock(nr_pdcp_ue_manager);
+    return;
+  }
+
+  nr_pdcp_entity_t *entity = nr_pdcp_get_rb(ue, drb_id, false);
+  if (entity == NULL) {
+    LOG_E(PDCP, "No PDCP entity found for UE %ld DRB %ld\n", ue_id, drb_id);
+    nr_pdcp_manager_unlock(nr_pdcp_ue_manager);
+    return;
+  }
+
+  entity->set_pdcp_count_dl(entity, dl_count, sn_size);
+  entity->set_pdcp_count_ul(entity, ul_count, sn_size);
+
+  nr_pdcp_manager_unlock(nr_pdcp_ue_manager);
+}
+
+/** * @brief Get PDCP COUNT values (PDCP-SN and HFN) for UL and DL from the PDCP entity
+ * @param[in]  ue_id          Unique UE ID
+ * @param[in]  rb_id          Radio Bearer ID
+ * @param[out] ul_count       UL PDCP count (SN, HFN)
+ * @param[out] dl_count       DL PDCP count (SN, HFN)
+ */
+void nr_pdcp_get_drb_count_values(ue_id_t ue_id, rb_id_t rb_id, nr_pdcp_count_t *ul_count, nr_pdcp_count_t *dl_count)
+{
+  nr_pdcp_manager_lock(nr_pdcp_ue_manager);
+
+  nr_pdcp_ue_t *ue = nr_pdcp_manager_get_ue(nr_pdcp_ue_manager, ue_id);
+
+  nr_pdcp_entity_t *entity = nr_pdcp_get_rb(ue, rb_id, false);
+
+  if (!entity) {
+    LOG_E(PDCP, "No entity found (DRB %ld)\n", rb_id);
+    nr_pdcp_manager_unlock(nr_pdcp_ue_manager);
+    return;
+  }
+
+  *dl_count = entity->get_pdcp_count_dl(entity);
+  *ul_count = entity->get_pdcp_count_ul(entity);
+
+  nr_pdcp_manager_unlock(nr_pdcp_ue_manager);
 }

@@ -314,7 +314,8 @@ typedef struct {
   int physicalCellId;
   int absoluteFrequencySSB;
   int subcarrierSpacing;
-  plmn_identity_t plmn;
+  int band;
+  plmn_id_t plmn;
   uint32_t tac;
   bool isIntraFrequencyNeighbour;
 } nr_neighbour_cell_t;

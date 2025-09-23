@@ -25,10 +25,6 @@
 #include "ru-mplane-api.h"
 #include "radio/COMMON/common_lib.h"
 
-bool edit_config_mplane(ru_session_t *ru_session, const char *buffer, const openair0_config_t *oai, const size_t num_rus);
-
-bool validate_config_mplane(ru_session_t *ru_session);
-
-bool commit_config_mplane(ru_session_t *ru_session);
+bool edit_val_commmit_rpc(ru_session_t *ru_session, const char *content);
 
 #endif /* CONFIGURE_MPLANE_H */

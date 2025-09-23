@@ -447,6 +447,13 @@ typedef struct
 
 } nfapi_nr_tdd_table_t;
 
+typedef struct {
+  nfapi_tl_t tl;
+  nfapi_nr_tdd_table_t *value;
+  uint8_t slots_per_frame;
+  uint8_t symbols_per_slot;
+} nfapi_nr_tdd_table_tlv_t;
+
 //table 3-27
 typedef struct 
 {
@@ -700,18 +707,41 @@ typedef enum {
   NFAPI_NR_STOP_MSG_INVALID_STATE
 } nfapi_nr_stop_errors_e;
 
-//3.3.5 PHY Notifications
+// 3.3.5 PHY Notifications
+
+#define SCF_ERROR_LIST                        \
+  X(NFAPI_NR_PHY_API_MSG_OK, 0x0)             \
+  X(NFAPI_NR_PHY_API_MSG_INVALID_STATE, 0x1)  \
+  X(NFAPI_NR_PHY_API_MSG_INVALID_CONFIG, 0x2) \
+  X(NFAPI_NR_PHY_API_SFN_OUT_OF_SYNC, 0X3)    \
+  X(NFAPI_NR_PHY_API_MSG_SLOR_ERR, 0X4)       \
+  X(NFAPI_NR_PHY_API_MSG_BCH_MISSING, 0X5)    \
+  X(NFAPI_NR_PHY_API_MSG_INVALID_SFN, 0X6)    \
+  X(NFAPI_NR_PHY_API_MSG_UL_DCI_ERR, 0X7)     \
+  X(NFAPI_NR_PHY_API_MSG_TX_ERR, 0X8)
+
+#ifdef ENABLE_AERIAL
+#define AERIAL_ERROR_LIST                                \
+  X(AERIAL_ERROR_CODE_FAPI_END, 0x32)                    \
+  X(AERIAL_ERROR_CODE_L1_PROC_OBJ_UNAVAILABLE_ERR, 0x33) \
+  X(AERIAL_ERROR_CODE_MSG_LATE_SLOT_ERR, 0x34)           \
+  X(AERIAL_ERROR_CODE_PARTIAL_SRS_IND_ERR, 0x35)         \
+  X(AERIAL_ERROR_CODE_L1_DL_CPLANE_TX_ERROR, 0x36)       \
+  X(AERIAL_ERROR_CODE_L1_UL_CPLANE_TX_ERROR, 0x37)       \
+  X(AERIAL_ERROR_CODE_L1_DL_GPU_ERROR, 0x38)             \
+  X(AERIAL_ERROR_CODE_L1_DL_CPU_TASK_ERROR, 0x39)        \
+  X(AERIAL_ERROR_CODE_L1_UL_CPU_TASK_ERROR, 0x3A)        \
+  X(AERIAL_ERROR_CODE_L1_P1_EXIT_ERROR, 0x3B)            \
+  X(AERIAL_ERROR_CODE_L1_P2_EXIT_ERROR, 0x3C)            \
+  X(AERIAL_ERROR_CODE_L1_DL_CH_ERROR, 0x3D)              \
+  X(AERIAL_ERROR_CODE_L1_UL_CH_ERROR, 0x3E)
+#else
+#define AERIAL_ERROR_LIST
+#endif
 
 #define NFAPI_PHY_ERROR_LIST \
-X(NFAPI_NR_PHY_API_MSG_OK              ,0x0)\
-X(NFAPI_NR_PHY_API_MSG_INVALID_STATE   ,0x1)\
-X(NFAPI_NR_PHY_API_MSG_INVALID_CONFIG  ,0x2)\
-X(NFAPI_NR_PHY_API_SFN_OUT_OF_SYNC     ,0X3)\
-X(NFAPI_NR_PHY_API_MSG_SLOR_ERR        ,0X4)\
-X(NFAPI_NR_PHY_API_MSG_BCH_MISSING     ,0X5)\
-X(NFAPI_NR_PHY_API_MSG_INVALID_SFN     ,0X6)\
-X(NFAPI_NR_PHY_API_MSG_UL_DCI_ERR      ,0X7)\
-X(NFAPI_NR_PHY_API_MSG_TX_ERR          ,0X8)
+  SCF_ERROR_LIST             \
+  AERIAL_ERROR_LIST
 
 typedef enum {
 #define X(name, value) name = value,
@@ -743,31 +773,31 @@ typedef struct {
 
 // 3.4.2
 
-//for pdcch_pdu:
+typedef struct {
+  // Index of the digital beam weight vector pre-stored at cell configuration.
+  // The vector maps this input port to output TXRUs. Value: 0->65535
+  uint16_t beam_idx;
+} nfapi_nr_dig_bf_interface_t;
 
-typedef struct
-{
-  uint16_t beam_idx;//Index of the digital beam weight vector pre-stored at cell configuration. The vector maps this input port to output TXRUs. Value: 0->65535
-
-}nfapi_nr_dig_bf_interface_t;
-
-typedef struct
-{
-  uint16_t pm_idx;//Index to precoding matrix (PM) pre-stored at cell configuration. Note: If precoding is not used this parameter should be set to 0. Value: 0->65535.
-  nfapi_nr_dig_bf_interface_t dig_bf_interface_list[NFAPI_MAX_NUM_BG_IF];//max dig_bf_interfaces
-
-}nfapi_nr_tx_precoding_and_beamforming_number_of_prgs_t;
+typedef struct {
+  // Index to precoding matrix (PM) pre-stored at cell configuration.
+  // Note: If precoding is not used this parameter should be set to 0. Value: 0->65535.
+  uint16_t pm_idx;
+  nfapi_nr_dig_bf_interface_t dig_bf_interface_list[NFAPI_MAX_NUM_BG_IF]; // max dig_bf_interfaces
+} nfapi_nr_tx_precoding_and_beamforming_number_of_prgs_t;
 
 //table 3-43
-typedef struct 
-{
-  uint16_t num_prgs;//Number of PRGs spanning this allocation. Value : 1->275 
-  uint16_t prg_size;//Size in RBs of a precoding resource block group (PRG) – to which same precoding and digital beamforming gets applied. Value: 1->275
-  //watchout: dig_bf_interfaces here, in table 3-53 it's dig_bf_interface
-  uint8_t  dig_bf_interfaces;//Number of STD ant ports (parallel streams) feeding into the digBF Value: 0->255
-  nfapi_nr_tx_precoding_and_beamforming_number_of_prgs_t prgs_list[NFAPI_MAX_NUM_PRGS];//max prg_size
-
-}nfapi_nr_tx_precoding_and_beamforming_t;
+typedef struct {
+  // Number of PRGs spanning this allocation. Value : 1->275
+  uint16_t num_prgs;
+  // Size in RBs of a precoding resource block group (PRG) to which same precoding and digital beamforming gets applied.
+  // Value: 1->275
+  uint16_t prg_size;
+  // watchout: dig_bf_interfaces here, in table 3-53 it's dig_bf_interface
+  uint8_t  dig_bf_interfaces;
+  // Number of STD ant ports (parallel streams) feeding into the digBF Value: 0->255
+  nfapi_nr_tx_precoding_and_beamforming_number_of_prgs_t prgs_list[NFAPI_MAX_NUM_PRGS]; // max prg_size
+} nfapi_nr_tx_precoding_and_beamforming_t;
 
 
 //table 3-37 

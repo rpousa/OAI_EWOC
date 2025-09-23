@@ -1021,7 +1021,6 @@ INPUT                  = \
 @CMAKE_CURRENT_SOURCE_DIR@/../openair3/S1AP/s1ap_eNB_ue_context.h \
 @CMAKE_CURRENT_SOURCE_DIR@/../openair3/S1AP/s1ap_eNB_management_procedures.h \
 @CMAKE_CURRENT_SOURCE_DIR@/../openair3/S1AP/s1ap_eNB_context_management_procedures.c \
-@CMAKE_CURRENT_SOURCE_DIR@/../openair3/S1AP/s1ap_common.c \
 @CMAKE_CURRENT_SOURCE_DIR@/../openair3/S1AP/s1ap_eNB_decoder.h \
 @CMAKE_CURRENT_SOURCE_DIR@/../openair3/S1AP/s1ap_eNB_management_procedures.c \
 @CMAKE_CURRENT_SOURCE_DIR@/../openair3/S1AP/s1ap_eNB_handlers.h \

@@ -141,7 +141,7 @@
   {CONFIG_STRING_MACRLC_LOCAL_N_ADDRESS_F1U,         NULL,                     0, .strptr=NULL, .defstrval=NULL,            TYPE_STRING,  0}, \
   {CONFIG_STRING_MACRLC_TRANSPORT_S_SHM_PREFIX,      NULL,                     0, .strptr=NULL, .defstrval="nvipc",         TYPE_STRING,  0}, \
   {CONFIG_STRING_MACRLC_TRANSPORT_S_POLL_CORE,       NULL,                     0, .i8ptr=NULL,  .defintval=-1,              TYPE_INT8,    0}, \
-  {CONFIG_STRING_MACRLC_ANALOG_BEAMFORMING,          HLP_MACRLC_AB,            PARAMFLAG_BOOL, .u8ptr=NULL, .defintval=0,   TYPE_UINT8,   0}, \
+  {CONFIG_STRING_MACRLC_ANALOG_BEAMFORMING,          HLP_MACRLC_AB,            0, .u8ptr=NULL,  .defintval=0,               TYPE_UINT8,   0}, \
   {CONFIG_STRING_MACRLC_BEAM_DURATION,               HLP_MACRLC_BEAM_DURATION, 0, .u8ptr=NULL,  .defintval=1,               TYPE_UINT8,   0}, \
   {CONFIG_STRING_MACRLC_BEAMS_PERIOD,                HLP_MACRLC_BEAMS_PERIOD,  0, .u8ptr=NULL,  .defintval=1,               TYPE_UINT8,   0}, \
   {CONFIG_STRING_MACRLC_BEAM_WEIGHTS_LIST,           NULL,                     0, .iptr=NULL,   .defintarrayval=0,          TYPE_INTARRAY,0}, \

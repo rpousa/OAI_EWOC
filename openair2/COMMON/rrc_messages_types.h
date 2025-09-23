@@ -105,12 +105,6 @@
 
 #define NAS_OAI_TUN_NSA(mSGpTR)         (mSGpTR)->ittiMsg.nas_oai_tun_nsa
 #define NAS_PDU_SESSION_REQ(mSGpTR) (mSGpTR)->ittiMsg.nas_pdu_session_req
-#define NR_MAC_RRC_CONFIG_RESET(mSGpTR) (mSGpTR)->ittiMsg.nr_mac_rrc_config_reset
-#define NR_MAC_RRC_CONFIG_CG(mSGpTR) (mSGpTR)->ittiMsg.nr_mac_rrc_config_cg
-#define NR_MAC_RRC_RESUME_RB(mSGpTR) (mSGpTR)->ittiMsg.nr_mac_rrc_resume_rb
-#define NR_MAC_RRC_CONFIG_MIB(mSGpTR) (mSGpTR)->ittiMsg.nr_mac_rrc_config_mib
-#define NR_MAC_RRC_CONFIG_SIB1(mSGpTR) (mSGpTR)->ittiMsg.nr_mac_rrc_config_sib1
-#define NR_MAC_RRC_CONFIG_OTHER_SIB(mSGpTR) (mSGpTR)->ittiMsg.nr_mac_rrc_config_other_sib
 
 #define NR_RRC_RLC_MAXRTX(mSGpTR) (mSGpTR)->ittiMsg.nr_rlc_maxrtx_indication
 
@@ -496,5 +490,26 @@ typedef struct {
   NR_SIB19_r17_t *sib19;
   bool can_start_ra;
 } nr_mac_rrc_config_other_sib_t;
+
+enum payload_type {
+  NR_MAC_RRC_CONFIG_RESET,
+  NR_MAC_RRC_CONFIG_CG,
+  NR_MAC_RRC_CONFIG_MIB,
+  NR_MAC_RRC_CONFIG_SIB1,
+  NR_MAC_RRC_CONFIG_OTHER_SIB,
+  NR_MAC_RRC_RESUME_RB
+};
+
+typedef struct {
+  enum payload_type payload_type;
+  union {
+    nr_mac_rrc_config_reset_t config_reset;
+    nr_mac_rrc_config_cg_t config_cg;
+    nr_mac_rrc_config_mib_t config_mib;
+    nr_mac_rrc_config_sib1_t config_sib1;
+    nr_mac_rrc_config_other_sib_t config_other_sib;
+    nr_mac_rrc_resume_rb_t resume_rb;
+  } payload;
+} nr_mac_rrc_message_t;
 
 #endif /* RRC_MESSAGES_TYPES_H_ */

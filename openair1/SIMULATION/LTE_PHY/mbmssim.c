@@ -89,8 +89,6 @@ int n_rx_dropped = 0; /*!< \brief initial max process time for rx */
 
 THREAD_STRUCT thread_struct;
 
-int emulate_rf = 0;
-
 void handler(int sig) {
   void *array[10];
   size_t size;

@@ -20,7 +20,6 @@ class TestDeploymentMethods(unittest.TestCase):
 		self.html = cls_oai_html.HTMLManagement()
 		self.html.testCaseId = "000000"
 		self.cont = cls_containerize.Containerize()
-		self.cont.eNBIPAddress = 'localhost'
 		self.cont.eNBSourceCodePath = os.getcwd()
 
 	def test_pull_clean_local_reg(self):
@@ -32,21 +31,21 @@ class TestDeploymentMethods(unittest.TestCase):
 			ret = cmd.run(f"ping -c1 -w1 {registry}")
 			if ret.returncode != 0: # could not ping once -> skip test
 				self.skipTest(f"test_pull_clean_local_reg: could not reach {registry} (run inside sboai)")
-		svr_id = '0'
+		node = 'localhost'
 		images = ["oai-gnb"]
 		tag = "develop"
-		pull = self.cont.Pull_Image_from_Registry(self.html, svr_id, images, tag=tag)
-		clean = self.cont.Clean_Test_Server_Images(self.html, svr_id, images, tag=tag)
+		pull = self.cont.Pull_Image_from_Registry(self.html, node, images, tag=tag)
+		clean = self.cont.Clean_Test_Server_Images(self.html, node, images, tag=tag)
 		self.assertTrue(pull)
 		self.assertTrue(clean)
 
 	def test_pull_clean_docker_hub(self):
-		svr_id = '0'
+		node = 'localhost'
 		r = "docker.io"
 		images = ["hello-world"]
 		tag = "latest"
-		pull = self.cont.Pull_Image_from_Registry(self.html, svr_id, images, tag=tag, registry=r, username=None, password=None)
-		clean = self.cont.Clean_Test_Server_Images(self.html, svr_id, images, tag=tag)
+		pull = self.cont.Pull_Image_from_Registry(self.html, node, images, tag=tag, registry=r, username=None, password=None)
+		clean = self.cont.Clean_Test_Server_Images(self.html, node, images, tag=tag)
 		self.assertTrue(pull)
 		self.assertTrue(clean)
 

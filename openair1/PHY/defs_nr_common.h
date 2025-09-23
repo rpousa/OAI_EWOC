@@ -91,6 +91,8 @@
 
 #define PBCH_MAX_RE_PER_SYMBOL (20 * 12)
 
+#define NR_PUCCH_DMRS_RB 4
+
 typedef enum {
   NR_MU_0=0,
   NR_MU_1,

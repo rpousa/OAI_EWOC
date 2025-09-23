@@ -41,6 +41,49 @@
 #define NB_SRS_PERIOD         (18)
 static const uint16_t srs_period[NB_SRS_PERIOD] = { 0, 1, 2, 4, 5, 8, 10, 16, 20, 32, 40, 64, 80, 160, 320, 640, 1280, 2560};
 
+// TS 38.212
+static const uint16_t table_7_3_1_1_2_2_1layer[28] = {0,  1,  2,  3,  12, 13, 14, 15, 16, 17, 18, 19, 32, 33,
+                                                      34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47};
+static const uint16_t table_7_3_1_1_2_2_2layers[22] = {4,  5,  6,  7,  8,  9,  20, 21, 22, 23, 24,
+                                                       25, 26, 27, 48, 49, 50, 51, 52, 53, 54, 55};
+static const uint16_t table_7_3_1_1_2_2_3layers[7] = {10, 28, 29, 56, 57, 58, 59};
+static const uint16_t table_7_3_1_1_2_2_4layers[5] = {11, 30, 31, 60, 61};
+static const uint16_t table_7_3_1_1_2_2B_1layer[16] = {0, 1, 2, 3, 15, 16, 17, 18, 19, 20, 21, 22, 23, 12, 24, 25};
+static const uint16_t table_7_3_1_1_2_2B_2layers[14] = {4, 5, 6, 7, 8, 9, 13, 26, 27, 28, 29, 30, 31, 32};
+static const uint16_t table_7_3_1_1_2_2B_3layers[3] = {10, 14, 33};
+static const uint16_t table_7_3_1_1_2_2B_4layers[3] = {11, 34, 35};
+static const uint16_t table_7_3_1_1_2_2A_1layer[16] = {0, 1, 2, 3, 12, 13, 14, 15, 16, 17, 18, 19, 20, 10, 21, 22};
+static const uint16_t table_7_3_1_1_2_2A_2layers[14] = {4, 5, 6, 7, 8, 9, 11, 23, 24, 25, 26, 27, 28, 29};
+static const uint16_t table_7_3_1_1_2_3A[16] = {0, 1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 4, 14, 15};
+static const uint16_t table_7_3_1_1_2_4_1layer_fullyAndPartialAndNonCoherent[6] = {0, 1, 3, 4, 5, 6};
+static const uint16_t table_7_3_1_1_2_4_2layers_fullyAndPartialAndNonCoherent[3] = {2, 7, 8};
+static const uint16_t table_7_3_1_1_2_4A_1layer[3] = {0, 1, 3};
+static const uint16_t table_7_3_1_1_2_28[3][15] = {
+    {0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 1, 2, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+};
+static const uint16_t table_7_3_1_1_2_29[3][15] = {
+    {0, 1, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 1, 2, 0, 3, 4, 0, 5, 0, 0, 0, 0, 0, 0, 0},
+    {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 0, 0, 0, 0},
+};
+static const uint16_t table_7_3_1_1_2_30[3][15] = {
+    {0, 1, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 1, 2, 0, 3, 4, 0, 5, 0, 0, 6, 0, 0, 0, 0},
+    {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 0},
+};
+static const uint16_t table_7_3_1_1_2_31[3][15] = {
+    {0, 1, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 1, 2, 0, 3, 4, 0, 5, 0, 0, 6, 0, 0, 0, 0},
+    {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14},
+};
+static const uint16_t table_7_3_1_1_2_32[3][15] = {
+    {0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 1, 2, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+};
+
 typedef enum {
   pusch_dmrs_pos0 = 0,
   pusch_dmrs_pos1 = 1,
@@ -76,24 +119,10 @@ bool is_dl_slot(const slot_t slot, const frame_structure_t *fs);
 bool is_mixed_slot(const slot_t slot, const frame_structure_t *fs);
 int get_tdd_period_idx(NR_TDD_UL_DL_ConfigCommon_t *tdd);
 void config_frame_structure(int mu,
-                            NR_TDD_UL_DL_ConfigCommon_t *tdd_UL_DL_ConfigurationCommon,
+                            const NR_TDD_UL_DL_ConfigCommon_t *tdd_UL_DL_ConfigurationCommon,
                             uint8_t tdd_period,
                             uint8_t frame_type,
                             frame_structure_t *fs);
-
-uint8_t compute_srs_resource_indicator(long *maxMIMO_Layers,
-                                       NR_PUSCH_Config_t *pusch_Config,
-                                       NR_SRS_Config_t *srs_config,
-                                       nr_srs_feedback_t *srs_feedback,
-                                       uint32_t *val);
-
-uint8_t compute_precoding_information(NR_PUSCH_Config_t *pusch_Config,
-                                      NR_SRS_Config_t *srs_config,
-                                      dci_field_t srs_resource_indicator,
-                                      nr_srs_feedback_t *srs_feedback,
-                                      const uint8_t *nrOfLayers,
-                                      int *tpmi,
-                                      uint32_t *val);
 
 NR_PDSCH_TimeDomainResourceAllocationList_t *get_dl_tdalist(const NR_UE_DL_BWP_t *DL_BWP,
                                                             int controlResourceSetId,
@@ -197,7 +226,9 @@ uint32_t nr_get_code_rate_dl(uint8_t Imcs, uint8_t table_idx);
 /** \brief Computes Q based on I_MCS PDSCH and table_idx for uplink. Implements MCS Tables from 38.214. */
 uint8_t nr_get_Qm_ul(uint8_t Imcs, uint8_t table_idx);
 uint32_t nr_get_code_rate_ul(uint8_t Imcs, uint8_t table_idx);
-
+int srs_binomial_sum(int count, int Lmax);
+int srs_codebook_nb_res(NR_SRS_Config_t *srs_config);
+int srs_non_codebook_nb_res(NR_SRS_Config_t *srs_config);
 uint16_t get_nr_srs_offset(NR_SRS_PeriodicityAndOffset_t periodicityAndOffset);
 void get_monitoring_period_offset(const NR_SearchSpace_t *ss, int *period, int *offset);
 

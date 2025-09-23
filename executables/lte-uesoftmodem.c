@@ -174,55 +174,6 @@ instance_t CUuniqInstance=0;
 /* forward declarations */
 void set_default_frame_parms(LTE_DL_FRAME_PARMS *frame_parms[MAX_NUM_CCs]);
 
-/*---------------------BMC: timespec helpers -----------------------------*/
-
-struct timespec min_diff_time = { .tv_sec = 0, .tv_nsec = 0 };
-struct timespec max_diff_time = { .tv_sec = 0, .tv_nsec = 0 };
-
-struct timespec clock_difftime(struct timespec start, struct timespec end) {
-  struct timespec temp;
-
-  if ((end.tv_nsec-start.tv_nsec)<0) {
-    temp.tv_sec = end.tv_sec-start.tv_sec-1;
-    temp.tv_nsec = 1000000000+end.tv_nsec-start.tv_nsec;
-  } else {
-    temp.tv_sec = end.tv_sec-start.tv_sec;
-    temp.tv_nsec = end.tv_nsec-start.tv_nsec;
-  }
-
-  return temp;
-}
-
-void print_difftimes(void) {
-#ifdef DEBUG
-  printf("difftimes min = %lu ns ; max = %lu ns\n", min_diff_time.tv_nsec, max_diff_time.tv_nsec);
-#else
-  LOG_I(HW,"difftimes min = %lu ns ; max = %lu ns\n", min_diff_time.tv_nsec, max_diff_time.tv_nsec);
-#endif
-}
-
-void update_difftimes(struct timespec start, struct timespec end) {
-  struct timespec diff_time = { .tv_sec = 0, .tv_nsec = 0 };
-  int             changed = 0;
-  diff_time = clock_difftime(start, end);
-
-  if ((min_diff_time.tv_nsec == 0) || (diff_time.tv_nsec < min_diff_time.tv_nsec)) {
-    min_diff_time.tv_nsec = diff_time.tv_nsec;
-    changed = 1;
-  }
-
-  if ((max_diff_time.tv_nsec == 0) || (diff_time.tv_nsec > max_diff_time.tv_nsec)) {
-    max_diff_time.tv_nsec = diff_time.tv_nsec;
-    changed = 1;
-  }
-
-#if 1
-
-  if (changed) print_difftimes();
-
-#endif
-}
-
 /*------------------------------------------------------------------------*/
 
 unsigned int build_rflocal(int txi, int txq, int rxi, int rxq) {
@@ -384,7 +335,8 @@ void set_default_frame_parms(LTE_DL_FRAME_PARMS *frame_parms[MAX_NUM_CCs]) {
   }
 }
 
-void init_openair0(LTE_DL_FRAME_PARMS *frame_parms,int rxgain) {
+static void init_openair0(LTE_DL_FRAME_PARMS *frame_parms, int rxgain)
+{
   int card;
   int i;
 

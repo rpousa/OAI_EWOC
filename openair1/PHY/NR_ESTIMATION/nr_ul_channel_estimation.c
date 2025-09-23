@@ -499,8 +499,7 @@ int nr_pusch_channel_estimation(PHY_VARS_gNB *gNB,
                                          pusch_pdu->scid,
                                          Ns,
                                          symbol);
-    pusch_dmrs_type_t dmrs_type = pusch_pdu->dmrs_config_type == NFAPI_NR_DMRS_TYPE1 ? pusch_dmrs_type1 : pusch_dmrs_type2;
-    float beta_dmrs_pusch = get_beta_dmrs_pusch(pusch_pdu->num_dmrs_cdm_grps_no_data, dmrs_type);
+    float beta_dmrs_pusch = get_beta_dmrs(pusch_pdu->num_dmrs_cdm_grps_no_data, pusch_pdu->dmrs_config_type == pusch_dmrs_type2);
     int16_t dmrs_scaling = (1 / beta_dmrs_pusch) * (1 << 14);
     nr_pusch_dmrs_rx(gNB,
                      Ns,

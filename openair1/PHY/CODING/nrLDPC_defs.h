@@ -29,7 +29,7 @@
    \brief LDPC encoder parameter structure
    \var n_segments number of segments in the transport block
    \var first_seg index of the first segment of the subset to encode
-   within the transport block 
+   within the transport block
    \var gen_code flag to generate parity check code
    0 -> encoding
    1 -> generate parity check code with AVX2
@@ -52,8 +52,8 @@
 */
 typedef struct {
   unsigned int n_segments; // optim8seg
-  unsigned int first_seg;  // optim8segmulti
-  unsigned char gen_code;  //orig
+  unsigned int first_seg; // optim8segmulti
+  unsigned char gen_code; // orig
   time_stats_t *tinput;
   time_stats_t *tprep;
   time_stats_t *tparity;
@@ -75,22 +75,20 @@ typedef struct {
 
 typedef int32_t(LDPC_initfunc_t)(void);
 typedef int32_t(LDPC_shutdownfunc_t)(void);
+
 // decoder interface
 /**
    \brief LDPC decoder API type definition
    \param p_decParams LDPC decoder parameters
    \param p_llr Input LLRs
    \param p_llrOut Output vector
-   \param p_profiler LDPC profiler statistics
+   \param time_stats time statistics
+   \param ab structure shared between tasks to stop all the tasks if one fails
 */
-
 typedef int32_t(LDPC_decoderfunc_t)(t_nrLDPC_dec_params *p_decParams,
-                                    uint8_t harq_pid,
-                                    uint8_t ulsch_id,
-                                    uint8_t C,
                                     int8_t *p_llr,
                                     int8_t *p_out,
-                                    t_nrLDPC_time_stats *,
+                                    t_nrLDPC_time_stats *time_stats,
                                     decode_abort_t *ab);
 typedef int32_t(LDPC_encoderfunc_t)(uint8_t **, uint8_t *, encoder_implemparams_t *);
 

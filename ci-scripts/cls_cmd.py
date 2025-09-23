@@ -45,12 +45,6 @@ def getConnection(host, d=None):
 	else:
 		return RemoteCmd(host, d=d)
 
-def runScript(host, path, timeout, parameters=None, redirect=None, silent=False):
-	if is_local(host):
-		return LocalCmd.exec_script(path, timeout, parameters, redirect, silent)
-	else:
-		return RemoteCmd.exec_script(host, path, timeout, parameters, redirect, silent)
-
 # provides a partial interface for the legacy SSHconnection class (getBefore(), command())
 class Cmd(metaclass=abc.ABCMeta):
 	def cd(self, d, silent=False):
@@ -111,12 +105,12 @@ class LocalCmd(Cmd):
 			logging.debug(f'Working dir is {self.cwd}')
 		self.cp = sp.CompletedProcess(args='', returncode=0, stdout='')
 
-	def exec_script(path, timeout, parameters=None, redirect=None, silent=False):
+	def exec_script(self, path, timeout, parameters=None, redirect=None, silent=False):
 		if redirect and not redirect.startswith("/"):
 			raise ValueError(f"redirect must be absolute, but is {redirect}")
 		c = f"{path} {parameters}" if parameters else path
 		if not redirect:
-			ret = sp.run(c, shell=True, timeout=timeout, stdout=sp.PIPE, stderr=sp.STDOUT)
+			ret = sp.run(c, shell=True, cwd=self.cwd, timeout=timeout, stdout=sp.PIPE, stderr=sp.STDOUT)
 			ret.stdout = ret.stdout.decode('utf-8').strip()
 		else:
 			with open(redirect, "w") as f:
@@ -238,18 +232,15 @@ class RemoteCmd(Cmd):
 			cfg['sock'] = paramiko.ProxyCommand(ucfg['proxycommand'])
 		return cfg
 
-	def exec_script(host, path, timeout, parameters=None, redirect=None, silent=False):
+	def exec_script(self, path, timeout, parameters=None, redirect=None, silent=False):
 		if redirect and not redirect.startswith("/"):
 			raise ValueError(f"redirect must be absolute, but is {redirect}")
 		p = parameters if parameters else ""
 		r = f"> {redirect}" if redirect else ""
 		if not silent:
-			logging.debug(f"local> ssh {host} bash -s {p} < {path} {r} # {path} from localhost")
-		client = RemoteCmd._ssh_init()
-		cfg = RemoteCmd._lookup_ssh_config(host)
-		client.connect(**cfg)
+			logging.debug(f"local> ssh {self.hostname} bash -s {p} < {path} {r}")
 		bash_opt = 'BASH_XTRACEFD=1' # write bash set -x output to stdout, see bash(1)
-		stdin, stdout, stderr = client.exec_command(f"{bash_opt} bash -s {p} {r}", timeout=timeout)
+		stdin, stdout, stderr = self.client.exec_command(f"{bash_opt} bash -s {p} {r}", timeout=timeout)
 		# open() the file f at path, read() it and write() it into the stdin of the bash -s cmd
 		with open(path) as f:
 			stdin.write(f.read())
@@ -259,7 +250,6 @@ class RemoteCmd(Cmd):
 		if redirect: cmd += f" &> {redirect}"
 		ret = sp.CompletedProcess(args=cmd, returncode=stdout.channel.recv_exit_status(), stdout=stdout.read(size=None) + stderr.read(size=None))
 		ret.stdout = ret.stdout.decode('utf-8').strip()
-		client.close()
 		return ret
 
 	def run(self, line, timeout=300, silent=False, reportNonZero=True):

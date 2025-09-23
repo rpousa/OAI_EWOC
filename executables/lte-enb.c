@@ -1229,7 +1229,8 @@ void init_eNB()
       LOG_I(PHY,"Initializing eNB %d CC_id %d\n",inst,CC_id);
       LOG_I(PHY,"Initializing eNB %d CC_id %d\n",inst,CC_id);
       LOG_I(PHY,"Registering with MAC interface module\n");
-      AssertFatal((eNB->if_inst         = IF_Module_init(inst))!=NULL,"Cannot register interface");
+      eNB->if_inst = IF_Module_init(inst);
+      AssertFatal(eNB->if_inst, "Cannot register interface");
       eNB->if_inst->schedule_response   = schedule_response;
       eNB->if_inst->PHY_config_req      = phy_config_request;
       eNB->if_inst->PHY_config_update_sib2_req      = phy_config_update_sib2_request;

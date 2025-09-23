@@ -26,14 +26,7 @@
 #include "PHY/NR_REFSIG/nr_refsig_common.h"
 #include "PHY/MODULATION/nr_modulation.h"
 
-extern simde__m128i byte2bit16_lut[256];
-void init_byte2bit16(void);
 void init_byte2m128i(void);
-
-static inline simde__m128i byte2bit16(uint8_t b)
-{
-  return byte2bit16_lut[b];
-}
 
 typedef struct {
   int size;
@@ -54,6 +47,13 @@ void freq2time(uint16_t ofdm_symbol_size, int16_t *freq_signal, int16_t *time_si
 void nr_est_delay(int ofdm_symbol_size, const c16_t *ls_est, c16_t *ch_estimates_time, delay_t *delay);
 unsigned int nr_get_tx_amp(int power_dBm, int power_max_dBm, int total_nb_rb, int nb_rb);
 void nr_fo_compensation(double fo_Hz, int samples_per_ms, int sample_offset, const c16_t *rxdata_in, c16_t *rxdata_out, int size);
+void nr_channel_level(const int symbol,
+                      const int size_est,
+                      const c16_t ch_estimates_ext[][size_est],
+                      const int nb_rx,
+                      const int Nl,
+                      int32_t avg[nb_rx * Nl],
+                      const uint32_t len);
 void nr_generate_csi_rs(const NR_DL_FRAME_PARMS *frame_parms,
                         const csi_mapping_parms_t *phy_csi_parms,
                         const int16_t amp,

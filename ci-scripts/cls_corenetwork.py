@@ -29,6 +29,7 @@ import yaml
 import re
 
 import cls_cmd
+from cls_ci_helper import archiveArtifact
 
 def listify(s):
 	if s is None:
@@ -76,7 +77,8 @@ class CoreNetwork:
 		words = line[1:].strip().split(" ")
 		script_name = words[0]
 		options = " ".join(words[1:])
-		ret = cls_cmd.runScript(host, script_name, 300, parameters=options, silent=silent)
+		with cls_cmd.getConnection(host) as c:
+			ret = c.exec_script(script_name, 300, parameters=options, silent=silent)
 		return ret
 
 	def _command(self, cmd_list, must_succeed=False, silent=False):
@@ -114,8 +116,7 @@ class CoreNetwork:
 		logging.info(f'deployed core network {self}, pingable IP address {ip}')
 		return True, output
 
-	def _collect_logs(self, log_dir):
-		logging.info(f'collecting logs into (local) {log_dir}')
+	def _collect_logs(self, ctx):
 		remote_dir = "/tmp/cn-undeploy-logs"
 		with cls_cmd.getConnection(self._host) as c:
 			# create a directory for log collection
@@ -134,18 +135,17 @@ class CoreNetwork:
 				logging.error("cannot enumerate log files")
 				return []
 			log_files = []
-			# copy them to the executor one by one, and store in log_dir
+			# copy them to the executor one by one
 			for f in ret.stdout.split("\n"):
-				l = f.replace(remote_dir, log_dir)
-				c.copyin(f, l)
-				log_files.append(l)
+				name = archiveArtifact(c, ctx, f)
+				log_files.append(name)
 			c.run(f'rm -rf {remote_dir}')
 			return log_files
 
-	def undeploy(self, log_dir=None):
+	def undeploy(self, ctx=None):
 		log_files = []
-		if log_dir is not None:
-			log_files = self._collect_logs(log_dir)
+		if ctx is not None:
+			log_files = self._collect_logs(ctx)
 		else:
 			logging.warning("no directory for log collection specified, cannot retrieve core network logs")
 		logging.info(f'undeploy core network {self}')

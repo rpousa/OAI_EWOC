@@ -19,6 +19,7 @@
  *      contact@openairinterface.org
  */
 
+#include "PHY/TOOLS/tools_defs.h"
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <netinet/in.h>
@@ -34,6 +35,7 @@
 #include <pthread.h>
 #include <sys/un.h>
 #include <sys/socket.h>
+#include <linux/limits.h>
 
 #include <common/utils/assertions.h>
 #include <common/utils/LOG/log.h>
@@ -46,11 +48,13 @@
 #include "actor.h"
 #include "noise_device.h"
 #include "simde/x86/avx512.h"
+#include "taps_client.h"
 
 // Simulator role
 typedef enum { ROLE_SERVER = 1, ROLE_CLIENT } role;
 
-#define NUM_CHANMOD_THREADS 1
+#define MAX_NUM_ANTENNAS_TX 4
+#define MAX_CHANNEL_LENGTH (1 << 20)
 
 #define ROLE_CLIENT_STRING "client"
 #define ROLE_SERVER_STRING "server"
@@ -58,14 +62,21 @@ typedef enum { ROLE_SERVER = 1, ROLE_CLIENT } role;
 #define VRTSIM_SECTION "vrtsim"
 #define TIME_SCALE_HLP \
   "sample time scale. 1.0 means realtime. Values > 1 mean faster than realtime. Values < 1 mean slower than realtime\n"
+#define TAPS_SOCKET_HLP "Socket to connect to the channel emulation server\n"
+#define CLIENT_NUM_RX_HLP "Number of RX antennas of the client, specified on the server\n"
+#define CONNECTION_DESCRIPTOR_HLP "Path to the file written by the server that the client can use to connect."
+#define DEFAULT_CHANNEL_NAME "vrtsim_channel"
+#define DEFAULT_DESCRIPTOR "/tmp/vrtsim_connection"
 
 // clang-format off
 #define VRTSIM_PARAMS_DESC \
   { \
-     {"channel_name", "shared memory channel name\n",  0, .strptr = &channel_name,               .defstrval = "vrtsim_channel", TYPE_STRING, 0}, \
-     {"role",         "either client or server\n",     0, .strptr = &role,                       .defstrval = ROLE_CLIENT_STRING,  TYPE_STRING, 0}, \
-     {"timescale",    TIME_SCALE_HLP,                  0, .dblptr = &vrtsim_state->timescale, .defdblval = 1.0,                 TYPE_DOUBLE, 0}, \
-     {"chanmod",      "Enable channel modelling",      0, .iptr = &vrtsim_state->chanmod,     .defintval = 0,                   TYPE_INT,    0}, \
+     {"connection_descriptor",  CONNECTION_DESCRIPTOR_HLP,   0, .strptr = &vrtsim_state->connection_descriptor,  .defstrval = DEFAULT_DESCRIPTOR, TYPE_STRING, 0}, \
+     {"role",                   "either client or server\n", 0, .strptr = &role,                                 .defstrval = ROLE_CLIENT_STRING, TYPE_STRING, 0}, \
+     {"timescale",              TIME_SCALE_HLP,              0, .dblptr = &vrtsim_state->timescale,              .defdblval = 1.0,                TYPE_DOUBLE, 0}, \
+     {"chanmod",                "Enable channel modelling",  0, .iptr = &vrtsim_state->chanmod,                  .defintval = 0,                  TYPE_INT,    0}, \
+     {"taps-socket",            TAPS_SOCKET_HLP,             0, .strptr = &vrtsim_state->taps_socket,            .defstrval = NULL,               TYPE_STRING, 0}, \
+     {"client-num-rx-antennas", CLIENT_NUM_RX_HLP,           0, .iptr = &vrtsim_state->client_num_rx_antennas,   .defintval = 1,                  TYPE_INT,    0}, \
   };
 // clang-format on
 
@@ -91,7 +102,7 @@ typedef struct tx_timing_s {
 
 typedef struct {
   int role;
-  char channel_name[40];
+  char *connection_descriptor;
   ShmTDIQChannel *channel;
   uint64_t last_received_sample;
   pthread_t timing_thread;
@@ -110,7 +121,12 @@ typedef struct {
   int rx_num_channels;
   channel_desc_t *channel_desc;
   Actor_t *channel_modelling_actors;
+  char *taps_socket;
+  int client_num_rx_antennas;
 } vrtsim_state_t;
+
+// Sample history for channel impulse response
+static c16_t saved_samples[MAX_NUM_ANTENNAS_TX][MAX_CHANNEL_LENGTH] __attribute__((aligned(32))) = {0};
 
 static void histogram_add(histogram_t *histogram, double diff)
 {
@@ -149,18 +165,26 @@ static void load_channel_model(vrtsim_state_t *vrtsim_state)
                    vrtsim_state->tx_bw);
   char *model_name = vrtsim_state->role == ROLE_CLIENT ? "client_tx_channel_model" : "server_tx_channel_model";
   vrtsim_state->channel_desc = find_channel_desc_fromname(model_name);
+  AssertFatal(vrtsim_state->channel_desc != NULL,
+              "Could not find model name %s. Make sure it is present in the config file",
+              model_name);
+  LOG_I(HW,
+        "Channel model %s parameters: path_loss_dB=%.2f, nb_tx=%d, nb_rx=%d, channel_length=%d\n",
+        model_name,
+        vrtsim_state->channel_desc->path_loss_dB,
+        vrtsim_state->channel_desc->nb_tx,
+        vrtsim_state->channel_desc->nb_rx,
+        vrtsim_state->channel_desc->channel_length);
   random_channel(vrtsim_state->channel_desc, 0);
   AssertFatal(vrtsim_state->channel_desc != NULL, "Could not find channel model %s\n", model_name);
 }
 
 static void vrtsim_readconfig(vrtsim_state_t *vrtsim_state)
 {
-  char *channel_name = NULL;
   char *role = NULL;
   paramdef_t vrtsim_params[] = VRTSIM_PARAMS_DESC;
   int ret = config_get(config_get_if(), vrtsim_params, sizeofArray(vrtsim_params), VRTSIM_SECTION);
   AssertFatal(ret >= 0, "configuration couldn't be performed\n");
-  strncpy(vrtsim_state->channel_name, channel_name, sizeof(vrtsim_state->channel_name) - 1);
   if (strncmp(role, ROLE_CLIENT_STRING, strlen(ROLE_CLIENT_STRING)) == 0) {
     vrtsim_state->role = ROLE_CLIENT;
   } else if (strncmp(role, ROLE_SERVER_STRING, strlen(ROLE_SERVER_STRING)) == 0) {
@@ -168,6 +192,15 @@ static void vrtsim_readconfig(vrtsim_state_t *vrtsim_state)
   } else {
     AssertFatal(false, "Invalid role configuration\n");
   }
+#ifdef ENABLE_TAPS_CLIENT
+  if (vrtsim_state->taps_socket) {
+    LOG_A(HW, "VRTSIM: will use taps socket %s\n", vrtsim_state->taps_socket);
+  }
+#else
+  if (vrtsim_state->taps_socket) {
+    AssertFatal(false, "Invalid configuration: Build with ENABLE_TAPS_CLIENT to use taps socket\n");
+  }
+#endif
 }
 
 static void *vrtsim_timing_job(void *arg)
@@ -195,128 +228,105 @@ static void *vrtsim_timing_job(void *arg)
       samples_to_produce += 1;
       leftover_samples -= 1;
     }
+    AssertFatal(samples_to_produce >= 0, "Negative samples to produce: %f\n", samples_to_produce);
     shm_td_iq_channel_produce_samples(vrtsim_state->channel, samples_to_produce);
     usleep(1);
   }
   return 0;
 }
 
+typedef struct client_info_s {
+  int server_num_rx_antennas;
+  int client_num_rx_antennas;
+} client_info_t;
+
 /**
- * @brief Exchanges peer information between the server and the client.
+ * @brief Publishes the client information information to a file for the client to read.
  *
- * This function sets up a Unix domain socket server, waits for a client to connect,
- * and exchanges peer information (number of RX antennas) with the client.
+ * The server writes its client_info (number of RX antennas) to a file, which the client reads.
+ * The server does not wait for the client to write back; the client can connect at any point.
  *
- * @param peer_info The peer information to send to the client.
- * @return The peer information received from the client.
- *
- * @note This function will block until a client connects and the information is exchanged.
+ * @param client_info The client information to publish.
+ * @return The peer information (same as input, server is authoritative).
  */
-static peer_info_t server_exchange_peer_info(peer_info_t peer_info)
+static void server_publish_client_info(client_info_t client_info, char *descriptor_file)
 {
-  int server_fd, client_fd;
-
-  // Create a Unix domain socket
-  server_fd = socket(AF_UNIX, SOCK_STREAM, 0);
-  AssertFatal(server_fd >= 0, "socket() failed: errno: %d, %s\n", errno, strerror(errno));
-
-  // Bind the socket to a file path
-  struct sockaddr_un addr = {.sun_family = AF_UNIX};
-  strncpy(addr.sun_path, "/tmp/vrtsim_socket", sizeof(addr.sun_path) - 1);
-  unlink(addr.sun_path); // Ensure the path does not already exist
-  int ret = bind(server_fd, (struct sockaddr *)&addr, sizeof(addr));
-  AssertFatal(ret == 0, "bind() failed: errno: %d, %s\n", errno, strerror(errno));
-
-  // Listen for incoming connections
-  ret = listen(server_fd, 1);
-  AssertFatal(ret == 0, "listen() failed: errno: %d, %s\n", errno, strerror(errno));
-
-  // Accept a connection from a client
-  socklen_t addr_len = sizeof(addr);
-  client_fd = accept(server_fd, (struct sockaddr *)&addr, &addr_len);
-  AssertFatal(client_fd >= 0, "accept() failed: errno: %d, %s\n", errno, strerror(errno));
-
-  // Send the antenna info to the server
-  ssize_t bytes_sent = send(client_fd, &peer_info, sizeof(peer_info), 0);
-  AssertFatal(bytes_sent == sizeof(peer_info), "send() failed: errno: %d, %s\n", errno, strerror(errno));
-
-  ssize_t bytes_received = recv(client_fd, &peer_info, sizeof(peer_info), 0);
-  AssertFatal(bytes_received == sizeof(peer_info), "recv() failed: errno: %d, %s\n", errno, strerror(errno));
-
-  LOG_I(HW, "Received client info: RX %d\n", peer_info.num_rx_antennas);
-
-  // Close the client and server sockets
-  close(client_fd);
-  close(server_fd);
-  return peer_info;
+  FILE *fp = fopen(descriptor_file, "wb");
+  AssertFatal(fp != NULL, "Failed to open client info file for writing: %s\n", strerror(errno));
+  size_t written = fwrite(&client_info, sizeof(client_info), 1, fp);
+  AssertFatal(written == 1, "Failed to write client info to file\n");
+  fclose(fp);
 }
 
-/**
- * @brief Exchanges peer information between the client and the server.
- *
- * This function connects to a Unix domain socket server, exchanges peer information
- * (number of RX antennas) with the server, and returns the peer information received
- * from the server.
- *
- * @param peer_info The peer information to send to the server.
- * @return The peer information received from the server.
- *
- * @note This function will block until the information is exchanged.
- */
-static peer_info_t client_exchange_peer_info(peer_info_t peer_info)
+static client_info_t client_read_info(char *descriptor_file)
 {
-  int client_fd;
-
-  // Create a Unix domain socket
-  client_fd = socket(AF_UNIX, SOCK_STREAM, 0);
-  AssertFatal(client_fd >= 0, "socket() failed: errno: %d, %s\n", errno, strerror(errno));
-
-  // Connect to the server
-  struct sockaddr_un addr = {.sun_family = AF_UNIX};
-  strncpy(addr.sun_path, "/tmp/vrtsim_socket", sizeof(addr.sun_path) - 1);
-  int ret = -1;
+  client_info_t client_info;
   int tries = 0;
-  while (ret != 0 && tries < 10) {
-    ret = connect(client_fd, (struct sockaddr *)&addr, sizeof(addr));
-    tries++;
+  while (tries < 10) {
+    FILE *fp = fopen(descriptor_file, "rb");
+    if (fp) {
+      size_t read = fread(&client_info, sizeof(client_info), 1, fp);
+      fclose(fp);
+      if (read == 1) {
+        return client_info;
+      }
+    }
     sleep(1);
+    tries++;
   }
-  AssertFatal(ret == 0, "connect() failed: errno: %d, %s\n", errno, strerror(errno));
-
-  peer_info_t peer_info_received;
-  ssize_t bytes_received = recv(client_fd, &peer_info_received, sizeof(peer_info_received), 0);
-  AssertFatal(bytes_received == sizeof(peer_info_received), "recv() failed: errno: %d, %s\n", errno, strerror(errno));
-
-  // Send the antenna info to the server
-  ssize_t bytes_sent = send(client_fd, &peer_info, sizeof(peer_info), 0);
-  AssertFatal(bytes_sent == sizeof(peer_info), "send() failed: errno: %d, %s\n", errno, strerror(errno));
-
-  LOG_I(HW, "Received peer info: RX %d\n", peer_info_received.num_rx_antennas);
-
-  // Close the client socket
-  close(client_fd);
-  return peer_info_received;
+  AssertFatal(0, "Timeout waiting for client info\n");
+  return client_info;
 }
 
 static int vrtsim_connect(openair0_device *device)
 {
   vrtsim_state_t *vrtsim_state = (vrtsim_state_t *)device->priv;
-  // Exchange peer info
-  peer_info_t peer_info = {.num_rx_antennas = device->openair0_cfg[0].rx_num_channels};
+
+  // Setup a shared memory channel
   if (vrtsim_state->role == ROLE_SERVER) {
-    vrtsim_state->peer_info = server_exchange_peer_info(peer_info);
+    vrtsim_state->peer_info.num_rx_antennas = vrtsim_state->client_num_rx_antennas;
+    vrtsim_state->channel = shm_td_iq_channel_create(DEFAULT_CHANNEL_NAME,
+                                                     vrtsim_state->peer_info.num_rx_antennas,
+                                                     device->openair0_cfg[0].rx_num_channels);
+    // Exchange peer info
+    client_info_t client_info = {
+        .server_num_rx_antennas = device->openair0_cfg[0].rx_num_channels,
+        .client_num_rx_antennas = vrtsim_state->client_num_rx_antennas,
+    };
+    server_publish_client_info(client_info, vrtsim_state->connection_descriptor);
+
+    vrtsim_state->run_timing_thread = true;
+    int ret = pthread_create(&vrtsim_state->timing_thread, NULL, vrtsim_timing_job, vrtsim_state);
+    AssertFatal(ret == 0, "pthread_create() failed: errno: %d, %s\n", errno, strerror(errno));
   } else {
-    vrtsim_state->peer_info = client_exchange_peer_info(peer_info);
+    client_info_t client_info = client_read_info(vrtsim_state->connection_descriptor);
+    AssertFatal(client_info.server_num_rx_antennas > 0, "Server did not publish valid client info, aborting client connection\n");
+    AssertFatal(
+        client_info.client_num_rx_antennas == device->openair0_cfg[0].rx_num_channels,
+        "Server expects different number of RX antennas. %d != %d. Use server command line option --client-num-rx-antennas\n",
+        client_info.client_num_rx_antennas,
+        device->openair0_cfg[0].rx_num_channels);
+    vrtsim_state->channel = shm_td_iq_channel_connect(DEFAULT_CHANNEL_NAME, 10);
+    vrtsim_state->peer_info.num_rx_antennas = client_info.server_num_rx_antennas;
+    vrtsim_state->last_received_sample = shm_td_iq_channel_get_current_sample(vrtsim_state->channel);
   }
 
   // Handle channel modelling after number of RX antennas are known
   int num_tx_stats = 1;
-  if (vrtsim_state->chanmod) {
+  if (vrtsim_state->chanmod || vrtsim_state->taps_socket) {
     vrtsim_state->channel_modelling_actors = calloc_or_fail(vrtsim_state->peer_info.num_rx_antennas, sizeof(Actor_t));
     for (int i = 0; i < vrtsim_state->peer_info.num_rx_antennas; i++) {
       init_actor(&vrtsim_state->channel_modelling_actors[i], "chanmod", -1);
     }
-    load_channel_model(vrtsim_state);
+    if (vrtsim_state->taps_socket) {
+      taps_client_connect(0,
+                          vrtsim_state->taps_socket,
+                          device->openair0_cfg[0].tx_num_channels,
+                          vrtsim_state->peer_info.num_rx_antennas,
+                          &vrtsim_state->channel_desc);
+    } else {
+      load_channel_model(vrtsim_state);
+    }
     num_tx_stats = vrtsim_state->peer_info.num_rx_antennas;
   }
   vrtsim_state->tx_timing = calloc_or_fail(num_tx_stats, sizeof(tx_timing_t));
@@ -324,22 +334,6 @@ static int vrtsim_connect(openair0_device *device)
     vrtsim_state->tx_timing[i].tx_histogram.min_samples = 100;
     // Set the histogram range to 3000uS. Anything above that is not interesting
     vrtsim_state->tx_timing[i].tx_histogram.range = 3000.0;
-  }
-
-  // Setup a shared memory channel
-  if (vrtsim_state->role == ROLE_SERVER) {
-    vrtsim_state->channel = shm_td_iq_channel_create(vrtsim_state->channel_name,
-                                                     vrtsim_state->peer_info.num_rx_antennas,
-                                                     device->openair0_cfg[0].rx_num_channels);
-    vrtsim_state->run_timing_thread = true;
-    while (!shm_td_iq_channel_is_connected(vrtsim_state->channel)) {
-      LOG_I(HW, "Waiting for client\n");
-      sleep(1);
-    }
-    int ret = pthread_create(&vrtsim_state->timing_thread, NULL, vrtsim_timing_job, vrtsim_state);
-    AssertFatal(ret == 0, "pthread_create() failed: errno: %d, %s\n", errno, strerror(errno));
-  } else {
-    vrtsim_state->channel = shm_td_iq_channel_connect(vrtsim_state->channel_name, 10);
   }
 
   return 0;
@@ -376,7 +370,7 @@ static int vrtsim_write_internal(vrtsim_state_t *vrtsim_state,
 typedef struct {
   vrtsim_state_t *vrtsim_state;
   openair0_timestamp timestamp;
-  c16_t *samples[4];
+  c16_t *samples[MAX_NUM_ANTENNAS_TX];
   int nsamps;
   int nbAnt;
   int flags;
@@ -386,6 +380,7 @@ typedef struct {
 static void perform_channel_modelling(void *arg)
 {
   channel_modelling_args_t *channel_modelling_args = arg;
+  vrtsim_state_t *vrtsim_state = channel_modelling_args->vrtsim_state;
   int nsamps = channel_modelling_args->nsamps;
   int aarx = channel_modelling_args->aarx;
   int nb_tx_ant = channel_modelling_args->nbAnt;
@@ -396,31 +391,43 @@ static void perform_channel_modelling(void *arg)
   // Apply noise from global settings
   get_noise_vector((float *)samples, nsamps * 2);
 
-  channel_desc_t *channel_desc = channel_modelling_args->vrtsim_state->channel_desc;
-  const float pathloss_linear = powf(10, channel_desc->path_loss_dB / 20.0);
+  channel_desc_t *channel_desc = vrtsim_state->channel_desc;
 
-  // Convert channel impulse response to float + apply pathloss
+  if (channel_desc == NULL) {
+    return;
+  }
+
   cf_t channel_impulse_response[nb_tx_ant][channel_desc->channel_length];
-  for (int aatx = 0; aatx < nb_tx_ant; aatx++) {
-    const struct complexd *channelModel = channel_desc->ch[aarx + (aatx * channel_desc->nb_rx)];
-    for (int i = 0; i < channel_desc->channel_length; i++) {
-      channel_impulse_response[aatx][i].r = channelModel[i].r * pathloss_linear;
-      channel_impulse_response[aatx][i].i = channelModel[i].i * pathloss_linear;
+  cf_t *channel_impulse_response_p[nb_tx_ant];
+  if (!vrtsim_state->taps_socket) {
+    const float pathloss_linear = powf(10, channel_desc->path_loss_dB / 20.0);
+    // Convert channel impulse response to float + apply pathloss
+    for (int aatx = 0; aatx < nb_tx_ant; aatx++) {
+      const struct complexd *channelModel = channel_desc->ch[aarx + (aatx * channel_desc->nb_rx)];
+      for (int i = 0; i < channel_desc->channel_length; i++) {
+        channel_impulse_response[aatx][i].r = channelModel[i].r * pathloss_linear;
+        channel_impulse_response[aatx][i].i = channelModel[i].i * pathloss_linear;
+      }
+      channel_impulse_response_p[aatx] = channel_impulse_response[aatx];
+    }
+  } else {
+    for (int aatx = 0; aatx < nb_tx_ant; aatx++) {
+      struct complexf *channelModel = channel_desc->ch_ps[aarx + (aatx * channel_desc->nb_rx)];
+      channel_impulse_response_p[aatx] = channelModel;
     }
   }
 
   for (int aatx = 0; aatx < nb_tx_ant; aatx++) {
+    c16_t *previous_samples = saved_samples[aatx];
     for (int i = 0; i < nsamps; i++) {
-      cf_t *impulse_response = channel_impulse_response[aatx];
+      cf_t *impulse_response = channel_impulse_response_p[aatx];
       for (int l = 0; l < channel_desc->channel_length; l++) {
         int idx = i - l;
-        // TODO: Use AVX512 for this
-        // TODO: What are the previously sent samples (for impulse response)
-        if (idx >= 0) {
-          c16_t tx_input = input_samples[aatx][idx];
-          samples[i].r += tx_input.r * impulse_response[l].r - tx_input.i * impulse_response[l].i;
-          samples[i].i += tx_input.i * impulse_response[l].r + tx_input.r * impulse_response[l].i;
-        }
+        // TODO: Use AVX2 for this
+        c16_t tx_input = idx >= 0 ? input_samples[aatx][idx]
+                                  : previous_samples[(channel_modelling_args->timestamp + i + idx) % MAX_CHANNEL_LENGTH];
+        samples[i].r += tx_input.r * impulse_response[l].r - tx_input.i * impulse_response[l].i;
+        samples[i].i += tx_input.i * impulse_response[l].r + tx_input.r * impulse_response[l].i;
       }
     }
   }
@@ -462,6 +469,7 @@ static int vrtsim_write_with_chanmod(vrtsim_state_t *vrtsim_state,
                                      int nbAnt,
                                      int flags)
 {
+  AssertFatal(nbAnt < MAX_NUM_ANTENNAS_TX, "Number of antennas %d exceeds maximum %d\n", nbAnt, MAX_NUM_ANTENNAS_TX);
   for (int aarx = 0; aarx < vrtsim_state->peer_info.num_rx_antennas; aarx++) {
     notifiedFIFO_elt_t *task = newNotifiedFIFO_elt(sizeof(channel_modelling_args_t), 0, NULL, perform_channel_modelling);
     channel_modelling_args_t *args = (channel_modelling_args_t *)NotifiedFifoData(task);
@@ -476,21 +484,68 @@ static int vrtsim_write_with_chanmod(vrtsim_state_t *vrtsim_state,
     }
     pushNotifiedFIFO(&vrtsim_state->channel_modelling_actors[aarx].fifo, task);
   }
+  int start_index = timestamp % MAX_CHANNEL_LENGTH;
+  int end_index = min(start_index + nsamps, MAX_CHANNEL_LENGTH);
+  int cp_nsamps = end_index - start_index;
+  for (int aatx = 0; aatx < nbAnt; aatx++) {
+    c16_t *samples = (c16_t *)samplesVoid[aatx];
+    memcpy(&saved_samples[aatx][start_index], &samples[0], sizeof(c16_t) * cp_nsamps);
+  }
+
+  if (end_index < start_index + nsamps) {
+    // wrap around condition, write at beginning of buffer
+    cp_nsamps = nsamps - cp_nsamps; // remaining samples
+    start_index = 0;
+    for (int aatx = 0; aatx < nbAnt; aatx++) {
+      c16_t *samples = (c16_t *)samplesVoid[aatx];
+      memcpy(&saved_samples[aatx][start_index], &samples[0], sizeof(c16_t) * cp_nsamps);
+    }
+  }
   return nsamps;
 }
 
 static int vrtsim_write(openair0_device *device, openair0_timestamp timestamp, void **samplesVoid, int nsamps, int nbAnt, int flags)
 {
+  AssertFatal(nsamps > 0, "Number of samples must be greater than 0\n");
+  AssertFatal(nbAnt > 0 && nbAnt <= MAX_NUM_ANTENNAS_TX,
+              "Number of antennas %d must be between 1 and %d\n",
+              nbAnt,
+              MAX_NUM_ANTENNAS_TX);
+  AssertFatal(timestamp >= 0, "Timestamp must be non-negative, got %ld\n", timestamp);
   timestamp -= device->openair0_cfg->command_line_sample_advance;
   vrtsim_state_t *vrtsim_state = (vrtsim_state_t *)device->priv;
-  return vrtsim_state->chanmod ? vrtsim_write_with_chanmod(vrtsim_state, timestamp, samplesVoid, nsamps, nbAnt, flags)
-                               : vrtsim_write_internal(vrtsim_state, timestamp, (c16_t *)samplesVoid[0], nsamps, 0, flags, 0);
+  bool channel_modelling = vrtsim_state->chanmod || vrtsim_state->taps_socket;
+  return channel_modelling ? vrtsim_write_with_chanmod(vrtsim_state, timestamp, samplesVoid, nsamps, nbAnt, flags)
+                           : vrtsim_write_internal(vrtsim_state, timestamp, (c16_t *)samplesVoid[0], nsamps, 0, flags, 0);
 }
 
 static int vrtsim_read(openair0_device *device, openair0_timestamp *ptimestamp, void **samplesVoid, int nsamps, int nbAnt)
 {
   vrtsim_state_t *vrtsim_state = (vrtsim_state_t *)device->priv;
-  shm_td_iq_channel_wait(vrtsim_state->channel, vrtsim_state->last_received_sample + nsamps);
+  if (shm_td_iq_channel_is_aborted(vrtsim_state->channel)) {
+    return 0;
+  }
+  if (vrtsim_state->role == ROLE_SERVER) {
+    uint64_t timeout_uS = 0; // 0 means no timeout
+    shm_td_iq_channel_wait(vrtsim_state->channel, vrtsim_state->last_received_sample + nsamps, timeout_uS);
+  } else {
+    uint64_t start_sample = shm_td_iq_channel_get_current_sample(vrtsim_state->channel);
+    uint64_t timeout_uS = 2 * 1000 * 1000; // 2 seconds timeout waiting for sample number to change
+    //
+    while (shm_td_iq_channel_wait(vrtsim_state->channel, vrtsim_state->last_received_sample + nsamps, timeout_uS) == 1) {
+      uint64_t sample = shm_td_iq_channel_get_current_sample(vrtsim_state->channel);
+      if (sample == start_sample) {
+        LOG_E(HW,
+              "VRTSIM: Read timeout waiting for sample %lu to change, aborting channel\n",
+              vrtsim_state->last_received_sample + nsamps);
+        shm_td_iq_channel_abort(vrtsim_state->channel);
+        break;
+      } else {
+        start_sample = sample;
+      }
+    }
+  }
+
   int ret = shm_td_iq_channel_rx(vrtsim_state->channel, vrtsim_state->last_received_sample, nsamps, 0, samplesVoid[0]);
   if (ret == CHANNEL_ERROR_TOO_LATE) {
     vrtsim_state->rx_samples_late += nsamps;
@@ -506,14 +561,14 @@ static int vrtsim_read(openair0_device *device, openair0_timestamp *ptimestamp, 
 static void vrtsim_end(openair0_device *device)
 {
   vrtsim_state_t *vrtsim_state = (vrtsim_state_t *)device->priv;
-  if (vrtsim_state->role == ROLE_SERVER) {
+  if (vrtsim_state->role == ROLE_SERVER && vrtsim_state->run_timing_thread) {
     vrtsim_state->run_timing_thread = false;
     int ret = pthread_join(vrtsim_state->timing_thread, NULL);
     AssertFatal(ret == 0, "pthread_join() failed: errno: %d, %s\n", errno, strerror(errno));
   }
 
   tx_timing_t *tx_timing = vrtsim_state->tx_timing;
-  if (vrtsim_state->chanmod) {
+  if (vrtsim_state->chanmod || vrtsim_state->taps_socket) {
     for (int i = 0; i < vrtsim_state->peer_info.num_rx_antennas; i++) {
       shutdown_actor(&vrtsim_state->channel_modelling_actors[i]);
     }
@@ -526,9 +581,12 @@ static void vrtsim_end(openair0_device *device)
       tx_timing->tx_samples_total += tx_timing[i].tx_samples_total;
     }
     tx_timing->average_tx_budget /= vrtsim_state->peer_info.num_rx_antennas;
+    free_noise_device();
+    if (vrtsim_state->taps_socket) {
+      taps_client_stop();
+    }
   }
-  // produce 1 second of extra samples so threads can finish
-  shm_td_iq_channel_produce_samples(vrtsim_state->channel, vrtsim_state->sample_rate);
+  shm_td_iq_channel_abort(vrtsim_state->channel);
   sleep(1);
   shm_td_iq_channel_destroy(vrtsim_state->channel);
 
@@ -540,9 +598,18 @@ static void vrtsim_end(openair0_device *device)
         "VRTSIM: Read/write too early (suspected radio implementaton error) TX: %lu, RX: %lu\n",
         tx_timing->tx_early,
         vrtsim_state->rx_early);
-  LOG_I(HW, "VRTSIM: Average TX budget %.3lf uS\n", tx_timing->average_tx_budget);
+  LOG_I(HW, "VRTSIM: Average TX budget %.3lf uS (more is better)\n", tx_timing->average_tx_budget);
   histogram_print(&tx_timing->tx_histogram);
   free(vrtsim_state->tx_timing);
+
+  if (vrtsim_state->role == ROLE_SERVER) {
+    int ret = remove(vrtsim_state->connection_descriptor);
+    if (ret != 0) {
+      LOG_E(HW, "Failed to remove connection descriptor file %s: %s\n", vrtsim_state->connection_descriptor, strerror(errno));
+    } else {
+      LOG_A(HW, "Removed connection descriptor file %s\n", vrtsim_state->connection_descriptor);
+    }
+  }
 }
 
 static int vrtsim_stub(openair0_device *device)
@@ -588,10 +655,11 @@ __attribute__((__visibility__("default"))) int device_init(openair0_device *devi
   vrtsim_state->tx_num_channels = openair0_cfg->tx_num_channels;
   vrtsim_state->rx_num_channels = openair0_cfg->rx_num_channels;
 
-  if (vrtsim_state->chanmod) {
+  if (vrtsim_state->chanmod || vrtsim_state->taps_socket) {
     init_channelmod();
     int noise_power_dBFS = get_noise_power_dBFS();
     int16_t noise_power = noise_power_dBFS == INVALID_DBFS_VALUE ? 0 : (int16_t)(32767.0 / powf(10.0, .05 * -noise_power_dBFS));
+    LOG_A(HW, "VRTSIM: Noise power %d sample value\n", noise_power);
     init_noise_device(noise_power);
   }
   return 0;

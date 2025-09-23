@@ -320,6 +320,25 @@ int nr_rlc_get_available_tx_space(const int ue_id, const logical_chan_id_t chann
   return ret;
 }
 
+int nr_rlc_tx_list_occupancy(int ue_id, logical_chan_id_t lcid)
+{
+  int ret;
+
+  nr_rlc_manager_lock(nr_rlc_ue_manager);
+  nr_rlc_ue_t *ue = nr_rlc_manager_get_ue(nr_rlc_ue_manager, ue_id);
+  nr_rlc_entity_t *rb = get_rlc_entity_from_lcid(ue, lcid);
+
+  if (rb != NULL) {
+    ret = rb->tx_list_occupancy(rb);
+  } else {
+    ret = 0;
+  }
+
+  nr_rlc_manager_unlock(nr_rlc_ue_manager);
+
+  return ret;
+}
+
 int nr_rlc_module_init(nr_rlc_op_mode_t mode)
 {
   static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;

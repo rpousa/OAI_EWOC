@@ -665,7 +665,7 @@ unsigned int ulsch_decoding(PHY_VARS_eNB *eNB,
     }
 
 #ifdef DEBUG_ULSCH_DECODING
-    printf("ulsch_decoding.c: ACK i %u, r %d, j %u, ColumnSet[j] %d\n",i,r,j,columnset[j]);
+    printf("ulsch_decoding.c: ACK i %d, r %d, j %d, ColumnSet[j] %d\n", i, r, j, columnset[j]);
 #endif
     j=(j+3)&3;
   }
@@ -1040,6 +1040,7 @@ void dump_ulsch_stats(FILE *fd,PHY_VARS_eNB *eNB,int frame) {
 
   char output[16384];
   char *str = output;
+  *str = 0;
   for (eNB_SCH_STATS_t *st = eNB->ulsch_stats; st < eNB->ulsch_stats + sizeofArray(eNB->ulsch_stats); st++)
     if (st->rnti > 0 && st->round_trials[0] > 100) {
       for (int aa = 0; aa < eNB->frame_parms.nb_antennas_rx; aa++)

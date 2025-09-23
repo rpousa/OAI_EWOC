@@ -220,15 +220,6 @@ static void nr_generate_dci(PHY_VARS_gNB *gNB,
 
           } else { // DCI payload
             txdataF[l * frame_parms->ofdm_symbol_size + k] = c16mulRealShift(mod_dci[dci_idx], amp, 15);
-#ifdef DEBUG_DCI
-            LOG_I(NR_PHY_DCI,
-                  "PDCCH: l %d position %d => (%d,%d)\n",
-                  l,
-                  k,
-		  		  txdataF[l * frame_parms->ofdm_symbol_size + k].r,
-		  txdataF[l * frame_parms->ofdm_symbol_size + k].i;
-#endif
-
             dci_idx++;
           }
 

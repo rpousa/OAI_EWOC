@@ -60,31 +60,28 @@
         <testCase id="111111">
                 <class>Pull_Local_Registry</class>
                 <desc>Pull Images from Local Registry</desc>
-                <svr_id>0</svr_id>
+                <node>localhost</node>
                 <images>oai-gnb-asan oai-nr-ue-asan</images>
         </testCase>
         <testCase id="800813">
                 <class>Create_Workspace</class>
                 <desc>Create new Workspace</desc>
-                <eNB_instance>0</eNB_instance>
-                <eNB_serverId>0</eNB_serverId>
+                <node>localhost</node>
         </testCase>
         <testCase id="000001">
                 <class>Deploy_Object</class>
                 <desc>Deploy OAI 5G CoreNetwork</desc>
+                <node>localhost</node>
                 <yaml_path>ci-scripts/yaml_files/5g_rfsimulator_24prb</yaml_path>
                 <services>mysql oai-amf oai-smf oai-upf oai-ext-dn</services>
-                <eNB_instance>0</eNB_instance>
-                <eNB_serverId>0</eNB_serverId>
         </testCase>
 
         <testCase id="000002">
                 <class>Deploy_Object</class>
                 <desc>Deploy OAI 5G gNB+UE RFsim SA</desc>
+                <node>localhost</node>
                 <yaml_path>ci-scripts/yaml_files/5g_rfsimulator_24prb</yaml_path>
                 <services>oai-gnb oai-nr-ue</services>
-                <eNB_instance>0</eNB_instance>
-                <eNB_serverId>0</eNB_serverId>
         </testCase>
 
         <testCase id="000003">
@@ -164,16 +161,15 @@
                 <class>Undeploy_Object</class>
                 <always_exec>true</always_exec>
                 <desc>Undeploy all OAI 5G stack</desc>
+                <node>localhost</node>
                 <yaml_path>ci-scripts/yaml_files/5g_rfsimulator_24prb</yaml_path>
-                <eNB_instance>0</eNB_instance>
-                <eNB_serverId>0</eNB_serverId>
         </testCase>
 
         <testCase id="222222">
                 <class>Clean_Test_Server_Images</class>
                 <always_exec>true</always_exec>
                 <desc>Clean Test Images on Test Server</desc>
-                <svr_id>0</svr_id>
+                <node>localhost</node>
                 <images>oai-gnb-asan oai-nr-ue-asan</images>
         </testCase>
 

@@ -66,7 +66,7 @@ bool read_mac_sm(void* data)
     }
     if (is_ul_slot(rd->slot, &RC.nrmac[mod_id]->frame_structure)) {
       rd->ul_curr_tbs = UE->mac_stats.ul.current_bytes;
-      rd->ul_sched_rb = sched_ctrl->sched_pusch.rbSize;
+      rd->ul_sched_rb = UE->mac_stats.ul.current_rbs;
     }
 
     rd->rnti = UE->rnti;
