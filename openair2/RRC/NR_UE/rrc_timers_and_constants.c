@@ -162,7 +162,7 @@ void nr_rrc_handle_timers(NR_UE_RRC_INST_t *rrc)
 
   bool t300_expired = nr_timer_tick(&timers->T300);
   if(t300_expired) {
-    LOG_W(NR_RRC, "Timer T300 expired! No timely response to RRCSetupRequest\n");
+    LOG_W(NR_RRC, "[UE %ld] Timer T300 expired! No timely response to RRCSetupRequest\n", rrc->ue_id);
     handle_t300_expiry(rrc);
   }
 
@@ -170,7 +170,7 @@ void nr_rrc_handle_timers(NR_UE_RRC_INST_t *rrc)
   // Upon T301 expiry, the UE shall perform the actions upon going to RRC_IDLE
   // with release cause 'RRC connection failure'
   if(t301_expired) {
-    LOG_W(NR_RRC, "Timer T301 expired! No timely response to RRCReestabilshmentRequest\n");
+    LOG_W(NR_RRC, "[UE %ld] Timer T301 expired! No timely response to RRCReestabilshmentRequest\n", rrc->ue_id);
     nr_rrc_going_to_IDLE(rrc, RRC_CONNECTION_FAILURE, NULL);
   }
 
@@ -178,13 +178,13 @@ void nr_rrc_handle_timers(NR_UE_RRC_INST_t *rrc)
   // 5.3.14.4 in 38.331
   // consider the barring for this Access Category to be alleviated
   if (t302_expired) {
-    LOG_W(NR_RRC, "Timer T302 expired! Access barring alleviated!\n");
+    LOG_W(NR_RRC, "[UE %ld] Timer T302 expired! Access barring alleviated!\n", rrc->ue_id);
     handle_302_expired_stopped(rrc);
   }
 
   bool t304_expired = nr_timer_tick(&timers->T304);
   if(t304_expired) {
-    LOG_W(NR_RRC, "Timer T304 expired\n");
+    LOG_W(NR_RRC, "[UE %ld] Timer T304 expired\n", rrc->ue_id);
     // TODO
     // For T304 of MCG, in case of the handover from NR or intra-NR
     // handover, initiate the RRC re-establishment procedure;
@@ -194,15 +194,15 @@ void nr_rrc_handle_timers(NR_UE_RRC_INST_t *rrc)
 
   bool t310_expired = nr_timer_tick(&timers->T310);
   if(t310_expired) {
-    LOG_W(NR_RRC, "Timer T310 expired\n");
+    LOG_W(NR_RRC, "[UE %ld] Timer T310 expired\n", rrc->ue_id);
     // handle detection of radio link failure
     // as described in 5.3.10.3 of 38.331
     handle_rlf_detection(rrc);
   }
 
   bool t311_expired = nr_timer_tick(&timers->T311);
-  if(t311_expired) {
-    LOG_W(NR_RRC, "Timer T311 expired! No suitable cell found in time after initiation of re-establishment\n");
+  if (t311_expired) {
+    LOG_W(NR_RRC, "[UE %ld] Timer T311 expired! No suitable cell found in time after initiation of re-establishment\n", rrc->ue_id);
     // Upon T311 expiry, the UE shall perform the actions upon going to RRC_IDLE
     // with release cause 'RRC connection failure'
     nr_rrc_going_to_IDLE(rrc, RRC_CONNECTION_FAILURE, NULL);
@@ -210,7 +210,7 @@ void nr_rrc_handle_timers(NR_UE_RRC_INST_t *rrc)
 
   bool t430_expired = nr_timer_tick(&rrc->timers_and_constants.T430);
   if (t430_expired && rrc->nrRrcState == RRC_STATE_CONNECTED_NR && rrc->is_NTN_UE) {
-    LOG_W(NR_RRC, "Timer T430 expired! Indicate UL SYNC LOSS to MAC\n");
+    LOG_W(NR_RRC, "[UE %ld] Timer T430 expired! Indicate UL SYNC LOSS to MAC\n", rrc->ue_id);
     // Upon T430 expiry, the UE shall reacquire SIB19 and re-obtain UL-SYNC
     // Spec 38.331 Section 5.2.2.6
     handle_t430_expiry(rrc);

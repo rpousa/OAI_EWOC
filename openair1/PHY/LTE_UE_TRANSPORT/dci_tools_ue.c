@@ -941,17 +941,17 @@ void extract_dci2A_info(uint8_t N_RB_DL, frame_type_t frame_type, uint8_t nb_ant
     pdci_info_extarcted->tpmi     = tpmi;
 }
 
-int check_dci_format1_1a_coherency(DCI_format_t dci_format,
-        uint8_t N_RB_DL,
-        uint16_t rnti,
-        uint16_t tc_rnti,
-        uint16_t si_rnti,
-        uint16_t ra_rnti,
-        uint16_t p_rnti,
-        uint32_t frame,
-        uint8_t  subframe,
-        DCI_INFO_EXTRACTED_t *pdci_info_extarcted,
-        LTE_DL_UE_HARQ_t *pdlsch0_harq)
+static int check_dci_format1_1a_coherency(DCI_format_t dci_format,
+                                          uint8_t N_RB_DL,
+                                          uint16_t rnti,
+                                          uint16_t tc_rnti,
+                                          uint16_t si_rnti,
+                                          uint16_t ra_rnti,
+                                          uint16_t p_rnti,
+                                          uint32_t frame,
+                                          uint8_t subframe,
+                                          DCI_INFO_EXTRACTED_t *pdci_info_extarcted,
+                                          LTE_DL_UE_HARQ_t *pdlsch0_harq)
 {
     uint8_t  harq_pid  = pdci_info_extarcted->harq_pid;
     uint32_t rballoc   = pdci_info_extarcted->rballoc;
@@ -982,34 +982,39 @@ int check_dci_format1_1a_coherency(DCI_format_t dci_format,
     // I- check dci content minimum coherency
     if( ((rnti==si_rnti) || (rnti==p_rnti) || (rnti==ra_rnti)) && harq_pid > 0)
     {
-        return(0);
+      LOG_I(PHY, "bad system or random access rnti %x id, harq %d \n", rnti, harq_pid);
+      return (0);
     }
 
     if(harq_pid>=8)
     {
-      //        LOG_I(PHY,"bad harq id \n");
-        return(0);
+      LOG_I(PHY, "bad harq id %d\n", harq_pid);
+      return (0);
     }
 
     if(dci_format == format1 && ((rnti==si_rnti) || (rnti==p_rnti) || (rnti==ra_rnti)) )
     {
-      //        LOG_I(PHY,"bad dci format \n");
-        return(0);
+      LOG_I(PHY, "bad dci format 1 with system rnti %x\n", rnti);
+      return (0);
     }
 
 
     if( mcs1 > 28)
     {
+      if (!pdlsch0_harq) {
+        LOG_E(PHY, "pointer to pdlsch0_harq is NULL\n");
+        return 0;
+      }
         if(pdlsch0_harq->round == 0)
         {
-	  //            LOG_I(PHY,"bad dci mcs + round \n");
-            return(0);
+          LOG_I(PHY, "bad dci mcs %d + round %d\n", mcs1, pdlsch0_harq->round);
+          return (0);
         }
 
         if((rnti==si_rnti) || (rnti==p_rnti) || (rnti==ra_rnti))
         {
-	  //            LOG_I(PHY,"bad dci mcs + rnti  \n");
-            return(0);
+          LOG_I(PHY, "bad dci mcs %d + rnti  %x\n", mcs1, rnti);
+          return (0);
         }
     }
 
@@ -1065,47 +1070,47 @@ int check_dci_format1_1a_coherency(DCI_format_t dci_format,
         }
     }
 
-
-    else if (dci_format == format1)
-    {
-        NPRB = conv_nprb(rah, rballoc, N_RB_DL);
+    else if (dci_format == format1) {
+      NPRB = conv_nprb(rah, rballoc, N_RB_DL);
     }
-
 
     if(dci_format == format1A && rballoc > RIV_max)
     {
-      //        LOG_I(PHY,"bad dci rballoc rballoc %d  RIV_max %lld \n",rballoc, RIV_max);
-        // DCI false detection
-        return(0);
+      LOG_I(PHY, "bad dci rballoc rballoc %d  RIV_max %lld \n", rballoc, RIV_max);
+      // DCI false detection
+      return (0);
     }
 
     if(NPRB == 0)
     {
         // DCI false detection
-      //        LOG_I(PHY,"bad NPRB = 0 \n");
+        LOG_I(PHY, "bad dci NPRB = 0 \n");
         return(0);
     }
 
     // this a retransmission
+    if (!pdlsch0_harq) {
+      LOG_E(PHY, "pointer to pdlsch0_harq is NULL\n");
+      return 0;
+    }
     if(pdlsch0_harq->round>0)
     {
         // compare old TBS to new TBS
         if((mcs1<29) && (pdlsch0_harq->TBS != TBStable[get_I_TBS(mcs1)][NPRB-1]))
         {
-            // this is an eNB issue
-            // retransmisison but old and new TBS are different !!!
-            // work around, consider it as a new transmission
-            LOG_E(PHY,
-                  "Format1A Retransmission but TBS are different: consider it as new transmission !!!, round %d, mcs 1 %d, NPRB %d \n",
-                  pdlsch0_harq->round,
-                  mcs1,
-                  NPRB);
-            pdlsch0_harq->round = 0;
-            //return(0); // ?? to cross check
-	  return(0); // ?? to cross check
+          // this is an eNB issue
+          // retransmisison but old and new TBS are different !!!
+          // we have missed DCIs, consider it as a new transmission
+          LOG_W(PHY,
+                "dci format1A Retransmission but TBS are different: consider it as new transmission !!!, round %d, mcs 1 %d, NPRB "
+                "%d \n",
+                pdlsch0_harq->round,
+                mcs1,
+                NPRB);
+          pdlsch0_harq->round = 0;
+          return (0);
         }
     }
-
     return(1);
 }
 
@@ -1148,14 +1153,15 @@ int check_dci_format1c_coherency(uint8_t N_RB_DL,
 
    if(rballoc > RIV_max)
    {
-      // DCI false detection
-      return(0);
+     LOG_I(PHY, "bad dci format 1c rballoc rballoc %d  RIV_max %u \n", rballoc, RIV_max); // DCI false detection
+     return (0);
    }
 
    if(NPRB == 0)
    {
-      // DCI false detection
-      return(0);
+     LOG_I(PHY, "bad dci format 1c NPRB = 0 \n");
+     // DCI false detection
+     return (0);
    }
 
    return(1);
@@ -1204,52 +1210,43 @@ int check_dci_format2_2a_coherency(DCI_format_t dci_format,
 #endif
 
     // I- check dci content minimum coherency
-    if(harq_pid>=8)
-    {
-      //        LOG_I(PHY,"bad harq pid\n");
+    if (harq_pid >= 8) {
+      LOG_I(PHY, "bad dci foramt2 harq pid %d\n", harq_pid);
       return(0);
     }
 
-    if( (rnti==si_rnti) || (rnti==p_rnti) || (rnti==ra_rnti) )
-    {
-      //        LOG_I(PHY,"bad rnti\n");
-        return(0);
+    if ((rnti == si_rnti) || (rnti == p_rnti) || (rnti == ra_rnti)) {
+      LOG_I(PHY, "bad dci format 2 rnti %x\n", rnti);
+      return (0);
     }
 
-
-    if( mcs1 > 28)
-    {
-      if(pdlsch0_harq->round == 0)
-      {
-	//          LOG_I(PHY,"bad mcs1\n");
-        return(0);
-      }
+    if (!pdlsch0_harq) {
+      LOG_E(PHY, "pointer to pdlsch0_harq is NULL\n");
+      return 0;
+    }
+    if ((mcs1 > 28) && !pdlsch0_harq->round) {
+      LOG_I(PHY, "bad mcs1 %d while round is %d\n", mcs1, pdlsch0_harq->round);
+      return (0);
     }
 
-    if( mcs2 > 28)
-    {
-      if(pdlsch1_harq->round == 0)
-      {
-	//          LOG_I(PHY,"bad mcs2\n");
-          return(0);
-      }
+    if (!pdlsch1_harq) {
+      LOG_E(PHY, "pointer to pdlsch0_harq is NULL\n");
+      return 0;
+    }
+    if ((mcs2 > 28) && !pdlsch1_harq->round) {
+      LOG_I(PHY, "bad mcs2 %d while round is %d\n", mcs2, pdlsch0_harq->round);
+      return (0);
     }
 
-
-    if((pdlsch0_harq->round == 0) && (rv1 > 0) && (mcs1 != 0))
-    {
-      // DCI false detection
-      //        LOG_I(PHY,"bad rv1\n");
+    if ((pdlsch0_harq->round == 0) && (rv1 > 0) && (mcs1 != 0)) {
+      LOG_I(PHY, "bad mcs2 %d while round is %d and rv1 %d and mcs1 %d\n", mcs2, pdlsch0_harq->round, rv1, mcs1);
       return(0);
     }
 
-    if((pdlsch1_harq->round == 0) && (rv2 > 0) && (mcs2 != 0))
-    {
-      // DCI false detection
-      //        LOG_I(PHY,"bad rv2\n");
+    if ((pdlsch1_harq->round == 0) && (rv2 > 0) && (mcs2 != 0)) {
+      LOG_I(PHY, "bad mcs2 %d while round is %d and rv2 %d \n", mcs2, pdlsch0_harq->round, rv2);
       return(0);
     }
-
 
     switch (N_RB_DL) {
     case 6:
@@ -1307,14 +1304,14 @@ int check_dci_format2_2a_coherency(DCI_format_t dci_format,
    if( (rballoc > RIV_max) && (rah == 1) )
    {
       // DCI false detection
-     //       LOG_I(PHY,"bad rballoc %d RIV_max %lld\n", rballoc, RIV_max);
+      LOG_I(PHY, "bad rballoc %d RIV_max %lld\n", rballoc, RIV_max);
       return(0);
    }
 
    if(NPRB == 0)
    {
       // DCI false detection
-     //       LOG_I(PHY,"bad NPRB\n");
+      LOG_I(PHY, "dci format 2 bad NPRB %d\n", NPRB);
       return(0);
    }
 
@@ -1627,8 +1624,13 @@ void prepare_dl_decoding_format1_1A(DCI_format_t dci_format,
     {
         if(mcs1 < 29)
         {
-            pdlsch0_harq->TBS = TBStable[get_I_TBS(mcs1)][NPRB4TBS-1];
-            pdlsch0_harq->Qm  = get_Qm(mcs1);
+          int tbs = get_I_TBS(mcs1);
+          if (NPRB4TBS > 110 || tbs >= TBStable_rowCnt) {
+            LOG_E(PHY, "NPRB4TBS %d out of array\n", NPRB4TBS);
+            pdlsch0_harq->TBS = 0;
+          } else
+            pdlsch0_harq->TBS = TBStable[tbs][NPRB4TBS - 1];
+          pdlsch0_harq->Qm = get_Qm(mcs1);
         }
     }
 
@@ -2304,11 +2306,8 @@ int generate_ue_dlsch_params_from_dci(int frame,
                                               p_rnti,frame,subframe,
                                               &dci_info_extarcted,
                                               dlsch0_harq);
-      if(status == 0)
-      {
-        printf("bad DCI 1A !!! \n");
-        return(-1);
-      }
+      if (status == 0) // log of error is done
+        return (-1);
 
       // dci is correct ==> update internal structure and prepare dl decoding
 #ifdef DEBUG_DCI
@@ -2412,12 +2411,8 @@ int generate_ue_dlsch_params_from_dci(int frame,
                                               p_rnti,frame,subframe,
                                               &dci_info_extarcted,
                                               dlsch0_harq);
-      if(status == 0)
-      {
-          printf("bad DCI 1 !!! \n");
-          return(-1);
-      }
-
+      if (status == 0) // log of error is done
+        return (-1);
 
       // dci is correct ==> update internal structure and prepare dl decoding
 #ifdef DEBUG_DCI
@@ -3528,8 +3523,14 @@ int generate_ue_ulsch_params_from_dci(void *dci_pdu,
 
 
     if (rballoc > RIV_max) {
-      LOG_E(PHY,"frame %d, subframe %d, rnti %x, format %d: FATAL ERROR: generate_ue_ulsch_params_from_dci, rb_alloc[%d] > RIV_max[%d]\n",
-            proc->frame_rx, subframe, rnti, dci_format,rballoc,RIV_max);
+      LOG_W(PHY,
+            "frame %d, subframe %d, rnti %x, format %d, generate_ue_ulsch_params_from_dci impossible rb_alloc[%d] > RIV_max[%d]\n",
+            proc->frame_rx,
+            subframe,
+            rnti,
+            dci_format,
+            rballoc,
+            RIV_max);
       LOG_E(PHY,"Wrong DCI0 detection, do not transmit PUSCH for HARQID: %d\n",harq_pid);
       ulsch->harq_processes[harq_pid]->subframe_scheduling_flag = 0;
       return(-1);

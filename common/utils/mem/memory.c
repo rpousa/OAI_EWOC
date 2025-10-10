@@ -25,52 +25,6 @@
 #include "common/utils/mem/oai_memory.h"
 #include "common/utils/LOG/log.h"
 
-/****************************************************************************
- **                                                                        **
- ** Name:  memory_get_path()                                         **
- **                                                                        **
- ** Description: Gets the absolute path of the file where non-volatile     **
- **    data are located                                          **
- **                                                                        **
- ** Inputs:  dirname: The directory where data file is located   **
- **    filename:  The name of the data file                  **
- **    Others:  None                                       **
- **                                                                        **
- ** Outputs:   None                                                      **
- **    Return:  The absolute path of the non-volatile data **
- **       file. The returned value is a dynamically  **
- **       allocated octet string that needs to be    **
- **       freed after usage.                         **
- **    Others:  None                                       **
- **                                                                        **
- ***************************************************************************/
-char* memory_get_path(const char* dirname, const char* filename)
-{
-  /* Get non-volatile data directory */
-  const char* path = getenv(dirname);
-
-  if (path == NULL) {
-    path = getenv(DEFAULT_NAS_PATH);
-  }
-
-  if (path == NULL) {
-    path = ".";
-  }
-
-  /* Append non-volatile data file name */
-  size_t size = strlen(path) + strlen(filename) + 1;
-  char* data_filename = (char*)malloc(size + 1);
-
-  if (data_filename != NULL) {
-    if (size != sprintf(data_filename, "%s/%s", path, filename)) {
-      free(data_filename);
-      return NULL;
-    }
-  }
-
-  return data_filename;
-}
-
 char* memory_get_path_from_ueid(const char* dirname, const char* filename, int ueid)
 {
   /* Get non-volatile data directory */

@@ -129,4 +129,4 @@ add_subdirectory(flexric/src/util)
 add_subdirectory(RAN_FUNCTION)
 
 add_library(e2_agent_arg STATIC e2_agent_arg.c)
-add_dependencies(e2_agent_arg generate_T)
+target_link_libraries(e2_agent_arg PRIVATE CONFIG_LIB log_headers)

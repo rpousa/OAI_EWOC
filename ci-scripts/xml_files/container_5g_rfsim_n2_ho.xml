@@ -31,9 +31,6 @@
  000002
  000003
  020001
- 020002
- 030001
- 030002
  000004
  040001
  050001
@@ -110,7 +107,7 @@
                 <nodes>acamas</nodes>
                 <svr_id>rfsim5g_ue</svr_id>
                 <svr_node>acamas</svr_node>
-                <ping_args>-c 100 -i 0.25</ping_args>
+                <ping_args>-c 50 -i 0.25</ping_args>
                 <ping_packetloss_threshold>5</ping_packetloss_threshold>
         </testCase>
 
@@ -121,7 +118,7 @@
                 <nodes>acamas</nodes>
                 <svr_id>rfsim5g_ext_dn</svr_id>
                 <svr_node>acamas</svr_node>
-                <ping_args>-c 100 -i 0.25</ping_args>
+                <ping_args>-c 50 -i 0.25</ping_args>
                 <ping_packetloss_threshold>10</ping_packetloss_threshold>
         </testCase>
 

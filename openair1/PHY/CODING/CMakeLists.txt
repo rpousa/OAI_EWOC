@@ -7,7 +7,6 @@ add_library(coding MODULE
             3gpplte_turbo_decoder.c
 )
 set_target_properties(coding PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
-#ensure that the T header files are generated before targets depending on them
 target_link_libraries(coding PRIVATE log_headers)
 
 add_library(ldpc_orig MODULE
@@ -68,3 +67,4 @@ if (ENABLE_LDPC_CUDA)
 endif()
 
 add_subdirectory(nrLDPC_coding)
+add_subdirectory(nrLDPC_decoder)

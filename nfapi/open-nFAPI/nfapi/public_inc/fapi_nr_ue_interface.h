@@ -59,7 +59,9 @@ typedef struct {
   uint16_t Nid_cell;
   nfapi_nr_meas_type_e meas_type;
   bool is_neighboring_cell;
-  uint8_t rsrp_dBm;
+  int ssb_index;
+  int rsrp_dBm;
+  float sinr_dB;  
   uint8_t rank_indicator;
   uint16_t i1;
   uint8_t i2;
@@ -133,11 +135,8 @@ typedef struct {
   uint8_t ssb_length;
   uint16_t cell_id;
   uint16_t ssb_start_subcarrier;
-  short rsrp_dBm;
   long arfcn;
   rlm_t radiolink_monitoring; // -1 no monitoring, 0 out_of_sync, 1 in_sync
-  // SINR value times 10 as reporting granularity is 0.5
-  float sinr_dB;
 } fapi_nr_ssb_pdu_t;
 
 typedef struct {

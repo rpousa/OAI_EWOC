@@ -319,51 +319,6 @@ int do_RRCReject(uint8_t *const buffer)
     return (enc_rval.encoded + 7) / 8;
 }
 
-/* returns a default radio bearer config suitable for NSA etc */
-NR_RadioBearerConfig_t *get_default_rbconfig(int eps_bearer_id,
-                                             int rb_id,
-                                             e_NR_CipheringAlgorithm ciphering_algorithm,
-                                             e_NR_SecurityConfig__keyToUse key_to_use,
-                                             const nr_pdcp_configuration_t *pdcp_config)
-{
-  NR_RadioBearerConfig_t *rbconfig = calloc(1, sizeof(*rbconfig));
-  rbconfig->srb_ToAddModList = NULL;
-  rbconfig->srb3_ToRelease = NULL;
-  rbconfig->drb_ToAddModList = calloc(1,sizeof(*rbconfig->drb_ToAddModList));
-  NR_DRB_ToAddMod_t *drb_ToAddMod = calloc(1,sizeof(*drb_ToAddMod));
-  drb_ToAddMod->cnAssociation = calloc(1,sizeof(*drb_ToAddMod->cnAssociation));
-  drb_ToAddMod->cnAssociation->present = NR_DRB_ToAddMod__cnAssociation_PR_eps_BearerIdentity;
-  drb_ToAddMod->cnAssociation->choice.eps_BearerIdentity= eps_bearer_id;
-  drb_ToAddMod->drb_Identity = rb_id;
-  drb_ToAddMod->reestablishPDCP = NULL;
-  drb_ToAddMod->recoverPDCP = NULL;
-  drb_ToAddMod->pdcp_Config = calloc(1,sizeof(*drb_ToAddMod->pdcp_Config));
-  asn1cCalloc(drb_ToAddMod->pdcp_Config->drb, drb);
-  asn1cCallocOne(drb->discardTimer, encode_discard_timer(pdcp_config->drb.discard_timer));
-  asn1cCallocOne(drb->pdcp_SN_SizeUL, encode_sn_size_ul(pdcp_config->drb.sn_size));
-  asn1cCallocOne(drb->pdcp_SN_SizeDL, encode_sn_size_dl(pdcp_config->drb.sn_size));
-  drb->headerCompression.present = NR_PDCP_Config__drb__headerCompression_PR_notUsed;
-  drb->headerCompression.choice.notUsed = 0;
-  drb->integrityProtection = NULL;
-  drb->statusReportRequired = NULL;
-  drb->outOfOrderDelivery = NULL;
-
-  drb_ToAddMod->pdcp_Config->moreThanOneRLC = NULL;
-  asn1cCallocOne(drb_ToAddMod->pdcp_Config->t_Reordering, encode_t_reordering(pdcp_config->drb.t_reordering));
-  drb_ToAddMod->pdcp_Config->ext1 = NULL;
-
-  asn1cSeqAdd(&rbconfig->drb_ToAddModList->list,drb_ToAddMod);
-
-  rbconfig->drb_ToReleaseList = NULL;
-
-  asn1cCalloc(rbconfig->securityConfig, secConf);
-  asn1cCalloc(secConf->securityAlgorithmConfig, secConfAlgo);
-  secConfAlgo->cipheringAlgorithm = ciphering_algorithm;
-  secConfAlgo->integrityProtAlgorithm = NULL;
-  asn1cCallocOne(secConf->keyToUse, key_to_use);
-  return rbconfig;
-}
-
 //------------------------------------------------------------------------------
 int do_RRCSetup(uint8_t *const buffer,
                 size_t buffer_size,
@@ -590,15 +545,35 @@ static NR_RRCReconfiguration_IEs_t *build_RRCReconfiguration_IEs(const nr_rrc_re
 
     /* masterCellGroup */
     if (params->cell_group_config) {
-      // Encode in extension IE (Master cell group)
-      uint8_t *buf = NULL;
-      ssize_t len = uper_encode_to_new_buffer(&asn_DEF_NR_CellGroupConfig, NULL, params->cell_group_config, (void **)&buf);
-      AssertFatal(len > 0, "ASN1 message encoding failed (%lu)!\n", len);
+      uint8_t temp[4096];
+      asn_enc_rval_t enc = uper_encode_to_buffer(&asn_DEF_NR_CellGroupConfig, NULL, params->cell_group_config, temp, sizeof(temp));
+
+      if (enc.encoded <= 0) {
+        LOG_E(NR_RRC, "ASN.1 encoding failed for NR_CellGroupConfig (encoded=%ld)\n", enc.encoded);
+        if (enc.failed_type) {
+          LOG_E(NR_RRC, "Failed at ASN.1 type: %s\n", enc.failed_type->name);
+        }
+        if (enc.structure_ptr) {
+          LOG_E(NR_RRC, "Failed at structure element: %p\n", enc.structure_ptr);
+        }
+        // Print diagnostic information to help debug the issue
+        LOG_E(NR_RRC, "CellGroupConfig structure that failed to encode:\n");
+        xer_fprint(stdout, &asn_DEF_NR_CellGroupConfig, (const void *)params->cell_group_config);
+        ASN_STRUCT_FREE(asn_DEF_NR_RRCReconfiguration_IEs, ie);
+        return NULL;
+      }
+      DevAssert(enc.encoded <= sizeof(temp) * 8); // Encoded data must fit in temp buffer
+      // Allocate buffer for the encoded data and copy it
+      // enc.encoded is in bits, convert to bytes
+      size_t encoded_bytes = (enc.encoded + 7) / 8;
+      uint8_t *buf = calloc_or_fail(1, encoded_bytes);
+      memcpy(buf, temp, encoded_bytes);
+
       if (LOG_DEBUGFLAG(DEBUG_ASN1)) {
         xer_fprint(stdout, &asn_DEF_NR_CellGroupConfig, (const void *)params->cell_group_config);
       }
       ie->nonCriticalExtension->masterCellGroup = calloc_or_fail(1, sizeof(*ie->nonCriticalExtension->masterCellGroup));
-      *ie->nonCriticalExtension->masterCellGroup = (OCTET_STRING_t){.buf = buf, .size = len};
+      *ie->nonCriticalExtension->masterCellGroup = (OCTET_STRING_t){.buf = buf, .size = encoded_bytes};
     }
 
     /* masterKeyUpdate */
@@ -653,6 +628,10 @@ byte_array_t do_RRCReconfiguration(const nr_rrc_reconfig_param_t *params)
 {
   byte_array_t msg = {.buf = NULL, .len = 0};
   NR_RRCReconfiguration_IEs_t *ie = build_RRCReconfiguration_IEs(params);
+  if (!ie) {
+    LOG_E(NR_RRC, "%s: failed to encode RRCReconfiguration\n", __func__);
+    return msg;
+  }
 
   NR_DL_DCCH_Message_t dl_dcch_msg = {0};
   dl_dcch_msg.message.present = NR_DL_DCCH_MessageType_PR_c1;
@@ -1166,7 +1145,11 @@ NR_MeasConfig_t *get_MeasConfig(const NR_MeasTiming_t *mt,
   if (rc_A3_seq) {
     for (int i = 0; i < rc_A3_seq->size; i++) {
       NR_ReportConfigToAddMod_t *rc_A3 = (NR_ReportConfigToAddMod_t *)seq_arr_at(rc_A3_seq, i);
-      asn1cSeqAdd(&mc->reportConfigToAddModList->list, rc_A3);
+      // Create a deep copy of the report config
+      NR_ReportConfigToAddMod_t *rc_A3_copy = NULL;
+      int result = asn_copy(&asn_DEF_NR_ReportConfigToAddMod, (void **)&rc_A3_copy, rc_A3);
+      AssertFatal(result >= 0, "error during asn_copy() of ReportConfigToAddMod\n");
+      asn1cSeqAdd(&mc->reportConfigToAddModList->list, rc_A3_copy);
     }
   }
 
@@ -1276,6 +1259,7 @@ void fill_removal_lists_from_source_measConfig(NR_MeasConfig_t *currentMC, byte_
      and extract the measConfig provided by the source gNB */
   if (!hpi->criticalExtensions.choice.c1->choice.handoverPreparationInformation->sourceConfig) {
     LOG_W(NR_RRC, "Missing sourceConfig: in source gNB rrcReconfiguration\n");
+    ASN_STRUCT_FREE(asn_DEF_NR_HandoverPreparationInformation, hpi);
     return;
   }
   NR_RRCReconfiguration_t *rrcReconf = NULL;
@@ -1287,11 +1271,15 @@ void fill_removal_lists_from_source_measConfig(NR_MeasConfig_t *currentMC, byte_
                                                            sourceConfig->rrcReconfiguration.size);
   if (rrcReconf_dec_rval.code != RC_OK || rrcReconf_dec_rval.consumed < 0) {
     LOG_E(NR_RRC, "Failed to decode source gNB rrcReconfiguration!\n");
+    ASN_STRUCT_FREE(asn_DEF_NR_HandoverPreparationInformation, hpi);
     return;
   }
 
-  if (rrcReconf->criticalExtensions.choice.rrcReconfiguration->measConfig == NULL)
+  if (rrcReconf->criticalExtensions.choice.rrcReconfiguration->measConfig == NULL) {
+    ASN_STRUCT_FREE(asn_DEF_NR_HandoverPreparationInformation, hpi);
+    ASN_STRUCT_FREE(asn_DEF_NR_RRCReconfiguration, rrcReconf);
     return;
+  }
 
   NR_MeasConfig_t *sourceMC = rrcReconf->criticalExtensions.choice.rrcReconfiguration->measConfig;
 
@@ -1323,6 +1311,10 @@ void fill_removal_lists_from_source_measConfig(NR_MeasConfig_t *currentMC, byte_
       asn1cSeqAdd(&currentMC->measIdToRemoveList->list, measId);
     }
   }
+
+  // Clean up allocated memory
+  ASN_STRUCT_FREE(asn_DEF_NR_HandoverPreparationInformation, hpi);
+  ASN_STRUCT_FREE(asn_DEF_NR_RRCReconfiguration, rrcReconf);
 }
 
 int doRRCReconfiguration_from_HandoverCommand(byte_array_t *ba, const byte_array_t handoverCommand)

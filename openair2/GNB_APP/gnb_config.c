@@ -1344,7 +1344,7 @@ void config_rlc(configmodule_interface_t *cfg, nr_rlc_configuration_t *rlc_confi
   rlc_config->drb_um.sn_field_length = config_get_processedint(cfg, &rlc_drb_um_params[CONFIG_NR_RLC_DRB_UM_SN_FIELD_LENGTH_IDX]);
 }
 
-void config_pdcp(configmodule_interface_t *cfg, nr_pdcp_configuration_t *pdcp_config)
+static void config_pdcp(configmodule_interface_t *cfg, nr_pdcp_configuration_t *pdcp_config)
 {
   /* DRB configuration */
   paramdef_t pdcp_params[] = NR_PDCP_DRB_GLOBALPARAMS_DESC;
@@ -1431,6 +1431,7 @@ void RCconfig_nr_macrlc(configmodule_interface_t *cfg)
   LOG_I(GNB_APP, "SIB1 TDA %d\n", config.sib1_tda);
   config.do_CSIRS = *GNBParamList.paramarray[0][GNB_DO_CSIRS_IDX].iptr;
   config.do_SRS = *GNBParamList.paramarray[0][GNB_DO_SRS_IDX].iptr;
+  config.max_num_rsrp = *GNBParamList.paramarray[0][GNB_LIMIT_RSRP_REPORT_IDX].iptr;
   config.do_SINR = *GNBParamList.paramarray[0][GNB_DO_SINR_IDX].iptr;
   config.force_256qam_off = *GNBParamList.paramarray[0][GNB_FORCE256QAMOFF_IDX].iptr;
   config.force_UL256qam_off = *GNBParamList.paramarray[0][GNB_FORCEUL256QAMOFF_IDX].iptr;

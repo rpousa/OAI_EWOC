@@ -110,7 +110,7 @@ NR_CellGroupConfig_t *get_default_secondaryCellGroup(const NR_ServingCellConfigC
                                                      const nr_mac_config_t *configuration,
                                                      int uid);
 
-NR_ReconfigurationWithSync_t *get_reconfiguration_with_sync(rnti_t rnti, uid_t uid, const NR_ServingCellConfigCommon_t *scc);
+NR_ReconfigurationWithSync_t *get_reconfiguration_with_sync(rnti_t rnti, uid_t uid, const NR_ServingCellConfigCommon_t *scc, int frame);
 
 NR_RLC_BearerConfig_t *get_SRB_RLC_BearerConfig(long channelId,
                                                 long priority,

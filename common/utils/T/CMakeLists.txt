@@ -47,7 +47,7 @@ add_custom_target(generate_T DEPENDS T_IDs.h check_vcd)
 # even if T is off, we need the headers as many targets depend on it
 # for this, create an INTERFACE (header-only) library T_headers. To ensure the
 # headers have really been created, we make this headers library explicitly
-# depend on the generated headers.
+# depend on the generate_T target.
 add_library(T_headers INTERFACE)
 add_dependencies(T_headers T_IDs.h generate_T)
 target_include_directories(T_headers INTERFACE ${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_CURRENT_SOURCE_DIR})

@@ -35,6 +35,8 @@ def gitCommitAuthorEmailAddr
 // list of failing stages
 def failingStages = ""
 
+OAI_Registry = "gracehopper3-oai.sboai.cs.eurecom.fr"
+
 pipeline {
   agent {
     label nodeExecutor
@@ -834,11 +836,11 @@ def triggerCN5GSlaveJob (jobName, gitlabStatusName) {
     shortenShaOne = sh returnStdout: true, script: 'git log -1 --pretty=format:"%h" --abbrev=8 ' + env.gitlabMergeRequestLastCommit
     shortenShaOne = shortenShaOne.trim()
     branchName = env.gitlabSourceBranch.replaceAll("/", "-").trim()
-    fullRanTag = 'porcepix.sboai.cs.eurecom.fr/oai-gnb:' + env.gitlabSourceBranch + '-' + shortenShaOne
+    fullRanTag = OAI_Registry + '/oai-gnb:' + env.gitlabSourceBranch + '-' + shortenShaOne
   } else {
     shortenShaOne = sh returnStdout: true, script: 'git log -1 --pretty=format:"%h" --abbrev=8 ' + env.GIT_COMMIT
     shortenShaOne = shortenShaOne.trim()
-    fullRanTag = 'porcepix.sboai.cs.eurecom.fr/oai-gnb:develop-' + shortenShaOne
+    fullRanTag = OAI_Registry + '/oai-gnb:develop-' + shortenShaOne
   }
   // Workaround for the "cancelled" GitLab pipeline notification
   // The slave job is triggered with the propagate false so the following commands are executed

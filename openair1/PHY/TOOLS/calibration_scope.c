@@ -99,8 +99,9 @@ static void commonGraph(OAIgraph_t *graph, int type, FL_Coord x, FL_Coord y, FL_
 }
 
 static OAIgraph_t calibrationCommonGraph( void (*funct) (OAIgraph_t *graph, calibData_t *context),
-                                  int type, FL_Coord x, FL_Coord y, FL_Coord w, FL_Coord h, const char *label, FL_COLOR pointColor) {
-  OAIgraph_t graph;
+                                  int type, FL_Coord x, FL_Coord y, FL_Coord w, FL_Coord h, const char *label, FL_COLOR pointColor)
+{
+  OAIgraph_t graph = {0};
   commonGraph(&graph, type, x, y, w, h, label, pointColor);
   graph.funct=funct;
   return graph;
@@ -236,7 +237,9 @@ static void genericWaterFall (OAIgraph_t *graph, scopeSample_t *values, const in
   graph->iteration++;
 }
 
-static void genericPowerPerAntena(OAIgraph_t  *graph, const int nb_ant, const scopeSample_t **data, const int len) {
+__attribute__((unused))
+static void genericPowerPerAntena(OAIgraph_t  *graph, const int nb_ant, const scopeSample_t **data, const int len)
+{
   float *values, *time;
   oai_xygraph_getbuff(graph, &time, &values, len, 0);
 
@@ -263,7 +266,10 @@ static void gNBfreqWaterFall  (OAIgraph_t *graph, calibData_t *context) {
                    0, 0,
                    "X axis:one frame in time");
 }
-static void timeResponse (OAIgraph_t *graph, calibData_t *context) {
+
+__attribute__((unused))
+static void timeResponse (OAIgraph_t *graph, calibData_t *context)
+{
   #if 0
   const int len=2*phy_vars_gnb->frame_parms.ofdm_symbol_size;
   float *values, *time;

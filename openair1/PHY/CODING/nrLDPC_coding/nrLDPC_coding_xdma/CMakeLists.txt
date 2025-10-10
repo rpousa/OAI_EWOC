@@ -16,12 +16,7 @@ if (ENABLE_LDPC_XDMA)
   )
   target_include_directories(ldpc_xdma PRIVATE ../nrLDPC_coding_segment)
 
-  #ensure that the T header files are generated before targets depending on them
-  if (${T_TRACER})
-    add_dependencies(ldpc_xdma generate_T)
-  endif (${T_TRACER})
-
-  target_link_libraries(ldpc_xdma PRIVATE ldpc_gen_HEADERS)
+  target_link_libraries(ldpc_xdma PRIVATE ldpc_gen_HEADERS log_headers)
   set_target_properties(ldpc_xdma PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
   add_dependencies(nr-softmodem ldpc_xdma)

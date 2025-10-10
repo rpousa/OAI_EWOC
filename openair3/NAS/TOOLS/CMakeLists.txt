@@ -13,6 +13,7 @@ add_library(conf2uedata_lib OBJECT
     ${OPENAIR_DIR}/common/utils/mem/memory.c
     ${OPENAIR_DIR}/common/utils/utils.c
 )
+target_link_libraries(conf2uedata_lib PUBLIC log_headers)
 
 add_executable(conf2uedata conf2uedata.c)
 target_link_libraries(conf2uedata PRIVATE conf2uedata_lib)
@@ -28,9 +29,3 @@ add_executable(nvram nvram.c)
 target_link_libraries(nvram PRIVATE conf2uedata_lib)
 set_target_properties(nvram PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 target_link_libraries(nvram PRIVATE LOG minimal_lib ${libconfig_LIBRARIES})
-
-if (${T_TRACER})
-  add_dependencies(conf2uedata generate_T)
-  add_dependencies(usim generate_T)
-  add_dependencies(nvram generate_T)
-endif (${T_TRACER})

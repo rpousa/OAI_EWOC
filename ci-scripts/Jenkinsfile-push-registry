@@ -31,6 +31,9 @@ if (params.LockResources != null && params.LockResources.trim().length() > 0)
 // Docker Hub account to push to
 def DH_Account = "oaisoftwarealliance"
 
+// internal registry to use
+def OAI_Registry = "gracehopper3-oai.sboai.cs.eurecom.fr"
+
 pipeline {
   agent {
     label nodeExecutor
@@ -79,14 +82,14 @@ pipeline {
             def listOfImages = ["oai-enb", "oai-gnb", "oai-lte-ue", "oai-nr-ue", "oai-nr-cuup", "oai-gnb-fhi72"]
             // Logging in on both registries
             sh "docker login -u ${DH_Username} -p ${DH_Password} > /dev/null 2>&1"
-            sh "docker login -u oaicicd -p oaicicd porcepix.sboai.cs.eurecom.fr > /dev/null 2>&1"
+            sh "docker login -u oaicicd -p oaicicd ${OAI_Registry} > /dev/null 2>&1"
             listOfImages.eachWithIndex { item, iindex ->
-              sh "docker pull --quiet porcepix.sboai.cs.eurecom.fr/${item}:develop-${WEEK_SHA}"
-              sh "docker image tag porcepix.sboai.cs.eurecom.fr/${item}:develop-${WEEK_SHA} ${DH_Account}/${item}:develop"
-              sh "docker image tag porcepix.sboai.cs.eurecom.fr/${item}:develop-${WEEK_SHA} ${DH_Account}/${item}:${WEEK_TAG}"
+              sh "docker pull --quiet ${OAI_Registry}/${item}:develop-${WEEK_SHA}"
+              sh "docker image tag ${OAI_Registry}/${item}:develop-${WEEK_SHA} ${DH_Account}/${item}:develop"
+              sh "docker image tag ${OAI_Registry}/${item}:develop-${WEEK_SHA} ${DH_Account}/${item}:${WEEK_TAG}"
               sh "docker push --quiet ${DH_Account}/${item}:${WEEK_TAG}"
               sh "docker push --quiet ${DH_Account}/${item}:develop"
-              sh "docker rmi ${DH_Account}/${item}:${WEEK_TAG} ${DH_Account}/${item}:develop porcepix.sboai.cs.eurecom.fr/${item}:develop-${WEEK_SHA}"
+              sh "docker rmi ${DH_Account}/${item}:${WEEK_TAG} ${DH_Account}/${item}:develop ${OAI_Registry}/${item}:develop-${WEEK_SHA}"
             }
             // Proxy is not following the same pattern.
             sh "docker image tag proxy:develop ${DH_Account}/proxy:develop"
@@ -95,7 +98,7 @@ pipeline {
             sh "docker push --quiet ${DH_Account}/proxy:${WEEK_TAG}"
             sh "docker rmi ${DH_Account}/proxy:develop ${DH_Account}/proxy:${WEEK_TAG}"
             // Logging out on both registries
-            sh "docker logout porcepix.sboai.cs.eurecom.fr > /dev/null 2>&1"
+            sh "docker logout ${OAI_Registry} > /dev/null 2>&1"
             sh "docker logout > /dev/null 2>&1"
           }
         }
@@ -105,7 +108,7 @@ pipeline {
   post {
     always {
       script {
-        sh "docker logout porcepix.sboai.cs.eurecom.fr > /dev/null 2>&1"
+        sh "docker logout ${OAI_Registry} > /dev/null 2>&1"
         sh "docker logout > /dev/null 2>&1"
         echo "End of Registry Push"
       }

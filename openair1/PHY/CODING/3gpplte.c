@@ -30,6 +30,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include "PHY/CODING/coding_defs.h"
+#include "common/utils/utils.h"
 
 //#define DEBUG_TURBO_ENCODER 1
 

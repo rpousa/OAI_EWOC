@@ -358,7 +358,7 @@ int16_t get_pucch_tx_power_ue(NR_UE_MAC_INST_t *mac,
                             1,
                             start_prb);
   float P_CMIN = current_UL_BWP->P_CMIN;
-  int16_t pathloss = compute_nr_SSB_PL(mac, mac->ssb_measurements.ssb_rsrp_dBm);
+  int16_t pathloss = compute_nr_SSB_PL(mac);
 
   if (power_config->twoPUCCH_PC_AdjustmentStates && *power_config->twoPUCCH_PC_AdjustmentStates > 1) {
     LOG_E(MAC,"PUCCH power control adjustment states with 2 states not yet implemented\n");
@@ -427,20 +427,23 @@ static int get_deltatf(uint16_t nb_of_prbs,
 // - PRACH transmission from a UE is not in response to a detection of a PDCCH order by the UE
 // Measurement units:
 // - referenceSignalPower:   dBm/RE (average EPRE of the resources elements that carry secondary synchronization signals in dBm)
-int16_t compute_nr_SSB_PL(NR_UE_MAC_INST_t *mac, short ssb_rsrp_dBm)
+int16_t compute_nr_SSB_PL(NR_UE_MAC_INST_t *mac)
 {
+  // getting the maximum SSB RSRP from the SSB measurements
+  int max_ssb_rsrp_dBm = mac->ssb_measurements[mac->mib_ssb].ssb_rsrp_dBm;
   fapi_nr_config_request_t *cfg = &mac->phy_config.config_req;
   int referenceSignalPower = cfg->ssb_config.ss_pbch_power;
+
   //TODO improve PL measurements. Probably not correct as it is.
 
-  int16_t pathloss = (int16_t)(referenceSignalPower - ssb_rsrp_dBm);
+  int16_t pathloss = (int16_t)(referenceSignalPower - max_ssb_rsrp_dBm);
 
   LOG_D(NR_MAC, "pathloss %d dB, referenceSignalPower %d dBm/RE (%f mW), RSRP %d dBm (%f mW)\n",
         pathloss,
         referenceSignalPower,
         pow(10, referenceSignalPower/10),
-        ssb_rsrp_dBm,
-        pow(10, ssb_rsrp_dBm/10));
+        max_ssb_rsrp_dBm,
+        pow(10, max_ssb_rsrp_dBm/10));
 
   return pathloss;
 }
@@ -557,8 +560,8 @@ int get_pusch_tx_power_ue(NR_UE_MAC_INST_t *mac,
     DELTA_TF = 10 * log10(pow(2, BPRE * 1.25f) * beta_offset);
   }
 
-  // TODO: compute pathoss using correct reference
-  int16_t pathloss = compute_nr_SSB_PL(mac, mac->ssb_measurements.ssb_rsrp_dBm);
+  // TODO: compute pathloss using correct reference
+  int16_t pathloss = compute_nr_SSB_PL(mac);
   int P_CMIN = mac->current_UL_BWP->P_CMIN;
 
   float pusch_power_without_f_b_f_c = P_O_PUSCH + M_pusch_component + alpha * pathloss + DELTA_TF;
@@ -626,7 +629,7 @@ int get_srs_tx_power_ue(NR_UE_MAC_INST_t *mac,
                             get_m_srs(srs_resource->freqHopping.c_SRS, srs_resource->freqHopping.b_SRS),
                             0); // TODO: Determine SRS start RB
 
-  int16_t pathloss = compute_nr_SSB_PL(mac, mac->ssb_measurements.ssb_rsrp_dBm);
+  int16_t pathloss = compute_nr_SSB_PL(mac);
 
   int srs_power_without_h_b_f_c = P_0_SRS + alpha * pathloss + m_srs_component;
 

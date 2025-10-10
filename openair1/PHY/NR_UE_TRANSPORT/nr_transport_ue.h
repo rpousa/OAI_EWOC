@@ -38,18 +38,7 @@
 #include "nfapi/open-nFAPI/nfapi/public_inc/fapi_nr_ue_interface.h"
 #include "../NR_TRANSPORT/nr_transport_common_proto.h"
 
-typedef enum {
- NEW_TRANSMISSION_HARQ,
- RETRANSMISSION_HARQ
-} harq_result_t;
-
 typedef struct {
-  /// HARQ tx status
-  harq_result_t tx_status;
-  /// Last TPC command
-  uint8_t TPC;
-  /// Length of ACK information (bits)
-  uint8_t O_ACK;
   /// Index of current HARQ round for this ULSCH
   uint8_t round;
   /// pointer to pdu from MAC interface (TS 36.212 V15.4.0, Sec 5.1 p. 8)
@@ -66,14 +55,10 @@ typedef struct {
   uint32_t C;
   /// Number of bits in code segments
   uint32_t K;
-  /// Total number of bits across all segments
-  uint32_t sumKr;
+  ///
+  uint32_t Kb;
   /// Number of "Filler" bits
   uint32_t F;
-  /// n_DMRS  for cyclic shift of DMRS
-  uint8_t n_DMRS;
-  /// n_DMRS2 for cyclic shift of DMRS
-  uint8_t n_DMRS2;
   /// Number of soft channel bits
   uint32_t G;
   // Number of modulated symbols carrying data
@@ -152,4 +137,13 @@ typedef struct {
   // PTRS symbol index, to be updated every PTRS symbol within a slot.
   uint8_t ptrs_symbol_index;
 } NR_UE_DLSCH_t;
+
+typedef struct {
+  uint16_t Q_dash_ACK; // number of coded HARQ-ACK symbols
+  uint16_t E_uci_ACK; // number of coded HARQ-ACK bits
+  uint16_t Q_dash_ACK_rvd; // number of coded HARQ-ACK symbols reserved
+  uint16_t E_uci_ACK_rvd; // number of coded HARQ-ACK bits reserved
+  uint32_t G_ulsch; // bit capacity of ULSCH
+} rate_match_info_uci_t;
+
 #endif

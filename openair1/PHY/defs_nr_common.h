@@ -113,7 +113,24 @@ typedef struct {
   uint8_t k_0_p[MAX_NUM_NR_SRS_AP][MAX_NUM_NR_SRS_SYMBOLS];
   uint8_t srs_generated_signal_bits;
   c16_t **srs_generated_signal;
-  nfapi_nr_srs_pdu_t srs_pdu;
+  bool is_signal_generated;
+  int B_SRS;
+  int C_SRS;
+  int b_hop;
+  int comb_size;
+  int K_TC_overbar;
+  int n_SRS_cs;
+  int n_ID_SRS;
+  int n_shift;
+  int n_RRC;
+  int groupOrSequenceHopping;
+  int l_offset;
+  int T_SRS;
+  int T_offset;
+  int R;
+  int N_symb_SRS;
+  int n_srs_ports;
+  int resource_type;
 } nr_srs_info_t;
 
 typedef struct NR_DL_FRAME_PARMS NR_DL_FRAME_PARMS;

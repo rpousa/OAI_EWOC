@@ -44,7 +44,7 @@ add_library(telnetsrv_enb MODULE
             telnetsrv_enb_phycmd.c
 )
 add_dependencies(telnetsrv telnetsrv_enb)
-target_link_libraries(telnetsrv_enb PRIVATE asn1_nr_rrc_hdrs asn1_lte_rrc_hdrs)
+target_link_libraries(telnetsrv_enb PRIVATE asn1_nr_rrc_hdrs asn1_lte_rrc_hdrs log_headers)
 
 message(STATUS "No specific telnet functions for gnb")
 

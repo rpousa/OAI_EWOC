@@ -1,9 +1,9 @@
 add_library(noise_device STATIC noise_device.c)
+target_link_libraries(noise_device PRIVATE log_headers)
 
 add_library(vrtsim MODULE vrtsim.c)
 set_target_properties(vrtsim PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
-target_link_libraries(vrtsim PRIVATE SIMU shm_td_iq_channel actor noise_device)
-add_dependencies(vrtsim generate_T)
+target_link_libraries(vrtsim PRIVATE SIMU shm_td_iq_channel actor noise_device log_headers)
 
 add_boolean_option(OAI_VRTSIM_TAPS_CLIENT OFF "Enable taps client" ON)
 if (OAI_VRTSIM_TAPS_CLIENT)

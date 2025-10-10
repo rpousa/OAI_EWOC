@@ -183,7 +183,7 @@ See [nFAPI documentation](../nfapi.md) or [Aerial
 tutorial](../Aerial_FAPI_Split_Tutorial.md) for information about the (n)FAPI
 split.
 
-See [F1 documentation](../F1-design.md) for information about the F1 split.
+See [F1 documentation](../F1AP/F1-design.md) for information about the F1 split.
 
 ## MAC scheduler-related configuration options
 

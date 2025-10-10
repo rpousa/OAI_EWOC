@@ -484,7 +484,6 @@ void clean_UE_harq(PHY_VARS_NR_UE *UE)
   }
   for (int harq_pid = 0; harq_pid < NR_MAX_ULSCH_HARQ_PROCESSES; harq_pid++) {
     NR_UL_UE_HARQ_t *ul_harq_process = &UE->ul_harq_processes[harq_pid];
-    ul_harq_process->tx_status = NEW_TRANSMISSION_HARQ;
     ul_harq_process->round = 0;
   }
 }

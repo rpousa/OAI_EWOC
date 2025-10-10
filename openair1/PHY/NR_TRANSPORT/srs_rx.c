@@ -36,7 +36,6 @@
 #include "PHY/defs_gNB.h"
 #include "PHY/defs_RU.h"
 #include "PHY/CODING/nrSmallBlock/nr_small_block_defs.h"
-#include "PHY/NR_UE_TRANSPORT/srs_modulation_nr.h"
 #include "common/utils/LOG/log.h"
 #include "SCHED_NR/sched_nr.h"
 #include "nfapi/oai_integration/vendor_ext.h"

@@ -1,5 +1,5 @@
-This tutorial explains how to perform handovers. For the moment, only F1
-handovers are supported.
+This tutorial explains how to perform handovers. It covers both F1 handovers
+(intra-gNB, within a single gNB between DUs) and N2 handovers (inter-gNB).
 
 [[_TOC_]]
 
@@ -12,6 +12,23 @@ handover of the UE from DU0 to DU1. Alternatively, a manual trigger can do the
 same.
 
 ![F1 Handover setup](./RRC/ho.png)
+
+# What is a gNB neighbor?
+
+Network continuity is a key aspect of 5G. In the 5G architecture, gNB neighbors
+play a central role in maintaining service continuity through mechanisms such
+as handover and load balancing. By definition, a gNB neighbor is another gNB
+that can be measured and linked by the UE. If the current serving gNB is no
+longer optimal, the UE may connect to a neighbor gNB.
+
+To support this behavior, the network configuration specifies additional frequencies
+and cells that the UE should measure. The UE reports these measurements to the
+network, which then decides whether or not to initiate a handover.
+
+Neighbor types include:
+- **Intra-gNB neighbors** - cells belonging to the same gNB
+- **Inter-gNB neighbors** - cells belonging to different gNBs
+- **Inter-RAT neighbors** - cells belonging to another RAT (e.g., LTE)
 
 # Steps to run F1 handover with OAI UE
 
@@ -353,9 +370,15 @@ We assume:
 
 * Two independent gNBs connected to the same 5GC via N2 interface.
 * A UE initially connected to gNB-PCI0, which will be handed over to gNB-PCI1.
-* Handover is triggered by either by decision based measurement event (e.g. A3) or telnet command.
+* Handover is triggered by either a decision based measurement event (e.g. A3) or telnet command.
 
 ## Steps to run N2 handover with OAI UE
+
+**Note for same-machine setup:** When running both gNBs on the same machine, you need to assign a unique IP address to the second gNB to avoid network conflicts. For example:
+
+```sh
+sudo ip addr add 192.168.71.180/24 dev rfsim5g-public
+```
 
 1. Similarly to F1 handover, UE does not support any measurement reporting and handover is triggered by
 telnet command. Therefore, ensure that both gNBs and UE are built with telnet support:
@@ -380,10 +403,17 @@ sudo ./nr-uesoftmodem -r 106 --numerology 1 --band 78 -C 3619200000 --rfsim --ui
 
 Ensure the UE successfully registers with the network.
 
-4. Start the target gNB (gNB PCI1) e.g.
+4. Start the target gNB (gNB-PCI1) e.g.
 
 ```sh
-sudo ./nr-softmodem -O ../../../targets/PROJECTS/GENERIC-NR-5GC/CONF/gnb.sa.band78.fr1.106PRB.pci1.rfsim.conf --sa --rfsim --telnetsrv --telnetsrv.shrmod ci --gNBs.[0].min_rxtxtime 6 --rfsimulator.serveraddr 127.0.0.1
+sudo ./nr-softmodem -O ../../../targets/PROJECTS/GENERIC-NR-5GC/CONF/gnb.sa.band78.fr1.106PRB.pci1.rfsim.conf --rfsim --telnetsrv --telnetsrv.shrmod ci --gNBs.[0].min_rxtxtime 6 --rfsimulator.serveraddr 127.0.0.1
+```
+
+**Note for same-machine setup:** When running both gNBs on the same machine, add the following network interface options to the target gNB command, e.g.:
+
+```sh
+--gNBs.[0].NETWORK_INTERFACES.GNB_IPV4_ADDRESS_FOR_NG_AMF 192.168.71.180
+--gNBs.[0].NETWORK_INTERFACES.GNB_IPV4_ADDRESS_FOR_NGU 192.168.71.180
 ```
 
 5. Trigger the N2 handover, e.g.
@@ -393,7 +423,7 @@ From gNB-PCI0, trigger handover on target gNB with PCI 1 for UE ID 1:
 ```sh
 echo ci trigger_n2_ho 1,1 | nc 127.0.0.1 9090 && echo
 ```
-where the input parameters correspond to the PCI of the neighbor call and the RRC ID of the UE.
+where the input parameters correspond to the PCI of the neighbor cell and the RRC ID of the UE.
 
 This will initiate the N2 handover on the source gNB.
 

@@ -45,6 +45,7 @@ if(ENABLE_UESCOPE OR ENABLE_ENBSCOPE OR ENABLE_NRSCOPE)
               lte_phy_scope.c
               ../../../executables/stats.c)
   target_link_libraries(xforms_common PRIVATE asn1_nr_rrc_hdrs asn1_lte_rrc_hdrs)
+  target_link_libraries(xforms_common PRIVATE log_headers)
 
   add_library(enbscope MODULE lte_enb_scope.c $<TARGET_OBJECTS:xforms_common>)
   target_link_libraries(enbscope PUBLIC forms PRIVATE asn1_nr_rrc_hdrs asn1_lte_rrc_hdrs UTIL)

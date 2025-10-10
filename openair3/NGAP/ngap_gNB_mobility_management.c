@@ -37,7 +37,7 @@
  *         (9.2.3.1 of 3GPP TS 38.413) NG-RAN node → AMF */
 NGAP_NGAP_PDU_t *encode_ng_handover_required(const ngap_handover_required_t *msg)
 {
-  NGAP_NGAP_PDU_t *pdu = malloc_or_fail(sizeof(*pdu));
+  NGAP_NGAP_PDU_t *pdu = calloc_or_fail(1, sizeof(*pdu));
 
   /* Prepare the NGAP message to encode */
   pdu->present = NGAP_NGAP_PDU_PR_initiatingMessage;
@@ -88,7 +88,9 @@ NGAP_NGAP_PDU_t *encode_ng_handover_required(const ngap_handover_required_t *msg
     asn1cSequenceAdd(ie6->value.choice.PDUSessionResourceListHORqd.list, NGAP_PDUSessionResourceItemHORqd_t, hoRequiredPduSession);
     // PDU Session ID (M)
     hoRequiredPduSession->pDUSessionID = msg->pdusessions[i].pdusession_id;
-    // Handover Required Transfer (M)
+    // Handover Required Transfer (M) - ASN.1 encoding of empty transfer structure
+    // This is a mandatory field in the NGAP Handover Required message, however it contains
+    // only Direct Forwarding Path Availability IE, which is optional and is not sent
     NGAP_HandoverRequiredTransfer_t hoRequiredTransfer = {0};
     uint8_t ho_req_transfer_transparent_container_buffer[128] = {0};
     if (LOG_DEBUGFLAG(DEBUG_ASN1))
@@ -123,7 +125,7 @@ NGAP_NGAP_PDU_t *encode_ng_handover_required(const ngap_handover_required_t *msg
 
   // PDU Session Resource Information List (O)
   asn1cCalloc(source2target->pDUSessionResourceInformationList, pduSessionList);
-  for (uint8_t i = 0; i < msg->nb_of_pdusessions; ++i) {
+  for (uint16_t i = 0; i < msg->nb_of_pdusessions; ++i) {
     const pdusession_resource_t *pduSession = &msg->pdusessions[i];
     NGAP_DEBUG("Handover Required: preparing PDU Session Resource Information List for PDU Session ID %d\n",
                pduSession->pdusession_id);
@@ -196,7 +198,7 @@ NGAP_NGAP_PDU_t *encode_ng_handover_required(const ngap_handover_required_t *msg
 
 NGAP_NGAP_PDU_t *encode_ng_handover_failure(const ngap_handover_failure_t *msg)
 {
-  NGAP_NGAP_PDU_t *pdu = malloc_or_fail(sizeof(*pdu));
+  NGAP_NGAP_PDU_t *pdu = calloc_or_fail(1, sizeof(*pdu));
 
   /* Prepare the NGAP message to encode */
   pdu->present = NGAP_NGAP_PDU_PR_unsuccessfulOutcome;
@@ -281,7 +283,7 @@ int decode_ng_handover_request(ngap_handover_request_t *out, const NGAP_NGAP_PDU
   // Mobility Restriction List (O)
   NGAP_FIND_PROTOCOLIE_BY_ID(NGAP_HandoverRequestIEs_t, ie, container, NGAP_ProtocolIE_ID_id_MobilityRestrictionList, false);
   if (ie != NULL) {
-    out->mobility_restriction = malloc_or_fail(sizeof(*out->mobility_restriction));
+    out->mobility_restriction = calloc_or_fail(1, sizeof(*out->mobility_restriction));
     *out->mobility_restriction = decode_ngap_mobility_restriction(&ie->value.choice.MobilityRestrictionList);
   }
 
@@ -383,7 +385,7 @@ int decode_ng_handover_request(ngap_handover_request_t *out, const NGAP_NGAP_PDU
 
 NGAP_NGAP_PDU_t *encode_ng_handover_request_ack(ngap_handover_request_ack_t *msg)
 {
-  NGAP_NGAP_PDU_t *pdu = malloc_or_fail(sizeof(*pdu));
+  NGAP_NGAP_PDU_t *pdu = calloc_or_fail(1, sizeof(*pdu));
 
   pdu->present = NGAP_NGAP_PDU_PR_successfulOutcome;
   asn1cCalloc(pdu->choice.successfulOutcome, head);
@@ -451,7 +453,7 @@ NGAP_NGAP_PDU_t *encode_ng_handover_request_ack(ngap_handover_request_ack_t *msg
       for (int j = 0; j < msg->pdusessions[pduSesIdx].ack_transfer.nb_of_qos_flow; j++) {
         asn1cSequenceAdd(transfer.qosFlowSetupResponseList.list, NGAP_QosFlowItemWithDataForwarding_t, qosItem);
         qosItem->qosFlowIdentifier = msg->pdusessions[pduSesIdx].ack_transfer.qos_setup_list[j].qfi;
-        qosItem->dataForwardingAccepted = malloc_or_fail(sizeof(*qosItem->dataForwardingAccepted));
+        qosItem->dataForwardingAccepted = calloc_or_fail(1, sizeof(*qosItem->dataForwardingAccepted));
         *qosItem->dataForwardingAccepted = NGAP_DataForwardingAccepted_data_forwarding_accepted;
       }
 
@@ -563,7 +565,7 @@ void free_ng_handover_command(ngap_handover_command_t *msg)
 
 NGAP_NGAP_PDU_t *encode_ng_handover_notify(const ngap_handover_notify_t *msg)
 {
-  NGAP_NGAP_PDU_t *pdu = malloc_or_fail(sizeof(*pdu));
+  NGAP_NGAP_PDU_t *pdu = calloc_or_fail(1, sizeof(*pdu));
 
   // Message Type (M)
   pdu->present = NGAP_NGAP_PDU_PR_initiatingMessage;
@@ -680,7 +682,7 @@ int decode_ng_handover_cancel_ack(ngap_handover_cancel_ack_t *out, const NGAP_NG
 /** @brief Encode NGAP UL RAN Status Transfer (9.2.3.14 of 3GPP TS 38.413) */
 NGAP_NGAP_PDU_t *encode_ng_ul_ran_status_transfer(const ngap_ran_status_transfer_t *msg)
 {
-  NGAP_NGAP_PDU_t *pdu = malloc_or_fail(sizeof(*pdu));
+  NGAP_NGAP_PDU_t *pdu = calloc_or_fail(1, sizeof(*pdu));
   pdu->present = NGAP_NGAP_PDU_PR_initiatingMessage;
   asn1cCalloc(pdu->choice.initiatingMessage, head);
   head->procedureCode = NGAP_ProcedureCode_id_UplinkRANStatusTransfer;

@@ -63,24 +63,20 @@ static void free_ho_ctx(nr_handover_context_t *ho_ctx)
   free(ho_ctx);
 }
 
+/** @brief Fill DRB to Be Setup List in F1 UE Context Setup Request (optional list)
+ * @return 0 if list is empty, list size otherwise */
 static int fill_drb_to_be_setup(const gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue, f1ap_drb_to_setup_t drbs[MAX_DRBS_PER_UE])
 {
   int nb_drb = 0;
-  for (int i = 0; i < MAX_DRBS_PER_UE; ++i) {
-    drb_t *rrc_drb = &ue->established_drbs[i];
-    if (rrc_drb->status == DRB_INACTIVE)
-      continue;
 
+  FOR_EACH_SEQ_ARR(drb_t *, rrc_drb, &ue->drbs) {
+    DevAssert(nb_drb < MAX_DRBS_PER_UE);
     f1ap_drb_to_setup_t *drb = &drbs[nb_drb];
+    nr_pdcp_configuration_t *pdcp = &rrc_drb->pdcp_config;
     nb_drb++;
     /* fetch an existing PDU session for this DRB */
     rrc_pdu_session_param_t *pdu = find_pduSession_from_drbId(ue, rrc_drb->drb_id);
     AssertFatal(pdu != NULL, "no PDU session for DRB ID %d\n", rrc_drb->drb_id);
-    // for the moment, we only support one QoS flow. Put a reminder in case
-    // this changes
-    AssertFatal(pdu->param.nb_qos == 1, "only 1 Qos flow supported\n");
-    int qfi = rrc_drb->cnAssociation.sdap_config.mappedQoS_FlowsToAdd[0];
-    pdusession_level_qos_parameter_t *qos_param = get_qos_characteristics(qfi, pdu);
 
     drb->id = rrc_drb->drb_id;
 
@@ -88,9 +84,14 @@ static int fill_drb_to_be_setup(const gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue, f1ap_
     drb->nr.nssai = pdu->param.nssai;
     drb->nr.flows_len = 1;
     drb->nr.flows = calloc_or_fail(1, sizeof(*drb->nr.flows));
-    DevAssert(qfi > 0);
-    drb->nr.flows[0].qfi = qfi;
-    drb->nr.flows[0].param = get_qos_char_from_qos_flow_param(qos_param);
+
+    // Find the QoS flow associated with this DRB
+    // Since we don't have QFI mapping in the new structure, we'll use the first QoS flow
+    AssertFatal(seq_arr_size(&pdu->param.qos) == 1, "only 1 Qos flow supported\n");
+    nr_rrc_qos_t *qos_param = (nr_rrc_qos_t *)seq_arr_at(&pdu->param.qos, 0);
+    DevAssert(qos_param->qos.qfi > 0);
+    drb->nr.flows[0].qfi = qos_param->qos.qfi;
+    drb->nr.flows[0].param = get_qos_char_from_qos_flow_param(&qos_param->qos);
     /* the DRB QoS parameters: we just reuse the ones from the first flow */
     drb->nr.drb_qos = drb->nr.flows[0].param;
 
@@ -99,10 +100,11 @@ static int fill_drb_to_be_setup(const gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue, f1ap_
     drb->up_ul_tnl_len = 1;
 
     drb->rlc_mode = rrc->configuration.um_on_default_drb ? F1AP_RLC_MODE_UM_BIDIR : F1AP_RLC_MODE_AM;
+    DevAssert(pdcp->drb.sn_size == 18 || pdcp->drb.sn_size == 12);
     drb->dl_pdcp_sn_len = malloc_or_fail(sizeof(*drb->dl_pdcp_sn_len));
-    *drb->dl_pdcp_sn_len = rrc_drb->pdcp_config.pdcp_SN_SizeDL == 1 ? F1AP_PDCP_SN_18B : F1AP_PDCP_SN_12B;
+    *drb->dl_pdcp_sn_len = pdcp->drb.sn_size == 18 ? F1AP_PDCP_SN_18B : F1AP_PDCP_SN_12B;
     drb->ul_pdcp_sn_len = malloc_or_fail(sizeof(*drb->ul_pdcp_sn_len));
-    *drb->ul_pdcp_sn_len = rrc_drb->pdcp_config.pdcp_SN_SizeUL == 1 ? F1AP_PDCP_SN_18B : F1AP_PDCP_SN_12B;;
+    *drb->ul_pdcp_sn_len = pdcp->drb.sn_size == 18 ? F1AP_PDCP_SN_18B : F1AP_PDCP_SN_12B;
   }
   return nb_drb;
 }

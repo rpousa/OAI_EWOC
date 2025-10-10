@@ -260,7 +260,7 @@ void update_mac_ul_timers(NR_UE_MAC_INST_t *mac)
   if (phr_info->is_configured) {
     bool prohibit_expired = nr_timer_tick(&phr_info->prohibitPHR_Timer);
     if (prohibit_expired) {
-      int16_t pathloss = compute_nr_SSB_PL(mac, mac->ssb_measurements.ssb_rsrp_dBm);
+      int16_t pathloss = compute_nr_SSB_PL(mac);
       if (abs(pathloss - phr_info->PathlossLastValue) > phr_info->PathlossChange_db) {
         phr_info->phr_reporting |= (1 << phr_cause_prohibit_timer);
       }
@@ -1299,8 +1299,8 @@ static void nr_update_rlc_buffers_status(NR_UE_MAC_INST_t *mac, frame_t frameP, 
             rlc_status.bytes_in_buffer,
             frameP,
             slotP);
-      lc_sched_info->LCID_buffer_remain = rlc_status.bytes_in_buffer;
     }
+    lc_sched_info->LCID_buffer_remain = rlc_status.bytes_in_buffer;
   }
 }
 
@@ -1331,6 +1331,8 @@ static void nr_update_bsr(NR_UE_MAC_INST_t *mac, uint32_t *LCG_bytes)
   bool bsr_regular_triggered = mac->scheduling_info.BSR_reporting_active & NR_BSR_TRIGGER_REGULAR;
   for (int i = 0; i < mac->lc_ordered_list.count; i++) {
     nr_lcordered_info_t *lc_info = mac->lc_ordered_list.array[i];
+    if (lc_info->rb_suspended)
+      continue;
     int lcid = lc_info->lcid;
     NR_LC_SCHEDULING_INFO *lc_sched_info = get_scheduling_info_from_lcid(mac, lcid);
     int lcgid = lc_sched_info->LCGID;
@@ -1713,7 +1715,7 @@ static bool schedule_uci_on_pusch(NR_UE_MAC_INST_t *mac,
   return mux_done;
 }
 
-static void nr_ue_pucch_scheduler(NR_UE_MAC_INST_t *mac, frame_t frameP, int slotP)
+static void nr_ue_pucch_scheduler(NR_UE_MAC_INST_t *mac, frame_t frame, int slot)
 {
   PUCCH_sched_t pucch[3] = {0}; // TODO the size might change in the future in case of multiple SR or multiple CSI in a slot
 
@@ -1722,40 +1724,50 @@ static void nr_ue_pucch_scheduler(NR_UE_MAC_INST_t *mac, frame_t frameP, int slo
   mac->nr_ue_emul_l1.num_csi_reports = 0;
   int num_res = 0;
 
-  // SR
-  if (mac->state == UE_CONNECTED && trigger_periodic_scheduling_request(mac, &pucch[0], frameP, slotP)) {
-    num_res++;
-    // TODO check if the PUCCH resource for the SR transmission occasion overlap with a UL-SCH resource
+  if (mac->ra.ra_pucch) {
+    // scheduling PUCCH prepared in advance for MSG4
+    RA_PUCCH_SCHED_t *ra_pucch = mac->ra.ra_pucch;
+    if (ra_pucch->sched_frame == frame && ra_pucch->sched_slot == slot) {
+      pucch[0] = ra_pucch->pucch_sched;
+      num_res++;
+      free_and_zero(mac->ra.ra_pucch);
+    }
+  } else {
+    // SR
+    if (mac->state == UE_CONNECTED && trigger_periodic_scheduling_request(mac, &pucch[0], frame, slot)) {
+      num_res++;
+      // TODO check if the PUCCH resource for the SR transmission occasion overlap with a UL-SCH resource
+    }
+
+    // CSI
+    int csi_res = 0;
+    if (mac->state == UE_CONNECTED)
+      csi_res = nr_get_csi_measurements(mac, frame, slot, &pucch[num_res]);
+    if (csi_res > 0) {
+      num_res += csi_res;
+    }
+
+    // ACKNACK
+    bool any_harq = get_downlink_ack(mac, frame, slot, &pucch[num_res]);
+    if (any_harq)
+      num_res++;
+
+    if (num_res == 0)
+      return;
+    // do no transmit pucch if only SR scheduled and it is negative
+    if (num_res == 1 && pucch[0].n_sr > 0 && pucch[0].sr_payload == 0)
+      return;
+
+    if (num_res > 1)
+      multiplex_pucch_resource(mac, pucch, num_res);
   }
-
-  // CSI
-  int csi_res = 0;
-  if (mac->state == UE_CONNECTED)
-    csi_res = nr_get_csi_measurements(mac, frameP, slotP, &pucch[num_res]);
-  if (csi_res > 0) {
-    num_res += csi_res;
-  }
-
-  // ACKNACK
-  bool any_harq = get_downlink_ack(mac, frameP, slotP, &pucch[num_res]);
-  if (any_harq)
-    num_res++;
-
-  if (num_res == 0)
-    return;
-  // do no transmit pucch if only SR scheduled and it is negative
-  if (num_res == 1 && pucch[0].n_sr > 0 && pucch[0].sr_payload == 0)
-    return;
-
-  if (num_res > 1)
-    multiplex_pucch_resource(mac, pucch, num_res);
 
   for (int j = 0; j < num_res; j++) {
     if (pucch[j].n_harq + pucch[j].n_sr + pucch[j].n_csi != 0) {
       LOG_D(NR_MAC,
             "%d.%d configure pucch, O_ACK %d, O_SR %d, O_CSI %d\n",
-            frameP,
-            slotP,
+            frame,
+            slot,
             pucch[j].n_harq,
             pucch[j].n_sr,
             pucch[j].n_csi);
@@ -1764,20 +1776,20 @@ static void nr_ue_pucch_scheduler(NR_UE_MAC_INST_t *mac, frame_t frameP, int slo
       mac->nr_ue_emul_l1.num_csi_reports = pucch[j].n_csi;
 
       // checking if we need to schedule pucch[j] on PUSCH
-      if (schedule_uci_on_pusch(mac, frameP, slotP, &pucch[j], mac->current_UL_BWP))
+      if (schedule_uci_on_pusch(mac, frame, slot, &pucch[j], mac->current_UL_BWP))
         continue;
 
-      fapi_nr_ul_config_request_pdu_t *pdu = lockGet_ul_config(mac, frameP, slotP, FAPI_NR_UL_CONFIG_TYPE_PUCCH);
+      fapi_nr_ul_config_request_pdu_t *pdu = lockGet_ul_config(mac, frame, slot, FAPI_NR_UL_CONFIG_TYPE_PUCCH);
       if (!pdu) {
         LOG_E(NR_MAC, "Error in pucch allocation\n");
         return;
       }
       DevAssert(mac->current_DL_BWP != NULL);
       int mu = mac->current_DL_BWP->scs;
-      mac->nr_ue_emul_l1.active_uci_sfn_slot = NFAPI_SFNSLOT2DEC(mu, frameP, slotP);
+      mac->nr_ue_emul_l1.active_uci_sfn_slot = NFAPI_SFNSLOT2DEC(mu, frame, slot);
       int ret = nr_ue_configure_pucch(mac,
-                                      slotP,
-                                      frameP,
+                                      slot,
+                                      frame,
                                       mac->crnti, // FIXME not sure this is valid for all pucch instances
                                       &pucch[j],
                                       &pdu->pucch_config_pdu);
@@ -2905,7 +2917,7 @@ static void nr_ue_fill_phr(NR_UE_MAC_INST_t *mac,
         headroom,
         tx_power);
 
-  phr_info->PathlossLastValue = compute_nr_SSB_PL(mac, mac->ssb_measurements.ssb_rsrp_dBm);
+  phr_info->PathlossLastValue = compute_nr_SSB_PL(mac);
   // Restart both timers according to 38.321
   nr_timer_start(&phr_info->periodicPHR_Timer);
   nr_timer_start(&phr_info->prohibitPHR_Timer);

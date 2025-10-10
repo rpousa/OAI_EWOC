@@ -306,6 +306,10 @@ int8_t get_next_dmrs_symbol_in_slot(uint16_t  ul_dmrs_symb_pos, uint8_t counter,
   return -1;
 }
 
+int8_t get_num_dmrs_re_per_rb(const uint8_t dmrs_type, const uint8_t num_cdm_grp_no_data)
+{
+  return (dmrs_type == NFAPI_NR_DMRS_TYPE1 ? 6 * num_cdm_grp_no_data : 4 * num_cdm_grp_no_data);
+}
 
 /* return the position of valid dmrs symbol in a slot for channel compensation */
 int8_t get_valid_dmrs_idx_for_channel_est(uint16_t dmrs_symb_pos, uint8_t counter)

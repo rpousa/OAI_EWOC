@@ -201,9 +201,9 @@ pdusession_level_qos_parameter_t fill_qos(uint8_t qfi, const NGAP_QosFlowLevelQo
   }
   // Allocation and Retention Priority
   const NGAP_AllocationAndRetentionPriority_t *arp = &params->allocationAndRetentionPriority;
-  out.allocation_retention_priority.priority_level = arp->priorityLevelARP;
-  out.allocation_retention_priority.pre_emp_capability = arp->pre_emptionCapability;
-  out.allocation_retention_priority.pre_emp_vulnerability = arp->pre_emptionVulnerability;
+  out.arp.priority_level = arp->priorityLevelARP;
+  out.arp.pre_emp_capability = arp->pre_emptionCapability;
+  out.arp.pre_emp_vulnerability = arp->pre_emptionVulnerability;
 
   return out;
 }

@@ -147,8 +147,6 @@ void nr_pdsch_ptrs_processing(PHY_VARS_NR_UE *ue,
                               uint16_t rnti,
                               NR_UE_DLSCH_t dlsch[2]);
 
-float_t get_nr_RSRP(module_id_t Mod_id,uint8_t CC_id,uint8_t gNB_index);
-
 int nr_sl_psbch_rsrp_measurements(sl_nr_ue_phy_params_t *sl_phy_params,
                                   NR_DL_FRAME_PARMS *fp,
                                   c16_t rxdataF[][fp->samples_per_slot_wCP],

@@ -27,6 +27,7 @@
 #include "openair2/E1AP/e1ap_common.h"
 #include "openair2/E2AP/flexric/src/util/time_now_us.h"
 #include "openair2/F1AP/f1ap_ids.h"
+#include "ds/seq_arr.h"
 
 static pthread_once_t once_kpm_mutex = PTHREAD_ONCE_INIT;
 
@@ -212,8 +213,8 @@ static arr_ue_id_t filter_ues_by_s_nssai_in_cu(const test_info_lst_t test_info)
     /* UE has no AMF UE NGAP ID yet => can't send message */
     if (ue->amf_ue_ngap_id >= (1LL << 40))
       continue;
-    for (int p = 0; p < ue->nb_of_pdusessions; ++p) {
-      pdusession_t *pdu = &ue->pduSession[p].param;
+    FOR_EACH_SEQ_ARR(rrc_pdu_session_param_t*, item, &ue->pduSessions) {
+      pdusession_t* pdu = &item->param;
       if (nssai_matches(pdu->nssai, sst, sd)) {
         arr_ue_id.ue_id[arr_ue_id.sz] = fill_ue_id_data[ngran_gNB_CU](ue, 0, 0);
 

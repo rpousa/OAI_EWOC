@@ -1,6 +1,6 @@
 [[_TOC_]]
 
-# 1. Introduction
+## 1. Introduction
 
 E1 is the interface that lies between the nodes CU Control Plane (CUCP) and CU User Plane (CUUP). Once the nodes are configured, all user plane traffic flows through CUUP.
 
@@ -77,11 +77,11 @@ sequenceDiagram
 ```
 More details about the E1AP procedures in OAI are available in this document: [E1 Procedures](./e1ap_procedures.md).
 
-# 2. Running the E1 Split
+## 2. Running the E1 Split
 
 The setup is assuming that all modules are running on the same machine. The user can refer to the [F1 design document](./../F1AP/F1-design.md) for local deployment of the DU.
 
-## 2.1 Configuration File
+### 2.1 Configuration File
 
 The gNB is started based on the node type that is specified in the configuration file. The following parameters must be configured accordingly.
 
@@ -130,9 +130,9 @@ The CUUP uses the IP address specified in `gNBs.[0].local_s_address` for F1-U an
 
 Alternatively, you can use the config files `ci-scripts/conf_files/gnb-cucp.sa.f1.conf` and `ci-scripts/conf_files/gnb-cuup.sa.f1.conf`.
 
-## 2.2 Steps to Run the Split in rfsimulator with OAI UE
+### 2.2 Steps to Run the Split in rfsimulator with OAI UE
 
-Note: A 5G core must be running at this point. Steps to start the OAI 5G core can be found [in the oai-cn5g-fed repository](https://gitlab.eurecom.fr/oai/cn5g/oai-cn5g-fed/-/blob/master/docs/DEPLOY_HOME.md) or [here](NR_SA_CN5G_gNB_USRP_COTS_UE_Tutorial.md).
+Note: A 5G core must be running at this point. Steps to start the OAI 5G core can be found [in the oai-cn5g-fed repository](https://gitlab.eurecom.fr/oai/cn5g/oai-cn5g-fed/-/blob/master/docs/DEPLOY_HOME.md) or [here](../NR_SA_Tutorial_OAI_CN5G.md).
 
 0. Open wireshark to capture the E1AP messages. You might set the capture filter
    to `sctp` to limit the number of captured packages.
@@ -165,7 +165,7 @@ OAI UE:
 sudo ./nr-uesoftmodem -r 106 --numerology 1 --band 78 -C 3619200000 --rfsim --rfsimulator.serveraddr 127.0.0.1
 ```
 
-# 3. Configuration file IP addresses of network functions
+## 3. Configuration file IP addresses of network functions
 
 You can also run the nodes on different machines. If you do so please change the interface parameters accordingly and make sure the interfaces are reachable. Please refer to the following figure for an overview of all parameters.
 
@@ -173,7 +173,7 @@ You can also run the nodes on different machines. If you do so please change the
 
 [PDF version](./images/e1-archi.pdf) | [LaTeX/TikZ version](./images/e1-archi.tex) if you want to modify to reflect your setup
 
-# 4. Multiple CU-UP
+## 4. Multiple CU-UP
 
 It is possible to connect multiple CU-UP to the same CU-CP. In the handler of
 the E1 Setup Request, the CU-CP verifies that the PLMN(s) (MCC, MNC) between
@@ -195,6 +195,6 @@ that you have to restart the CU-CP if you want to connect the CU-UP again
 (e.g., after a crash). The CU-CP might also misfunction during attach if a
 CU-UP was connected, but disconnected in the meantime.
 
-# 5. Abnormal conditions
+## 5. Abnormal conditions
 
 * The CU-UP goes offline during normal operation (e.g. UEs have a valid PDU Session and are exchanging data on the UP): after restarting the CU-UP, the UP is not restored and the user will notice GTP errors. In this case the UEs have to reconnect.

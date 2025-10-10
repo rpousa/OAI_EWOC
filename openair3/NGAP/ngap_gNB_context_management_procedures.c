@@ -111,6 +111,7 @@ int ngap_ue_context_release_complete(instance_t instance,
   if (ngap_gNB_encode_pdu(&pdu, &buffer, &length) < 0) {
     /* Encode procedure has failed... */
     NGAP_ERROR("Failed to encode UE context release complete\n");
+    ASN_STRUCT_FREE_CONTENTS_ONLY(asn_DEF_NGAP_NGAP_PDU, &pdu);
     return -1;
   }
 
@@ -125,6 +126,7 @@ int ngap_ue_context_release_complete(instance_t instance,
   ngap_gNB_ue_context_t *tmp = ngap_detach_ue_context(ue_release_complete_p->gNB_ue_ngap_id);
   if (tmp)
     free(tmp);
+  ASN_STRUCT_FREE_CONTENTS_ONLY(asn_DEF_NGAP_NGAP_PDU, &pdu);
   return 0;
 }
 
@@ -207,6 +209,7 @@ int ngap_ue_context_release_req(instance_t instance,
   if (ngap_gNB_encode_pdu(&pdu, &buffer, &length) < 0) {
     /* Encode procedure has failed... */
     NGAP_ERROR("Failed to encode UE context release complete\n");
+    ASN_STRUCT_FREE_CONTENTS_ONLY(asn_DEF_NGAP_NGAP_PDU, &pdu);
     return -1;
   }
 
@@ -215,6 +218,7 @@ int ngap_ue_context_release_req(instance_t instance,
                                    ue_context_p->amf_ref->assoc_id, buffer,
                                    length, ue_context_p->tx_stream);
 
+  ASN_STRUCT_FREE_CONTENTS_ONLY(asn_DEF_NGAP_NGAP_PDU, &pdu);
   return 0;
 }
 

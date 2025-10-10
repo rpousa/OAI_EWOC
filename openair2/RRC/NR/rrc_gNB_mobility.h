@@ -33,7 +33,11 @@ typedef struct nr_rrc_du_container_t nr_rrc_du_container_t;
 typedef struct NR_CellGroupConfig NR_CellGroupConfig_t;
 
 typedef void (*ho_cancel_t)(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue);
-typedef int (*ho_status_transfer_t)(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE, const int n_to_mod, const e1_pdcp_status_info_t *pdcp_status);
+typedef int (*ho_status_transfer_t)(gNB_RRC_INST *rrc,
+                                    gNB_RRC_UE_t *UE,
+                                    const int n_to_mod,
+                                    const int *drb_ids,
+                                    const e1_pdcp_status_info_t *pdcp_status);
 
 typedef struct nr_ho_source_cu {
   /// pointer to the (source) DU structure

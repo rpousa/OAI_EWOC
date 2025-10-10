@@ -8,11 +8,11 @@ else()
 endif()
 
 add_library(params_yaml_static config_yaml.cpp)
-target_link_libraries(params_yaml_static PUBLIC UTIL yaml-cpp::yaml-cpp)
+target_link_libraries(params_yaml_static PUBLIC yaml-cpp::yaml-cpp)
 if (ENABLE_TESTS)
   add_subdirectory(tests)
 endif()
 
 add_library(params_yaml MODULE config_yaml.cpp)
-target_link_libraries(params_yaml PUBLIC UTIL yaml-cpp::yaml-cpp)
+target_link_libraries(params_yaml PUBLIC yaml-cpp::yaml-cpp)
 set_target_properties(params_yaml PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})

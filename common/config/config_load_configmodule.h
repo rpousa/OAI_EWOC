@@ -39,7 +39,6 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "common/config/config_paramdesc.h"
-#include "common/utils/T/T.h"
 #define CONFIG_MAX_OOPT_PARAMS    10     // maximum number of parameters in the -O option (-O <cfgmode>:P1:P2...
 #define CONFIG_MAX_ALLOCATEDPTRS  32768   // maximum number of parameters that can be dynamicaly allocated in the config module
 

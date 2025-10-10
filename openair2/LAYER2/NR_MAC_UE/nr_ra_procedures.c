@@ -42,7 +42,7 @@
 int16_t get_prach_tx_power(NR_UE_MAC_INST_t *mac)
 {
   RA_config_t *ra = &mac->ra;
-  int16_t pathloss = compute_nr_SSB_PL(mac, mac->ssb_measurements.ssb_rsrp_dBm);
+  int16_t pathloss = compute_nr_SSB_PL(mac);
   int16_t ra_preamble_rx_power = (int16_t)(ra->prach_resources.ra_preamble_rx_target_power + pathloss);
   return min(ra->prach_resources.Pc_max, ra_preamble_rx_power);
 }
@@ -177,7 +177,7 @@ static void select_preamble_group(NR_UE_MAC_INST_t *mac)
       // – preambleReceivedTargetPower – msg3-DeltaPreamble – messagePowerOffsetGroupB
       int groupB_pow_offset = get_messagePowerOffsetGroupB(groupB->messagePowerOffsetGroupB);
       int PLThreshold = ra->prach_resources.Pc_max - ra->preambleRxTargetPower - ra->msg3_deltaPreamble - groupB_pow_offset;
-      int pathloss = compute_nr_SSB_PL(mac, mac->ssb_measurements.ssb_rsrp_dBm);
+      int pathloss = compute_nr_SSB_PL(mac);
       // TODO if the Random Access procedure was initiated for the CCCH logical channel and the CCCH SDU size
       // plus MAC subheader is greater than ra-Msg3SizeGroupA
       if (ra->Msg3_size > get_Msg3SizeGroupA(groupB->ra_Msg3SizeGroupA) && pathloss < PLThreshold)
@@ -879,23 +879,23 @@ bool init_RA(NR_UE_MAC_INST_t *mac, int frame)
   // set POWER_OFFSET_2STEP_RA to 0 dB
   prach_resources->power_offset_2step = 0;
 
-  const NR_UE_UL_BWP_t *current_UL_BWP = mac->current_UL_BWP;
   // perform the BWP operation as specified in clause 5.15
   // if PRACH occasions are not configured for the active UL BWP
-  if (!current_UL_BWP->rach_ConfigCommon) {
+  if (!mac->current_UL_BWP->rach_ConfigCommon) {
     // switch the active UL BWP to BWP indicated by initialUplinkBWP
-    current_UL_BWP = get_ul_bwp_structure(mac, 0, false);
+    mac->current_UL_BWP = get_ul_bwp_structure(mac, 0, false);
     // if the Serving Cell is an SpCell
     // switch the active DL BWP to BWP indicated by initialDownlinkBWP
     mac->current_DL_BWP = get_dl_bwp_structure(mac, 0, false);
   } else {
     // if the active DL BWP does not have the same bwp-Id as the active UL BWP
-    if (current_UL_BWP->bwp_id != mac->current_DL_BWP->bwp_id) {
+    if (mac->current_UL_BWP->bwp_id != mac->current_DL_BWP->bwp_id) {
       // switch the active DL BWP to the DL BWP with the same bwp-Id as the active UL BWP
       mac->current_DL_BWP = get_dl_bwp_structure(mac, 0, false);
     }
   }
 
+  const NR_UE_UL_BWP_t *current_UL_BWP = mac->current_UL_BWP;
   NR_RACH_ConfigCommon_t *nr_rach_ConfigCommon = current_UL_BWP->rach_ConfigCommon;
   AssertFatal(nr_rach_ConfigCommon, "rach-ConfigCommon should be configured here\n");
   // stop the bwp-InactivityTimer associated with the active DL BWP of this Serving Cell, if running
@@ -971,7 +971,7 @@ bool init_RA(NR_UE_MAC_INST_t *mac, int frame)
                       "msgA_RSRP_Threshold_r16 is mandatory present if both 2-step and 4-step random access types are configured\n");
           // For thresholds the RSRP value is (IE value – 156) dBm except for the IE 127 in which case the actual value is infinity
           int rsrp_msga_thr = *twostep_conf->msgA_RSRP_Threshold_r16 - 156;
-          if (*twostep_conf->msgA_RSRP_Threshold_r16 != 127 && mac->ssb_measurements.ssb_rsrp_dBm > rsrp_msga_thr)
+          if (*twostep_conf->msgA_RSRP_Threshold_r16 != 127 && mac->ssb_measurements[mac->mib_ssb].ssb_rsrp_dBm > rsrp_msga_thr)
             twostep = true;
         } else {
           // if the BWP selected for Random Access procedure is only configured with 2-step RA type Random Access
@@ -1141,7 +1141,7 @@ void nr_get_Msg3_MsgA_PUSCH_payload(NR_UE_MAC_INST_t *mac, uint8_t *buf, int TBS
     *(NR_MAC_SUBHEADER_FIXED *)pdu = (NR_MAC_SUBHEADER_FIXED){.LCID = UL_SCH_LCID_PADDING};
     pdu += sizeof(NR_MAC_SUBHEADER_FIXED);
   }
-  ra->Msg3_buffer = calloc(TBS_max, sizeof(uint8_t));
+  ra->Msg3_buffer = calloc_or_fail(TBS_max, sizeof(uint8_t));
   memcpy(ra->Msg3_buffer, buf, sizeof(uint8_t) * TBS_max);
 }
 
@@ -1260,18 +1260,12 @@ void prepare_msg4_msgb_feedback(NR_UE_MAC_INST_t *mac, int pid, int ack_nack)
                          .n_harq = 1};
   current_harq->active = false;
   current_harq->ack_received = false;
-  if (get_softmodem_params()->emulate_l1) {
-    mac->nr_ue_emul_l1.harq[pid].active = true;
-    mac->nr_ue_emul_l1.harq[pid].active_dl_harq_sfn = sched_frame;
-    mac->nr_ue_emul_l1.harq[pid].active_dl_harq_slot = sched_slot;
-  }
-  fapi_nr_ul_config_request_pdu_t *pdu = lockGet_ul_config(mac, sched_frame, sched_slot, FAPI_NR_UL_CONFIG_TYPE_PUCCH);
-  if (!pdu)
-    return;
-  int ret = nr_ue_configure_pucch(mac, sched_slot, sched_frame, mac->ra.t_crnti, &pucch, &pdu->pucch_config_pdu);
-  if (ret != 0)
-    remove_ul_config_last_item(pdu);
-  release_ul_config(pdu, false);
+
+  RA_config_t *ra = &mac->ra;
+  ra->ra_pucch = calloc_or_fail(1, sizeof(*ra->ra_pucch));
+  ra->ra_pucch->pucch_sched = pucch;
+  ra->ra_pucch->sched_frame = sched_frame;
+  ra->ra_pucch->sched_slot = sched_slot;
 }
 
 void reset_ra(NR_UE_MAC_INST_t *nr_mac, bool free_prach)

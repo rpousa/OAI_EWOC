@@ -160,6 +160,108 @@ openair0_config_t openair0_cfg[MAX_CARDS];
 
 channel_desc_t *UE2gNB[MAX_MOBILES_PER_GNB][NUMBER_OF_gNB_MAX];
 
+static void copy_bytes_to_packed_bits(const uint8_t *in, const uint32_t num_bits, const bool is_ulsch, uint8_t *out)
+{
+  if (is_ulsch) { // MATLAB computes CRC for input of MSB first
+    for (uint_fast32_t b = 0; b < num_bits; b++) {
+      out[b / 8] |= ((in[b] & 1) << (7 - (b % 8)));
+    }
+  } else {
+    for (uint_fast32_t b = 0; b < num_bits; b++) {
+      out[b / 8] |= (in[b] << (b % 8));
+    }
+  }
+}
+
+static void prepare_ue_pusch_pdu_from_matlab_vector(const bool uci_on_pusch,
+                                                    FILE *vect_file,
+                                                    nfapi_nr_ue_pusch_pdu_t *pusch_config_pdu,
+                                                    uint8_t *cw_buf)
+{
+  if (!uci_on_pusch)
+    return;
+
+  if (vect_file == NULL)
+    return;
+
+  struct vect_vars {
+    uint32_t A;
+    uint32_t oack;
+    uint32_t ocsi1;
+    uint32_t ocsi2;
+    uint32_t cwlen;
+    uint32_t cwlen_scr;
+  } __attribute__((packed));
+
+  struct vect_vars var = {0};
+  if (1 != fread(&var, sizeof(var), 1, vect_file)) {
+    printf("Error reading from matlab vector file\n");
+    exit(-1);
+  }
+
+  const uint16_t buff_len = var.A + var.oack + var.ocsi1 + var.ocsi2;
+  uint8_t vec_bits[buff_len];
+  memset(vec_bits, 0, sizeof(vect_file));
+
+  uint8_t *p_vec_bits = vec_bits;
+  if (var.A != fread(p_vec_bits, sizeof(uint8_t), var.A, vect_file)) {
+    printf("Error reading ULSCH bits from file\n");
+    exit(-1);
+  }
+  p_vec_bits += var.A;
+  if (var.oack != fread(p_vec_bits, sizeof(uint8_t), var.oack, vect_file)) {
+    printf("Error reading ACK bits from file\n");
+    exit(-1);
+  }
+  p_vec_bits += var.oack;
+  if (var.ocsi1 != fread(p_vec_bits, sizeof(uint8_t), var.ocsi1, vect_file)) {
+    printf("Error reading CSI1 bits from file\n");
+    exit(-1);
+  }
+  p_vec_bits += var.ocsi1;
+  if (var.ocsi2 != fread(p_vec_bits, sizeof(uint8_t), var.ocsi2, vect_file)) {
+    printf("Error reading CSI2 bits from file\n");
+    exit(-1);
+  }
+
+  if (var.cwlen != fread(cw_buf, sizeof(uint8_t), var.cwlen, vect_file)) {
+    printf("Error reading cw bits from file\n");
+    exit(-1);
+  }
+
+  memset(cw_buf, 0, var.cwlen_scr);
+  if (var.cwlen_scr != fread(cw_buf, sizeof(uint8_t), var.cwlen_scr, vect_file)) {
+    printf("Error reading cw bits from file\n");
+    exit(-1);
+  }
+
+  uint16_t tb_buf_size = (var.A + 7) / 8;
+  pusch_config_pdu->pusch_data.tb_size = tb_buf_size;
+  pusch_config_pdu->tx_request_body.pdu_length = tb_buf_size;
+  uint8_t *pb = pusch_config_pdu->tx_request_body.fapiTxPdu;
+  memset(pb, 0, tb_buf_size);
+  p_vec_bits = vec_bits;
+  copy_bytes_to_packed_bits(p_vec_bits, var.A, true, pb);
+
+  pusch_config_pdu->pusch_uci.harq_ack_bit_length = var.oack;
+  pb = (uint8_t *)&pusch_config_pdu->pusch_uci.harq_payload;
+  memset(pb, 0, sizeof(pusch_config_pdu->pusch_uci.harq_payload));
+  p_vec_bits += var.A;
+  copy_bytes_to_packed_bits(p_vec_bits, var.oack, false, pb);
+
+  pusch_config_pdu->pusch_uci.csi_part1_bit_length = var.ocsi1;
+  pb = (uint8_t *)&pusch_config_pdu->pusch_uci.csi_part1_payload;
+  memset(pb, 0, sizeof(pusch_config_pdu->pusch_uci.csi_part1_payload));
+  p_vec_bits += var.oack;
+  copy_bytes_to_packed_bits(p_vec_bits, var.ocsi1, false, pb);
+
+  pusch_config_pdu->pusch_uci.csi_part2_bit_length = var.ocsi2;
+  pb = (uint8_t *)&pusch_config_pdu->pusch_uci.csi_part2_payload;
+  memset(pb, 0, sizeof(pusch_config_pdu->pusch_uci.csi_part2_payload));
+  p_vec_bits += var.ocsi1;
+  copy_bytes_to_packed_bits(p_vec_bits, var.ocsi2, false, pb);
+}
+
 configmodule_interface_t *uniqCfg = NULL;
 int main(int argc, char *argv[])
 {
@@ -204,6 +306,8 @@ int main(int argc, char *argv[])
   int print_perf = 0;
   cpuf = get_cpu_freq_GHz();
   int msg3_flag = 0;
+  bool uci_on_pusch = false;
+  bool no_phase_pre_comp = false;
   int rv_index = 0;
   float roundStats;
   double effRate;
@@ -227,6 +331,7 @@ int main(int argc, char *argv[])
 
   UE_nr_rxtx_proc_t UE_proc;
   FILE *scg_fd=NULL;
+  FILE *uci_ulsch_matlab_vec = NULL;
   int file_offset = 0;
 
   double DS_TDL = .03;
@@ -252,7 +357,8 @@ int main(int argc, char *argv[])
   int c;
   bool setAffinity=false;
   char gNBthreads[128]="n";
-  while ((c = getopt(argc, argv, "--:O:a:b:c:d:ef:g:h:i:jk:m:n:p:q:r:s:t:u:v:w:y:z:A:C:F:G:H:I:M:N:PR:S:T:U:L:ZW:E:X:Y:")) != -1) {
+  while ((c = getopt(argc, argv, "--:O:a:b:c:d:ef:g:h:i:jk:m:n:o::p:q:r:s:t:u:v:w:y:z:A:C:F:G:H:I:M:N:PR:S:T:U:L:ZW:E:X:Y:"))
+         != -1) {
     /* ignore long options starting with '--', option '-O' and their arguments that are handled by configmodule */
     /* with this opstring getopt returns 1 for non-option arguments, refer to 'man 3 getopt' */
     if (c == 1 || c == '-' || c == 'O')
@@ -358,6 +464,20 @@ int main(int argc, char *argv[])
 
     case 'm':
       Imcs = atoi(optarg);
+      break;
+
+    case 'o':
+      uci_on_pusch = true;
+      // UCI on PUSCH is not implemented in OAI gNB yet.
+      // So this flag is needed to verify in MATLAB
+      no_phase_pre_comp = true;
+      if (optarg) { // -o with file input: use matlab vector
+        uci_ulsch_matlab_vec = fopen(optarg, "rb");
+        if (uci_ulsch_matlab_vec == NULL) {
+          printf("Error opening %s\n", optarg);
+          exit(-1);
+        }
+      }
       break;
 
     case 'W':
@@ -539,6 +659,7 @@ int main(int argc, char *argv[])
       printf("-k 3/4 sampling\n");
       printf("-m MCS value\n");
       printf("-n Number of trials to simulate\n");
+      printf("-o Enable UCI on PUSCH. Optionally accepts input file (without space). This feature is not yet available in gNB so only used to verify with MATLAB generated vector\n");
       printf("-p Use extended prefix mode\n");
       printf("-q MCS table\n");
       printf("-r Number of allocated resource blocks for PUSCH\n");
@@ -708,7 +829,7 @@ int main(int argc, char *argv[])
   rnti_t rnti = 0x1234;
   int uid = 0;
   NR_CellGroupConfig_t *secondaryCellGroup = get_default_secondaryCellGroup(scc, UE_Capability_nr, 0, 1, &conf, uid);
-  secondaryCellGroup->spCellConfig->reconfigurationWithSync = get_reconfiguration_with_sync(rnti, uid, scc);
+  secondaryCellGroup->spCellConfig->reconfigurationWithSync = get_reconfiguration_with_sync(rnti, uid, scc, frame);
 
   NR_BCCH_BCH_Message_t *mib = get_new_MIB_NR(scc);
 
@@ -786,7 +907,8 @@ int main(int argc, char *argv[])
   UE->if_inst->phy_config_request = nr_ue_phy_config_request;
   UE->if_inst->dl_indication = nr_ue_dl_indication;
   UE->if_inst->ul_indication = nr_ue_ul_indication;
-  
+  UE->no_phase_pre_comp = no_phase_pre_comp;
+
   UE_mac->if_module = nr_ue_if_module_init(0);
 
   initFloatingCoresTpool(threadCnt, &nrUE_params.Tpool, false, "UE-tpool");
@@ -924,6 +1046,9 @@ int main(int argc, char *argv[])
   }
 
   unsigned int available_bits = nr_get_G(nb_rb, nb_symb_sch, nb_re_dmrs, number_dmrs_symbols, unav_res, mod_order, precod_nbr_layers);
+  uint8_t cw_buf[available_bits];
+  memset(cw_buf, 0, available_bits);
+  UE->phy_sim_test_buf = calloc(1, (available_bits + 7) / 8);
   printf("[ULSIM]: VALUE OF G: %u, TBS: %u\n", available_bits, TBS);
 
   int frame_length_complex_samples = gNB->frame_parms.samples_per_subframe * NR_NUMBER_OF_SUBFRAMES_PER_FRAME;
@@ -1222,6 +1347,20 @@ int main(int argc, char *argv[])
           // pusch_config_pdu->pdu_bit_map |= PUSCH_PDU_BITMAP_DFTS_OFDM;
           pusch_config_pdu->num_dmrs_cdm_grps_no_data = num_dmrs_cdm_grps_no_data;
         }
+        if (uci_on_pusch) {
+          const nfapi_nr_ue_pusch_uci_t pusch_uci = {
+              .alpha_scaling = 3,
+              .beta_offset_csi1 = 13,
+              .beta_offset_csi2 = 13,
+              .beta_offset_harq_ack = 11,
+              .harq_ack_bit_length = 3,
+              .harq_payload = 3,
+              //.csi_part1_bit_length = 4,
+              //.csi_part1_payload = 15
+          };
+          pusch_config_pdu->pusch_uci = pusch_uci;
+          prepare_ue_pusch_pdu_from_matlab_vector(uci_on_pusch, uci_ulsch_matlab_vec, pusch_config_pdu, cw_buf);
+        }
 
         if (do_SRS == 1) {
           fapi_nr_ul_config_request_pdu_t *ul_config1 = &ul_config.ul_config_list[1];
@@ -1457,7 +1596,7 @@ int main(int argc, char *argv[])
         }
 
         if ((ulsch_gNB->last_iteration_cnt >= ulsch_gNB->max_ldpc_iterations) || ul_proc_error == 1) {
-          error_flag = 1;
+          error_flag = uci_on_pusch ? 0 : 1;
           n_errors[round]++;
           crc_status = 1;
         } else
@@ -1474,15 +1613,29 @@ int main(int argc, char *argv[])
                  available_bits, (ptrsSymbPerSlot * ptrsRePerSymb * mod_order * precod_nbr_layers));
         }
 
-        for (i = 0; i < available_bits; i++) {
-          const uint8_t current_bit = (UE->ul_harq_processes[harq_pid].f[i / 8] >> (i & 7)) & 1;
-          if (((current_bit == 0) && (pusch_vars->llr[i] <= 0)) || ((current_bit == 1) && (pusch_vars->llr[i] >= 0))) {
-            /*if(errors_scrambling == 0)
-              printf("\x1B[34m" "[frame %d][trial %d]\t1st bit in error in unscrambling = %d\n" "\x1B[0m", frame, trial, i);*/
-            errors_scrambling[round]++;
+        if (uci_on_pusch) {
+          for (i = 0; i < available_bits; i++) {
+            const uint8_t current_bit = (UE->phy_sim_test_buf[i / 8] >> (i & 7)) & 1;
+            const uint8_t test_vector_bit = cw_buf[i] & 1;
+            if (current_bit != test_vector_bit)
+              errors_scrambling[round]++;
+          }
+        } else {
+          for (i = 0; i < available_bits; i++) {
+            const uint8_t current_bit = (UE->ul_harq_processes[harq_pid].f[i / 8] >> (i & 7)) & 1;
+            if (((current_bit == 0) && (pusch_vars->llr[i] <= 0)) || ((current_bit == 1) && (pusch_vars->llr[i] >= 0))) {
+              errors_scrambling[round]++;
+            }
           }
         }
         round++;
+        if (uci_on_pusch && uci_ulsch_matlab_vec && (errors_scrambling[round] == 0)) {
+          ret = 0;
+          printf("*************\n");
+          printf("UCI on PUSCH test OK against MATLAB generated codeword\n");
+          printf("*************\n");
+          break;
+        }
       } // round
 
       if (n_trials == 1 && errors_scrambling[0] > 0) {
@@ -1654,6 +1807,11 @@ int main(int argc, char *argv[])
     fclose(csv_file);
     free(filename_csv);
   }
+
+  if (uci_ulsch_matlab_vec)
+    fclose(uci_ulsch_matlab_vec);
+
+  free_and_zero(UE->phy_sim_test_buf);
 
   return ret;
 }

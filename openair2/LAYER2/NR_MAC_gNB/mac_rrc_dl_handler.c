@@ -572,11 +572,11 @@ static NR_UE_info_t *create_new_UE(gNB_MAC_INST *mac, uint32_t cu_id, const NR_C
   const nr_mac_config_t *configuration = &mac->radio_config;
   if (is_SA) {
     cellGroupConfig = get_initial_cellGroupConfig(UE->uid, scc, &mac->radio_config, &mac->rlc_config);
-    cellGroupConfig->spCellConfig->reconfigurationWithSync = get_reconfiguration_with_sync(UE->rnti, UE->uid, scc);
+    cellGroupConfig->spCellConfig->reconfigurationWithSync = get_reconfiguration_with_sync(UE->rnti, UE->uid, scc, mac->frame);
   } else {
     NR_UE_NR_Capability_t *cap = get_ue_nr_cap_from_cg_config_info(cgci);
     cellGroupConfig = get_default_secondaryCellGroup(scc, cap, 1, 1, configuration, UE->uid);
-    cellGroupConfig->spCellConfig->reconfigurationWithSync = get_reconfiguration_with_sync(UE->rnti, UE->uid, scc);
+    cellGroupConfig->spCellConfig->reconfigurationWithSync = get_reconfiguration_with_sync(UE->rnti, UE->uid, scc, mac->frame);
     // TODO: in NSA we assign capabilities here, otherwise outside => not logic
     UE->capability = cap;
   }
@@ -721,6 +721,7 @@ void ue_context_setup_request(const f1ap_ue_context_setup_req_t *req)
   /* free the memory we allocated above */
   free_ue_context_setup_resp(&resp);
   ASN_STRUCT_FREE(asn_DEF_NR_CG_ConfigInfo, cg_configinfo);
+  ASN_STRUCT_FREE(asn_DEF_NR_MeasurementTimingConfiguration, mtc);
 }
 
 void ue_context_modification_request(const f1ap_ue_context_mod_req_t *req)

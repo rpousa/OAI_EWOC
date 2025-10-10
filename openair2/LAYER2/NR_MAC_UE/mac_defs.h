@@ -304,6 +304,26 @@ typedef struct {
 } NR_pdcch_order_config_t;
 
 typedef struct {
+  NR_PUCCH_Resource_t *pucch_resource;
+  uint32_t ack_payload;
+  uint8_t sr_payload;
+  uint32_t csi_part1_payload;
+  uint32_t csi_part2_payload;
+  int n_sr;
+  int n_csi;
+  int n_harq;
+  int n_CCE;
+  int N_CCE;
+  int initial_pucch_id;
+} PUCCH_sched_t;
+
+typedef struct {
+  int sched_frame;
+  int sched_slot;
+  PUCCH_sched_t pucch_sched;
+} RA_PUCCH_SCHED_t;
+
+typedef struct {
   // pointer to RACH config dedicated
   NR_RACH_ConfigDedicated_t *rach_ConfigDedicated;
   /// state of RA procedure
@@ -354,6 +374,8 @@ typedef struct {
   int preambleRxTargetPower;
   int msg3_deltaPreamble;
   int preambleReceivedTargetPower_config;
+  RA_PUCCH_SCHED_t *ra_pucch;
+
   /// Random-access Contention Resolution Timer
   NR_timer_t contention_resolution_timer;
   /// Transmitted UE Contention Resolution Identifier
@@ -404,23 +426,8 @@ typedef struct {
 } RAR_grant_t;
 
 typedef struct {
-  NR_PUCCH_Resource_t *pucch_resource;
-  uint32_t ack_payload;
-  uint8_t sr_payload;
-  uint32_t csi_part1_payload;
-  uint32_t csi_part2_payload;
-  int n_sr;
-  int n_csi;
-  int n_harq;
-  int n_CCE;
-  int N_CCE;
-  int initial_pucch_id;
-} PUCCH_sched_t;
-
-typedef struct {
-  uint32_t ssb_index;
   /// SSB RSRP in dBm
-  short ssb_rsrp_dBm;
+  int ssb_rsrp_dBm;
   float_t ssb_sinr_dB;
 } NR_SSB_meas_t;
 
@@ -473,8 +480,8 @@ typedef struct {
 } NR_BWP_PDCCH_t;
 
 typedef struct csi_payload {
-  uint32_t part1_payload;
-  uint32_t part2_payload;
+  uint64_t part1_payload;
+  uint64_t part2_payload;
   int p1_bits;
   int p2_bits;
 } csi_payload_t;
@@ -625,7 +632,7 @@ typedef struct NR_UE_MAC_INST_s {
   uint8_t ssb_subcarrier_offset;
   int ssb_start_subcarrier;
 
-  NR_SSB_meas_t ssb_measurements;
+  NR_SSB_meas_t ssb_measurements[MAX_NB_SSB];
 
   dci_pdu_rel15_t def_dci_pdu_rel15[NR_MAX_SLOTS_PER_FRAME][8];
 

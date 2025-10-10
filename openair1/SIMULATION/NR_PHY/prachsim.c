@@ -64,7 +64,6 @@
 #include "nfapi/oai_integration/vendor_ext.h"
 #include "nfapi_interface.h"
 #include "nfapi_nr_interface_scf.h"
-#include "nr_common.h"
 #include "time_meas.h"
 
 #define NR_PRACH_DEBUG 1

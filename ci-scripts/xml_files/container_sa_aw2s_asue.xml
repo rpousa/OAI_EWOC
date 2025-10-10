@@ -36,18 +36,6 @@
     102002
     302002
     102003
-    102004
-    102005
-    102006
-    102007
-    102008
-    102009
-    102010
-    102011
-    102012
-    102013
-    102014
-    102015
     100100
     100010
     100020
@@ -118,80 +106,8 @@
 
   <testCase id="102003">
     <class>Attach_UE</class>
-    <desc>Attach UE 3</desc>
-    <id>amarisoft_ue_3</id>
-  </testCase>
-
-  <testCase id="102004">
-    <class>Attach_UE</class>
-    <desc>Attach UE 4</desc>
-    <id>amarisoft_ue_4</id>
-  </testCase>
-
-  <testCase id="102005">
-    <class>Attach_UE</class>
-    <desc>Attach (RedCap) UE 5</desc>
-    <id>amarisoft_ue_5</id>
-  </testCase>
-
-  <testCase id="102006">
-    <class>Attach_UE</class>
-    <desc>Attach (RedCap) UE 6</desc>
-    <id>amarisoft_ue_6</id>
-  </testCase>
-
-  <testCase id="102007">
-    <class>Attach_UE</class>
-    <desc>Attach UE 7</desc>
-    <id>amarisoft_ue_7</id>
-  </testCase>
-
-  <testCase id="102008">
-    <class>Attach_UE</class>
-    <desc>Attach UE 8</desc>
-    <id>amarisoft_ue_8</id>
-  </testCase>
-
-  <testCase id="102009">
-    <class>Attach_UE</class>
-    <desc>Attach UE 9</desc>
-    <id>amarisoft_ue_9</id>
-  </testCase>
-
-  <testCase id="102010">
-    <class>Attach_UE</class>
-    <desc>Attach (RedCap) UE 10</desc>
-    <id>amarisoft_ue_10</id>
-  </testCase>
-
-  <testCase id="102011">
-    <class>Attach_UE</class>
-    <desc>Attach (RedCap) UE 11</desc>
-    <id>amarisoft_ue_11</id>
-  </testCase>
-
-  <testCase id="102012">
-    <class>Attach_UE</class>
-    <desc>Attach (RedCap) UE 12</desc>
-    <id>amarisoft_ue_12</id>
-  </testCase>
-
-  <testCase id="102013">
-    <class>Attach_UE</class>
-    <desc>Attach UE 13</desc>
-    <id>amarisoft_ue_13</id>
-  </testCase>
-
-  <testCase id="102014">
-    <class>Attach_UE</class>
-    <desc>Attach UE 14</desc>
-    <id>amarisoft_ue_14</id>
-  </testCase>
-
-  <testCase id="102015">
-    <class>Attach_UE</class>
-    <desc>Attach (RedCap) UE 15</desc>
-    <id>amarisoft_ue_15</id>
+    <desc>Attach UE 3 - 15</desc>
+    <id>amarisoft_ue_3 amarisoft_ue_4 amarisoft_ue_5 amarisoft_ue_6 amarisoft_ue_7 amarisoft_ue_8 amarisoft_ue_9 amarisoft_ue_10 amarisoft_ue_11 amarisoft_ue_12 amarisoft_ue_13 amarisoft_ue_14 amarisoft_ue_15</id>
   </testCase>
 
   <testCase id="100010">

@@ -27,10 +27,11 @@
 #include "openair2/LAYER2/NR_MAC_gNB/mac_proto.h"
 #include "openair2/E2AP/flexric/src/util/time_now_us.h"
 #include "openair2/LAYER2/nr_pdcp/nr_pdcp_oai_api.h"
-
+#include "ds/seq_arr.h"
 
 #if defined (NGRAN_GNB_CUCP)
 #include "openair2/RRC/NR/rrc_gNB_UE_context.h"
+#include "openair2/RRC/NR/rrc_gNB_radio_bearers.h"
 #endif
 
 bool read_gtp_sm(void * data)
@@ -62,16 +63,15 @@ bool read_gtp_sm(void * data)
     rrc_gNB_ue_context_t *ue_context_p = rrc_gNB_get_ue_context(RC.nrrrc[0], ue_id_list[i]);
 
     gtp->msg.ngut[i].rnti = ue_id_list[i];
-    int nb_pdu_session = ue_context_p->ue_context.nb_of_pdusessions;
-    if (nb_pdu_session > 0) {
-      int nb_pdu_idx = nb_pdu_session - 1;
-      gtp->msg.ngut[i].teidgnb = ue_context_p->ue_context.pduSession[nb_pdu_idx].param.n3_outgoing.teid;
-      gtp->msg.ngut[i].teidupf = ue_context_p->ue_context.pduSession[nb_pdu_idx].param.n3_incoming.teid;
+    FOR_EACH_SEQ_ARR(rrc_pdu_session_param_t*, session, &ue_context_p->ue_context.pduSessions) {
+      gtp->msg.ngut[i].teidgnb = session->param.n3_outgoing.teid;
+      gtp->msg.ngut[i].teidupf = session->param.n3_incoming.teid;
       // TODO: one PDU session has multiple QoS Flow
-      int nb_qos_flow = ue_context_p->ue_context.pduSession[nb_pdu_idx].param.nb_qos;
-      if (nb_qos_flow > 0) {
-        gtp->msg.ngut[i].qfi = ue_context_p->ue_context.pduSession[nb_pdu_idx].param.qos[nb_qos_flow - 1].qfi;
+      DevAssert(seq_arr_size(&session->param.qos) == 1);
+      FOR_EACH_SEQ_ARR(nr_rrc_qos_t *, qos, &session->param.qos) {
+        gtp->msg.ngut[i].qfi = qos->qos.qfi;
       }
+      break;
     }
   }
 

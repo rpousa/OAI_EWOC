@@ -52,6 +52,7 @@
 #endif
 #include <pthread.h>
 #include <common/utils/utils.h>
+#include "common/utils/T/T.h"
 #if ENABLE_LTTNG
 #include "lttng-log.h"
 #endif

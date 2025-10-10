@@ -15,7 +15,7 @@ oc project ${OC_NS} > /dev/null
 oc tag oaicicd-ran/oai-physim:${IMG_TAG} ${OC_NS}/oai-physim:${IMG_TAG}
 helm install ${OC_RELEASE} ${OAI_DIR}/charts/${OC_RELEASE} --set global.image.version=${IMG_TAG} --wait --timeout 120s
 POD_ID=$(oc get pods | grep oai-${OC_RELEASE} | awk '{print $1}')
-sleep 10
+sleep 30
 echo "Monitoring logs for 'FINISHED' in pod '$POD_ID'"
 oc logs -f -n ${OC_NS} "$POD_ID" | while read -r line; do
   if [[ "$line" == *"FINISHED"* ]]; then

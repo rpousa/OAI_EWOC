@@ -38,11 +38,13 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <pthread.h>
 
 #include "PHY/CODING/nrPolar_tools/nr_polar_dci_defs.h"
 #include "PHY/CODING/nrPolar_tools/nr_polar_uci_defs.h"
 #include "PHY/CODING/nrPolar_tools/nr_polar_pbch_defs.h"
 #include "PHY/CODING/coding_defs.h"
+#include "PHY/sse_intrin.h"
 // #include "SIMULATION/TOOLS/sim.h"
 
 #define NR_POLAR_DECODER_LISTSIZE 8 // uint8_t

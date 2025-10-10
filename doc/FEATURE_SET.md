@@ -11,12 +11,12 @@
 -  FAPI (IF2)  : specified by Small Cell Forum (open-nFAPI implementation)
 -  IF1         : F1 in 3GPP Release 15
 
-![Functional Split Architecture](./oai_enb_func_split_arch.png)
+![Functional Split Architecture](./images/oai_enb_func_split_arch.png)
 
 
 # OpenAirInterface Block Diagram #
 
-![Block Diagram](./oai_enb_block_diagram.png)
+![Block Diagram](./images/oai_enb_block_diagram.png)
 
 # OpenAirInterface 5G-NR Feature Set #
 
@@ -25,7 +25,7 @@
 The following features are valid for the gNB and the 5G-NR UE.
 
 *  Static TDD
-   - Multi TDD pattern supported refer [TDD Configuration](NR_SA_Multi_TDD_Pattern.md)
+   - Multi TDD pattern supported refer [TDD Configuration](MAC/mac-usage.md)
 *  Static FDD
 *  Normal CP
 *  Subcarrier spacings: 15 and 30kHz (FR1), 120kHz (FR2)

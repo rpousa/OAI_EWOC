@@ -28,7 +28,7 @@
 #define __CODING_DEFS__H__
 
 #include <stdint.h>
-#include <PHY/defs_common.h>
+#include <stdbool.h>
 
 #define CRC24_A 0
 #define CRC24_B 1
@@ -455,8 +455,5 @@ int32_t nr_segmentation(unsigned char *input_buffer,
  */
 int nr_get_R_ldpc_decoder(int rvidx, int E, int BG, int Z, int *llrLen, int round);
 
-decoder_if_t phy_threegpplte_turbo_decoder;
-decoder_if_t phy_threegpplte_turbo_decoder8;
-decoder_if_t phy_threegpplte_turbo_decoder16;
 /** @} */
 #endif

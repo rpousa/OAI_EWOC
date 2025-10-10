@@ -41,6 +41,15 @@
 #define NR_PUSCH_x 2 // UCI placeholder bit TS 38.212 V15.4.0 subclause 5.3.3.1
 #define NR_PUSCH_y 3 // UCI placeholder bit
 
+typedef enum {
+  BIT_TYPE_ULSCH = 0, // Default: UL-SCH data
+  BIT_TYPE_ACK = 1, // HARQ-ACK bit
+  BIT_TYPE_ACK_RESERVED = 2, // Reserved for HARQ-ACK (punctured)
+  BIT_TYPE_ACK_ULSCH = 3,
+  BIT_TYPE_CSI1 = 4, // CSI Part 1 bit
+  BIT_TYPE_CSI2 = 5 // CSI Part 2 bit
+} uci_on_pusch_bit_type_t;
+
 // Specifies the data that should be copied to the scope during PDSCH RX
 typedef struct pdsch_scope_req_s {
   bool copy_chanest_to_scope;
@@ -86,6 +95,13 @@ void nr_dlsch_decoding(PHY_VARS_NR_UE *phy_vars_ue,
                        int nb_dlsch,
                        uint8_t *DLSCH_ids);
 
+int nr_ulsch_pre_encoding(PHY_VARS_NR_UE *ue,
+                          const NR_UE_ULSCH_t *ulsch,
+                          const uint32_t frame,
+                          const uint8_t slot,
+                          const unsigned int *G,
+                          const int nb_ulsch,
+                          const uint8_t *ULSCH_ids);
 /** \brief This is the alternative top-level entry point for ULSCH encoding in UE.
     It handles all the HARQ processes in only one call. The routine first
     computes the segmentation information, followed by LDPC encoding algorithm of the
@@ -121,8 +137,8 @@ void nr_pusch_codeword_scrambling(uint8_t *in,
                                   uint32_t Nid,
                                   uint32_t n_RNTI,
                                   bool uci_on_pusch,
-                                  uint32_t* out);
-
+                                  const uci_on_pusch_bit_type_t *template,
+                                  uint32_t *out);
 
 /** \brief Alternative entry point to UE uplink shared channels procedures.
     It handles all the HARQ processes in only one call.
@@ -154,7 +170,8 @@ uint8_t nr_ue_pusch_common_procedures(PHY_VARS_NR_UE *UE,
                                       c16_t **txdataF,
                                       c16_t **txdata,
                                       uint32_t linktype,
-                                      bool was_symbol_used[NR_NUMBER_OF_SYMBOLS_PER_SLOT]);
+                                      bool was_symbol_used[NR_NUMBER_OF_SYMBOLS_PER_SLOT],
+                                      bool no_phase_pre_comp);
 
 void clean_UE_harq(PHY_VARS_NR_UE *UE);
 

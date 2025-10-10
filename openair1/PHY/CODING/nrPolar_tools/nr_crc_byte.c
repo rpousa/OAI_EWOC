@@ -20,6 +20,7 @@
  */
 
 #include "PHY/CODING/nrPolar_tools/nr_polar_defs.h"
+#include "common/utils/utils.h"
 
 // ----- Old implementation ----
 const uint8_t **crc24c_generator_matrix(uint16_t payloadSizeBits)

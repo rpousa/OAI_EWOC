@@ -35,8 +35,6 @@ typedef unsigned char uint8_t;
 
 //-----------------------------------------------------------------------------
 
-char* memory_get_path(const char* dirname, const char* filename);
-
 char* memory_get_path_from_ueid(const char* dirname, const char* filename, int ueid);
 
 int memory_read(const char* datafile, void* data, size_t size);

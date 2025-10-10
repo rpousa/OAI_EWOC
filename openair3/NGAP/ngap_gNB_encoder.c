@@ -148,6 +148,5 @@ int ngap_gNB_encode_pdu(NGAP_NGAP_PDU_t *pdu, uint8_t **buffer, uint32_t *len)
       NGAP_DEBUG("Unknown message outcome (%d) or not implemented", (int)pdu->present);
       return -1;
   }
-  ASN_STRUCT_FREE_CONTENTS_ONLY(asn_DEF_NGAP_NGAP_PDU, pdu);
   return ret;
 }

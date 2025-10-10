@@ -289,7 +289,7 @@ void remove_ul_config_last_item(fapi_nr_ul_config_request_pdu_t *pdu);
 fapi_nr_ul_config_request_pdu_t *fapiLockIterator(fapi_nr_ul_config_request_t *ul_config, frame_t frame_tx, int slot_tx);
 
 void release_ul_config(fapi_nr_ul_config_request_pdu_t *pdu, bool clearIt);
-int16_t compute_nr_SSB_PL(NR_UE_MAC_INST_t *mac, short ssb_rsrp_dBm);
+int16_t compute_nr_SSB_PL(NR_UE_MAC_INST_t *mac);
 
 // PUSCH scheduler:
 // - Calculate the slot in which ULSCH should be scheduled. This is current slot + K2,

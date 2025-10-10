@@ -293,30 +293,20 @@ int ngap_handover_required(instance_t instance, ngap_handover_required_t *msg)
     return -1;
   }
 
-  if ((ue_context_p->gNB_ue_ngap_id != msg->gNB_ue_ngap_id)) {
-    NGAP_ERROR("ue_context_p->gNB_ue_ngap_id %d does not match msg->gNB_ue_ngap_id %d\n",
-               ue_context_p->gNB_ue_ngap_id,
-               msg->gNB_ue_ngap_id);
-    return -1;
-  }
+  DevAssert(ue_context_p->gNB_ue_ngap_id == msg->gNB_ue_ngap_id);
 
   NGAP_NGAP_PDU_t *pdu = encode_ng_handover_required(msg);
-  if (!pdu) {
-    NGAP_ERROR("Failed to encode Handover Required\n");
-    ASN_STRUCT_FREE(asn_DEF_NGAP_NGAP_PDU, pdu);
-    return -1;
-  }
+  DevAssert(pdu != NULL);
 
   if (LOG_DEBUGFLAG(DEBUG_ASN1))
-    xer_fprint(stdout, &asn_DEF_NGAP_NGAP_PDU, &pdu);
+    xer_fprint(stdout, &asn_DEF_NGAP_NGAP_PDU, pdu);
 
   byte_array_t out = { .buf = NULL, .len = 0 };
   if (ngap_gNB_encode_pdu(pdu, &out.buf, (uint32_t *)&out.len) < 0) {
-    ASN_STRUCT_FREE(asn_DEF_NGAP_NGAP_PDU, pdu);
     NGAP_ERROR("Failed to encode Handover Required message\n");
+    ASN_STRUCT_FREE(asn_DEF_NGAP_NGAP_PDU, pdu);
     return -1;
   }
-  free(pdu);
 
   /* UE associated signalling -> use the allocated stream */
   ngap_gNB_itti_send_sctp_data_req(ngap_gNB_instance_p->instance,
@@ -325,6 +315,7 @@ int ngap_handover_required(instance_t instance, ngap_handover_required_t *msg)
                                    out.len,
                                    ue_context_p->tx_stream);
 
+  ASN_STRUCT_FREE(asn_DEF_NGAP_NGAP_PDU, pdu);
   return 0;
 }
 
@@ -345,11 +336,7 @@ static int ngap_gNB_handover_failure(instance_t instance, const ngap_handover_fa
   DevAssert(ngap_gNB_instance_p != NULL);
 
   NGAP_NGAP_PDU_t *pdu = encode_ng_handover_failure(msg);
-  if (!pdu) {
-    NGAP_ERROR("Failed to encode NG Handover Failure\n");
-    ASN_STRUCT_FREE(asn_DEF_NGAP_NGAP_PDU, pdu);
-    return -1;
-  }
+  DevAssert(pdu != NULL);
 
   if (ngap_gNB_encode_pdu(pdu, &buffer, &length) < 0) {
     NGAP_ERROR("Failed to encode HANDOVER FAILURE MESSAGE\n");
@@ -369,7 +356,7 @@ static int ngap_gNB_handover_failure(instance_t instance, const ngap_handover_fa
   }
 
   ngap_gNB_itti_send_sctp_data_req(ngap_gNB_instance_p->instance, amf->assoc_id, buffer, length, amf->nextstream);
-  ASN_STRUCT_FREE(asn_DEF_NGAP_NGAP_PDU, &pdu);
+  ASN_STRUCT_FREE(asn_DEF_NGAP_NGAP_PDU, pdu);
 
   return 0;
 }
@@ -383,25 +370,8 @@ static int ngap_gNB_handover_request_acknowledge(instance_t instance, ngap_hando
   DevAssert(msg != NULL);
   DevAssert(ngap != NULL);
 
-  // First, create and store NGAP UE context
-  ngap_gNB_ue_context_t ue_context_p = {
-      .amf_ref = ngap_gNB_get_AMF_from_instance(ngap),
-      .gNB_ue_ngap_id = msg->gNB_ue_ngap_id,
-      .amf_ue_ngap_id = msg->amf_ue_ngap_id,
-      .gNB_instance = ngap,
-      .ue_state = NGAP_UE_CONNECTED,
-  };
-  if (ue_context_p.amf_ref == NULL) {
-    NGAP_ERROR("Failed to fetch AMF for current NGAP instance\n");
-    return -1;
-  }
-  ngap_store_ue_context(&ue_context_p);
-
   NGAP_NGAP_PDU_t *pdu = encode_ng_handover_request_ack(msg);
-  if (!pdu) {
-    NGAP_ERROR("Failed to encode NG Handover Request Acknowledge\n");
-    return -1;
-  }
+  DevAssert(pdu != NULL);
 
   if (LOG_DEBUGFLAG(DEBUG_ASN1))
     xer_fprint(stdout, &asn_DEF_NGAP_NGAP_PDU, pdu);
@@ -412,10 +382,25 @@ static int ngap_gNB_handover_request_acknowledge(instance_t instance, ngap_hando
     return -1;
   }
 
+  // Create and store NGAP UE context
+  ngap_gNB_ue_context_t ue_context_p = {
+    .amf_ref = ngap_gNB_get_AMF_from_instance(ngap),
+    .gNB_ue_ngap_id = msg->gNB_ue_ngap_id,
+    .amf_ue_ngap_id = msg->amf_ue_ngap_id,
+    .gNB_instance = ngap,
+    .ue_state = NGAP_UE_CONNECTED,
+  };
+  if (!ue_context_p.amf_ref) {
+    NGAP_ERROR("Failed to fetch AMF for current NGAP instance\n");
+    ASN_STRUCT_FREE(asn_DEF_NGAP_NGAP_PDU, pdu);
+    return -1;
+  }
+  ngap_store_ue_context(&ue_context_p);
+
   /* UE associated signalling -> use the allocated stream */
   ngap_gNB_itti_send_sctp_data_req(ngap->instance, ue_context_p.amf_ref->assoc_id, ba.buf, ba.len, ue_context_p.tx_stream);
   NGAP_INFO("Sent Handover Request Acknowledge to AMF\n");
-
+  ASN_STRUCT_FREE(asn_DEF_NGAP_NGAP_PDU, pdu);
   return 0;
 }
 
@@ -431,14 +416,10 @@ static int ngap_gNB_handover_notify(instance_t instance, const ngap_handover_not
   DevAssert(ngap_gNB_instance_p != NULL);
 
   if ((ue_context_p = ngap_get_ue_context(msg->gNB_ue_ngap_id)) == NULL) {
-    NGAP_ERROR("Failed to encode Handover Notify: no ue context associated with gNB_ue_ngap_id=%d\n", msg->gNB_ue_ngap_id);
+    NGAP_ERROR("Failed to find UE context for Handover Notify: gNB_ue_ngap_id=%d\n", msg->gNB_ue_ngap_id);
     return -1;
   }
-
-  if (ue_context_p->gNB_ue_ngap_id != msg->gNB_ue_ngap_id) {
-    NGAP_ERROR("Failed to encode Handover Notify: unknown gNB_ue_ngap_id=%d\n", msg->gNB_ue_ngap_id);
-    return -1;
-  }
+  DevAssert(ue_context_p->gNB_ue_ngap_id == msg->gNB_ue_ngap_id);
 
   if (ue_context_p->amf_ue_ngap_id != msg->amf_ue_ngap_id) {
     NGAP_ERROR("Failed to encode Handover Notify: unknown amf_ue_ngap_id=%ld\n", msg->amf_ue_ngap_id);
@@ -446,6 +427,10 @@ static int ngap_gNB_handover_notify(instance_t instance, const ngap_handover_not
   }
 
   NGAP_NGAP_PDU_t *pdu = encode_ng_handover_notify(msg);
+  if (!pdu) {
+    NGAP_ERROR("Failed to encode NG Handover Notify\n");
+    return -1;
+  }
 
   if (ngap_gNB_encode_pdu(pdu, &ba.buf, (uint32_t *)&ba.len) < 0) {
     NGAP_ERROR("Failed to encode NG Handover Notify message\n");
@@ -459,6 +444,7 @@ static int ngap_gNB_handover_notify(instance_t instance, const ngap_handover_not
                                    ba.buf,
                                    ba.len,
                                    ue_context_p->tx_stream);
+  ASN_STRUCT_FREE(asn_DEF_NGAP_NGAP_PDU, pdu);
 
   return 0;
 }
@@ -479,11 +465,7 @@ static int ngap_gNB_handover_cancel(instance_t instance, const ngap_handover_can
     NGAP_ERROR("Failed to encode Handover Cancel: no UE context for gNB_ue_ngap_id=%d\n", msg->gNB_ue_ngap_id);
     return -1;
   }
-
-  if (ue_context_p->gNB_ue_ngap_id != msg->gNB_ue_ngap_id) {
-    NGAP_ERROR("Failed to encode Handover Cancel: mismatched gNB_ue_ngap_id=%d\n", msg->gNB_ue_ngap_id);
-    return -1;
-  }
+  DevAssert(ue_context_p->gNB_ue_ngap_id == msg->gNB_ue_ngap_id);
 
   if (ue_context_p->amf_ue_ngap_id != msg->amf_ue_ngap_id) {
     NGAP_ERROR("Failed to encode Handover Cancel: mismatched amf_ue_ngap_id=%ld\n", msg->amf_ue_ngap_id);
@@ -492,17 +474,13 @@ static int ngap_gNB_handover_cancel(instance_t instance, const ngap_handover_can
 
   /* Encode NGAP PDU */
   NGAP_NGAP_PDU_t *pdu = encode_ng_handover_cancel(msg);
-  if (pdu == NULL) {
-    NGAP_ERROR("Failed to encode NG Handover Cancel\n");
-    return -1;
-  }
+  DevAssert(pdu != NULL);
 
   if (ngap_gNB_encode_pdu(pdu, &ba.buf, (uint32_t *)&ba.len) < 0) {
     NGAP_ERROR("Failed to encode NG Handover Cancel message PDU\n");
     ASN_STRUCT_FREE(asn_DEF_NGAP_NGAP_PDU, pdu);
     return -1;
   }
-  ASN_STRUCT_FREE(asn_DEF_NGAP_NGAP_PDU, pdu);
 
   /* UE-associated signalling -> use the UE's allocated SCTP stream */
   ngap_gNB_itti_send_sctp_data_req(ngap_gNB_instance_p->instance,
@@ -511,6 +489,7 @@ static int ngap_gNB_handover_cancel(instance_t instance, const ngap_handover_can
                                    ba.len,
                                    ue_context_p->tx_stream);
 
+  ASN_STRUCT_FREE(asn_DEF_NGAP_NGAP_PDU, pdu);
   return 0;
 }
 
@@ -522,16 +501,15 @@ int ngap_gNB_handle_ul_ran_status_transfer(instance_t instance, const ngap_ran_s
   DevAssert(ngap_gNB_instance_p != NULL);
 
   ngap_gNB_ue_context_t *ue_context_p = ngap_get_ue_context(msg->gnb_ue_ngap_id);
-  if (!ue_context_p || ue_context_p->gNB_ue_ngap_id != msg->gnb_ue_ngap_id) {
-    NGAP_ERROR("Could not find UE context for gNB_ue_ngap_id %d\n", msg->gnb_ue_ngap_id);
+  if (!ue_context_p) {
+    NGAP_ERROR("Failed to find UE context for gNB_ue_ngap_id %d\n", msg->gnb_ue_ngap_id);
     return -1;
   }
 
+  DevAssert(ue_context_p->gNB_ue_ngap_id == msg->gnb_ue_ngap_id);
+
   NGAP_NGAP_PDU_t *pdu = encode_ng_ul_ran_status_transfer(msg);
-  if (!pdu) {
-    NGAP_ERROR("Failed to encode UL RAN Status Transfer\n");
-    return -1;
-  }
+  DevAssert(pdu != NULL);
 
   byte_array_t out = {.buf = NULL, .len = 0};
   if (ngap_gNB_encode_pdu(pdu, &out.buf, (uint32_t *)&out.len) < 0) {
@@ -541,6 +519,7 @@ int ngap_gNB_handle_ul_ran_status_transfer(instance_t instance, const ngap_ran_s
   }
 
   ngap_gNB_itti_send_sctp_data_req(instance, ue_context_p->amf_ref->assoc_id, out.buf, out.len, ue_context_p->tx_stream);
+  ASN_STRUCT_FREE(asn_DEF_NGAP_NGAP_PDU, pdu);
   return 0;
 }
 
@@ -698,7 +677,7 @@ static int ngap_gNB_generate_ng_setup_request(
   pdu.choice.initiatingMessage->value.present = NGAP_InitiatingMessage__value_PR_NGSetupRequest;
   out = &pdu.choice.initiatingMessage->value.choice.NGSetupRequest;
   /* mandatory */
-  ie = (NGAP_NGSetupRequestIEs_t *)calloc(1, sizeof(NGAP_NGSetupRequestIEs_t));
+  ie = calloc_or_fail(1, sizeof(NGAP_NGSetupRequestIEs_t));
   ie->id = NGAP_ProtocolIE_ID_id_GlobalRANNodeID;
   ie->criticality = NGAP_Criticality_reject;
   ie->value.present = NGAP_NGSetupRequestIEs__value_PR_GlobalRANNodeID;
@@ -721,7 +700,7 @@ static int ngap_gNB_generate_ng_setup_request(
 
   /* optional */
   if (instance_p->gNB_name) {
-    ie = (NGAP_NGSetupRequestIEs_t *)calloc(1, sizeof(NGAP_NGSetupRequestIEs_t));
+    ie = calloc_or_fail(1, sizeof(NGAP_NGSetupRequestIEs_t));
     ie->id = NGAP_ProtocolIE_ID_id_RANNodeName;
     ie->criticality = NGAP_Criticality_ignore;
     ie->value.present = NGAP_NGSetupRequestIEs__value_PR_RANNodeName;
@@ -731,28 +710,28 @@ static int ngap_gNB_generate_ng_setup_request(
   }
 
   /* mandatory */
-  ie = (NGAP_NGSetupRequestIEs_t *)calloc(1, sizeof(NGAP_NGSetupRequestIEs_t));
+  ie = calloc_or_fail(1, sizeof(NGAP_NGSetupRequestIEs_t));
   ie->id = NGAP_ProtocolIE_ID_id_SupportedTAList;
   ie->criticality = NGAP_Criticality_reject;
   ie->value.present = NGAP_NGSetupRequestIEs__value_PR_SupportedTAList;
   {
-    ta = (NGAP_SupportedTAItem_t *)calloc(1, sizeof(NGAP_SupportedTAItem_t));
+    ta = (NGAP_SupportedTAItem_t *)calloc_or_fail(1, sizeof(NGAP_SupportedTAItem_t));
     INT24_TO_OCTET_STRING(instance_p->tac, &ta->tAC);
     {
       for (int i = 0; i < ngap_amf_data_p->broadcast_plmn_num; ++i) {
-        plmn = (NGAP_BroadcastPLMNItem_t *)calloc(1, sizeof(NGAP_BroadcastPLMNItem_t));
+        plmn = (NGAP_BroadcastPLMNItem_t *)calloc_or_fail(1, sizeof(NGAP_BroadcastPLMNItem_t));
         ngap_plmn_t *plmn_req = &instance_p->plmn[ngap_amf_data_p->broadcast_plmn_index[i]];
         plmn_id_t *plmn_id = &instance_p->plmn[ngap_amf_data_p->broadcast_plmn_index[i]].plmn;
         MCC_MNC_TO_TBCD(plmn_id->mcc, plmn_id->mnc, plmn_id->mnc_digit_length, &plmn->pLMNIdentity);
 
         for (int si = 0; si < plmn_req->num_nssai; si++) {
-          ssi = (NGAP_SliceSupportItem_t *)calloc(1, sizeof(NGAP_SliceSupportItem_t));
+          ssi = (NGAP_SliceSupportItem_t *)calloc_or_fail(1, sizeof(NGAP_SliceSupportItem_t));
           INT8_TO_OCTET_STRING(plmn_req->s_nssai[si].sst, &ssi->s_NSSAI.sST);
 
           const uint32_t sd = plmn_req->s_nssai[si].sd;
           if (sd != 0xffffff) {
-            ssi->s_NSSAI.sD = calloc(1, sizeof(NGAP_SD_t));
-            ssi->s_NSSAI.sD->buf = calloc(3, sizeof(uint8_t));
+            ssi->s_NSSAI.sD = calloc_or_fail(1, sizeof(NGAP_SD_t));
+            ssi->s_NSSAI.sD->buf = calloc_or_fail(3, sizeof(uint8_t));
             ssi->s_NSSAI.sD->size = 3;
             ssi->s_NSSAI.sD->buf[0] = (sd & 0xff0000) >> 16;
             ssi->s_NSSAI.sD->buf[1] = (sd & 0x00ff00) >> 8;
@@ -770,7 +749,7 @@ static int ngap_gNB_generate_ng_setup_request(
   asn1cSeqAdd(&out->protocolIEs.list, ie);
   
   /* mandatory */
-  ie = (NGAP_NGSetupRequestIEs_t *)calloc(1, sizeof(NGAP_NGSetupRequestIEs_t));
+  ie = calloc_or_fail(1, sizeof(NGAP_NGSetupRequestIEs_t));
   ie->id = NGAP_ProtocolIE_ID_id_DefaultPagingDRX;
   ie->criticality = NGAP_Criticality_ignore;
   ie->value.present = NGAP_NGSetupRequestIEs__value_PR_PagingDRX;
@@ -780,11 +759,13 @@ static int ngap_gNB_generate_ng_setup_request(
 
   if (ngap_gNB_encode_pdu(&pdu, &buffer, &len) < 0) {
     NGAP_ERROR("Failed to encode NG setup request\n");
+    ASN_STRUCT_FREE_CONTENTS_ONLY(asn_DEF_NGAP_NGAP_PDU, &pdu);
     return -1;
   }
 
   /* Non UE-Associated signalling -> stream = 0 */
   ngap_gNB_itti_send_sctp_data_req(instance_p->instance, ngap_amf_data_p->assoc_id, buffer, len, 0);
+  ASN_STRUCT_FREE_CONTENTS_ONLY(asn_DEF_NGAP_NGAP_PDU, &pdu);
   return ret;
 }
 

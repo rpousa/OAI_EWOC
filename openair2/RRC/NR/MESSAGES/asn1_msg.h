@@ -89,12 +89,6 @@ int do_SIB2_NR(uint8_t **msg_SIB2, NR_SSB_MTC_t *ssbmtc);
 
 int do_RRCReject(uint8_t *const buffer);
 
-NR_RadioBearerConfig_t *get_default_rbconfig(int eps_bearer_id,
-                                             int rb_id,
-                                             e_NR_CipheringAlgorithm ciphering_algorithm,
-                                             e_NR_SecurityConfig__keyToUse key_to_use,
-                                             const nr_pdcp_configuration_t *pdcp_config);
-
 int do_RRCSetup(uint8_t *const buffer,
                 size_t buffer_size,
                 const uint8_t transaction_id,

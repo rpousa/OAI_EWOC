@@ -22,15 +22,11 @@
 #include "nr_refsig.h"
 #include "nr_mod_table.h"
 c16_t nr_qpsk_mod_table[4];
-
+simde__m128i nr_qpsk_byte_mod_table[256];
 int32_t nr_16qam_mod_table[16];
-simde__m128i nr_qpsk_byte_mod_table[2048];
-
-int64_t nr_16qam_byte_mod_table[1024];
-
+int64_t nr_16qam_byte_mod_table[256];
 int64_t nr_64qam_mod_table[4096];
-
-int32_t nr_256qam_mod_table[512];
+int32_t nr_256qam_mod_table[256];
 
 void nr_generate_modulation_table() {
   float sqrt2 = 0.70711;

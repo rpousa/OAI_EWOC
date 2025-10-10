@@ -833,7 +833,6 @@ set(xnap_headers
     asn_SEQUENCE_OF.h
     asn_SET_OF.h
     asn_system.h
-    ber_decoder.h
     ber_tlv_length.h
     ber_tlv_tag.h
     BIT_STRING.h

@@ -72,6 +72,7 @@
 #include "xer_encoder.h"
 #include "f1ap_common.h"
 #include "lib/f1ap_ue_context.h"
+#include "rrc_gNB_asn1.h"
 
 // In case of phy-test and do-ra mode, read UE capabilities directly from file
 // and put it into a CG-ConfigInfo field
@@ -132,6 +133,32 @@ static instance_t get_f1_gtp_instance(void)
   if (!inst)
     return -1; // means no F1
   return inst->gtpInst;
+}
+
+/* returns a default radio bearer config suitable for NSA etc */
+static NR_RadioBearerConfig_t *get_default_rbconfig(int eps_bearer_id,
+                                                    int rb_id,
+                                                    e_NR_CipheringAlgorithm ciphering_algorithm,
+                                                    e_NR_SecurityConfig__keyToUse key_to_use,
+                                                    const nr_pdcp_configuration_t *pdcp_config)
+{
+  NR_RadioBearerConfig_t *rbconfig = calloc_or_fail(1, sizeof(*rbconfig));
+  rbconfig->drb_ToAddModList = calloc_or_fail(1, sizeof(*rbconfig->drb_ToAddModList));
+  NR_DRB_ToAddMod_t *drb_ToAddMod = calloc_or_fail(1, sizeof(*drb_ToAddMod));
+  drb_ToAddMod->drb_Identity = rb_id;
+  drb_ToAddMod->pdcp_Config = nr_rrc_build_pdcp_config_ie(false, false, pdcp_config);
+  asn1cCalloc(drb_ToAddMod->cnAssociation, cn_association);
+  cn_association->present = NR_DRB_ToAddMod__cnAssociation_PR_eps_BearerIdentity;
+  cn_association->choice.eps_BearerIdentity = eps_bearer_id;
+  asn1cSeqAdd(&rbconfig->drb_ToAddModList->list, drb_ToAddMod);
+  asn1cCalloc(rbconfig->securityConfig, secConf);
+  asn1cCalloc(secConf->securityAlgorithmConfig, secConfAlgo);
+  secConfAlgo->cipheringAlgorithm = ciphering_algorithm;
+  secConfAlgo->integrityProtAlgorithm = NULL;
+  asn1cCallocOne(secConf->keyToUse, key_to_use);
+  if (LOG_DEBUGFLAG(DEBUG_ASN1))
+    xer_fprint(stdout, &asn_DEF_NR_DRB_ToAddMod, drb_ToAddMod);
+  return rbconfig;
 }
 
 /* generate prototypes for the tree management functions (RB_INSERT used in rrc_add_nsa_user) */

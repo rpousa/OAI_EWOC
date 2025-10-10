@@ -74,10 +74,7 @@ int rrc_gNB_process_NGAP_UE_CONTEXT_RELEASE_REQ(MessageDef *msg_p, instance_t in
 
 int rrc_gNB_process_NGAP_UE_CONTEXT_RELEASE_COMMAND(MessageDef *msg_p, instance_t instance);
 
-void rrc_gNB_send_NGAP_UE_CONTEXT_RELEASE_COMPLETE(instance_t instance,
-                                                   uint32_t gNB_ue_ngap_id,
-                                                   int num_pdu,
-                                                   uint32_t pdu_session_id[256]);
+void rrc_gNB_send_NGAP_UE_CONTEXT_RELEASE_COMPLETE(instance_t instance, uint32_t gNB_ue_ngap_id, seq_arr_t *pduSessions);
 
 void rrc_gNB_send_NGAP_UE_CAPABILITIES_IND(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE, const NR_UECapabilityInformation_t *const ue_cap_info);
 
@@ -107,7 +104,11 @@ void rrc_gNB_free_Handover_Command(ngap_handover_command_t *msg);
 void rrc_gNB_send_NGAP_HANDOVER_NOTIFY(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE);
 void rrc_gNB_send_NGAP_HANDOVER_CANCEL(int module_id, gNB_RRC_UE_t *UE, ngap_cause_t cause);
 
-int rrc_gNB_send_NGAP_ul_ran_status_transfer(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE, const int n_to_mod, const e1_pdcp_status_info_t *pdcp_status);
+int rrc_gNB_send_NGAP_ul_ran_status_transfer(gNB_RRC_INST *rrc,
+                                             gNB_RRC_UE_t *UE,
+                                             const int n_to_mod,
+                                             const int *drb_ids,
+                                             const e1_pdcp_status_info_t *pdcp_status);
 
 int rrc_gNB_process_NGAP_DL_RAN_STATUS_TRANSFER(MessageDef *msg_p, instance_t instance);
 

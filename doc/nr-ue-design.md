@@ -15,7 +15,7 @@ The UE exits when at any point in operation it gets out of synchronization. When
 
 UE uses actors which are threads dedicated to particular activity. Sync Actor handles initial sync. DL Actors handle DLSCH PHY procedures. UL procedures are are run on the UL Actor
 
-![design](nr-ue-threads.svg)
+![design](images/nr-ue-threads.svg)
 
 ## Initial Synchronization Block
 ```mermaid

@@ -647,7 +647,7 @@ int main(int argc, char **argv)
       break;
     }
   }
-printf("%d\n", slot);
+
   logInit();
   set_glog(loglvl);
   /* initialize the sin table */
@@ -804,7 +804,7 @@ printf("%d\n", slot);
   rnti_t rnti = 0x1234;
   int uid = 0;
   NR_CellGroupConfig_t *secondaryCellGroup = get_default_secondaryCellGroup(scc, UE_Capability_nr, 0, 1, &conf, uid);
-  secondaryCellGroup->spCellConfig->reconfigurationWithSync = get_reconfiguration_with_sync(rnti, uid, scc);
+  secondaryCellGroup->spCellConfig->reconfigurationWithSync = get_reconfiguration_with_sync(rnti, uid, scc, frame);
 
   /* -U option modify DMRS */
   if(modify_dmrs) {

@@ -398,7 +398,6 @@ static bool eq_pdcp_info(const e1_pdcp_status_info_t *a, const e1_pdcp_status_in
  */
 static bool eq_drb_to_setup(const DRB_nGRAN_to_setup_t *a, const DRB_nGRAN_to_setup_t *b)
 {
-  bool result = true;
   _E1_EQ_CHECK_LONG(a->id, b->id);
   _E1_EQ_CHECK_INT(a->numCellGroups, b->numCellGroups);
   for (int i = 0; i < a->numCellGroups; i++) {
@@ -406,11 +405,14 @@ static bool eq_drb_to_setup(const DRB_nGRAN_to_setup_t *a, const DRB_nGRAN_to_se
   }
   _E1_EQ_CHECK_INT(a->numQosFlow2Setup, b->numQosFlow2Setup);
   for (int i = 0; i < a->numQosFlow2Setup; i++) {
-    result &= eq_qos_flow(&a->qosFlows[i], &b->qosFlows[i]);
+    if (!eq_qos_flow(&a->qosFlows[i], &b->qosFlows[i]))
+      return false;
   }
-  result &= eq_pdcp_config(&a->pdcp_config, &b->pdcp_config);
-  result &= eq_sdap_config(&a->sdap_config, &b->sdap_config);
-  return result;
+  if (!eq_pdcp_config(&a->pdcp_config, &b->pdcp_config))
+    return false;
+  if (!eq_sdap_config(&a->sdap_config, &b->sdap_config))
+    return false;
+  return true;
 }
 
 static void free_drb_to_setup_item(const DRB_nGRAN_to_setup_t *msg)
@@ -1939,32 +1941,42 @@ static bool eq_security_ind(security_indication_t *a, security_indication_t *b)
  */
 static bool eq_drb_to_mod(const DRB_nGRAN_to_mod_t *a, const DRB_nGRAN_to_mod_t *b)
 {
-  bool result = true;
   _E1_EQ_CHECK_LONG(a->id, b->id);
   _E1_EQ_CHECK_INT(a->numQosFlow2Setup, b->numQosFlow2Setup);
   for (int i = 0; i < a->numQosFlow2Setup; i++) {
-    result &= eq_qos_flow(&a->qosFlows[i], &b->qosFlows[i]);
+    if (!eq_qos_flow(&a->qosFlows[i], &b->qosFlows[i]))
+      return false;
   }
   _E1_EQ_CHECK_INT(a->numDlUpParam, b->numDlUpParam);
   for (int i = 0; i < a->numDlUpParam; i++) {
     _E1_EQ_CHECK_INT(a->DlUpParamList[i].cell_group_id, b->DlUpParamList[i].cell_group_id);
-    result &= eq_up_tl_info(&a->DlUpParamList[i].tl_info, &b->DlUpParamList[i].tl_info);
+    if (!eq_up_tl_info(&a->DlUpParamList[i].tl_info, &b->DlUpParamList[i].tl_info))
+      return false;
   }
-  if (a->pdcp_config && b->pdcp_config)
-    result &= eq_pdcp_config(a->pdcp_config, b->pdcp_config);
-  if (a->sdap_config && b->sdap_config)
-    result &= eq_sdap_config(a->sdap_config, b->sdap_config);
+  _E1_EQ_CHECK_OPTIONAL_PTR(a, b, pdcp_config);
+  if (a->pdcp_config && b->pdcp_config) {
+    if (!eq_pdcp_config(a->pdcp_config, b->pdcp_config))
+      return false;
+  }
+  _E1_EQ_CHECK_OPTIONAL_PTR(a, b, sdap_config);
+  if (a->sdap_config && b->sdap_config) {
+    if (!eq_sdap_config(a->sdap_config, b->sdap_config))
+      return false;
+  }
   _E1_EQ_CHECK_OPTIONAL_PTR(a, b, pdcp_status);
-  if (a->pdcp_status && b->pdcp_status)
-    result &= eq_pdcp_info(a->pdcp_status, b->pdcp_status);
-  return result;
+  if (a->pdcp_status && b->pdcp_status) {
+    if (!eq_pdcp_info(a->pdcp_status, b->pdcp_status))
+      return false;
+  }
+  return true;
 }
 
 /** @brief Equality check for PDU session item to modify */
 static bool eq_pdu_session_to_mod_item(const pdu_session_to_mod_t *a, const pdu_session_to_mod_t *b)
 {
   _E1_EQ_CHECK_LONG(a->sessionId, b->sessionId);
-  if (a->UP_TL_information && a->UP_TL_information) {
+  _E1_EQ_CHECK_OPTIONAL_PTR(a, b, UP_TL_information);
+  if (a->UP_TL_information && b->UP_TL_information) {
     if (!eq_up_tl_info(a->UP_TL_information, b->UP_TL_information))
       return false;
   }
@@ -1978,8 +1990,10 @@ static bool eq_pdu_session_to_mod_item(const pdu_session_to_mod_t *a, const pdu_
     if (!eq_drb_to_mod(&a->DRBnGRanModList[i], &b->DRBnGRanModList[i]))
       return false;
   }
+  _E1_EQ_CHECK_OPTIONAL_PTR(a, b, securityIndication);
   if (a->securityIndication && b->securityIndication) {
-    eq_security_ind(a->securityIndication, b->securityIndication);
+    if (!eq_security_ind(a->securityIndication, b->securityIndication))
+      return false;
   }
   return true;
 }
@@ -2423,8 +2437,6 @@ bool eq_bearer_context_mod_response(const e1ap_bearer_modif_resp_t *a, const e1a
 {
   if (!a || !b) return false; // Null-check both inputs
 
-  bool result = true;
-
   // Basic members
   _E1_EQ_CHECK_INT(a->gNB_cu_cp_ue_id, b->gNB_cu_cp_ue_id);
   _E1_EQ_CHECK_INT(a->gNB_cu_up_ue_id, b->gNB_cu_up_ue_id);
@@ -2440,8 +2452,10 @@ bool eq_bearer_context_mod_response(const e1ap_bearer_modif_resp_t *a, const e1a
     _E1_EQ_CHECK_OPTIONAL_IE(pduA, pduB, integrityProtectionIndication, _E1_EQ_CHECK_INT);
 
     _E1_EQ_CHECK_OPTIONAL_PTR(pduA, pduB, ng_DL_UP_TL_info);
-    if (pduA->ng_DL_UP_TL_info && pduB->ng_DL_UP_TL_info)
-      result &= eq_up_tl_info(pduA->ng_DL_UP_TL_info, pduB->ng_DL_UP_TL_info);
+    if (pduA->ng_DL_UP_TL_info && pduB->ng_DL_UP_TL_info) {
+      if (!eq_up_tl_info(pduA->ng_DL_UP_TL_info, pduB->ng_DL_UP_TL_info))
+        return false;
+    }
 
     // DRB Modified List
     _E1_EQ_CHECK_INT(pduA->numDRBModified, pduB->numDRBModified);
@@ -2455,7 +2469,8 @@ bool eq_bearer_context_mod_response(const e1ap_bearer_modif_resp_t *a, const e1a
       }
       _E1_EQ_CHECK_OPTIONAL_PTR(drbModA, drbModB, pdcp_status);
       if (drbModA->pdcp_status && drbModB->pdcp_status) {
-        result &= eq_pdcp_info(drbModA->pdcp_status, drbModA->pdcp_status);
+        if (!eq_pdcp_info(drbModA->pdcp_status, drbModB->pdcp_status))
+          return false;
       }
     }
 
@@ -2490,7 +2505,7 @@ bool eq_bearer_context_mod_response(const e1ap_bearer_modif_resp_t *a, const e1a
 
   }
 
-  return result;
+  return true;
 }
 
 /**

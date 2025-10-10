@@ -50,6 +50,11 @@
 
 #define NR_MAX_SUPPORTED_DL_LAYERS 4
 
+/* Default values for measurement gap configuration */
+#define DEFAULT_MGRP NR_GapConfig__mgrp_ms160
+#define DEFAULT_MGTA NR_GapConfig__mgta_ms0dot5
+#define DEFAULT_MGL NR_GapConfig__mgl_ms6
+
 #define PUCCH2_SIZE 8
 const uint8_t slotsperframe[5] = {10, 20, 40, 80, 160};
 
@@ -2094,21 +2099,52 @@ static void config_csi_meas_report(NR_CSI_MeasConfig_t *csi_MeasConfig,
   asn1cSeqAdd(&csi_MeasConfig->csi_ReportConfigToAddModList->list, csirep);
 }
 
+static long config_nrofReportedRS(const NR_UE_NR_Capability_t *uecap,
+                                  uint64_t ssb_bitmap,
+                                  const NR_ServingCellConfigCommon_t *scc,
+                                  int max_num_reported_rs)
+{
+  long nb_band = *scc->downlinkConfigCommon->frequencyInfoDL->frequencyBandList.list.array[0];
+  int num_supported_rs = 0;
+  if (uecap) {
+    for (int i = 0; i < uecap->rf_Parameters.supportedBandListNR.list.count; i++) {
+      NR_BandNR_t *band = uecap->rf_Parameters.supportedBandListNR.list.array[i];
+      if (band->bandNR == nb_band) {
+        if (band->mimo_ParametersPerBand && band->mimo_ParametersPerBand->maxNumberNonGroupBeamReporting) {
+          int maxNumberNonGroupBeamReporting = 1 << *band->mimo_ParametersPerBand->maxNumberNonGroupBeamReporting;
+          if (num_supported_rs == 0 || num_supported_rs > maxNumberNonGroupBeamReporting)
+            num_supported_rs = maxNumberNonGroupBeamReporting;
+        }
+      }
+    }
+  }
+  int configured_rs = max_num_reported_rs > 0 ? min(num_supported_rs, max_num_reported_rs) : num_supported_rs;
+  uint32_t num_ssb = count_bits64(ssb_bitmap);
+  if (num_ssb == 1 || configured_rs < 2)
+    return NR_CSI_ReportConfig__groupBasedBeamReporting__disabled__nrofReportedRS_n1;
+  if (num_ssb == 2 || configured_rs == 2)
+    return NR_CSI_ReportConfig__groupBasedBeamReporting__disabled__nrofReportedRS_n2;
+  if (num_ssb == 3 || configured_rs == 3)
+    return NR_CSI_ReportConfig__groupBasedBeamReporting__disabled__nrofReportedRS_n3;
+  return NR_CSI_ReportConfig__groupBasedBeamReporting__disabled__nrofReportedRS_n4;
+}
+
 static void config_rsrp_meas_report(NR_CSI_MeasConfig_t *csi_MeasConfig,
+                                    const NR_UE_NR_Capability_t *uecap,
                                     const NR_ServingCellConfigCommon_t *servingcellconfigcommon,
                                     NR_PUCCH_CSI_Resource_t *pucchcsires,
-                                    int do_csi, // if rsrp is based on CSI or SSB
+                                    const nr_mac_config_t *configuration,
                                     int rep_id,
                                     int uid,
                                     int curr_bwp,
                                     int num_antenna_ports,
-                                    bool do_sinr)
+                                    uint64_t ssb_bitmap)
 {
   int resource_id = -1;
   for (int csi_list = 0; csi_list < csi_MeasConfig->csi_ResourceConfigToAddModList->list.count; csi_list++) {
     NR_CSI_ResourceConfig_t *csires = csi_MeasConfig->csi_ResourceConfigToAddModList->list.array[csi_list];
     if (csires->csi_RS_ResourceSetList.present == NR_CSI_ResourceConfig__csi_RS_ResourceSetList_PR_nzp_CSI_RS_SSB) {
-      if (do_csi && num_antenna_ports < 4) {
+      if (configuration->do_CSIRS && num_antenna_ports < 4) {
         if (csires->csi_RS_ResourceSetList.choice.nzp_CSI_RS_SSB->nzp_CSI_RS_ResourceSetList)
           resource_id = csires->csi_ResourceConfigId;
       } else {
@@ -2130,13 +2166,13 @@ static void config_rsrp_meas_report(NR_CSI_MeasConfig_t *csi_MeasConfig,
   csirep->reportConfigType.choice.periodic = calloc(1, sizeof(*csirep->reportConfigType.choice.periodic));
   set_csi_meas_periodicity(servingcellconfigcommon, csirep, uid, curr_bwp, true);
   asn1cSeqAdd(&csirep->reportConfigType.choice.periodic->pucch_CSI_ResourceList.list, pucchcsires);
-  if (do_csi && num_antenna_ports < 4) {
+  if (configuration->do_CSIRS && num_antenna_ports < 4) {
     csirep->reportQuantity.present = NR_CSI_ReportConfig__reportQuantity_PR_cri_RSRP;
     csirep->reportQuantity.choice.cri_RSRP = (NULL_t)0;
   } else {
     csirep->reportQuantity.present = NR_CSI_ReportConfig__reportQuantity_PR_ssb_Index_RSRP;
     csirep->reportQuantity.choice.ssb_Index_RSRP = (NULL_t)0;
-    if (do_sinr) {
+    if (configuration->do_SINR) {
       csirep->reportQuantity.present = NR_CSI_ReportConfig__reportQuantity_PR_none;
       csirep->reportQuantity.choice.none = (NULL_t)0;
       csirep->ext2 = calloc(1, sizeof(*csirep->ext2));
@@ -2148,7 +2184,10 @@ static void config_rsrp_meas_report(NR_CSI_MeasConfig_t *csi_MeasConfig,
   csirep->groupBasedBeamReporting.present = NR_CSI_ReportConfig__groupBasedBeamReporting_PR_disabled;
   csirep->groupBasedBeamReporting.choice.disabled = calloc(1, sizeof(*csirep->groupBasedBeamReporting.choice.disabled));
   csirep->groupBasedBeamReporting.choice.disabled->nrofReportedRS = calloc(1, sizeof(*csirep->groupBasedBeamReporting.choice.disabled->nrofReportedRS));
-  *csirep->groupBasedBeamReporting.choice.disabled->nrofReportedRS = NR_CSI_ReportConfig__groupBasedBeamReporting__disabled__nrofReportedRS_n1;
+  *csirep->groupBasedBeamReporting.choice.disabled->nrofReportedRS = config_nrofReportedRS(uecap,
+                                                                                           ssb_bitmap,
+                                                                                           servingcellconfigcommon,
+                                                                                           configuration->max_num_rsrp);
   asn1cSeqAdd(&csi_MeasConfig->csi_ReportConfigToAddModList->list, csirep);
 }
 
@@ -3292,6 +3331,7 @@ static NR_BWP_DownlinkDedicated_t *configure_initial_dl_bwp(const NR_ServingCell
 }
 
 static NR_CSI_MeasConfig_t *get_csiMeasConfig(const NR_ServingCellConfig_t *configDedicated,
+                                              const NR_UE_NR_Capability_t *uecap,
                                               const NR_ServingCellConfigCommon_t *scc,
                                               const nr_mac_config_t *configuration,
                                               int uid,
@@ -3396,14 +3436,15 @@ static NR_CSI_MeasConfig_t *get_csiMeasConfig(const NR_ServingCellConfig_t *conf
   pucchrsrp->uplinkBandwidthPartId = bwp_id;
   pucchrsrp->pucch_Resource = pucch_Resource;
   config_rsrp_meas_report(csi_MeasConfig,
+                          uecap,
                           scc,
                           pucchrsrp,
-                          configuration->do_CSIRS,
+                          configuration,
                           bwp_id + 10,
                           uid,
                           curr_bwp,
                           pdsch_AntennaPorts,
-                          configuration->do_SINR);
+                          bitmap);
   return csi_MeasConfig;
 }
 
@@ -3482,6 +3523,7 @@ static NR_SpCellConfig_t *get_initial_SpCellConfig(int uid,
   configDedicated->csi_MeasConfig = calloc(1, sizeof(*configDedicated->csi_MeasConfig));
   configDedicated->csi_MeasConfig->present = NR_SetupRelease_CSI_MeasConfig_PR_setup;
   configDedicated->csi_MeasConfig->choice.setup = get_csiMeasConfig(configDedicated,
+                                                                    NULL,
                                                                     scc,
                                                                     configuration,
                                                                     uid,
@@ -3786,6 +3828,7 @@ NR_CellGroupConfig_t * update_cellGroupConfig_for_BWP_switch(NR_CellGroupConfig_
 
   ASN_STRUCT_FREE(asn_DEF_NR_CSI_MeasConfig, configDedicated->csi_MeasConfig->choice.setup);
   configDedicated->csi_MeasConfig->choice.setup = get_csiMeasConfig(configDedicated,
+                                                                    uecap,
                                                                     scc,
                                                                     configuration,
                                                                     uid,
@@ -4101,6 +4144,7 @@ NR_CellGroupConfig_t *get_default_secondaryCellGroup(const NR_ServingCellConfigC
   configDedicated->csi_MeasConfig = calloc(1, sizeof(*configDedicated->csi_MeasConfig));
   configDedicated->csi_MeasConfig->present = NR_SetupRelease_CSI_MeasConfig_PR_setup;
   configDedicated->csi_MeasConfig->choice.setup = get_csiMeasConfig(configDedicated,
+                                                                    uecap,
                                                                     servingcellconfigcommon,
                                                                     configuration,
                                                                     uid,
@@ -4123,7 +4167,7 @@ NR_CellGroupConfig_t *get_default_secondaryCellGroup(const NR_ServingCellConfigC
   return secondaryCellGroup;
 }
 
-NR_ReconfigurationWithSync_t *get_reconfiguration_with_sync(rnti_t rnti, uid_t uid, const NR_ServingCellConfigCommon_t *scc)
+NR_ReconfigurationWithSync_t *get_reconfiguration_with_sync(rnti_t rnti, uid_t uid, const NR_ServingCellConfigCommon_t *scc, int frame)
 {
   NR_ReconfigurationWithSync_t *reconfigurationWithSync = calloc(1, sizeof(*reconfigurationWithSync));
   reconfigurationWithSync->newUE_Identity = rnti;
@@ -4132,6 +4176,19 @@ NR_ReconfigurationWithSync_t *get_reconfiguration_with_sync(rnti_t rnti, uid_t u
   reconfigurationWithSync->ext1 = NULL;
 
   reconfigurationWithSync->spCellConfigCommon = clone_ServingCellConfigCommon(scc);
+
+  // in case of ReconfigurationWithSync, the epochTime_r17 must be present if there is a ntn_Config_r17
+  if (reconfigurationWithSync->spCellConfigCommon->ext2 && reconfigurationWithSync->spCellConfigCommon->ext2->ntn_Config_r17) {
+    NR_NTN_Config_r17_t *ntncfg = reconfigurationWithSync->spCellConfigCommon->ext2->ntn_Config_r17;
+    if (!ntncfg->epochTime_r17) {
+      ntncfg->epochTime_r17 = calloc(1, sizeof(*ntncfg->epochTime_r17));
+      // the epochTime_r17 is esp. relevant for the timer T430, which runs for multiples of 5 seconds.
+      // here we don't have access to the current subFrame number, so we only set the SFN.
+      // the error of up to 10 ms should be acceptable for this long running timer.
+      ntncfg->epochTime_r17->sfn_r17 = frame;
+      ntncfg->epochTime_r17->subFrameNR_r17 = 0;
+    }
+  }
 
   reconfigurationWithSync->rach_ConfigDedicated = calloc(1, sizeof(*reconfigurationWithSync->rach_ConfigDedicated));
   reconfigurationWithSync->rach_ConfigDedicated->present = NR_ReconfigurationWithSync__rach_ConfigDedicated_PR_uplink;
@@ -4159,53 +4216,6 @@ NR_ReconfigurationWithSync_t *get_reconfiguration_with_sync(rnti_t rnti, uid_t u
   return reconfigurationWithSync;
 }
 
-static NR_MeasGapConfig_t *get_gap_config_from_smtc(const NR_SSB_MTC_t *ssb_mtc)
-{
-  NR_MeasGapConfig_t *measGapConfig = calloc_or_fail(1, sizeof(*measGapConfig));
-  measGapConfig->ext1 = calloc_or_fail(1, sizeof(*measGapConfig->ext1));
-  measGapConfig->ext1->gapUE = calloc_or_fail(1, sizeof(*measGapConfig->ext1->gapUE));
-  measGapConfig->ext1->gapUE->present = NR_SetupRelease_GapConfig_PR_setup;
-  NR_GapConfig_t *gap_config = calloc_or_fail(1, sizeof(*gap_config));
-  measGapConfig->ext1->gapUE->choice.setup = gap_config;
-
-  // mgta = Measurement Gap Timing Advance, to provide sufficient time for the UE to re-tune its transceiver
-  // This allows the Measurement Gap to extend mgta ms either side of the SS/PBCH Measurement Window.
-  gap_config->mgta = NR_GapConfig__mgta_ms0dot5;
-
-  // mgrp = Measurement Gap Repetition Period
-  // gapOffset = It defines the start of the Measurement Gaps relative to the start of the radio frame with SFN = 0
-  // The Measurement Gaps need to be synchronized with the SS/PBCH transmissions which are to be measured
-  gap_config->mgrp = NR_GapConfig__mgrp_ms160;
-  switch (ssb_mtc->periodicityAndOffset.present) {
-    case NR_SSB_MTC__periodicityAndOffset_PR_sf20:
-      gap_config->gapOffset = ssb_mtc->periodicityAndOffset.choice.sf20;
-      break;
-    case NR_SSB_MTC__periodicityAndOffset_PR_sf40:
-      gap_config->gapOffset = ssb_mtc->periodicityAndOffset.choice.sf40;
-      break;
-    case NR_SSB_MTC__periodicityAndOffset_PR_sf80:
-      gap_config->gapOffset = ssb_mtc->periodicityAndOffset.choice.sf80;
-      break;
-    case NR_SSB_MTC__periodicityAndOffset_PR_sf160:
-      gap_config->gapOffset = ssb_mtc->periodicityAndOffset.choice.sf160;
-      break;
-    default:
-      LOG_W(NR_RRC, "SMTC periodicity higher than MGRP\n");
-      // With this configuration, not all SSBs belong to the Measurement Gap.
-      if (ssb_mtc->periodicityAndOffset.present == NR_SSB_MTC__periodicityAndOffset_PR_sf5) {
-        gap_config->gapOffset = ssb_mtc->periodicityAndOffset.choice.sf5;
-      } else if (ssb_mtc->periodicityAndOffset.present == NR_SSB_MTC__periodicityAndOffset_PR_sf10) {
-        gap_config->gapOffset = ssb_mtc->periodicityAndOffset.choice.sf10;
-      }
-  }
-
-  // mgl = Measurement Gap Length
-  // FIXME: At least the duration of the SMTC plus 2 times the mgta should be enough,
-  //  however, at the moment it only works by setting the maximum value
-  gap_config->mgl = NR_GapConfig__mgl_ms6;
-
-  return measGapConfig;
-}
 
 NR_MeasurementTimingConfiguration_t *get_nr_mtc(uint8_t *buf, uint32_t len)
 {
@@ -4278,25 +4288,37 @@ static float get_mgta(long mgta)
   }
 }
 
-/** @brief Return Measurement Gap Configuration, from ASN.1 config */
-const NR_GapConfig_t *get_gap_config(const NR_MeasGapConfig_t *mgc)
+/** @brief Extract gapOffset from SSB MTC periodicity */
+static bool extract_gap_offset_from_smtc(const NR_SSB_MTC_t *ssb_mtc, long *gapOffset)
 {
-  if (mgc->gapFR2 && mgc->gapFR2->present == NR_SetupRelease_GapConfig_PR_setup)
-    return mgc->gapFR2->choice.setup;
+  if (!ssb_mtc)
+    return false;
 
-  // FR1 case
-  if (!mgc->ext1)
-    return NULL;
+  // Extract gapOffset based on periodicity
+  switch (ssb_mtc->periodicityAndOffset.present) {
+    case NR_SSB_MTC__periodicityAndOffset_PR_sf20:
+      *gapOffset = ssb_mtc->periodicityAndOffset.choice.sf20;
+      break;
+    case NR_SSB_MTC__periodicityAndOffset_PR_sf40:
+      *gapOffset = ssb_mtc->periodicityAndOffset.choice.sf40;
+      break;
+    case NR_SSB_MTC__periodicityAndOffset_PR_sf80:
+      *gapOffset = ssb_mtc->periodicityAndOffset.choice.sf80;
+      break;
+    case NR_SSB_MTC__periodicityAndOffset_PR_sf160:
+      *gapOffset = ssb_mtc->periodicityAndOffset.choice.sf160;
+      break;
+    default:
+      LOG_W(NR_RRC, "SMTC periodicity higher than MGRP\n");
+      if (ssb_mtc->periodicityAndOffset.present == NR_SSB_MTC__periodicityAndOffset_PR_sf5) {
+        *gapOffset = ssb_mtc->periodicityAndOffset.choice.sf5;
+      } else if (ssb_mtc->periodicityAndOffset.present == NR_SSB_MTC__periodicityAndOffset_PR_sf10) {
+        *gapOffset = ssb_mtc->periodicityAndOffset.choice.sf10;
+      }
+      break;
+  }
 
-  const NR_SetupRelease_GapConfig_t *gapUE = mgc->ext1->gapUE;
-  if (gapUE && gapUE->present == NR_SetupRelease_GapConfig_PR_setup)
-    return gapUE->choice.setup;
-
-  const NR_SetupRelease_GapConfig_t *gapFR1 = mgc->ext1->gapFR1;
-  if (gapFR1 && gapFR1->present == NR_SetupRelease_GapConfig_PR_setup)
-    return gapFR1->choice.setup;
-
-  return NULL;
+  return true;
 }
 
 measgap_config_t create_measgap_config(const NR_MeasurementTimingConfiguration_t *mtc, int scs, int min_rxtxtime)
@@ -4307,18 +4329,25 @@ measgap_config_t create_measgap_config(const NR_MeasurementTimingConfiguration_t
   DevAssert(mt != NULL && mt->frequencyAndTiming != NULL);
   const struct NR_MeasTiming__frequencyAndTiming *ft = mt->frequencyAndTiming;
   const NR_SSB_MTC_t *ssb_mtc = &ft->ssb_MeasurementTimingConfiguration;
-  NR_MeasGapConfig_t *measGapConfig = get_gap_config_from_smtc(ssb_mtc);
-  const NR_GapConfig_t *gap_config = get_gap_config(measGapConfig);
-  if (!gap_config)
+
+  // Initialize with defaults
+  long mgrp = DEFAULT_MGRP;
+  long gapOffset = 0;
+  long mgta = DEFAULT_MGTA;
+  long mgl = DEFAULT_MGL;
+
+  // Extract gapOffset from SSB MTC periodicity
+  if (!extract_gap_offset_from_smtc(ssb_mtc, &gapOffset)) {
     return mgc;
+  }
 
-  mgc.mgrp_ms = get_mgrp(gap_config->mgrp);
+  mgc.mgrp_ms = get_mgrp(mgrp);
   DevAssert(mgc.mgrp_ms != -1);
-  mgc.mgrp = gap_config->mgrp;
+  mgc.mgrp = mgrp;
 
-  mgc.gapOffset = gap_config->gapOffset;
-  mgc.mgta = gap_config->mgta;
-  mgc.n_slots_mgta = ((int)(10 * get_mgta(gap_config->mgta)) << scs) / 10;
+  mgc.gapOffset = gapOffset;
+  mgc.mgta = mgta;
+  mgc.n_slots_mgta = ((int)(10 * get_mgta(mgta)) << scs) / 10;
 
   // We start the timer K2 slots earlier to avoid scheduling feedback PUCCHs inside measGap
   // or depending on the current min_rxtxtime earlier
@@ -4327,12 +4356,13 @@ measgap_config_t create_measgap_config(const NR_MeasurementTimingConfiguration_t
 
   mgc.n_slots_advance = mgc.n_slots_mgta + max_k2;
 
-  mgc.mgl_ms = get_mgl(gap_config->mgl);
+  mgc.mgl_ms = get_mgl(mgl);
   DevAssert(mgc.mgl_ms != -1);
-  mgc.mgl = gap_config->mgl;
+  mgc.mgl = mgl;
   mgc.mgl_slots = ((int)(10 * (mgc.mgl_ms + max_k2)) << scs) / 10;
 
   mgc.enable = true;
+
   return mgc;
 }
 

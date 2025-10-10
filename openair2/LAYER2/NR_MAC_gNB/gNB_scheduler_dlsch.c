@@ -1250,10 +1250,16 @@ void nr_schedule_ue_spec(module_id_t module_id,
             current_harq_pid,
             harq->round,
             harq->ndi);
-      AssertFatal(harq->sched_pdsch.tb_size == TBS,
-                  "UE %04x mismatch between scheduled TBS and buffered TB for HARQ PID %d\n",
-                  UE->rnti,
-                  current_harq_pid);
+      if (!get_softmodem_params()->phy_test)
+        AssertFatal(harq->sched_pdsch.tb_size == TBS,
+                    "UE %04x mismatch between scheduled TBS and buffered TB for HARQ PID %d\n",
+                    UE->rnti,
+                    current_harq_pid);
+      else if (harq->sched_pdsch.tb_size != TBS)
+        LOG_E(NR_MAC,
+              "Mismatch between scheduled TBS and buffered TB for HARQ PID %d. No RTX control in phy-test mode. "
+              "Possible causes: presence of CSI-RS or DLSCH scheduled in the mixed slot.\n",
+              current_harq_pid);
       T(T_GNB_MAC_RETRANSMISSION_DL_PDU_WITH_DATA, T_INT(module_id), T_INT(CC_id), T_INT(rnti),
         T_INT(frame), T_INT(slot), T_INT(current_harq_pid), T_INT(harq->round), T_BUFFER(harq->transportBlock.buf, TBS));
       UE->mac_stats.dl.total_rbs_retx += sched_pdsch->rbSize;

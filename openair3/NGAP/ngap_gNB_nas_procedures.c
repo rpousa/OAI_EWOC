@@ -259,8 +259,11 @@ int ngap_gNB_handle_nas_first_req(instance_t instance, ngap_nas_first_req_t *UEf
     ie->value.choice.UEContextRequest = NGAP_UEContextRequest_requested;
   }
 
-  if (ngap_gNB_encode_pdu(&pdu, &buffer, &length) < 0)
+  if (ngap_gNB_encode_pdu(&pdu, &buffer, &length) < 0) {
+    ASN_STRUCT_FREE_CONTENTS_ONLY(asn_DEF_NGAP_NGAP_PDU, &pdu);
     DevMessage("Failed to encode initial UE message\n");
+    return -1;
+  }
 
   /* Update the current NGAP UE state */
   ue_desc_p.ue_state = NGAP_UE_WAITING_CSR;
@@ -288,6 +291,7 @@ int ngap_gNB_handle_nas_first_req(instance_t instance, ngap_nas_first_req_t *UEf
   /* Send encoded message over sctp */
   ngap_gNB_itti_send_sctp_data_req(instance_p->instance, amf->assoc_id, buffer, length, ue_desc_p.tx_stream);
 
+  ASN_STRUCT_FREE_CONTENTS_ONLY(asn_DEF_NGAP_NGAP_PDU, &pdu);
   return 0;
 }
 
@@ -454,6 +458,7 @@ int ngap_gNB_nas_uplink(instance_t instance, ngap_uplink_nas_t *ngap_uplink_nas_
   if (ngap_gNB_encode_pdu(&pdu, &buffer, &length) < 0) {
     NGAP_ERROR("Failed to encode uplink NAS transport\n");
     /* Encode procedure has failed... */
+    ASN_STRUCT_FREE_CONTENTS_ONLY(asn_DEF_NGAP_NGAP_PDU, &pdu);
     return -1;
   }
 
@@ -462,6 +467,7 @@ int ngap_gNB_nas_uplink(instance_t instance, ngap_uplink_nas_t *ngap_uplink_nas_
                                    ue_context_p->amf_ref->assoc_id, buffer,
                                    length, ue_context_p->tx_stream);
 
+  ASN_STRUCT_FREE_CONTENTS_ONLY(asn_DEF_NGAP_NGAP_PDU, &pdu);
   return 0;
 }
 
@@ -535,6 +541,7 @@ int ngap_gNB_nas_non_delivery_ind(instance_t instance,
   if (ngap_gNB_encode_pdu(&pdu, &buffer, &length) < 0) {
     NGAP_ERROR("Failed to encode NAS NON delivery indication\n");
     /* Encode procedure has failed... */
+    ASN_STRUCT_FREE_CONTENTS_ONLY(asn_DEF_NGAP_NGAP_PDU, &pdu);
     return -1;
   }
 
@@ -543,6 +550,7 @@ int ngap_gNB_nas_non_delivery_ind(instance_t instance,
                                    ue_context_p->amf_ref->assoc_id, buffer,
                                    length, ue_context_p->tx_stream);
 
+  ASN_STRUCT_FREE_CONTENTS_ONLY(asn_DEF_NGAP_NGAP_PDU, &pdu);
   return 0;
 }
 
@@ -704,6 +712,7 @@ int ngap_gNB_initial_ctxt_resp(instance_t instance, ngap_initial_context_setup_r
   if (ngap_gNB_encode_pdu(&pdu, &buffer, &length) < 0) {
     NGAP_ERROR("Failed to encode InitialContextSetupResponse\n");
     /* Encode procedure has failed... */
+    ASN_STRUCT_FREE_CONTENTS_ONLY(asn_DEF_NGAP_NGAP_PDU, &pdu);
     return -1;
   }
 
@@ -711,6 +720,7 @@ int ngap_gNB_initial_ctxt_resp(instance_t instance, ngap_initial_context_setup_r
     LOG_I(NR_RRC,"Send message to sctp: NGAP_InitialContextSetupResponse\n");
     ngap_gNB_itti_send_sctp_data_req(ngap_gNB_instance_p->instance, ue_context_p->amf_ref->assoc_id, buffer, length, ue_context_p->tx_stream);
 
+    ASN_STRUCT_FREE_CONTENTS_ONLY(asn_DEF_NGAP_NGAP_PDU, &pdu);
     return 0;
 }
 
@@ -785,6 +795,7 @@ int ngap_gNB_initial_ctxt_fail(instance_t instance, ngap_initial_context_setup_f
   if (ngap_gNB_encode_pdu(&pdu, &buffer, &length) < 0) {
     NGAP_ERROR("Failed to encode InitialContextSetupFailure\n");
     /* Encode procedure has failed... */
+    ASN_STRUCT_FREE_CONTENTS_ONLY(asn_DEF_NGAP_NGAP_PDU, &pdu);
     return -1;
   }
   /* UE associated signalling -> use the allocated stream */
@@ -794,6 +805,7 @@ int ngap_gNB_initial_ctxt_fail(instance_t instance, ngap_initial_context_setup_f
                                    buffer,
                                    length,
                                    ue_context_p->tx_stream);
+  ASN_STRUCT_FREE_CONTENTS_ONLY(asn_DEF_NGAP_NGAP_PDU, &pdu);
   return 0;
 }
 
@@ -866,11 +878,13 @@ int ngap_gNB_ue_capabilities(instance_t instance, ngap_ue_cap_info_ind_t *ue_cap
   if (ngap_gNB_encode_pdu(&pdu, &buffer, &length) < 0) {
     /* Encode procedure has failed... */
     NGAP_ERROR("Failed to encode UE radio capabilities indication\n");
+    ASN_STRUCT_FREE_CONTENTS_ONLY(asn_DEF_NGAP_NGAP_PDU, &pdu);
     return -1;
   }
 
   /* UE associated signalling -> use the allocated stream */
   ngap_gNB_itti_send_sctp_data_req(ngap_gNB_instance_p->instance, ue_context_p->amf_ref->assoc_id, buffer, length, ue_context_p->tx_stream);
+  ASN_STRUCT_FREE_CONTENTS_ONLY(asn_DEF_NGAP_NGAP_PDU, &pdu);
   return 0;
 }
 
@@ -990,11 +1004,13 @@ int ngap_gNB_pdusession_setup_resp(instance_t instance, ngap_pdusession_setup_re
   if (ngap_gNB_encode_pdu(&pdu, &buffer, &length) < 0) {
       NGAP_ERROR("Failed to encode uplink transport\n");
       /* Encode procedure has failed... */
+      ASN_STRUCT_FREE_CONTENTS_ONLY(asn_DEF_NGAP_NGAP_PDU, &pdu);
       return -1;
   }
 
   /* UE associated signalling -> use the allocated stream */
   ngap_gNB_itti_send_sctp_data_req(ngap_gNB_instance_p->instance, ue_context_p->amf_ref->assoc_id, buffer, length, ue_context_p->tx_stream);
+  ASN_STRUCT_FREE_CONTENTS_ONLY(asn_DEF_NGAP_NGAP_PDU, &pdu);
   return 0;
 }
 
@@ -1128,12 +1144,14 @@ int ngap_gNB_pdusession_modify_resp(instance_t instance, ngap_pdusession_modify_
   if (ngap_gNB_encode_pdu(&pdu, &buffer, &length) < 0) {
     NGAP_ERROR("Failed to encode uplink transport\n");
     /* Encode procedure has failed... */
+    ASN_STRUCT_FREE_CONTENTS_ONLY(asn_DEF_NGAP_NGAP_PDU, &pdu);
     return -1;
   }
 
   /* UE associated signalling -> use the allocated stream */
   ngap_gNB_itti_send_sctp_data_req(ngap_gNB_instance_p->instance, ue_context_p->amf_ref->assoc_id, buffer, length, ue_context_p->tx_stream);
 
+  ASN_STRUCT_FREE_CONTENTS_ONLY(asn_DEF_NGAP_NGAP_PDU, &pdu);
   return 0;
 }
 //------------------------------------------------------------------------------
@@ -1201,17 +1219,18 @@ int ngap_gNB_pdusession_release_resp(instance_t instance, ngap_pdusession_releas
   if (ngap_gNB_encode_pdu(&pdu, &buffer, &length) < 0) {
     NGAP_ERROR("Failed to encode release response\n");
     /* Encode procedure has failed... */
+    ASN_STRUCT_FREE_CONTENTS_ONLY(asn_DEF_NGAP_NGAP_PDU, &pdu);
     return -1;
   }
 
   /* UE associated signalling -> use the allocated stream */
   ngap_gNB_itti_send_sctp_data_req(ngap_gNB_instance_p->instance, ue_context_p->amf_ref->assoc_id, buffer, length, ue_context_p->tx_stream);
-  NGAP_INFO("pdusession_release_response sended gNB_UE_NGAP_ID %u  amf_ue_ngap_id %lu nb_of_pdusessions_released %d nb_of_pdusessions_failed %d\n",
+  NGAP_INFO("pdusession_release_response sended gNB_UE_NGAP_ID %u  amf_ue_ngap_id %lu nb_of_pdusessions_released %d \n",
             pdusession_release_resp_p->gNB_ue_ngap_id,
             (uint64_t)ue_context_p->amf_ue_ngap_id,
-            pdusession_release_resp_p->nb_of_pdusessions_released,
-            pdusession_release_resp_p->nb_of_pdusessions_failed);
+            pdusession_release_resp_p->nb_of_pdusessions_released);
 
+  ASN_STRUCT_FREE_CONTENTS_ONLY(asn_DEF_NGAP_NGAP_PDU, &pdu);
   return 0;
 }
 

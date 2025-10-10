@@ -313,7 +313,15 @@ void phy_procedures_nrUE_SL_TX(PHY_VARS_NR_UE *ue, const UE_nr_rxtx_proc_t *proc
     was_symbol_used[i] = true;
   if (tx_action) {
     LOG_D(NR_PHY, "Sending Uplink data \n");
-    nr_ue_pusch_common_procedures(ue, proc->nr_slot_tx, fp, fp->nb_antennas_tx, txdataF, txp, link_type_sl, was_symbol_used);
+    nr_ue_pusch_common_procedures(ue,
+                                  proc->nr_slot_tx,
+                                  fp,
+                                  fp->nb_antennas_tx,
+                                  txdataF,
+                                  txp,
+                                  link_type_sl,
+                                  was_symbol_used,
+                                  ue->no_phase_pre_comp);
   }
 
   LOG_D(NR_PHY, "****** end Sidelink TX-Chain for AbsSubframe %d.%d ******\n", frame_tx, slot_tx);

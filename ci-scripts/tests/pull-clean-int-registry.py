@@ -26,7 +26,7 @@ class TestDeploymentMethods(unittest.TestCase):
 		# the pull function has the authentication at the internal cluster hardcoded
 		# this is a refactoring opportunity: we should do it in a separate step
 		# and allow to have pull work with any registry
-		registry = "porcepix.sboai.cs.eurecom.fr"
+		registry = cls_containerize.DEFAULT_REGISTRY
 		with cls_cmd.getConnection("localhost") as cmd:
 			ret = cmd.run(f"ping -c1 -w1 {registry}")
 			if ret.returncode != 0: # could not ping once -> skip test

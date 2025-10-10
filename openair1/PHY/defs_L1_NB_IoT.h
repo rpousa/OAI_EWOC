@@ -512,20 +512,20 @@ typedef struct PHY_VARS_eNB_NB_IoT_s {
   NB_IoT_DL_FRAME_PARMS         frame_parms;
   PHY_MEASUREMENTS_eNB_NB_IoT   measurements[NUMBER_OF_eNB_SECTORS_MAX_NB_IoT]; /// Measurement variables
   NB_IoT_eNB_COMMON             common_vars;
-  NB_IoT_eNB_SRS                srs_vars[NUMBER_OF_UE_MAX_NB_IoT];
+  NB_IoT_eNB_SRS                srs_vars[NUMBER_OF_UE_MAX];
   NB_IoT_eNB_PBCH               pbch;
-  NB_IoT_eNB_PUSCH              *pusch_vars[NUMBER_OF_UE_MAX_NB_IoT];
+  NB_IoT_eNB_PUSCH              *pusch_vars[NUMBER_OF_UE_MAX];
   NB_IoT_eNB_PRACH              prach_vars;
-  //LTE_eNB_DLSCH_t             *dlsch[NUMBER_OF_UE_MAX_NB_IoT][2];             // Nusers times two spatial streams
-  NB_IoT_eNB_NULSCH_t            *ulsch[NUMBER_OF_UE_MAX_NB_IoT+1];              // Nusers + number of RA (the ulsch[0] contains RAR)
+  //LTE_eNB_DLSCH_t             *dlsch[NUMBER_OF_UE_MAX][2];             // Nusers times two spatial streams
+  NB_IoT_eNB_NULSCH_t            *ulsch[NUMBER_OF_UE_MAX+1];              // Nusers + number of RA (the ulsch[0] contains RAR)
   //LTE_eNB_DLSCH_t             *dlsch_SI,*dlsch_ra;
   //LTE_eNB_DLSCH_t             *dlsch_MCH;
-  NB_IoT_eNB_UE_stats           UE_stats[NUMBER_OF_UE_MAX_NB_IoT];
-  //LTE_eNB_UE_stats            *UE_stats_ptr[NUMBER_OF_UE_MAX_NB_IoT];
+  NB_IoT_eNB_UE_stats           UE_stats[NUMBER_OF_UE_MAX];
+  //LTE_eNB_UE_stats            *UE_stats_ptr[NUMBER_OF_UE_MAX];
   /// cell-specific reference symbols
   uint32_t                      lte_gold_table_NB_IoT[20][2][14];
   /// UE-specific reference symbols (p=5), TM 7
-  uint32_t                      lte_gold_uespec_port5_table[NUMBER_OF_UE_MAX_NB_IoT][20][38];
+  uint32_t                      lte_gold_uespec_port5_table[NUMBER_OF_UE_MAX][20][38];
   /// UE-specific reference symbols (p=7...14), TM 8/9/10
   uint32_t                      lte_gold_uespec_table[2][20][2][21];
   /// mbsfn reference symbols
@@ -539,7 +539,7 @@ typedef struct PHY_VARS_eNB_NB_IoT_s {
   ///
   char                          eNB_generate_rar;
   /// Indicator set to 0 after first SR
-  uint8_t                       first_sr[NUMBER_OF_UE_MAX_NB_IoT];
+  uint8_t                       first_sr[NUMBER_OF_UE_MAX];
 
   uint32_t                      max_peak_val;
   ///
@@ -549,7 +549,7 @@ typedef struct PHY_VARS_eNB_NB_IoT_s {
   /// N0 (used for abstraction)
   double                        N0;
   ///
-  unsigned char                 first_run_timing_advance[NUMBER_OF_UE_MAX_NB_IoT];
+  unsigned char                 first_run_timing_advance[NUMBER_OF_UE_MAX];
   unsigned char                 first_run_I0_measurements;
 
   unsigned char                 cooperation_flag;                   // for cooperative communication
@@ -575,37 +575,37 @@ typedef struct PHY_VARS_eNB_NB_IoT_s {
   DCI_ALLOC_NB_IoT_t            dci_alloc[2][NUM_DCI_MAX_NB_IoT];   // dci_alloc from even/odd subframes
   /////////////
   // PDSCH Variables
-  PDSCH_CONFIG_DEDICATED_NB_IoT             pdsch_config_dedicated[NUMBER_OF_UE_MAX_NB_IoT];
+  PDSCH_CONFIG_DEDICATED_NB_IoT             pdsch_config_dedicated[NUMBER_OF_UE_MAX];
   // PUSCH Variables
-  PUSCH_CONFIG_DEDICATED_NB_IoT             pusch_config_dedicated[NUMBER_OF_UE_MAX_NB_IoT];
+  PUSCH_CONFIG_DEDICATED_NB_IoT             pusch_config_dedicated[NUMBER_OF_UE_MAX];
   // PUCCH variables
-  PUCCH_CONFIG_DEDICATED_NB_IoT             pucch_config_dedicated[NUMBER_OF_UE_MAX_NB_IoT];
+  PUCCH_CONFIG_DEDICATED_NB_IoT             pucch_config_dedicated[NUMBER_OF_UE_MAX];
   // UL-POWER-Control
-  UL_POWER_CONTROL_DEDICATED_NB_IoT         ul_power_control_dedicated[NUMBER_OF_UE_MAX_NB_IoT];
+  UL_POWER_CONTROL_DEDICATED_NB_IoT         ul_power_control_dedicated[NUMBER_OF_UE_MAX];
   // TPC
-  TPC_PDCCH_CONFIG_NB_IoT                   tpc_pdcch_config_pucch[NUMBER_OF_UE_MAX_NB_IoT];
+  TPC_PDCCH_CONFIG_NB_IoT                   tpc_pdcch_config_pucch[NUMBER_OF_UE_MAX];
   ///
-  TPC_PDCCH_CONFIG_NB_IoT                   tpc_pdcch_config_pusch[NUMBER_OF_UE_MAX_NB_IoT];
+  TPC_PDCCH_CONFIG_NB_IoT                   tpc_pdcch_config_pusch[NUMBER_OF_UE_MAX];
   // CQI reporting
-  CQI_REPORT_CONFIG_NB_IoT                  cqi_report_config[NUMBER_OF_UE_MAX_NB_IoT];
+  CQI_REPORT_CONFIG_NB_IoT                  cqi_report_config[NUMBER_OF_UE_MAX];
   // SRS Variables
-  SOUNDINGRS_UL_CONFIG_DEDICATED_NB_IoT     soundingrs_ul_config_dedicated[NUMBER_OF_UE_MAX_NB_IoT];
+  SOUNDINGRS_UL_CONFIG_DEDICATED_NB_IoT     soundingrs_ul_config_dedicated[NUMBER_OF_UE_MAX];
   ///
   uint8_t                                   ncs_cell[20][7];
   // Scheduling Request Config
-  SCHEDULING_REQUEST_CONFIG_NB_IoT          scheduling_request_config[NUMBER_OF_UE_MAX_NB_IoT];
+  SCHEDULING_REQUEST_CONFIG_NB_IoT          scheduling_request_config[NUMBER_OF_UE_MAX];
   // Transmission mode per UE
-  uint8_t                                   transmission_mode[NUMBER_OF_UE_MAX_NB_IoT];
+  uint8_t                                   transmission_mode[NUMBER_OF_UE_MAX];
   /// cba_last successful reception for each group, used for collision detection
   uint8_t                                   cba_last_reception[4];
   // Pointers for active physicalConfigDedicated to be applied in current subframe
-  struct                                    PhysicalConfigDedicated                         *physicalConfigDedicated[NUMBER_OF_UE_MAX_NB_IoT];
+  struct                                    PhysicalConfigDedicated                         *physicalConfigDedicated[NUMBER_OF_UE_MAX];
   //Pointers for actve physicalConfigDedicated for NB-IoT to be applied in current subframe
-  struct                                    PhysicalConfigDedicated_NB_r13                  *phy_config_dedicated_NB_IoT[NUMBER_OF_UE_MAX_NB_IoT];
+  struct                                    PhysicalConfigDedicated_NB_r13                  *phy_config_dedicated_NB_IoT[NUMBER_OF_UE_MAX];
   ///
   uint32_t                                  rb_mask_ul[4];
   /// Information regarding TM5
-  MU_MIMO_mode_NB_IoT                       mu_mimo_mode[NUMBER_OF_UE_MAX_NB_IoT];
+  MU_MIMO_mode_NB_IoT                       mu_mimo_mode[NUMBER_OF_UE_MAX];
   /// target_ue_dl_mcs : only for debug purposes
   uint32_t                                  target_ue_dl_mcs;
   /// target_ue_ul_mcs : only for debug purposes
@@ -660,16 +660,16 @@ typedef struct PHY_VARS_eNB_NB_IoT_s {
   time_stats_t                       ulsch_tc_ext_stats;
   time_stats_t                       ulsch_tc_intl1_stats;
   time_stats_t ulsch_tc_intl2_stats;
-  int32_t                                   pucch1_stats_cnt[NUMBER_OF_UE_MAX_NB_IoT][10];
-  int32_t                                   pucch1_stats[NUMBER_OF_UE_MAX_NB_IoT][10*1024];
-  int32_t                                   pucch1_stats_thres[NUMBER_OF_UE_MAX_NB_IoT][10*1024];
-  int32_t                                   pucch1ab_stats_cnt[NUMBER_OF_UE_MAX_NB_IoT][10];
-  int32_t                                   pucch1ab_stats[NUMBER_OF_UE_MAX_NB_IoT][2*10*1024];
-  int32_t                                   pusch_stats_rb[NUMBER_OF_UE_MAX_NB_IoT][10240];
-  int32_t                                   pusch_stats_round[NUMBER_OF_UE_MAX_NB_IoT][10240];
-  int32_t                                   pusch_stats_mcs[NUMBER_OF_UE_MAX_NB_IoT][10240];
-  int32_t                                   pusch_stats_bsr[NUMBER_OF_UE_MAX_NB_IoT][10240];
-  int32_t                                   pusch_stats_BO[NUMBER_OF_UE_MAX_NB_IoT][10240];
+  int32_t                                   pucch1_stats_cnt[NUMBER_OF_UE_MAX][10];
+  int32_t                                   pucch1_stats[NUMBER_OF_UE_MAX][10*1024];
+  int32_t                                   pucch1_stats_thres[NUMBER_OF_UE_MAX][10*1024];
+  int32_t                                   pucch1ab_stats_cnt[NUMBER_OF_UE_MAX][10];
+  int32_t                                   pucch1ab_stats[NUMBER_OF_UE_MAX][2*10*1024];
+  int32_t                                   pusch_stats_rb[NUMBER_OF_UE_MAX][10240];
+  int32_t                                   pusch_stats_round[NUMBER_OF_UE_MAX][10240];
+  int32_t                                   pusch_stats_mcs[NUMBER_OF_UE_MAX][10240];
+  int32_t                                   pusch_stats_bsr[NUMBER_OF_UE_MAX][10240];
+  int32_t                                   pusch_stats_BO[NUMBER_OF_UE_MAX][10240];
 
   /// RF and Interface devices per CC
   openair0_device                           rfdevice;
@@ -682,7 +682,7 @@ typedef struct PHY_VARS_eNB_NB_IoT_s {
   //------------------------
 
   /*
-   * NUMBER_OF_UE_MAX_NB_IoT maybe in the future should be dynamic because could be very large and the memory may explode
+   * NUMBER_OF_UE_MAX maybe in the future should be dynamic because could be very large and the memory may explode
    * (is almost the indication of the number of UE context that we are storing at PHY layer)
    *
    * reasoning: the following data structure (ndlsch, nulsch ecc..) are used to store the context that should be transmitted in at least n+4 subframe later
@@ -710,11 +710,10 @@ typedef struct PHY_VARS_eNB_NB_IoT_s {
    *
    */
 
-  //TODO: check what should be NUMBER_OF_UE_MAX_NB_IoT value
   NB_IoT_eNB_NPBCH_t        *npbch;
-  NB_IoT_eNB_NPDCCH_t       *npdcch[NUMBER_OF_UE_MAX_NB_IoT];
-  NB_IoT_eNB_NDLSCH_t       *ndlsch[NUMBER_OF_UE_MAX_NB_IoT][2];
-  NB_IoT_eNB_NULSCH_t       *nulsch[NUMBER_OF_UE_MAX_NB_IoT+1]; //nulsch[0] contains the RAR
+  NB_IoT_eNB_NPDCCH_t       *npdcch[NUMBER_OF_UE_MAX];
+  NB_IoT_eNB_NDLSCH_t       *ndlsch[NUMBER_OF_UE_MAX][2];
+  NB_IoT_eNB_NULSCH_t       *nulsch[NUMBER_OF_UE_MAX+1]; //nulsch[0] contains the RAR
   NB_IoT_eNB_NDLSCH_t       *ndlsch_SI,*ndlsch_ra, *ndlsch_SIB1;
 
   NB_IoT_DL_FRAME_PARMS     frame_parms_NB_IoT;

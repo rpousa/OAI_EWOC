@@ -36,9 +36,14 @@ RUN dnf install -y libasan libubsan
 
 #run build_oai to build the target image
 RUN /bin/sh oaienv && \ 
-    cd cmake_targets && \
-    mkdir -p log && \
-    ./build_oai --phy_simulators --ninja --sanitize --build-tool-opt -k10 --noavx512 -c --cmake-opt -DCMAKE_C_FLAGS=-Werror --cmake-opt -DCMAKE_CXX_FLAGS=-Werror --cmake-opt -DCMAKE_RUNTIME_OUTPUT_DIRECTORY=/opt/oai-physim/bin
+    mkdir -p cmake_targets/ran_build/build && \
+    cd cmake_targets/ran_build/build && \
+    cmake3 -GNinja ../../.. \
+        -DAVX512=OFF -DCMAKE_C_FLAGS=-Werror -DCMAKE_CXX_FLAGS=-Werror \
+        -DENABLE_PHYSIM_TESTS=ON \
+        -DSANITIZE_ADDRESS=ON -DSANITIZE_UNDEFINED=ON \
+        -DCMAKE_RUNTIME_OUTPUT_DIRECTORY=/opt/oai-physim/bin && \
+    ninja -k10 -j36
 
 #start from scratch for target executable
 FROM registry.access.redhat.com/ubi9/ubi:latest AS oai-physim

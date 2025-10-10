@@ -19,19 +19,15 @@
  *      contact@openairinterface.org
  */
 
-/*
-  nbiot_config.h
-  -------------------
-  AUTHOR  : Francois Taburet
-  COMPANY : NOKIA
-  EMAIL   : francois.taburet@nokia-bell-labs.com
-*/
-#ifndef INCLUDE_NBIOT_CONFIG_H
-#define INCLUDE_NBIOT_CONFIG_H
+#ifndef _RRC_GNB_ASN1_H_
+#define _RRC_GNB_ASN1_H_
 
+#include <stdbool.h>
+#include "seq_arr.h"
+#include "NR_DRB-ToAddMod.h"
+#include "NR_RadioBearerConfig.h"
+#include "openair2/LAYER2/nr_pdcp/nr_pdcp_configuration.h"
 
-extern void RCconfig_NbIoTL1(void) ;
-extern void RCconfig_NbIoTmacrlc(void);
-extern int  RCconfig_NbIoTRRC(MessageDef *msg_p, int nbiotrrc_id,eNB_RRC_INST_NB_IoT *nbiotrrc);
-extern void RCConfig_NbIoT(RAN_CONTEXT_t *RC);
+NR_PDCP_Config_t *nr_rrc_build_pdcp_config_ie(const bool integrity, const bool ciphering, const nr_pdcp_configuration_t *pdcp);
+
 #endif

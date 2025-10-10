@@ -139,6 +139,7 @@ typedef enum {
 #define GNB_CONFIG_STRING_DU_SIB_LIST                   "du_sibs"
 #define GNB_CONFIG_STRING_DOSINR                        "do_SINR"
 #define GNB_CONFIG_STRING_1ST_ACTIVE_BWP                "first_active_bwp"
+#define GNB_CONFIG_STRING_LIMIT_RSRP_REPORT             "max_num_RSRP_reported"
 
 #define GNB_CONFIG_HLP_STRING_ENABLE_SDAP               "enable the SDAP layer\n"
 #define GNB_CONFIG_HLP_FORCE256QAMOFF                   "suppress activation of 256 QAM despite UE support"
@@ -202,6 +203,7 @@ typedef enum {
 {GNB_CONFIG_STRING_DU_SIB_LIST,                  GNB_CONFIG_HLP_DU_SIBS, 0, .iptr=NULL, .defintarrayval=0,        TYPE_INTARRAY,  0},  \
 {GNB_CONFIG_STRING_DOSINR,      GNB_CONFIG_HLP_DOSINR,   0,            .iptr=NULL,  .defintval=0,                 TYPE_INT,       0},  \
 {GNB_CONFIG_STRING_1ST_ACTIVE_BWP,               NULL,   0,            .iptr=NULL,  .defintval=0,                 TYPE_INT,       0},  \
+{GNB_CONFIG_STRING_LIMIT_RSRP_REPORT,            NULL,   0,            .iptr=NULL,  .defintval=0,                 TYPE_INT,       0},  \
 }
 // clang-format on
 
@@ -246,6 +248,7 @@ typedef enum {
 #define GNB_DU_SIBS_IDX                 37
 #define GNB_DO_SINR_IDX                 38
 #define GNB_1ST_ACTIVE_BWP_IDX          39
+#define GNB_LIMIT_RSRP_REPORT_IDX       40
 
 #define TRACKING_AREA_CODE_OKRANGE {0x0001,0xFFFD}
 #define NUM_DL_HARQ_OKVALUES {2,4,6,8,10,12,16,32}
@@ -287,6 +290,7 @@ typedef enum {
   { .s5 = { NULL } },                                             \
   { .s1 =  { config_check_intval, NUM_DL_HARQ_OKVALUES,8 } },     \
   { .s1 =  { config_check_intval, NUM_UL_HARQ_OKVALUES,2 } },     \
+  { .s5 = { NULL } },                                             \
   { .s5 = { NULL } },                                             \
   { .s5 = { NULL } },                                             \
   { .s5 = { NULL } },                                             \

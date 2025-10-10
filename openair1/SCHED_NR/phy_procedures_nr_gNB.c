@@ -32,7 +32,6 @@
 #include "common/utils/LOG/vcd_signal_dumper.h"
 #include "PHY/INIT/nr_phy_init.h"
 #include "PHY/MODULATION/nr_modulation.h"
-#include "PHY/NR_UE_TRANSPORT/srs_modulation_nr.h"
 #include "T.h"
 #include "executables/nr-softmodem.h"
 #include "executables/softmodem-common.h"
@@ -779,18 +778,56 @@ int fill_srs_channel_matrix(uint8_t *channel_matrix,
   return 0;
 }
 
-int check_srs_pdu(const nfapi_nr_srs_pdu_t *srs_pdu, nfapi_nr_srs_pdu_t *saved_srs_pdu)
+static void copy_srs_info(const nfapi_nr_srs_pdu_t *srs_config_pdu, nr_srs_info_t *nr_srs_info)
 {
-  if (saved_srs_pdu->bwp_start == srs_pdu->bwp_start &&
-      saved_srs_pdu->bwp_size == srs_pdu->bwp_size &&
-      saved_srs_pdu->num_ant_ports == srs_pdu->num_ant_ports &&
-      saved_srs_pdu->time_start_position == srs_pdu->time_start_position &&
-      saved_srs_pdu->num_symbols == srs_pdu->num_symbols &&
-      saved_srs_pdu->config_index == srs_pdu->config_index) {
-    return 1;
+  nr_srs_info->B_SRS = srs_config_pdu->bandwidth_index;
+  nr_srs_info->C_SRS = srs_config_pdu->config_index;
+  nr_srs_info->b_hop = srs_config_pdu->frequency_hopping;
+  nr_srs_info->comb_size = srs_config_pdu->comb_size;
+  nr_srs_info->K_TC_overbar = srs_config_pdu->comb_offset;
+  nr_srs_info->n_SRS_cs = srs_config_pdu->cyclic_shift;
+  nr_srs_info->n_ID_SRS = srs_config_pdu->sequence_id;
+  // It adjusts the SRS allocation to align with the common resource block grid in multiples of four
+  nr_srs_info->n_shift = srs_config_pdu->frequency_position;
+  nr_srs_info->n_RRC = srs_config_pdu->frequency_shift;
+  nr_srs_info->groupOrSequenceHopping = srs_config_pdu->group_or_sequence_hopping;
+  nr_srs_info->l_offset = srs_config_pdu->time_start_position;
+  nr_srs_info->T_SRS = srs_config_pdu->t_srs;
+  nr_srs_info->T_offset = srs_config_pdu->t_offset;
+  nr_srs_info->R = 1 << srs_config_pdu->num_repetitions;
+  nr_srs_info->N_symb_SRS = 1 << srs_config_pdu->num_symbols; // Number of consecutive OFDM symbols
+  nr_srs_info->n_srs_ports = 1 << srs_config_pdu->num_ant_ports; // Number of antenna port for transmission
+  nr_srs_info->resource_type = srs_config_pdu->resource_type;
+}
+
+static bool srs_has_changed(const nfapi_nr_srs_pdu_t *srs_config_pdu, nr_srs_info_t *nr_srs_info)
+{
+  return nr_srs_info->B_SRS != srs_config_pdu->bandwidth_index
+         || nr_srs_info->C_SRS != srs_config_pdu->config_index
+         || nr_srs_info->b_hop != srs_config_pdu->frequency_hopping
+         ||  nr_srs_info->comb_size != srs_config_pdu->comb_size
+         || nr_srs_info->K_TC_overbar != srs_config_pdu->comb_offset
+         || nr_srs_info->n_SRS_cs != srs_config_pdu->cyclic_shift
+         || nr_srs_info->n_ID_SRS != srs_config_pdu->sequence_id
+         || nr_srs_info->n_shift != srs_config_pdu->frequency_position
+         || nr_srs_info->n_RRC != srs_config_pdu->frequency_shift
+         || nr_srs_info->groupOrSequenceHopping != srs_config_pdu->group_or_sequence_hopping
+         || nr_srs_info->l_offset != srs_config_pdu->time_start_position
+         || nr_srs_info->T_SRS != srs_config_pdu->t_srs
+         || nr_srs_info->T_offset != srs_config_pdu->t_offset
+         || nr_srs_info->R != 1 << srs_config_pdu->num_repetitions
+         || nr_srs_info->N_symb_SRS != 1 << srs_config_pdu->num_symbols
+         || nr_srs_info->n_srs_ports != 1 << srs_config_pdu->num_ant_ports
+         || nr_srs_info->resource_type != srs_config_pdu->resource_type;
+}
+
+static bool check_and_configure_srs_info(nfapi_nr_srs_pdu_t *srs_config_pdu, nr_srs_info_t *nr_srs_info)
+{
+  if (srs_has_changed(srs_config_pdu, nr_srs_info)) {
+    copy_srs_info(srs_config_pdu, nr_srs_info);
+    return true;
   }
-  *saved_srs_pdu = *srs_pdu;
-  return 0;
+  return false;
 }
 
 int phy_procedures_gNB_uespec_RX(PHY_VARS_gNB *gNB, int frame_rx, int slot_rx, NR_UL_IND_t *UL_INFO)
@@ -1017,8 +1054,16 @@ int phy_procedures_gNB_uespec_RX(PHY_VARS_gNB *gNB, int frame_rx, int slot_rx, N
         int8_t snr_per_rb[srs_pdu->bwp_size];
 
         start_meas(&gNB->generate_srs_stats);
-        if (check_srs_pdu(srs_pdu, &gNB->nr_srs_info[i]->srs_pdu) == 0) {
-          generate_srs_nr(srs_pdu, frame_parms, gNB->nr_srs_info[i]->srs_generated_signal, 0, gNB->nr_srs_info[i], AMP, frame_rx, slot_rx);
+
+        if (check_and_configure_srs_info(srs_pdu, gNB->nr_srs_info[i])) {
+          generate_srs_nr(frame_parms,
+                          gNB->nr_srs_info[i]->srs_generated_signal,
+                          0,
+                          srs_pdu->bwp_start,
+                          gNB->nr_srs_info[i],
+                          AMP,
+                          frame_rx,
+                          slot_rx);
         }
         stop_meas(&gNB->generate_srs_stats);
         c16_t **rxdataF = gNB->common_vars.rxdataF[srs->beam_nb];

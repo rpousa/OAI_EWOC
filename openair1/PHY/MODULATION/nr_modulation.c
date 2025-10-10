@@ -119,49 +119,33 @@ const char nr_W_4l_4p[5][4][4] = {
 
 void nr_modulation(const uint32_t *in, uint32_t length, uint16_t mod_order, int16_t *out)
 {
-  uint16_t mask = ((1 << mod_order) - 1);
-  int32_t *nr_mod_table32;
+  const uint16_t mask = ((1 << mod_order) - 1);
   int32_t *out32 = (int32_t *)out;
   const uint8_t *in_bytes = (const uint8_t *)in;
   const uint64_t *in64 = (const uint64_t *)in;
   int64_t *out64 = (int64_t *)out;
   uint32_t i = 0;
 
-#if defined(__SSE2__)
-  simde__m128i *nr_mod_table128;
-  simde__m128i *out128;
-#endif
-
   LOG_D(PHY, "nr_modulation: length %d, mod_order %d\n", length, mod_order);
 
   switch (mod_order) {
-#if defined(__SSE2__)
-    case 2:
-      nr_mod_table128 = (simde__m128i *)nr_qpsk_byte_mod_table;
-      out128 = (simde__m128i *)out;
+    case 2: {
+      simde__m128i *nr_mod_table128 = (simde__m128i *)nr_qpsk_byte_mod_table;
+      simde__m128i *out128 = (simde__m128i *)out;
       for (i = 0; i < length / 8; i++)
         out128[i] = nr_mod_table128[in_bytes[i]];
       // the bits that are left out
       i = i * 8 / 2;
-      nr_mod_table32 = (int32_t *)nr_qpsk_mod_table;
+      int32_t *nr_mod_table32 = (int32_t *)nr_qpsk_mod_table;
       while (i < length / 2) {
         const int idx = ((in_bytes[(i * 2) / 8] >> ((i * 2) & 0x7)) & mask);
         out32[i] = nr_mod_table32[idx];
         i++;
       }
+    }
       return;
-#else
-    case 2:
-      nr_mod_table32 = (int32_t *)nr_qpsk_mod_table;
-      for (i = 0; i < length / mod_order; i++) {
-        const int idx = ((in[i * 2 / 32] >> ((i * 2) & 0x1f)) & mask);
-        out32[i] = nr_mod_table32[idx];
-      }
-      return;
-#endif
 
     case 4:
-      out64 = (int64_t *)out;
       for (i = 0; i < length / 8; i++)
         out64[i] = nr_16qam_byte_mod_table[in_bytes[i]];
       // the bits that are left out
@@ -234,10 +218,11 @@ void nr_modulation(const uint32_t *in, uint32_t length, uint16_t mod_order, int1
       }
       return;
 
-    case 8:
-      nr_mod_table32 = (int32_t *)nr_256qam_mod_table;
+    case 8: {
+      int32_t *nr_mod_table32 = (int32_t *)nr_256qam_mod_table;
       for (i = 0; i < length / 8; i++)
         out32[i] = nr_mod_table32[in_bytes[i]];
+    }
       return;
 
     default:
