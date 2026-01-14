@@ -329,7 +329,7 @@ static int handle_ue_context_drbs_setup(NR_UE_info_t *UE,
       *rlc_BearerConfig->rlc_Config->choice.am->dl_AM_RLC.sn_FieldLength = NR_SN_FieldLengthAM_size12;
       *rlc_BearerConfig->rlc_Config->choice.am->ul_AM_RLC.sn_FieldLength = NR_SN_FieldLengthAM_size12;
     }
-
+    AssertFatal(rlc_BearerConfig->rlc_Config, "We expect rlc-Config to be always present when we configure a DRB\n");
     nr_rlc_add_drb(UE->rnti, drb->id, rlc_BearerConfig);
 
     nr_lc_config_t c = {.lcid = rlc_BearerConfig->logicalChannelIdentity, .nssai = drb->nr.nssai};
@@ -381,12 +381,9 @@ static int handle_ue_context_drbs_release(NR_UE_info_t *UE,
 {
   DevAssert(req_drbs != NULL && cellGroupConfig != NULL);
   instance_t f1inst = get_f1_gtp_instance();
-
   cellGroupConfig->rlc_BearerToReleaseList = calloc(1, sizeof(*cellGroupConfig->rlc_BearerToReleaseList));
   AssertFatal(cellGroupConfig->rlc_BearerToReleaseList != NULL, "out of memory\n");
 
-  /* Note: the actual GTP tunnels are already removed in the F1AP message
-   * decoding */
   for (int i = 0; i < drbs_len; i++) {
     const f1ap_drb_to_release_t *drb = &req_drbs[i];
 
@@ -401,7 +398,7 @@ static int handle_ue_context_drbs_release(NR_UE_info_t *UE,
     if (idx < cellGroupConfig->rlc_BearerToAddModList->list.count) {
       nr_mac_remove_lcid(&UE->UE_sched_ctrl, lcid);
       nr_rlc_release_entity(UE->rnti, lcid);
-      if (f1inst >= 0)
+      if (f1inst >= 0) /* Delete F1 tunnel */
         newGtpuDeleteOneTunnel(f1inst, UE->rnti, drb->id);
       asn_sequence_del(&cellGroupConfig->rlc_BearerToAddModList->list, idx, 1);
       long *plcid = malloc(sizeof(*plcid));
@@ -579,6 +576,7 @@ static NR_UE_info_t *create_new_UE(gNB_MAC_INST *mac, uint32_t cu_id, const NR_C
     cellGroupConfig->spCellConfig->reconfigurationWithSync = get_reconfiguration_with_sync(UE->rnti, UE->uid, scc, mac->frame);
     // TODO: in NSA we assign capabilities here, otherwise outside => not logic
     UE->capability = cap;
+    UE->local_bwp_id = 1; // get_default_secondaryCellGroup sets 1st active BWP as 1
   }
   // note: we don't pass the cellGroupConfig to add_new_nr_ue() because we need
   // the uid to create the CellGroupConfig (which is in the UE context created
@@ -684,11 +682,9 @@ void ue_context_setup_request(const f1ap_ue_context_setup_req_t *req)
     /* new UE: tell the UE to reestablish RLC */
     struct NR_CellGroupConfig__rlc_BearerToAddModList *addmod = new_CellGroup->rlc_BearerToAddModList;
     for (int i = 0; i < addmod->list.count; ++i) {
-      asn1cCallocOne(addmod->list.array[i]->reestablishRLC, NR_RLC_BearerConfig__reestablishRLC_true);
-      for (int i = 1; i < seq_arr_size(&UE->UE_sched_ctrl.lc_config); ++i) {
-        nr_lc_config_t *lc_config = seq_arr_at(&UE->UE_sched_ctrl.lc_config, i);
-        nr_rlc_reestablish_entity(UE->rnti, lc_config->lcid);
-      }
+      NR_RLC_BearerConfig_t *bc = addmod->list.array[i];
+      asn1cCallocOne(bc->reestablishRLC, NR_RLC_BearerConfig__reestablishRLC_true);
+      nr_rlc_reestablish_entity(UE->rnti, bc->logicalChannelIdentity);
     }
   }
 
@@ -699,8 +695,8 @@ void ue_context_setup_request(const f1ap_ue_context_setup_req_t *req)
   cgc.len = (enc_rval.encoded + 7) >> 3;
   resp.du_to_cu_rrc_info.cell_group_config = cgc;
 
-  ASN_STRUCT_FREE(asn_DEF_NR_CellGroupConfig, UE->CellGroup);
-  UE->CellGroup = new_CellGroup;
+  ASN_STRUCT_FREE(asn_DEF_NR_CellGroupConfig, UE->reconfigCellGroup);
+  UE->reconfigCellGroup = new_CellGroup;
   int ss_type = cg_configinfo ? NR_SearchSpace__searchSpaceType_PR_ue_Specific: NR_SearchSpace__searchSpaceType_PR_common;
   configure_UE_BWP(mac, scc, UE, false, ss_type, -1, -1);
 
@@ -774,16 +770,19 @@ void ue_context_modification_request(const f1ap_ue_context_mod_req_t *req)
           "RRC reconfiguration outcome unsuccessful, but no rollback mechanism implemented to come back to old configuration\n");
   } else if (req->reconfig_compl) {
     LOG_I(NR_MAC, "DU received confirmation of successful RRC Reconfiguration\n");
-    if (UE->reconfigSpCellConfig) {
-      // in case of reestablishment, the spCellConfig had to be released
-      // temporarily. Reapply now before doing the reconfiguration.
-      UE->CellGroup->spCellConfig = UE->reconfigSpCellConfig;
-      UE->reconfigSpCellConfig = NULL;
+    if (UE->reconfigCellGroup) {
+      LOG_W(NR_MAC, "reconfigCellGroup still present, did we miss ACK for RRCReconfiguration?\n");
+      ASN_STRUCT_FREE(asn_DEF_NR_CellGroupConfig, UE->CellGroup);
+      UE->CellGroup = UE->reconfigCellGroup;
+      UE->reconfigCellGroup = NULL;
+    }
+    if (UE->reestablish_rlc) {
       for (int i = 1; i < seq_arr_size(&UE->UE_sched_ctrl.lc_config); ++i) {
         nr_lc_config_t *c = seq_arr_at(&UE->UE_sched_ctrl.lc_config, i);
         c->suspended = false;
         nr_rlc_reestablish_entity(req->gNB_DU_ue_id, c->lcid);
       }
+      UE->reestablish_rlc = false;
     }
     // we re-configure the BWP to apply the CellGroup and to use UE specific Search Space with DCIX1
     configure_UE_BWP(mac, scc, UE, false, NR_SearchSpace__searchSpaceType_PR_ue_Specific, -1, -1);
@@ -810,8 +809,8 @@ void ue_context_modification_request(const f1ap_ue_context_mod_req_t *req)
     cgc.len = (enc_rval.encoded + 7) >> 3;
     resp.du_to_cu_rrc_info->cell_group_config = cgc;
 
-    ASN_STRUCT_FREE(asn_DEF_NR_CellGroupConfig, UE->CellGroup);
-    UE->CellGroup = new_CellGroup;
+    ASN_STRUCT_FREE(asn_DEF_NR_CellGroupConfig, UE->reconfigCellGroup);
+    UE->reconfigCellGroup = new_CellGroup;
     configure_UE_BWP(mac, scc, UE, false, NR_SearchSpace__searchSpaceType_PR_common, -1, -1);
   } else {
     ASN_STRUCT_FREE(asn_DEF_NR_CellGroupConfig, new_CellGroup); // we actually don't need it
@@ -967,19 +966,32 @@ void dl_rrc_message_transfer(const f1ap_dl_rrc_message_t *dl_rrc)
     ASN_STRUCT_FREE(asn_DEF_NR_CellGroupConfig, UE->CellGroup);
     UE->CellGroup = oldUE->CellGroup;
     oldUE->CellGroup = NULL;
+    ASN_STRUCT_FREE(asn_DEF_NR_UE_NR_Capability, UE->capability);
+    UE->capability = oldUE->capability;
+    oldUE->capability = NULL;
     UE->mac_stats = oldUE->mac_stats;
     UE->measgap_config = oldUE->measgap_config;
+    UE->local_bwp_id = oldUE->local_bwp_id;
     /* 38.331 5.3.7.2 says that the UE releases the spCellConfig, so we drop it
      * from the current configuration. It will be reapplied when the
      * reconfiguration has succeeded (indicated by the CU) */
-    UE->reconfigSpCellConfig = UE->CellGroup->spCellConfig;
+    asn_copy(&asn_DEF_NR_CellGroupConfig, (void **)&UE->reconfigCellGroup, UE->CellGroup);
+    ASN_STRUCT_FREE(asn_DEF_NR_SpCellConfig, UE->CellGroup->spCellConfig);
     UE->CellGroup->spCellConfig = NULL;
+    UE->reestablish_rlc = true;
     mac_remove_nr_ue(mac, *dl_rrc->old_gNB_DU_ue_id);
     pthread_mutex_unlock(&mac->sched_lock);
     nr_rlc_remove_ue(dl_rrc->gNB_DU_ue_id);
     nr_rlc_update_id(*dl_rrc->old_gNB_DU_ue_id, dl_rrc->gNB_DU_ue_id);
-    /* 38.331 clause 5.3.7.4: apply the specified configuration defined in 9.2.1 for SRB1 */
-    nr_rlc_reconfigure_entity(dl_rrc->gNB_DU_ue_id, 1, NULL);
+    /* 38.331 clause 5.3.7.4: apply gNB RLC configuration for SRB1 to match the UE RLC configuration defined in 9.2.1 */
+    nr_rlc_configuration_t rlc_configuration = mac->rlc_config; // use configuration file values for timers t_poll_retransmit, t_reassembly and t_status_prohibit
+    rlc_configuration.srb.poll_pdu = -1;
+    rlc_configuration.srb.poll_byte = -1;
+    rlc_configuration.srb.max_retx_threshold = 8;
+    rlc_configuration.srb.sn_field_length = 12;
+    NR_RLC_Config_t *rlc_Config = nr_srb_config(&rlc_configuration);
+    nr_rlc_reconfigure_entity(dl_rrc->gNB_DU_ue_id, 1, rlc_Config);
+    ASN_STRUCT_FREE(asn_DEF_NR_RLC_Config, rlc_Config);
     instance_t f1inst = get_f1_gtp_instance();
     if (f1inst >= 0) // we actually use F1-U
       gtpv1u_update_ue_id(f1inst, *dl_rrc->old_gNB_DU_ue_id, dl_rrc->gNB_DU_ue_id);

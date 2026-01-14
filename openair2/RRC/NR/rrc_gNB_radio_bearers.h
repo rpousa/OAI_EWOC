@@ -39,6 +39,10 @@ rrc_pdu_session_param_t *add_pduSession(seq_arr_t *sessions_ptr, const pdusessio
 /// @brief get PDU session of UE ue through the DRB drb_id
 rrc_pdu_session_param_t *find_pduSession_from_drbId(gNB_RRC_UE_t *ue, int drb_id);
 
+/// @brief Remove PDU Session from RRC list
+/// Also removes all associated DRBs for this PDU session.
+bool rm_pduSession(seq_arr_t *sessions, seq_arr_t *drbs, int pdusession_id);
+
 /// @brief set PDCP configuration in E1 Bearer Context Management message
 bearer_context_pdcp_config_t set_bearer_context_pdcp_config(const nr_pdcp_configuration_t pdcp,
                                                             bool um_on_default_drb,

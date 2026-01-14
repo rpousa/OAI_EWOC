@@ -178,7 +178,7 @@ void nr_pdcp_ue_add_srb_pdcp_entity(nr_pdcp_ue_t *ue, int srb_id, nr_pdcp_entity
 /* must be called with lock acquired */
 void nr_pdcp_ue_add_drb_pdcp_entity(nr_pdcp_ue_t *ue, int drb_id, nr_pdcp_entity_t *entity)
 {
-  if (drb_id < 1 || drb_id > 5) {
+  if (drb_id < 1 || drb_id > MAX_DRBS_PER_UE) {
     LOG_E(PDCP, "%s:%d:%s: fatal, bad drb id\n", __FILE__, __LINE__, __FUNCTION__);
     exit(1);
   }

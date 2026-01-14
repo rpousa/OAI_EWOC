@@ -136,8 +136,7 @@ int precoding_weigths_generation(nfapi_nr_pm_list_t *mat,
                 nfapi_nr_pm_weights_t *weights = &mat->pmi_pdu[pmiq].weights[j_col][i_rows];
                 res_code = sqrt(1 / (double)L) * v_lm[llc][mmc][i_rows];
                 c16_t precoder_weight = convert_precoder_weight(res_code);
-                weights->precoder_weight_Re = precoder_weight.r;
-                weights->precoder_weight_Im = precoder_weight.i;
+                *weights = precoder_weight;
                 LOG_D(PHY,
                       "%d Layer Precoding Matrix[pmi %d][antPort %d][layerIdx %d]= %f+j %f -> Fixed Point %d+j %d \n",
                       L,
@@ -146,15 +145,14 @@ int precoding_weigths_generation(nfapi_nr_pm_list_t *mat,
                       j_col,
                       creal(res_code),
                       cimag(res_code),
-                      weights->precoder_weight_Re,
-                      weights->precoder_weight_Im);
+                      weights->r,
+                      weights->i);
               }
               for (int i_rows = N1 * N2; i_rows < 2 * N1 * N2; i_rows++) {
                 nfapi_nr_pm_weights_t *weights = &mat->pmi_pdu[pmiq].weights[j_col][i_rows];
                 res_code = sqrt(1 / (double)L) * (phase_sign)*theta_n[nn] * v_lm[llc][mmc][i_rows - N1 * N2];
                 c16_t precoder_weight = convert_precoder_weight(res_code);
-                weights->precoder_weight_Re = precoder_weight.r;
-                weights->precoder_weight_Im = precoder_weight.i;
+                *weights = precoder_weight;
                 LOG_D(PHY,
                       "%d Layer Precoding Matrix[pmi %d][antPort %d][layerIdx %d]= %f+j %f -> Fixed Point %d+j %d \n",
                       L,
@@ -163,8 +161,8 @@ int precoding_weigths_generation(nfapi_nr_pm_list_t *mat,
                       j_col,
                       creal(res_code),
                       cimag(res_code),
-                      weights->precoder_weight_Re,
-                      weights->precoder_weight_Im);
+                      weights->r,
+                      weights->i);
               }
             }
             pmiq++;
@@ -710,7 +708,6 @@ static void config_common(gNB_MAC_INST *nrmac, const nr_mac_config_t *config, NR
   // precoding matrix configuration (to be improved)
   cfg->pmi_list = init_DL_MIMO_codebook(nrmac, pdsch_AntennaPorts);
 
-  int nb_beams = config->nb_bfw[1]; // number of beams
   if (nrmac->beam_info.beam_mode == PRECONFIGURED_BEAM_IDX) {
     LOG_I(NR_MAC, "Configuring analog beamforming in config_request message\n");
     cfg->analog_beamforming_ve.num_beams_period_vendor_ext.tl.tag = NFAPI_NR_FAPI_NUM_BEAMS_PERIOD_VENDOR_EXTENSION_TAG;
@@ -719,14 +716,6 @@ static void config_common(gNB_MAC_INST *nrmac, const nr_mac_config_t *config, NR
     cfg->analog_beamforming_ve.analog_bf_vendor_ext.tl.tag = NFAPI_NR_FAPI_ANALOG_BF_VENDOR_EXTENSION_TAG;
     cfg->analog_beamforming_ve.analog_bf_vendor_ext.value = 1;  // analog BF enabled
     cfg->num_tlv++;
-    cfg->analog_beamforming_ve.total_num_beams_vendor_ext.tl.tag = NFAPI_NR_FAPI_TOTAL_NUM_BEAMS_VENDOR_EXTENSION_TAG;
-    cfg->analog_beamforming_ve.total_num_beams_vendor_ext.value = nb_beams;
-    cfg->num_tlv++;
-    cfg->analog_beamforming_ve.analog_beam_list = malloc16(nb_beams * sizeof(*cfg->analog_beamforming_ve.analog_beam_list));
-    for (int i = 0; i < nb_beams; i++) {
-      cfg->analog_beamforming_ve.analog_beam_list[i].tl.tag = NFAPI_NR_FAPI_ANALOG_BEAM_VENDOR_EXTENSION_TAG;
-      cfg->analog_beamforming_ve.analog_beam_list[i].value = config->bw_list[i];
-    }
   } else {
     cfg->analog_beamforming_ve.analog_bf_vendor_ext.value = 0;  // analog BF disabled
     if (NFAPI_MODE == NFAPI_MONOLITHIC) {
@@ -782,7 +771,7 @@ static void initialize_beam_information(NR_beam_info_t *beam_info, int mu, int s
               slots_per_frame);
   beam_info->beam_allocation_size = size / beam_info->beam_duration;
   for (int i = 0; i < beam_info->beams_per_period; i++) {
-    beam_info->beam_allocation[i] = malloc16(beam_info->beam_allocation_size * sizeof(int));
+    beam_info->beam_allocation[i] = malloc16(beam_info->beam_allocation_size * sizeof(*beam_info->beam_allocation));
     for (int j = 0; j < beam_info->beam_allocation_size; j++)
       beam_info->beam_allocation[i][j] = -1;
   }
@@ -887,7 +876,7 @@ void nr_mac_config_scc(gNB_MAC_INST *nrmac, NR_ServingCellConfigCommon_t *scc, c
   LOG_D(NR_MAC, "Configuring common parameters from NR ServingCellConfig\n");
 
   config_common(nrmac, config, scc);
-  fapi_beam_index_allocation(scc, config, nrmac);
+  fill_beam_index_list(scc, config, nrmac);
 
   if (NFAPI_MODE == NFAPI_MONOLITHIC) {
     // nothing to be sent in the other cases
@@ -1067,6 +1056,24 @@ bool nr_update_sib19(const gnb_sat_position_update_t *sat_position)
   return true;
 }
 
+bool nr_trigger_bwp_switch(uint16_t rnti, int bwp_id)
+{
+  gNB_MAC_INST *nrmac = RC.nrmac[0];
+  NR_SCHED_LOCK(&nrmac->sched_lock);
+  NR_UE_info_t *UE = find_nr_UE(&nrmac->UE_info, rnti);
+  bool success = false;
+  if (!UE) {
+    LOG_W(NR_MAC, "could not find UE for RNTI %04x\n", rnti);
+  } else if (UE->current_DL_BWP.bwp_id == bwp_id) {
+    LOG_W(NR_MAC, "UE %04x is already on BWP ID %d, not triggering reconfiguration\n", rnti, bwp_id);
+  } else { // UE != NULL && current_DL_BWP.bwp_id != bwp_id
+    nr_mac_trigger_reconfiguration(nrmac, UE, bwp_id);
+    success = true;
+  }
+  NR_SCHED_UNLOCK(&nrmac->sched_lock);
+  return success;
+}
+
 void prepare_du_configuration_update(gNB_MAC_INST *mac,
                                      f1ap_served_cell_info_t *info,
                                      NR_BCCH_BCH_Message_t *mib,
@@ -1101,6 +1108,13 @@ void nr_mac_configure_sib1(gNB_MAC_INST *nrmac, const plmn_id_t *plmn, uint64_t 
   AssertFatal(cc->sib1_bcch_length > 0, "could not encode SIB1\n");
 }
 
+static bool process_addmod_bearers_cellGroupConfig(NR_UE_sched_ctrl_t *sched_ctrl, const NR_RLC_BearerConfig_t *conf)
+{
+  int priority = conf->mac_LogicalChannelConfig->ul_SpecificParameters->priority;
+  nr_lc_config_t c = {.lcid = conf->logicalChannelIdentity, .priority = priority};
+  return nr_mac_add_lcid(sched_ctrl, &c);
+}
+
 bool nr_mac_add_test_ue(gNB_MAC_INST *nrmac, uint32_t rnti, NR_CellGroupConfig_t *CellGroup)
 {
   /* ideally, instead of this function, "users" of this function should call
@@ -1111,8 +1125,9 @@ bool nr_mac_add_test_ue(gNB_MAC_INST *nrmac, uint32_t rnti, NR_CellGroupConfig_t
   NR_SCHED_LOCK(&nrmac->sched_lock);
 
   NR_UE_info_t *UE = get_new_nr_ue_inst(&nrmac->UE_info.uid_allocator, rnti, CellGroup);
-  DevAssert(UE->uid < MAX_MOBILES_PER_GNB); // test-mode: we assume we can always create a UE
-  free_and_zero(UE->ra); // test-mode (sims, phy-test): UE will not do RA
+  DevAssert(UE->uid < MAX_MOBILES_PER_GNB); // physical simulators: we assume we can always create a UE
+  free_and_zero(UE->ra); // physical simulators: UE will not do RA
+  UE->local_bwp_id = 1;  // for physical simulators
   bool res = add_connected_nr_ue(nrmac, UE);
   if (!res) {
     LOG_E(NR_MAC, "Error adding UE %04x\n", rnti);
@@ -1122,7 +1137,9 @@ bool nr_mac_add_test_ue(gNB_MAC_INST *nrmac, uint32_t rnti, NR_CellGroupConfig_t
   }
   int ss_type = NR_SearchSpace__searchSpaceType_PR_ue_Specific;
   configure_UE_BWP(nrmac, nrmac->common_channels[0].ServingCellConfigCommon, UE, false, ss_type, -1, -1);
-  process_addmod_bearers_cellGroupConfig(&UE->UE_sched_ctrl, CellGroup->rlc_BearerToAddModList);
+  const struct NR_CellGroupConfig__rlc_BearerToAddModList *l = CellGroup->rlc_BearerToAddModList;
+  for (int i = 0; l != NULL && i < l->list.count; ++i)
+    process_addmod_bearers_cellGroupConfig(&UE->UE_sched_ctrl, CellGroup->rlc_BearerToAddModList->list.array[i]);
   AssertFatal(CellGroup->rlc_BearerToReleaseList == NULL, "cannot release bearers while adding new UEs\n");
   NR_SCHED_UNLOCK(&nrmac->sched_lock);
   LOG_I(NR_MAC, "Added new UE %x with initial CellGroup\n", rnti);
@@ -1141,14 +1158,23 @@ void nr_mac_prepare_ra_ue(gNB_MAC_INST *nrmac, NR_UE_info_t *UE)
   uint8_t num_preamble = cfra->resources.choice.ssb->ssb_ResourceList.list.count;
   ra->preambles.num_preambles = num_preamble;
   NR_COMMON_channels_t *cc = &nrmac->common_channels[0];
+  char buf[200];
+  int idx = 0;
   for (int i = 0; i < cc->num_active_ssb; i++) {
     for (int j = 0; j < num_preamble; j++) {
       if (cc->ssb_index[i] == cfra->resources.choice.ssb->ssb_ResourceList.list.array[j]->ssb) {
         // one dedicated preamble for each beam
         ra->preambles.preamble_list[i] = cfra->resources.choice.ssb->ssb_ResourceList.list.array[j]->ra_PreambleIndex;
+        if (idx < sizeof(buf) - 1)
+          idx += snprintf(buf + idx, sizeof(buf) - idx, "  %d", ra->preambles.preamble_list[i]);
         break;
       }
     }
   }
-  LOG_I(NR_MAC, "Added new %s process for UE RNTI %04x with initial CellGroup\n", ra->cfra ? "CFRA" : "CBRA", UE->rnti);
+  LOG_I(NR_MAC,
+        "Added new %s process for UE RNTI %04x with initial CellGroup and %d preamble(s): %s\n",
+        ra->cfra ? "CFRA" : "CBRA",
+        UE->rnti,
+        num_preamble,
+        buf);
 }

@@ -24,6 +24,9 @@
 | gracehopper1-oai | Gracehopper1       | gNB (n78, PNF/Nvidia CUBB + VNF) | Foxconn RU, _Nvidia Aerial integration_   |
 | gracehopper3-oai | Gracehopper3       | build                | --                                                    |
 | acamas        | Acamas                | 4G and 5G rfsimulator| --                                                    |
+| groot         | Groot                 | gNB (n77)            | B210 (30AD30F)                                        |
+| rocket        | Rocket                | gNB (n77)            | B210 (31F8010)                                        |
+| raspix        | Raspix                | COTS UE              | Quectel RM520N                                        |
 
 Note: The available resources, and their current usage, is indicated here:
 - [Lockable resources of jenkins-oai](https://jenkins-oai.eurecom.fr/lockable-resources/):
@@ -226,6 +229,11 @@ information on how the images are built.
   - cacofonix + FHI72 + Metanoia (gNB), up2 (Quectel RM520N UE), OAI CN5G
   - OpenShift cluster for CN deployment
   - FHI 7.2 testing with 100 MHz bandwidth, 2 layers in DL
+- [RAN-SA-Handover-CN5G](https://jenkins-oai.eurecom.fr/job/RAN-SA-Handover-CN5G/)
+  ~5G-NR
+  - groot (CU+DU0) + B210, rocket (DU1) + B210, raspix (Quectel RM520N UE), OAI CN5G
+  - OpenShift cluster for CN deployment
+  - Attenuator (mini circuits RC4DAT-6G-60) - controlled from rocket
 
 ### RAN-CI-NSA-Trigger
 

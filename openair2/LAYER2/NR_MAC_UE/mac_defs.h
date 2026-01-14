@@ -62,6 +62,8 @@
 #include "NR_MeasConfig.h"
 #include "NR_ServingCellConfigCommonSIB.h"
 
+/* position_t */
+#include "executables/position_interface.h"
 
 // ==========
 // NR UE defs
@@ -148,6 +150,7 @@
 // Define the UE L2 states with X-Macro
 #define NR_UE_L2_STATES \
   UE_STATE(UE_NOT_SYNC) \
+  UE_STATE(UE_NOT_SYNC_RECONF) \
   UE_STATE(UE_BARRED) \
   UE_STATE(UE_RECEIVING_SIB) \
   UE_STATE(UE_PERFORMING_RA) \
@@ -307,8 +310,8 @@ typedef struct {
   NR_PUCCH_Resource_t *pucch_resource;
   uint32_t ack_payload;
   uint8_t sr_payload;
-  uint32_t csi_part1_payload;
-  uint32_t csi_part2_payload;
+  uint64_t csi_part1_payload;
+  uint64_t csi_part2_payload;
   int n_sr;
   int n_csi;
   int n_harq;
@@ -431,6 +434,14 @@ typedef struct {
   float_t ssb_sinr_dB;
 } NR_SSB_meas_t;
 
+typedef struct {
+  int rsrp_dBm;
+  uint8_t ri;
+  uint16_t i1;
+  uint8_t i2;
+  uint8_t cqi;
+} NR_CSIRS_meas_t;
+
 typedef enum ta_type {
   no_ta = 0,
   adjustment_ta,
@@ -534,28 +545,6 @@ typedef struct {
   A_SEQUENCE_OF(si_schedinfo_config_t) si_SchedInfo_list;
 } si_schedInfo_t;
 
-typedef struct ntn_timing_advance_components {
-  int epoch_sfn;
-  int epoch_subframe;
-
-  // N_common_ta_adj represents common round-trip-time between gNB and SAT received in SIB19 (ms)
-  double N_common_ta_adj;
-  // drift rate of common ta in µs/s
-  double N_common_ta_drift;
-  // change rate of common ta drift in µs/s²
-  double N_common_ta_drift_variant;
-  // N_UE_TA_adj calculated round-trip-time between UE and SAT (ms)
-  double N_UE_TA_adj;
-  // drift rate of N_UE_TA in µs/s
-  double N_UE_TA_drift;
-  // change rate of N_UE_TA drift in µs/s²
-  double N_UE_TA_drift_variant;
-  // cell scheduling offset expressed in terms of 15kHz SCS
-  long cell_specific_k_offset;
-
-  bool ntn_params_changed;
-} ntn_timing_advance_componets_t;
-
 /*!\brief Top level UE MAC structure */
 typedef struct NR_UE_MAC_INST_s {
   module_id_t ue_id;
@@ -601,9 +590,6 @@ typedef struct NR_UE_MAC_INST_s {
 
   nr_csi_report_t csi_report_template[MAX_CSI_REPORTCONFIG];
 
-  /// measurements from SS or CSI-RS
-  fapi_nr_l1_measurements_t l1_measurements;
-
   ////	FAPI-like interface message
   fapi_nr_ul_config_request_t *ul_config_request;
   fapi_nr_dl_config_request_t *dl_config_request;
@@ -622,8 +608,6 @@ typedef struct NR_UE_MAC_INST_s {
   int p_Max;
   int p_Max_alt;
 
-  ntn_timing_advance_componets_t ntn_ta;
-
   long pdsch_HARQ_ACK_Codebook;
 
   NR_Type0_PDCCH_CSS_config_t type0_PDCCH_CSS_config;
@@ -633,6 +617,8 @@ typedef struct NR_UE_MAC_INST_s {
   int ssb_start_subcarrier;
 
   NR_SSB_meas_t ssb_measurements[MAX_NB_SSB];
+  NR_CSIRS_meas_t csirs_measurements;
+  ssb_ro_preambles_t ssb_ro_preambles;
 
   dci_pdu_rel15_t def_dci_pdu_rel15[NR_MAX_SLOTS_PER_FRAME][8];
 
@@ -645,8 +631,6 @@ typedef struct NR_UE_MAC_INST_s {
   A_SEQUENCE_OF(NR_TAG_t) TAG_list;
   NR_TimeAlignmentTimer_t timeAlignmentTimerCommon;
   NR_timer_t time_alignment_timer;
-
-  nr_emulated_l1_t nr_ue_emul_l1;
 
   pthread_mutex_t mutex_dl_info;
 
@@ -664,29 +648,14 @@ typedef struct NR_UE_MAC_INST_s {
   notifiedFIFO_t input_nf;
 } NR_UE_MAC_INST_t;
 
-static inline int GET_NTN_UE_K_OFFSET(const ntn_timing_advance_componets_t *ntn_ta, int scs)
+static inline int GET_NTN_UE_K_OFFSET(const fapi_nr_ntn_config_t *ntn_ta, int scs)
 {
   return (int)ntn_ta->cell_specific_k_offset << scs;
 }
 
-static inline long GET_DURATION_RX_TO_TX(const ntn_timing_advance_componets_t *ntn_ta, int scs)
+static inline long GET_DURATION_RX_TO_TX(const fapi_nr_ntn_config_t *ntn_ta, int scs)
 {
   return NR_UE_CAPABILITY_SLOT_RX_TO_TX + (ntn_ta->cell_specific_k_offset << scs);
-}
-
-static inline double get_total_TA_ms(const ntn_timing_advance_componets_t *ntn_ta)
-{
-  return ntn_ta->N_common_ta_adj + ntn_ta->N_UE_TA_adj;
-}
-
-static inline double get_total_TA_drift(const ntn_timing_advance_componets_t *ntn_ta)
-{
-  return ntn_ta->N_common_ta_drift + ntn_ta->N_UE_TA_drift;
-}
-
-static inline double get_total_TA_drift_variant(const ntn_timing_advance_componets_t *ntn_ta)
-{
-  return ntn_ta->N_common_ta_drift_variant + ntn_ta->N_UE_TA_drift_variant;
 }
 
 /*@}*/

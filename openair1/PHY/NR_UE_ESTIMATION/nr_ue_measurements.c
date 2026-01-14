@@ -34,7 +34,6 @@
 #include "executables/nr-softmodem-common.h"
 #include "PHY/defs_nr_UE.h"
 #include "PHY/INIT/nr_phy_init.h"
-#include "PHY/phy_extern_nr_ue.h"
 #include "common/utils/LOG/log.h"
 #include "PHY/sse_intrin.h"
 #include "SCHED_NR_UE/defs.h"
@@ -48,7 +47,7 @@
 
 void nr_ue_measurements(PHY_VARS_NR_UE *ue,
                         const UE_nr_rxtx_proc_t *proc,
-                        NR_UE_DLSCH_t *dlsch,
+                        int number_rbs,
                         uint32_t pdsch_est_size,
                         int32_t dl_ch_estimates[][pdsch_est_size])
 {
@@ -56,8 +55,6 @@ void nr_ue_measurements(PHY_VARS_NR_UE *ue,
   int aarx, aatx, gNB_id = 0;
   NR_DL_FRAME_PARMS *frame_parms = &ue->frame_parms;
   int ch_offset = frame_parms->ofdm_symbol_size*2;
-  int N_RB_DL = dlsch->dlsch_config.number_rbs;
-
   ue->measurements.nb_antennas_rx = frame_parms->nb_antennas_rx;
 
   allocCast3D(rx_spatial_power,
@@ -85,7 +82,7 @@ void nr_ue_measurements(PHY_VARS_NR_UE *ue,
       ue->measurements.rx_power[gNB_id][aarx] = 0;
 
       for (aatx = 0; aatx < frame_parms->nb_antenna_ports_gNB; aatx++){
-        const int z=signal_energy_nodc((c16_t*)&dl_ch_estimates[gNB_id][ch_offset], N_RB_DL * NR_NB_SC_PER_RB);
+        const int z = signal_energy_nodc((c16_t*)&dl_ch_estimates[gNB_id][ch_offset], number_rbs * NR_NB_SC_PER_RB);
         rx_spatial_power[gNB_id][aatx][aarx] = z;
 
         if (rx_spatial_power[gNB_id][aatx][aarx] < 0)
@@ -127,8 +124,9 @@ void nr_ue_measurements(PHY_VARS_NR_UE *ue,
   for (gNB_id = 0; gNB_id < ue->n_connected_gNB; gNB_id++) {
 
     ue->measurements.rx_power_avg_dB[gNB_id] = dB_fixed( ue->measurements.rx_power_avg[gNB_id]);
+    ue->measurements.n0_power_avg_dB = dB_fixed(ue->measurements.n0_power_avg);
     ue->measurements.wideband_cqi_tot[gNB_id] = ue->measurements.rx_power_tot_dB[gNB_id] - ue->measurements.n0_power_tot_dB;
-    ue->measurements.wideband_cqi_avg[gNB_id] = ue->measurements.rx_power_avg_dB[gNB_id] - dB_fixed(ue->measurements.n0_power_avg);
+    ue->measurements.wideband_cqi_avg[gNB_id] = ue->measurements.rx_power_avg_dB[gNB_id] - ue->measurements.n0_power_avg_dB;
     ue->measurements.rx_rssi_dBm[gNB_id] = ue->measurements.rx_power_avg_dB[gNB_id] + 30 - SQ15_SQUARED_NORM_FACTOR_DB
                                            - ((int)ue->openair0_cfg[0].rx_gain[0] - (int)ue->openair0_cfg[0].rx_gain_offset[0])
                                            - dB_fixed(ue->frame_parms.ofdm_symbol_size);
@@ -236,11 +234,11 @@ void nr_ue_ssb_rsrp_measurements(PHY_VARS_NR_UE *ue,
     .gNB_index = proc->gNB_id,
     .meas_type = NFAPI_NR_SS_MEAS,
     .Nid_cell = ue->frame_parms.Nid_cell,
+    .rsrp_dBm = ue->measurements.ssb_rsrp_dBm[ssb_index],
+    .sinr_dB = ue->measurements.ssb_sinr_dB[ssb_index],
     .ssb_index = ssb_index,
     .is_neighboring_cell = false,
   };
-  int ssb_rsrp_dBm = ue->measurements.ssb_rsrp_dBm[ssb_index];
-  l1_measurements.rsrp_dBm = BOUNDED_EVAL(16, ssb_rsrp_dBm + 157, 113); // TS 38.133 - Table 10.1.6.1-1
   nr_downlink_indication_t dl_indication = {0};
   fapi_nr_rx_indication_t rx_ind = {0};
   nr_fill_dl_indication(&dl_indication, NULL, &rx_ind, proc, ue, NULL);

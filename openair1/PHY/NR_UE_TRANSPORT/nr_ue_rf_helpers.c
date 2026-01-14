@@ -29,9 +29,10 @@
  */
 
 #include "PHY/defs_nr_UE.h"
-#include "PHY/phy_extern_nr_ue.h"
 #include "nr_transport_proto_ue.h"
 #include "executables/softmodem-common.h"
+
+extern PHY_VARS_NR_UE ***PHY_vars_UE_g;
 
 void nr_get_carrier_frequencies(PHY_VARS_NR_UE *ue, uint64_t *dl_carrier, uint64_t *ul_carrier){
 

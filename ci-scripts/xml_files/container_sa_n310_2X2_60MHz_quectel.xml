@@ -146,7 +146,6 @@
     <desc>Undeploy gNB</desc>
     <node>matix</node>
     <yaml_path>ci-scripts/yaml_files/5g_sa_n310_2x2_60MHz</yaml_path>
-    <services>oai-gnb</services>
     <d_retx_th>15,100,100,100</d_retx_th>
     <u_retx_th>20,100,100,100</u_retx_th>
   </testCase>

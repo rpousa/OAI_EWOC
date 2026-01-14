@@ -1390,9 +1390,20 @@ static int ngap_gNB_handle_pdusession_release_command(sctp_assoc_t assoc_id, uin
   for (i = 0; i < ie->value.choice.PDUSessionResourceToReleaseListRelCmd.list.count; i++) {
     NGAP_PDUSessionResourceToReleaseItemRelCmd_t *item_p;
     item_p = ie->value.choice.PDUSessionResourceToReleaseListRelCmd.list.array[i];
-    pdusession_release_t *r = &msg->pdusession_release_params[i];
-    r->pdusession_id = item_p->pDUSessionID;
-    r->data = create_byte_array(item_p->pDUSessionResourceReleaseCommandTransfer.size, item_p->pDUSessionResourceReleaseCommandTransfer.buf);
+    msg->pdusession_ids[i] = item_p->pDUSessionID;
+
+    /* PDUSessionResourceReleaseCommandTransfer (Mandatory) */
+    void *decoded = decode_pdusession_transfer(&asn_DEF_NGAP_PDUSessionResourceReleaseCommandTransfer,
+                                               item_p->pDUSessionResourceReleaseCommandTransfer);
+    if (!decoded) {
+      NGAP_ERROR("Failed to decode PDUSessionResourceReleaseCommandTransfer for PDU Session %d\n", msg->pdusession_ids[i]);
+      return -1;
+    }
+    NGAP_PDUSessionResourceReleaseCommandTransfer_t *transfer = decoded;
+    ngap_cause_t cause = decode_ngap_cause(&transfer->cause);
+    NGAP_INFO("PDU Session %d release command: Cause type=%d value=%d\n", msg->pdusession_ids[i], cause.type, cause.value);
+    ASN_STRUCT_FREE_CONTENTS_ONLY(asn_DEF_NGAP_PDUSessionResourceReleaseCommandTransfer, transfer);
+    free(transfer);
   }
 
   itti_send_msg_to_task(TASK_RRC_GNB, ue_desc_p->gNB_instance->instance, message_p);

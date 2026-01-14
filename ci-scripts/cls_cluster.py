@@ -397,9 +397,9 @@ class Cluster:
 		# Analyze the logs
 		collectInfo = {}
 		for image, lf in log_files:
-			ret = cls_containerize.AnalyzeBuildLogs(image, lf)
-			imgStatus = ret['status']
-			msg = f"size {imageSize[image]}, analysis of {os.path.basename(lf)}: {ret['errors']} errors, {ret['warnings']} warnings"
+			imgStatus, errors = cls_containerize.AnalyzeBuildLogs(image, lf)
+			info = f"Analysis of {os.path.basename(lf)}: {imgStatus=}, size {imageSize[image]}, {len(errors)} errors"
+			msg = "\n".join([info] + errors)
 			HTML.CreateHtmlTestRowQueue(image, 'OK' if imgStatus else 'KO', [msg])
 			status = status and imgStatus
 

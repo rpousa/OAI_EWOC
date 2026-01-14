@@ -31,10 +31,86 @@
 #define MP_LOG_I(x, args...) LOG_I(HW, "[MPLANE] " x, ##args)
 #define MP_LOG_W(x, args...) LOG_W(HW, "[MPLANE] " x, ##args)
 
+#define OPER_STATE \
+        X(ENABLED_OPER, "enabled") \
+        X(DISABLED_OPER, "disabled")
+
+typedef enum {
+#define X(name, str) name,
+        OPER_STATE
+#undef X
+        OPER_COUNT
+} oper_state_e;
+
+oper_state_e str_to_enum_oper(const char* value);
+
+#define ADMIN_STATE \
+        X(UNLOCKED_ADMIN, "unlocked") \
+        X(SHUTTING_DOWN_ADMIN, "shutting-down") \
+        X(LOCKED_ADMIN, "locked")
+
+typedef enum {
+#define X(name, str) name,
+        ADMIN_STATE
+#undef X
+        ADMIN_COUNT
+} admin_state_e;
+
+admin_state_e str_to_enum_admin(const char* value);
+
+#define AVAIL_STATE \
+        X(NORMAL_AVAIL, "NORMAL") \
+        X(DEGRADED_AVAIL, "DEGRADED") \
+        X(FAULTY_AVAIL, "FAULTY")
+
+typedef enum {
+#define X(name, str) name,
+        AVAIL_STATE
+#undef X
+        AVAIL_COUNT
+} avail_state_e;
+
+avail_state_e str_to_enum_avail(const char* value);
+
 typedef struct {
-  bool ptp_state;
-  bool rx_carrier_state;
-  bool tx_carrier_state;
+  oper_state_e oper_state;  //  "enabled", "disabled"
+  admin_state_e admin_state; // "unlocked", "shutting-down", "locked"
+  avail_state_e avail_state; // "NORMAL", "DEGRADED", "FAULTY"
+} hardware_notif_t;
+
+#define PTP_STATE \
+        X(LOCKED_PTP,  "LOCKED") \
+        X(FREERUN_PTP, "FREERUN") \
+        X(HOLDOVER_PTP, "HOLDOVER")
+
+typedef enum {
+#define X(name, str) name,
+        PTP_STATE
+#undef X
+        PTP_COUNT
+} ptp_state_e;
+
+ptp_state_e str_to_enum_ptp(const char* value);
+
+#define CARRIER_STATE \
+        X(READY_CARRIER, "READY") \
+        X(DISABLED_CARRIER, "DISABLED") \
+        X(BUSY_CARRIER, "BUSY")
+
+typedef enum {
+#define X(name, str) name,
+        CARRIER_STATE
+#undef X
+        CARRIER_COUNT
+} carrier_state_e;
+
+carrier_state_e str_to_enum_carrier(const char* value);
+
+typedef struct {
+  hardware_notif_t hardware;
+  ptp_state_e ptp_state; //  "LOCKED", "FREERUN", "HOLDOVER"
+  carrier_state_e rx_carrier_state; // "READY", "DISABLED", "BUSY"
+  carrier_state_e tx_carrier_state; // "READY", "DISABLED", "BUSY"
   bool config_change;
   // to be extended with any notification callback
 
@@ -111,6 +187,8 @@ typedef struct {
   char **du_key_pair;
 
 } ru_session_list_t;
+
+void free_ru_session_list(ru_session_list_t *src);
 
 bool get_config_for_xran(const char *buffer, const int max_num_ant, xran_mplane_t *xran_mplane);
 

@@ -85,7 +85,7 @@ oc-cn5g-20897:
   Undeploy: "! scripts/oc-cn5g-undeploy.sh /opt/oai-cn5g-fed-develop-2025-jan oaicicd-core-for-fhi72"
   LogCollect: "! scripts/oc-cn5g-logcollect.sh /opt/oai-cn5g-fed-develop-2025-jan oaicicd-core-for-fhi72 %%log_dir%%"
 
-oc-cn5g-00102-ho:
+oc-cn5g-00103-ho:
   Host: groot
   NetworkScript: echo "inet 172.21.6.111"
   RunIperf3Server: False

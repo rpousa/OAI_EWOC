@@ -2867,16 +2867,16 @@ void float_to_chan_est(int32_t **dl_ch_estimates_ext,
     for (aarx=0; aarx<n_rx; aarx++) {
       for (re=0; re<length; re++) {
         if (cimag(dl_ch_estimates_ext_f[aatx*n_rx + aarx][re])<-1)
-          imag = 0x8000;
+          imag = -INT16_MAX;
         else if (cimag(dl_ch_estimates_ext_f[aatx*n_rx + aarx][re])>=1)
-          imag = 0x7FFF;
+          imag = INT16_MAX;
         else
           imag = cimag(dl_ch_estimates_ext_f[aatx*n_rx + aarx][re])*32768;
 
         if (creal(dl_ch_estimates_ext_f[aatx*n_rx + aarx][re])<-1)
-          real = 0x8000;
+          real = -INT16_MAX;
         else if (creal(dl_ch_estimates_ext_f[aatx*n_rx + aarx][re])>=1)
-          real = 0x7FFF;
+          real = INT16_MAX;
         else
           real = creal(dl_ch_estimates_ext_f[aatx*n_rx + aarx][re])*32768;
 
@@ -2910,16 +2910,16 @@ void float_to_rxdataF(int32_t **rxdataF_ext,
   for (aarx=0; aarx<n_rx; aarx++) {
     for (re=0; re<length; re++) {
       if (cimag(rxdataF_f[aarx][re])<-1)
-        imag = 0x8000;
+        imag = -INT16_MAX;
       else if (cimag(rxdataF_f[aarx][re])>=1)
-        imag = 0x7FFF;
+        imag = INT16_MAX;
       else
         imag = cimag(rxdataF_f[aarx][re])*32768;
 
       if (creal(rxdataF_f[aarx][re])<-1)
-        real = 0x8000;
+        real = -INT16_MAX;
       else if (creal(rxdataF_f[aarx][re])>=1)
-        real = 0x7FFF;
+        real = INT16_MAX;
       else
         real = creal(rxdataF_f[aarx][re])*32768;
 

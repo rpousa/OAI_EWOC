@@ -84,8 +84,8 @@
   {CONFIG_STRING_L1_PUSCH_DTX_THRESHOLD,               NULL,       0,         .uptr=NULL,           .defintval=50,              TYPE_UINT,     0},         \
   {CONFIG_STRING_L1_SRS_DTX_THRESHOLD,                 NULL,       0,         .uptr=NULL,           .defintval=30,              TYPE_UINT,     0},         \
   {CONFIG_STRING_L1_MAX_LDPC_ITERATIONS,               NULL,       0,         .uptr=NULL,           .defintval=8,               TYPE_UINT,     0},         \
-  {CONFIG_STRING_L1_RX_THREAD_CORE,                    NULL,       0,         .uptr=NULL,           .defintval=-1,              TYPE_UINT,     0},         \
-  {CONFIG_STRING_L1_TX_THREAD_CORE,                    NULL,       0,         .uptr=NULL,           .defintval=-1,              TYPE_UINT,     0},         \
+  {CONFIG_STRING_L1_RX_THREAD_CORE,                    NULL,       0,         .iptr=NULL,           .defintval=-1,              TYPE_INT,      0},         \
+  {CONFIG_STRING_L1_TX_THREAD_CORE,                    NULL,       0,         .iptr=NULL,           .defintval=-1,              TYPE_INT,      0},         \
   {CONFIG_STRING_L1_TX_AMP_BACKOFF_dB,                 HLP_L1TX_BO,0,         .uptr=NULL,           .defintval=36,              TYPE_UINT,     0},         \
   {CONFIG_STRING_L1_PHASE_COMP,                        HLP_L1_PHASE_COMP,PARAMFLAG_BOOL, .uptr=NULL,.defintval=1,               TYPE_UINT,     0},         \
   {CONFIG_STRING_NUM_ANTENNAS_PER_THREAD,              HLP_NUM_ARX,0,         .uptr=NULL,           .defintval=1,               TYPE_UINT,     0},         \

@@ -67,8 +67,6 @@ MESSAGE_DEF(NAS_5GMM_IND, MESSAGE_PRIORITY_MED, nas_5gmm_ind_t, nas_5gmm_ind)
 
 MESSAGE_DEF(NAS_RAB_ESTABLI_RSP, MESSAGE_PRIORITY_MED, rab_establish_rsp_t, nas_rab_est_rsp)
 
-MESSAGE_DEF(NAS_OAI_TUN_NSA, MESSAGE_PRIORITY_MED, nas_oai_tun_nsa_t, nas_oai_tun_nsa)
-
 // UE: RRC -> NAS messages
 MESSAGE_DEF(NAS_CELL_SELECTION_CNF, MESSAGE_PRIORITY_MED, cell_info_cnf_t, nas_cell_selection_cnf)
 MESSAGE_DEF(NAS_CELL_SELECTION_IND, MESSAGE_PRIORITY_MED, cell_info_ind_t, nas_cell_selection_ind)

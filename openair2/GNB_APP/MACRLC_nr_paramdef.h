@@ -79,6 +79,7 @@
 #define CONFIG_STRING_MACRLC_BEAM_WEIGHTS_LIST             "beam_weights"
 #define CONFIG_STRING_MACRLC_PUSCH_RSSI_THRESHOLD          "pusch_RSSI_Threshold"
 #define CONFIG_STRING_MACRLC_PUCCH_RSSI_THRESHOLD          "pucch_RSSI_Threshold"
+#define CONFIG_STRING_MACRLC_STATS_MAX_UE                  "stats_max_ue"
 
 #define HLP_MACRLC_UL_PRBBLACK "SNR threshold to decide whether a PRB will be blacklisted or not"
 #define HLP_MACRLC_DL_BLER_UP "Upper threshold of BLER to decrease DL MCS"
@@ -98,6 +99,7 @@
 #define HLP_MACRLC_BEAMS_PERIOD "set of beams that can be simultaneously allocated in a period"
 #define HLP_MACRLC_PUSCH_RSSI_THRESHOLD "Limits PUSCH TPC commands based on RSSI to prevent ADC railing. Value range [-1280, 0], unit 0.1 dBm/dBFS"
 #define HLP_MACRLC_PUCCH_RSSI_THRESHOLD "Limits PUCCH TPC commands based on RSSI to prevent ADC railing. Value range [-1280, 0], unit 0.1 dBm/dBFS"
+#define HLP_MACRLC_STATS_MAX_UE "Maximum number of UEs before disabling periodical output (0 to disable)"
 
 /*-------------------------------------------------------------------------------------------------------------------------------------------------------*/
 /*                                            MacRLC  configuration parameters                                                                           */
@@ -149,6 +151,7 @@
                                                                                0, .iptr=NULL,   .defintval=0,               TYPE_INT,     0}, \
   {CONFIG_STRING_MACRLC_PUCCH_RSSI_THRESHOLD,        HLP_MACRLC_PUCCH_RSSI_THRESHOLD, \
                                                                                0, .iptr=NULL,   .defintval=0,               TYPE_INT,     0}, \
+  {CONFIG_STRING_MACRLC_STATS_MAX_UE,                HLP_MACRLC_STATS_MAX_UE,  0, .iptr=NULL,   .defintval=8,               TYPE_INT,     0}, \
 }
 // clang-format off
 
@@ -194,6 +197,7 @@
 #define MACRLC_BEAMWEIGHTS_IDX                                 39
 #define MACRLC_PUSCH_RSSI_THRES_IDX                            40
 #define MACRLC_PUCCH_RSSI_THRES_IDX                            41
+#define MACRLC_STATS_MAX_UE_IDX                                42
 
 #define MACRLCPARAMS_CHECK { \
   { .s5 = { NULL } }, \
@@ -238,6 +242,7 @@
   { .s5 = { NULL } }, \
   { .s2 =  { config_check_intrange, {-1280, 0}} }, /* PUSCH RSSI threshold range */ \
   { .s2 =  { config_check_intrange, {-1280, 0}} }, /* PUCCH RSSI threshold range */ \
+  { .s5 = { NULL } }, \
 }
 
 /*---------------------------------------------------------------------------------------------------------------------------------------------------------*/

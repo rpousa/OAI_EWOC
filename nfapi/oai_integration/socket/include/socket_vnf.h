@@ -31,4 +31,5 @@ bool vnf_nr_send_p5_msg(vnf_t *vnf, uint16_t p5_idx, nfapi_nr_p4_p5_message_head
 bool vnf_nr_send_p7_msg(vnf_p7_t *vnf_p7, nfapi_nr_p7_message_header_t* header);
 void vnf_start_p5_thread(void* ptr);
 void* vnf_nr_start_p7_thread(void* ptr);
+void socket_nfapi_send_stop_request(vnf_t *vnf);
 #endif // SOCKET_VNF_H

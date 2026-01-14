@@ -30,6 +30,9 @@
 *       For example the PRACH duration is requested in the O-RAN 7.2 FrontHaul Interface
 */
 
+#ifndef __NR_PRACH_CONFIG_H__
+#define __NR_PRACH_CONFIG_H__
+
 /**
  * @brief Fetch PRACH format (format only) from PRACH configuration tables
  *
@@ -73,3 +76,5 @@ nr_prach_info_t get_nr_prach_occasion_info_from_index(uint8_t index, frequency_r
  * @return PRACH format (format concatenated with format2)
  */
 uint16_t get_nr_prach_format_from_index(uint8_t index, uint32_t pointa, uint8_t unpaired);
+
+#endif

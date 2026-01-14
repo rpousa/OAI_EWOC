@@ -1,6 +1,6 @@
 services:
     lte_ue0:
-        image: ${REGISTRY:-oaisoftwarealliance}/oai-lte-ue:${TAG:-develop}
+        image: ${REGISTRY-oaisoftwarealliance/}oai-lte-ue:${TAG:-develop}
         privileged: true
         container_name: lte-b200-ue-fdd-10Mhz-tm1
         environment:

@@ -672,7 +672,7 @@ void nr_rlc_reconfigure_entity(int ue_id, int lc_id, NR_RLC_Config_t *rlc_Config
 
 void nr_rlc_add_srb(int ue_id, int srb_id, const NR_RLC_BearerConfig_t *rlc_BearerConfig)
 {
-  struct NR_RLC_Config *r = rlc_BearerConfig->rlc_Config;
+  NR_RLC_Config_t *r = rlc_BearerConfig->rlc_Config;
   int t_status_prohibit;
   int t_poll_retransmit;
   int poll_pdu;
@@ -682,8 +682,7 @@ void nr_rlc_add_srb(int ue_id, int srb_id, const NR_RLC_BearerConfig_t *rlc_Bear
   int sn_field_length;
 
   LOG_D(RLC, "Trying to add SRB %d\n", srb_id);
-  AssertFatal(srb_id > 0 && srb_id < 4,
-              "Invalid srb id %d\n", srb_id);
+  AssertFatal(srb_id > 0 && srb_id < 4, "Invalid srb id %d\n", srb_id);
 
   if (r && r->present == NR_RLC_Config_PR_am) {
     struct NR_RLC_Config__am *am;

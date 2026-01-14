@@ -519,7 +519,13 @@ static NR_RRCReconfiguration_IEs_t *build_RRCReconfiguration_IEs(const nr_rrc_re
     cfg->drb_ToAddModList = params->drb_config_list;
     cfg->securityConfig = params->security_config;
     cfg->srb3_ToRelease = NULL;
-    cfg->drb_ToReleaseList = params->drb_release_list;
+    if (params->n_drb_rel) {
+      asn1cCalloc(cfg->drb_ToReleaseList, to_release);
+      for (int i = 0; i < params->n_drb_rel; i++) {
+        asn1cSequenceAdd(to_release->list, NR_DRB_Identity_t, DRB_release);
+        *DRB_release = params->drb_rel[i];
+      }
+    }
   }
 
   /* measConfig */
@@ -850,50 +856,45 @@ int do_RRCSetupComplete(uint8_t *buffer,
 }
 
 // TODO: This function is only implemented for event A2
-int do_nrMeasurementReport_SA(NR_MeasurementReport_t *measurementReport,
-                              long trigger_to_measid,
+int do_nrMeasurementReport_SA(long trigger_to_measid,
                               long trigger_quantity,
                               long rs_type,
                               uint16_t Nid_cell,
-                              int rsrp_dBm,
+                              int rsrp_index,
                               uint8_t *buffer,
                               size_t buffer_size)
 {
   asn_enc_rval_t enc_rval;
-  NR_UL_DCCH_Message_t ul_dcch_msg;
-  memset((void *)&ul_dcch_msg, 0, sizeof(NR_UL_DCCH_Message_t));
+  NR_UL_DCCH_Message_t ul_dcch_msg = {0};
 
   ul_dcch_msg.message.present = NR_UL_DCCH_MessageType_PR_c1;
-  ul_dcch_msg.message.choice.c1 = CALLOC(1, sizeof(struct NR_UL_DCCH_MessageType__c1));
-  ul_dcch_msg.message.choice.c1->present = NR_UL_DCCH_MessageType__c1_PR_measurementReport;
+  asn1cCalloc(ul_dcch_msg.message.choice.c1, c1);
+  c1->present = NR_UL_DCCH_MessageType__c1_PR_measurementReport;
 
-  memset(measurementReport, 0, sizeof(struct NR_MeasurementReport));
-  ul_dcch_msg.message.choice.c1->choice.measurementReport = measurementReport;
+  asn1cCalloc(c1->choice.measurementReport, measurementReport);
   measurementReport->criticalExtensions.present = NR_MeasurementReport__criticalExtensions_PR_measurementReport;
 
-  NR_MeasurementReport_IEs_t *measurementReport_ie = CALLOC(1, sizeof(struct NR_MeasurementReport_IEs));
-  measurementReport->criticalExtensions.choice.measurementReport = measurementReport_ie;
-  measurementReport_ie->measResults.measId = trigger_to_measid;
+  asn1cCalloc(measurementReport->criticalExtensions.choice.measurementReport, mrIE);
+  mrIE->measResults.measId = trigger_to_measid;
 
-  NR_MeasResultServMO_t *measResultServMo = CALLOC(1, sizeof(struct NR_MeasResultServMO));
+  NR_MeasResultServMO_t *measResultServMo = calloc_or_fail(1, sizeof(*measResultServMo));
 
   NR_MeasResultNR_t *measResultServingCell = &measResultServMo->measResultServingCell;
-  measResultServingCell->physCellId = CALLOC(1, sizeof(NR_PhysCellId_t));
-  *measResultServingCell->physCellId = Nid_cell;
+  asn1cCalloc(measResultServingCell->physCellId, pci);
+  *pci = Nid_cell;
 
-  struct NR_MeasQuantityResults *active_mq_res = CALLOC(1, sizeof(struct NR_MeasQuantityResults));
-
+  struct NR_MeasQuantityResults *active_mq_res = calloc_or_fail(1, sizeof(*active_mq_res));
   if (trigger_quantity == NR_MeasTriggerQuantityOffset_PR_rsrp) {
-    active_mq_res->rsrp = CALLOC(1, sizeof(NR_RSRP_Range_t));
-
-    *active_mq_res->rsrp = rsrp_dBm + 157;
+    asn1cCalloc(active_mq_res->rsrp, rsrp);
+    // Assign precomputed RSRP index
+    *rsrp = rsrp_index;
     if (rs_type == NR_NR_RS_Type_ssb)
       measResultServingCell->measResult.cellResults.resultsSSB_Cell = active_mq_res;
     else
       measResultServingCell->measResult.cellResults.resultsCSI_RS_Cell = active_mq_res;
   }
 
-  ASN_SEQUENCE_ADD(&measurementReport_ie->measResults.measResultServingMOList.list, measResultServMo);
+  ASN_SEQUENCE_ADD(&mrIE->measResults.measResultServingMOList.list, measResultServMo);
   enc_rval = uper_encode_to_buffer(&asn_DEF_NR_UL_DCCH_Message, NULL, (void *)&ul_dcch_msg, buffer, buffer_size);
   AssertFatal(enc_rval.encoded > 0, "ASN1 message encoding failed (%s, %lu)!\n", enc_rval.failed_type->name, enc_rval.encoded);
 
@@ -1025,7 +1026,7 @@ int do_RRCReestablishment(int8_t nh_ncc, uint8_t *const buffer, size_t buffer_si
   rrcReestablishment->criticalExtensions.choice.rrcReestablishment = CALLOC(1, sizeof(NR_RRCReestablishment_IEs_t));
 
   // 3GPP TS 33.501 Section 6.11 Security handling for RRC connection re-establishment procedure
-  rrcReestablishment->criticalExtensions.choice.rrcReestablishment->nextHopChainingCount = nh_ncc >= 0 ? nh_ncc : 0;
+  rrcReestablishment->criticalExtensions.choice.rrcReestablishment->nextHopChainingCount = nh_ncc;
   rrcReestablishment->criticalExtensions.choice.rrcReestablishment->lateNonCriticalExtension = NULL;
   rrcReestablishment->criticalExtensions.choice.rrcReestablishment->nonCriticalExtension = NULL;
 

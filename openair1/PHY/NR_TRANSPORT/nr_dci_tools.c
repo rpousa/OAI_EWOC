@@ -42,7 +42,7 @@ int compfunc(const void *a, const void *b)
   return (*(int *)a - *(int *)b);
 }
 
-void nr_fill_reg_list(int reg_list[MAX_DCI_CORESET][NR_MAX_PDCCH_AGG_LEVEL * NR_NB_REG_PER_CCE], nfapi_nr_dl_tti_pdcch_pdu_rel15_t *pdcch_pdu_rel15)
+void nr_fill_reg_list(int reg_list[MAX_DCI_CORESET][NR_MAX_PDCCH_AGG_LEVEL * NR_NB_REG_PER_CCE], const nfapi_nr_dl_tti_pdcch_pdu_rel15_t *pdcch_pdu_rel15)
 {
   int bsize = pdcch_pdu_rel15->RegBundleSize;
   int R = pdcch_pdu_rel15->InterleaverSize;

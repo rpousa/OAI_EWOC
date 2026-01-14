@@ -329,11 +329,6 @@ typedef struct UE_NR_SCAN_INFO_s {
   int32_t freq_offset_Hz[3][10];
 } UE_NR_SCAN_INFO_t;
 
-typedef struct {
-  bool update;
-  fapi_nr_dl_ntn_config_command_pdu ntn_config_params;
-} ntn_config_message_t;
-
 /// Top-level PHY Data Structure for UE
 typedef struct PHY_VARS_NR_UE_s {
   openair0_config_t openair0_cfg[MAX_CARDS];
@@ -462,12 +457,15 @@ typedef struct PHY_VARS_NR_UE_s {
 
   double initial_fo; /// initial frequency offset provided by the user
   int cont_fo_comp; /// flag enabling the continuous frequency offset estimation and compensation
-  double freq_offset; /// currently compensated frequency offset
-  double freq_off_acc; /// accumulated frequency error (for PI controller)
+  double freq_offset; /// currently compensated DL frequency offset (without dl_Doppler_shift)
+  double freq_off_acc; /// accumulated DL frequency error (for PI controller)
+  double dl_Doppler_shift; /// calculated DL Doppler shift
+  double ul_Doppler_shift; /// calculated UL Doppler shift
 
   /// Timing Advance updates variables
   /// Timing advance update computed from the TA command signalled from gNB
-  int timing_advance;
+  int timing_advance; /// corresponds to N_TA
+  int timing_advance_ntn; /// corresponds to N_common_TA_adj + N_UE_TA_adj
   int N_TA_offset; ///timing offset used in TDD
   int ta_frame;
   int ta_slot;
@@ -524,7 +522,6 @@ typedef struct PHY_VARS_NR_UE_s {
   Actor_t sync_actor;
   Actor_t *dl_actors;
   Actor_t *ul_actors;
-  ntn_config_message_t* ntn_config_message;
   pthread_t main_thread;
   pthread_t stat_thread;
 } PHY_VARS_NR_UE;
@@ -538,11 +535,14 @@ typedef struct {
   /// NR slot index within frame_rx [0 .. slots_per_frame - 1] to act upon for transmission
   int nr_slot_rx;
   int tx_slot_type;
-  //#endif
   /// frame to act upon for transmission
   int frame_tx;
   /// frame to act upon for reception
   int frame_rx;
+  /// hyper frame number to act upon for transmission
+  int hfn_tx;
+  /// hyper frame number to act upon for reception
+  int hfn_rx;
 } UE_nr_rxtx_proc_t;
 
 typedef struct {

@@ -36,4 +36,5 @@ bool pnf_nr_send_p5_message(pnf_t *pnf, nfapi_nr_p4_p5_message_header_t *msg, ui
 bool pnf_nr_send_p7_message(pnf_p7_t* pnf_p7, nfapi_nr_p7_message_header_t* header, uint32_t msg_len);
 void *pnf_start_p5_thread(void *ptr);
 void *pnf_nr_p7_thread_start(void *ptr);
+void socket_nfapi_nr_pnf_stop();
 #endif // SOCKET_PNF_H

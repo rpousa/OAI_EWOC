@@ -38,6 +38,8 @@
 #include "impl_defs_nr.h"
 #include "PHY/CODING/nrPolar_tools/nr_polar_defs.h"
 
+#include <pthread.h>
+
 #define MAX_NUM_SUBCARRIER_SPACING 5
 #define NR_MAX_OFDM_SYMBOL_SIZE 8192
 
@@ -133,12 +135,35 @@ typedef struct {
   int resource_type;
 } nr_srs_info_t;
 
+#define NUMBER_OF_NR_PRACH_MAX 8
+typedef struct {
+  int frame;
+  int slot;
+  int num_slots; // prach duration in slots
+  int beams[NFAPI_MAX_NUM_BG_IF];
+  nfapi_nr_prach_pdu_t pdu;
+  int rootSequenceIndex;
+  int numrootSequenceIndex;
+  int msg1_frequencystart;
+  int mu;
+  int prach_sequence_length;
+  int restricted_set;
+  int numerology_index;
+  int nb_rx;
+  c16_t rxsigF[NUMBER_OF_NR_RU_PRACH_OCCASIONS_MAX][NB_ANTENNAS_RX][NR_PRACH_SEQ_LEN_L];
+  c16_t (*Xu)[839];
+  time_stats_t *rx_prach;
+} prach_item_t;
+
+typedef struct {
+  /// prach commands
+  prach_item_t list[NUMBER_OF_NR_PRACH_MAX];
+  /// mutex for prach_list access
+  pthread_mutex_t prach_list_mutex;
+} prach_list_t;
+void init_prach_list(prach_list_t *);
+
 typedef struct NR_DL_FRAME_PARMS NR_DL_FRAME_PARMS;
-
-typedef uint32_t (*get_samples_per_slot_t)(int slot, const NR_DL_FRAME_PARMS *fp);
-typedef uint32_t (*get_slot_from_timestamp_t)(openair0_timestamp timestamp_rx, const NR_DL_FRAME_PARMS *fp);
-
-typedef uint32_t (*get_samples_slot_timestamp_t)(int slot, const NR_DL_FRAME_PARMS *fp, unsigned int sl_ahead);
 
 struct NR_DL_FRAME_PARMS {
   /// frequency range
@@ -195,12 +220,6 @@ struct NR_DL_FRAME_PARMS {
   uint16_t slots_per_frame;
   /// Number of samples in a subframe
   uint32_t samples_per_subframe;
-  /// Number of samples in current slot
-  get_samples_per_slot_t get_samples_per_slot;
-  /// slot calculation from timestamp
-  get_slot_from_timestamp_t get_slot_from_timestamp;
-  /// Number of samples before slot
-  get_samples_slot_timestamp_t get_samples_slot_timestamp;
   /// Number of samples in 0th and center slot of a subframe
   uint32_t samples_per_slot0;
   /// Number of samples in other slots of the subframe
@@ -284,7 +303,10 @@ typedef struct {
     int32_t sfn;
     int8_t  slot;
     int8_t  rxAnt_idx;
-    float dl_toa;
+    pthread_mutex_t dl_toa_mtx; // protect reading of max from write
+    // circular buffer to be able to read maximum of last estimations
+    float dl_toa[128]; // set through set_prs_dl_toa()
+    float *next_dl_toa;
     int32_t dl_aoa;
     float snr;
     float rsrp;
@@ -302,5 +324,18 @@ typedef struct {
 
 #define KHz (1000UL)
 #define MHz (1000*KHz)
+
+// Get symbol duration within slot in samples
+uint32_t get_samples_symbol_duration(const NR_DL_FRAME_PARMS *fp, int slot, int start_symbol, int num_symbols);
+// Get timestamp of symbol within slot in samples
+uint32_t get_samples_symbol_timestamp(const NR_DL_FRAME_PARMS *fp, int slot, int symbol);
+// Get slot duration between two slot
+uint32_t get_samples_slot_duration(const NR_DL_FRAME_PARMS *fp, unsigned int start_slot, unsigned int num_slots);
+// Get timestamp of slot from start of frame
+uint32_t get_samples_slot_timestamp(const NR_DL_FRAME_PARMS *fp, unsigned int slot);
+// Get slot from timestamp
+uint32_t get_slot_from_timestamp(openair0_timestamp timestamp_rx, const NR_DL_FRAME_PARMS *fp);
+// Get number of samples in the slot
+uint32_t get_samples_per_slot(int slot, const NR_DL_FRAME_PARMS *fp);
 
 #endif

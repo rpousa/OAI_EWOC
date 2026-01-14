@@ -85,8 +85,7 @@ TEST(NrLayerPrecoderTest, Basic)
   // Create and populate the pmi_pdu structure
   nfapi_nr_pm_pdu_t pmi_pdu = {0};
   for (int layer = 0; layer < n_layers; ++layer) {
-    pmi_pdu.weights[layer][ant].precoder_weight_Re = -SHRT_MAX; // Q15 representation of (~-1.0) -0.999969482421875 (-1+2^-15)
-    pmi_pdu.weights[layer][ant].precoder_weight_Im = 0;
+    pmi_pdu.weights[layer][ant] = (c16_t){-SHRT_MAX, 0};
   }
 
   // Call the C function
@@ -131,8 +130,7 @@ TEST(NrLayerPrecoderTest, SIMD)
   // Create and populate the pmi_pdu structure
   nfapi_nr_pm_pdu_t pmi_pdu = {0};
   for (int layer = 0; layer < n_layers; ++layer) {
-    pmi_pdu.weights[layer][ant].precoder_weight_Re = -SHRT_MAX; // Q15 representation of (~-1.0) -0.999969482421875 (-1+2^-15)
-    pmi_pdu.weights[layer][ant].precoder_weight_Im = 0;
+    pmi_pdu.weights[layer][ant] = (c16_t){-SHRT_MAX, 0};
   }
 
   // Call the C function
@@ -182,10 +180,8 @@ TEST(NrLayerPrecoderTest, Compare_CM_SIMD)
     // Could not use convert_precoder_weight() as complex.h could not be used in googletest
     // Use the logic in convert_precoder_weight()
     // precoder [−1,−j]
-    pmi_pdu.weights[layer][0].precoder_weight_Re = -SHRT_MAX; // Q15 representation of (~-1.0) -0.999969482421875 (-1+2^-15)
-    pmi_pdu.weights[layer][0].precoder_weight_Im = 0x0000;    // Q15 representation of 0
-    pmi_pdu.weights[layer][1].precoder_weight_Re = 0x0000;    // Q15 representation of 0
-    pmi_pdu.weights[layer][1].precoder_weight_Im = -SHRT_MAX; // Q15 representation of (~-1.0) -0.999969482421875 (-1+2^-15)
+    pmi_pdu.weights[layer][0] = (c16_t){-SHRT_MAX, 0};
+    pmi_pdu.weights[layer][1] = (c16_t){0, -SHRT_MAX};
   }
 
   // Get the results for all the antenna 

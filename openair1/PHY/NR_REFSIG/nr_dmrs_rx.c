@@ -150,24 +150,11 @@ int nr_pdsch_dmrs_rx(const PHY_VARS_NR_UE *ue,
   return(0);
 }
 
-int nr_pdcch_dmrs_rx(const PHY_VARS_NR_UE *ue,
-                     unsigned int Ns,
-                     const unsigned int *nr_gold_pdcch,
-                     c16_t *output,
-                     unsigned short p,
-                     unsigned short nb_rb_coreset)
+void nr_pdcch_dmrs_ref(const unsigned int *nr_gold_pdcch, c16_t *output, unsigned short nb_rb_coreset)
 {
-  if (p==2000) {
-    for (int i=0; i<((nb_rb_coreset*6)>>1); i++) {
-      output[i] = get_modulated(nr_gold_pdcch, i, true);
-#ifdef DEBUG_PDCCH
-      if (i<8)
-        printf("i %d idx %d pdcch mod_dmrs %d %d\n", i, idx, output[i].r, output[i].i);
-#endif
-    }
+  for (int i = 0; i < ((nb_rb_coreset * 6) >> 1); i++) {
+    output[i] = get_modulated(nr_gold_pdcch, i, true);
   }
-
-  return(0);
 }
 
 void nr_pbch_dmrs_rx(int symbol, const unsigned int *nr_gold_pbch, c16_t *output, bool sidelink)

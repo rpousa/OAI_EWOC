@@ -89,15 +89,22 @@ int nfapi_pnf_p7_stop(nfapi_pnf_p7_config_t* config)
 	return 0;
 }
 
-int nfapi_pnf_p7_slot_ind(nfapi_pnf_p7_config_t* config, uint16_t phy_id, uint16_t sfn, uint16_t slot)
+int nfapi_pnf_p7_get_msgs(nfapi_pnf_p7_config_t* config,
+                          uint16_t phy_id,
+                          uint16_t sfn,
+                          uint16_t slot,
+                          nfapi_nr_dl_tti_request_t* ret_dl_tti,
+                          nfapi_nr_ul_tti_request_t* ret_ul_tti,
+                          nfapi_nr_ul_dci_request_t* ret_ul_dci,
+                          nfapi_nr_tx_data_request_t* ret_tx_data)
 {
-	// Verify that config is not null
-	if(config == 0)
-		return -1;
-	
-	pnf_p7_t* _this = (pnf_p7_t*)(config);
+  // Verify that config is not null
+  if (config == 0)
+    return -1;
 
-	return pnf_p7_slot_ind(_this, phy_id, sfn, slot);
+  pnf_p7_t* _this = (pnf_p7_t*)(config);
+
+  return nr_pnf_p7_get_msgs(_this, phy_id, sfn, slot, ret_dl_tti, ret_ul_tti, ret_ul_dci, ret_tx_data);
 }
 
 int nfapi_pnf_p7_subframe_ind(nfapi_pnf_p7_config_t* config, uint16_t phy_id, uint16_t sfn_sf)
@@ -261,8 +268,8 @@ int nfapi_pnf_p7_nr_rx_data_ind(nfapi_pnf_p7_config_t* config, nfapi_nr_rx_data_
 
 	pnf_p7_t* _this = (pnf_p7_t*)(config);
   AssertFatal(_this->_public.send_p7_msg, "Function pointer must be configured|");
-	int ret = _this->_public.send_p7_msg(_this, (nfapi_nr_p7_message_header_t*)ind, sizeof(nfapi_nr_rx_data_indication_t));
-  if (ret == 0) {
+	bool ret = _this->_public.send_p7_msg(_this, (nfapi_nr_p7_message_header_t*)ind, sizeof(nfapi_nr_rx_data_indication_t));
+  if (ret) {
     for (int i = 0; i < ind->number_of_pdus; ++i)
       _this->nr_stats.ul.bytes += ind->pdu_list[i].pdu_length;
   }

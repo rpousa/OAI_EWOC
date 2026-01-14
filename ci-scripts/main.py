@@ -85,15 +85,7 @@ def CheckClassValidity(xml_class_list,action,id):
 		resp=True
 	return resp
 
-#assigning parameters to object instance attributes (even if the attributes do not exist !!)
-def AssignParams(params_dict):
-
-	for key,value in params_dict.items():
-		setattr(CiTestObj, key, value)
-		setattr(RAN, key, value)
-		setattr(HTML, key, value)
-
-def ExecuteActionWithParam(action, ctx):
+def ExecuteActionWithParam(action, ctx, node):
 	global RAN
 	global HTML
 	global CONTAINERS
@@ -102,7 +94,6 @@ def ExecuteActionWithParam(action, ctx):
 	if action == 'Build_eNB' or action == 'Build_Image' or action == 'Build_Proxy' or action == "Build_Cluster_Image" or action == "Build_Run_Tests":
 		RAN.Build_eNB_args=test.findtext('Build_eNB_args')
 		CONTAINERS.imageKind=test.findtext('kind')
-		node = test.findtext('node')
 		proxy_commit = test.findtext('proxy_commit')
 		if proxy_commit is not None:
 			CONTAINERS.proxyCommit = proxy_commit
@@ -118,7 +109,6 @@ def ExecuteActionWithParam(action, ctx):
 			success = CONTAINERS.BuildRunTests(ctx, node, HTML)
 
 	elif action == 'Initialize_eNB':
-		node = test.findtext('node')
 		datalog_rt_stats_file=test.findtext('rt_stats_cfg')
 		if datalog_rt_stats_file is None:
 			RAN.datalog_rt_stats_file='datalog_rt_stats.default.yaml'
@@ -139,7 +129,6 @@ def ExecuteActionWithParam(action, ctx):
 		success = RAN.InitializeeNB(ctx, node, HTML)
 
 	elif action == 'Terminate_eNB':
-		node = test.findtext('node')
 		#retx checkers
 		string_field = test.findtext('d_retx_th')
 		if (string_field is not None):
@@ -158,68 +147,35 @@ def ExecuteActionWithParam(action, ctx):
 
 	elif action == 'Initialize_UE' or action == 'Attach_UE' or action == 'Detach_UE' or action == 'Terminate_UE' or action == 'CheckStatusUE' or action == 'DataEnable_UE' or action == 'DataDisable_UE':
 		CiTestObj.ue_ids = test.findtext('id').split(' ')
-		if force_local:
-			# Change all execution targets to localhost
-			CiTestObj.nodes = ['localhost'] * len(CiTestObj.ue_ids)
-		else:
-			if test.findtext('nodes'):
-				CiTestObj.nodes = test.findtext('nodes').split(' ')
-				if len(CiTestObj.ue_ids) != len(CiTestObj.nodes):
-					logging.error('Number of Nodes are not equal to the total number of UEs')
-					sys.exit("Mismatch in number of Nodes and UIs")
-			else:
-				CiTestObj.nodes = [None] * len(CiTestObj.ue_ids)
 		if action == 'Initialize_UE':
-			success = CiTestObj.InitializeUE(HTML)
+			success = CiTestObj.InitializeUE(node, HTML)
 		elif action == 'Attach_UE':
-			success = CiTestObj.AttachUE(HTML)
+			success = CiTestObj.AttachUE(node, HTML)
 		elif action == 'Detach_UE':
-			success = CiTestObj.DetachUE(HTML)
+			success = CiTestObj.DetachUE(node, HTML)
 		elif action == 'Terminate_UE':
-			success = CiTestObj.TerminateUE(ctx, HTML)
+			success = CiTestObj.TerminateUE(ctx, node, HTML)
 		elif action == 'CheckStatusUE':
-			success = CiTestObj.CheckStatusUE(HTML)
+			success = CiTestObj.CheckStatusUE(node, HTML)
 		elif action == 'DataEnable_UE':
-			success = CiTestObj.DataEnableUE(HTML)
+			success = CiTestObj.DataEnableUE(node, HTML)
 		elif action == 'DataDisable_UE':
-			success = CiTestObj.DataDisableUE(HTML)
+			success = CiTestObj.DataDisableUE(node, HTML)
 
 	elif action == 'Ping':
 		CiTestObj.ping_args = test.findtext('ping_args')
 		CiTestObj.ping_packetloss_threshold = test.findtext('ping_packetloss_threshold')
 		CiTestObj.ue_ids = test.findtext('id').split(' ')
-		CiTestObj.svr_id = test.findtext('svr_id') or None
+		CiTestObj.svr_id = test.findtext('svr_id')
 		if test.findtext('svr_node'):
 			CiTestObj.svr_node = test.findtext('svr_node') if not force_local else 'localhost'
-		if force_local:
-			# Change all execution targets to localhost
-			CiTestObj.nodes = ['localhost'] * len(CiTestObj.ue_ids)
-		else:
-			if test.findtext('nodes'):
-				CiTestObj.nodes = test.findtext('nodes').split(' ')
-				if len(CiTestObj.ue_ids) != len(CiTestObj.nodes):
-					logging.error('Number of Nodes are not equal to the total number of UEs')
-					sys.exit("Mismatch in number of Nodes and UIs")
-			else:
-				CiTestObj.nodes = [None] * len(CiTestObj.ue_ids)
 		ping_rttavg_threshold = test.findtext('ping_rttavg_threshold') or ''
-		success = CiTestObj.Ping(ctx, HTML)
+		success = CiTestObj.Ping(ctx, node, HTML)
 
 	elif action == 'Iperf' or action == 'Iperf2_Unidir':
 		CiTestObj.iperf_args = test.findtext('iperf_args')
 		CiTestObj.ue_ids = test.findtext('id').split(' ')
-		CiTestObj.svr_id = test.findtext('svr_id') or None
-		if force_local:
-			# Change all execution targets to localhost
-			CiTestObj.nodes = ['localhost'] * len(CiTestObj.ue_ids)
-		else:
-			if test.findtext('nodes'):
-				CiTestObj.nodes = test.findtext('nodes').split(' ')
-				if len(CiTestObj.ue_ids) != len(CiTestObj.nodes):
-					logging.error('Number of Nodes are not equal to the total number of UEs')
-					sys.exit("Mismatch in number of Nodes and UIs")
-			else:
-				CiTestObj.nodes = [None] * len(CiTestObj.ue_ids)
+		CiTestObj.svr_id = test.findtext('svr_id')
 		if test.findtext('svr_node'):
 			CiTestObj.svr_node = test.findtext('svr_node') if not force_local else 'localhost'
 		CiTestObj.iperf_packetloss_threshold = test.findtext('iperf_packetloss_threshold')
@@ -229,14 +185,10 @@ def ExecuteActionWithParam(action, ctx):
 		if CiTestObj.iperf_profile != 'balanced' and CiTestObj.iperf_profile != 'unbalanced' and CiTestObj.iperf_profile != 'single-ue':
 			logging.error(f'test-case has wrong profile {CiTestObj.iperf_profile}, forcing balanced')
 			CiTestObj.iperf_profile = 'balanced'
-		CiTestObj.iperf_options = test.findtext('iperf_options') or 'check'
-		if CiTestObj.iperf_options != 'check' and CiTestObj.iperf_options != 'sink':
-			logging.error('test-case has wrong option ' + CiTestObj.iperf_options)
-			CiTestObj.iperf_options = 'check'
 		if action == 'Iperf':
-			success = CiTestObj.Iperf(ctx, HTML)
+			success = CiTestObj.Iperf(ctx, node, HTML)
 		elif action == 'Iperf2_Unidir':
-			success = CiTestObj.Iperf2_Unidir(ctx, HTML)
+			success = CiTestObj.Iperf2_Unidir(ctx, node, HTML)
 
 	elif action == 'IdleSleep':
 		st = test.findtext('idle_sleep_time_in_sec') or "5"
@@ -244,7 +196,6 @@ def ExecuteActionWithParam(action, ctx):
 
 	elif action == 'Deploy_Run_OC_PhySim':
 		oc_release = test.findtext('oc_release')
-		node = test.findtext('node') or None
 		script = "scripts/oc-deploy-physims.sh"
 		image_tag = cls_containerize.CreateTag(CLUSTER.ranCommitID, CLUSTER.ranBranch, CLUSTER.ranAllowMerge)
 		options = f"oaicicd-core-for-ci-ran {oc_release} {image_tag} {CLUSTER.eNBSourceCodePath}"
@@ -252,7 +203,6 @@ def ExecuteActionWithParam(action, ctx):
 		success = cls_oaicitest.Deploy_Physim(ctx, HTML, node, workdir, script, options)
 
 	elif action == 'Build_Deploy_Docker_PhySim' or action == 'Build_Deploy_Source_PhySim':
-		node = test.findtext('node') or None
 		ctest_opt = test.findtext('ctest-opt') or ''
 		script = "scripts/docker-build-and-deploy-physims.sh" if action == 'Build_Deploy_Docker_PhySim' else 'scripts/source-deploy-physims.sh'
 		options = f"{CONTAINERS.eNBSourceCodePath} {ctest_opt}"
@@ -264,8 +214,7 @@ def ExecuteActionWithParam(action, ctx):
 		core_op = getattr(cls_oaicitest.OaiCiTest, action)
 		success = core_op(cn_id, ctx, HTML)
 
-	elif action == 'Deploy_Object' or action == 'Undeploy_Object' or action == "Create_Workspace":
-		node = test.findtext('node')
+	elif action == 'Deploy_Object' or action == 'Undeploy_Object' or action == "Create_Workspace" or action == "Stop_Object":
 		CONTAINERS.yamlPath = test.findtext('yaml_path')
 		string_field=test.findtext('d_retx_th')
 		if (string_field is not None):
@@ -278,6 +227,8 @@ def ExecuteActionWithParam(action, ctx):
 		CONTAINERS.deploymentTag = cls_containerize.CreateTag(CONTAINERS.ranCommitID, CONTAINERS.ranBranch, CONTAINERS.ranAllowMerge)
 		if action == 'Deploy_Object':
 			success = CONTAINERS.DeployObject(ctx, node, HTML)
+		elif action == 'Stop_Object':
+			success = CONTAINERS.StopObject(ctx, node, HTML)
 		elif action == 'Undeploy_Object':
 			success = CONTAINERS.UndeployObject(ctx, node, HTML, RAN)
 		elif action == 'Create_Workspace':
@@ -287,15 +238,12 @@ def ExecuteActionWithParam(action, ctx):
 			success = CONTAINERS.Create_Workspace(node, HTML)
 
 	elif action == 'LicenceAndFormattingCheck':
-		node = test.findtext('node')
 		success = SCA.LicenceAndFormattingCheck(ctx, node, HTML)
 
 	elif action == 'Cppcheck_Analysis':
-		node = test.findtext('node')
 		success = SCA.CppCheckAnalysis(ctx, node, HTML)
 
 	elif action == 'Push_Local_Registry':
-		node = test.findtext('node')
 		tag_prefix = test.findtext('tag_prefix') or ""
 		success = CONTAINERS.Push_Image_to_Local_Registry(node, HTML, tag_prefix)
 
@@ -303,7 +251,6 @@ def ExecuteActionWithParam(action, ctx):
 		if force_local:
 			# Do not pull or remove images when running locally. User is supposed to handle image creation & cleanup
 			return True
-		node = test.findtext('node')
 		tag_prefix = test.findtext('tag_prefix') or ""
 		images = test.findtext('images').split()
 		# hack: for FlexRIC, we need to overwrite the tag to use
@@ -316,22 +263,21 @@ def ExecuteActionWithParam(action, ctx):
 			success = CONTAINERS.Clean_Test_Server_Images(HTML, node, images, tag=tag)
 
 	elif action == 'Custom_Command':
-		node = test.findtext('node')
-		if force_local:
-			# Change all execution targets to localhost
-			node = 'localhost'
 		command = test.findtext('command')
+		# Allow referencing repository workspace path in XML via %%workspace%%
+		command = command.replace("%%workspace%%", CONTAINERS.eNBSourceCodePath)
 		success = cls_oaicitest.Custom_Command(HTML, node, command)
 
 	elif action == 'Custom_Script':
-		node = test.findtext('node')
 		script = test.findtext('script')
-		success = cls_oaicitest.Custom_Script(HTML, node, script)
+		args = test.findtext('args')
+		# Allow referencing repository workspace path in XML via %%workspace%%
+		script = script.replace("%%workspace%%", CONTAINERS.eNBSourceCodePath)
+		success = cls_oaicitest.Custom_Script(HTML, node, script, args)
 
 	elif action == 'Pull_Cluster_Image':
 		tag_prefix = test.findtext('tag_prefix') or ""
 		images = test.findtext('images').split()
-		node = test.findtext('node')
 		success = CLUSTER.PullClusterImage(HTML, node, images, tag_prefix=tag_prefix)
 
 	else:
@@ -349,8 +295,16 @@ def test_in_list(test, list):
 			return True
 	return False
 
+test_runner_abort = False
 def receive_signal(signum, frame):
-	sys.exit(1)
+    global test_runner_abort
+    if not test_runner_abort:
+        logging.warning("received signal, canceling steps")
+        logging.info("send signal again to exit immediately")
+        test_runner_abort = True
+    else:
+        logging.warning("received signal again, exiting")
+        sys.exit(1)
 
 def ShowTestID(ctx, desc):
     logging.info(f'\u001B[1m----------------------------------------\u001B[0m')
@@ -395,16 +349,7 @@ CLUSTER = cls_cluster.Cluster()
 import args_parse
 # Force local execution, move all execution targets to localhost
 force_local = False
-py_param_file_present, py_params, mode, force_local = args_parse.ArgsParse(sys.argv,CiTestObj,RAN,HTML,CONTAINERS,HELP,SCA,CLUSTER)
-
-
-
-#-----------------------------------------------------------
-# TEMPORARY params management (UNUSED)
-#-----------------------------------------------------------
-#temporary solution for testing:
-if py_param_file_present == True:
-	AssignParams(py_params)
+mode, force_local = args_parse.ArgsParse(sys.argv,CiTestObj,RAN,HTML,CONTAINERS,HELP,SCA,CLUSTER)
 
 #-----------------------------------------------------------
 # mode amd XML class (action) analysis
@@ -550,7 +495,7 @@ elif re.match('^TesteNB$', mode, re.IGNORECASE) or re.match('^TestUE$', mode, re
 			#logging.info('test will be run: ' + test)
 			todo_tests.append(test)
 
-	signal.signal(signal.SIGUSR1, receive_signal)
+	signal.signal(signal.SIGINT, receive_signal)
 
 	HTML.CreateHtmlTabHeader()
 
@@ -560,6 +505,8 @@ elif re.match('^TesteNB$', mode, re.IGNORECASE) or re.match('^TestUE$', mode, re
 	i = 0
 	for test_case_id in todo_tests:
 		for test in all_tests:
+			if test_runner_abort:
+				task_set_succeeded = False
 			id = test.get('id')
 			if test_case_id != id:
 				continue
@@ -568,6 +515,7 @@ elif re.match('^TesteNB$', mode, re.IGNORECASE) or re.match('^TestUE$', mode, re
 			ctx = TestCaseCtx(i, int(id), logPath)
 			HTML.testCase_id=CiTestObj.testCase_id
 			desc = test.findtext('desc')
+			node = test.findtext('node') if not force_local else 'localhost'
 			always_exec = test.findtext('always_exec') in ['True', 'true', 'Yes', 'yes']
 			may_fail = test.findtext('may_fail') in ['True', 'true', 'Yes', 'yes']
 			HTML.desc = desc
@@ -582,7 +530,7 @@ elif re.match('^TesteNB$', mode, re.IGNORECASE) or re.match('^TestUE$', mode, re
 				HTML.CreateHtmlTestRowQueue(msg, "SKIP", [])
 				break
 			try:
-				test_succeeded = ExecuteActionWithParam(action, ctx)
+				test_succeeded = ExecuteActionWithParam(action, ctx, node)
 				if not test_succeeded and may_fail:
 					logging.warning(f"test ID {test_case_id} action {action} may or may not fail, proceeding despite error")
 				elif not test_succeeded:

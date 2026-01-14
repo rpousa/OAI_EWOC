@@ -110,6 +110,8 @@ RUN ldconfig && \
         /usr/local/lib/libnvipc.so
 
 WORKDIR /opt/oai-gnb
+
+COPY --from=ran-build /usr/local/bin/yq /usr/local/bin/yq
 COPY --from=ran-build /tini /tini
 ENTRYPOINT ["/tini", "-v", "--", "/opt/oai-gnb/bin/entrypoint.sh"]
 CMD ["/opt/oai-gnb/bin/nr-softmodem"]

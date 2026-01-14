@@ -145,8 +145,14 @@ int pnf_nr_p7_message_pump(pnf_p7_t* pnf_p7);
 int pnf_p7_pack_and_send_p7_message(pnf_p7_t* pnf_p7, nfapi_p7_message_header_t* msg, uint32_t msg_len);
 int pnf_p7_send_message(pnf_p7_t* pnf_p7, uint8_t* msg, uint32_t msg_len);
 
-
-int pnf_p7_slot_ind(pnf_p7_t* config, uint16_t phy_id, uint16_t sfn, uint16_t slot);
+int nr_pnf_p7_get_msgs(pnf_p7_t* pnf_p7,
+                       uint16_t phy_id,
+                       uint16_t sfn,
+                       uint16_t slot,
+                       nfapi_nr_dl_tti_request_t* ret_dl_tti,
+                       nfapi_nr_ul_tti_request_t* ret_ul_tti,
+                       nfapi_nr_ul_dci_request_t* ret_ul_dci,
+                       nfapi_nr_tx_data_request_t* ret_tx_data);
 int pnf_p7_subframe_ind(pnf_p7_t* config, uint16_t phy_id, uint16_t sfn_sf);
 int nfapi_pnf_p7_nr_slot_ind(nfapi_pnf_p7_config_t* config, nfapi_nr_slot_indication_scf_t* ind);
 int nfapi_pnf_p7_nr_rx_data_ind(nfapi_pnf_p7_config_t* config, nfapi_nr_rx_data_indication_t* ind);

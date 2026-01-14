@@ -125,8 +125,8 @@ static void e1_task_handle_sctp_data_ind(instance_t instance, sctp_data_ind_t *s
 int e1ap_send_RESET(bool isCu, sctp_assoc_t assoc_id, E1AP_Reset_t *Reset)
 {
   AssertFatal(false, "Not implemented yet\n");
-  E1AP_E1AP_PDU_t pdu = {0};
-  return e1ap_encode_send(isCu, assoc_id, &pdu, 0, __func__);
+  E1AP_E1AP_PDU_t *pdu = calloc_or_fail(1, sizeof(*pdu));
+  return e1ap_encode_send(isCu, assoc_id, pdu, 0, __func__);
 }
 
 int e1ap_send_RESET_ACKNOWLEDGE(instance_t instance, E1AP_Reset_t *Reset)
@@ -304,9 +304,9 @@ static void fill_CONFIGURATION_UPDATE(E1AP_E1AP_PDU_t *pdu)
 
 void e1apCUUP_send_CONFIGURATION_UPDATE(sctp_assoc_t assoc_id)
 {
-  E1AP_E1AP_PDU_t pdu = {0};
-  fill_CONFIGURATION_UPDATE(&pdu);
-  e1ap_encode_send(UPtype, assoc_id, &pdu, 0, __func__);
+  E1AP_E1AP_PDU_t *pdu = calloc_or_fail(1, sizeof(*pdu));
+  fill_CONFIGURATION_UPDATE(pdu);
+  e1ap_encode_send(UPtype, assoc_id, pdu, 0, __func__);
 }
 
 int e1apCUCP_send_gNB_DU_CONFIGURATION_FAILURE(void)

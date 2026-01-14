@@ -73,6 +73,7 @@ void nr_ue_decode_BCCH_DL_SCH(NR_UE_MAC_INST_t *mac,
                               uint8_t ack_nack,
                               uint8_t *pduP,
                               uint32_t pdu_len,
+                              int hfn,
                               int frame,
                               int slot);
 
@@ -82,15 +83,17 @@ void nr_release_mac_config_logicalChannelBearer(NR_UE_MAC_INST_t *mac, long chan
 
 void nr_rrc_mac_config_req_cg(module_id_t module_id,
                               int cc_idP,
+                              int hfn,
+                              int frame,
                               NR_CellGroupConfig_t *cell_group_config,
                               NR_UE_NR_Capability_t *ue_Capability);
 
-void nr_rrc_mac_config_req_mib(module_id_t module_id, int cc_idP, NR_MIB_t *mibP, int sched_sib1, bool barred);
-
+void nr_rrc_mac_config_req_mib(module_id_t module_id, int cc_idP, NR_MIB_t *mibP, bool barred);
+void nr_rrc_mac_sched_sib(module_id_t module_id, int sched_sib);
 void nr_rrc_mac_config_req_sib1(module_id_t module_id, int cc_idP, NR_SIB1_t *sib1, bool can_start_ra);
 
 struct position; /* forward declaration */
-void nr_rrc_mac_config_other_sib(module_id_t module_id, NR_SIB19_r17_t *sib19_r17, bool can_start_ra);
+void nr_rrc_mac_config_other_sib(module_id_t module_id, NR_SIB19_r17_t *sib19_r17, int hfn, int frame, bool can_start_ra);
 void nr_rrc_mac_resume_rb(module_id_t module_id, bool is_srb, int rb_id);
 void nr_rrc_mac_config_req_reset(module_id_t module_id, NR_UE_MAC_reset_cause_t cause);
 
@@ -252,7 +255,7 @@ void nr_get_RA_window(NR_UE_MAC_INST_t *mac);
 void prepare_msg4_msgb_feedback(NR_UE_MAC_INST_t *mac, int pid, int ack_nack);
 void configure_initial_pucch(PUCCH_sched_t *pucch, int res_ind);
 void release_PUCCH_SRS(NR_UE_MAC_INST_t *mac);
-void nr_ue_reset_sync_state(NR_UE_MAC_INST_t *mac);
+void nr_ue_reset_sync_state(NR_UE_MAC_INST_t *mac, bool reconf);
 void nr_ue_send_synch_request(NR_UE_MAC_INST_t *mac, module_id_t module_id, int cc_id, const fapi_nr_synch_request_t *sync_req);
 bool is_ss_monitor_occasion(const int frame, const int slot, const int slots_per_frame, const NR_SearchSpace_t *ss);
 
@@ -360,5 +363,5 @@ int sl_nr_ue_slot_select(const sl_nr_phy_config_request_t *cfg, int nr_slot, uin
 void nr_ue_sidelink_scheduler(nr_sidelink_indication_t *sl_ind, NR_UE_MAC_INST_t *mac);
 
 NR_SearchSpace_t *get_common_search_space(const NR_UE_MAC_INST_t *mac, const NR_SearchSpaceId_t ss_id);
-
+ssb_ro_preambles_t get_ssb_ro_preambles_4step(struct NR_RACH_ConfigCommon__ssb_perRACH_OccasionAndCB_PreamblesPerSSB *config);
 #endif

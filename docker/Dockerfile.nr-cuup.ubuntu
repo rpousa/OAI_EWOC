@@ -42,7 +42,8 @@ RUN apt-get update && \
         libconfig9 \
         iproute2 \
         net-tools \
-        openssl && \
+        openssl \
+        libyaml-cpp-dev && \
 # if the --sanitize option was used to build, additional packages are required
     /bin/bash -c 'if [[ "$BUILD_OPTION" = "--sanitize" ]]; then DEBIAN_FRONTEND=noninteractive apt-get install --yes \
         libasan8 \ 
@@ -61,6 +62,7 @@ COPY ./docker/scripts/gnb_entrypoint.sh ./entrypoint.sh
 COPY --from=gnb-build \
     /oai-ran/cmake_targets/ran_build/build/libparams_libconfig.so \
     /oai-ran/cmake_targets/ran_build/build/libtelnetsrv.so \
+    /oai-ran/cmake_targets/ran_build/build/libparams_yaml.so \
     /usr/local/lib/
 
 RUN ldconfig && ldd /opt/oai-gnb/bin/nr-cuup
@@ -69,6 +71,8 @@ RUN ldconfig && ldd /opt/oai-gnb/bin/nr-cuup
 WORKDIR /opt/oai-gnb/etc
 
 WORKDIR /opt/oai-gnb
+
+COPY --from=gnb-base /usr/local/bin/yq /usr/local/bin/yq
 COPY --from=gnb-base /tini /tini
 ENTRYPOINT ["/tini", "-v", "--", "/opt/oai-gnb/bin/entrypoint.sh"]
 CMD ["/opt/oai-gnb/bin/nr-cuup", "-O", "/opt/oai-gnb/etc/gnb.conf"]

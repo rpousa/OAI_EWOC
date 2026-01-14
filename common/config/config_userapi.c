@@ -71,7 +71,7 @@ int config_get_processedint(configmodule_interface_t *cfg, paramdef_t *cfgoption
 
   return ret;
 }
-void config_printhelp(paramdef_t *params,int numparams, char *prefix) {
+void config_printhelp(paramdef_t *params,int numparams, const char *prefix) {
   printf("\n-----Help for section %-26s: %03i entries------\n",(prefix==NULL)?"(root section)":prefix,numparams);
 
   for (int i=0 ; i<numparams ; i++) {
@@ -84,7 +84,7 @@ void config_printhelp(paramdef_t *params,int numparams, char *prefix) {
   printf("--------------------------------------------------------------------\n\n");
 }
 
-int config_execcheck(configmodule_interface_t *cfg, paramdef_t *params, int numparams, char *prefix)
+int config_execcheck(configmodule_interface_t *cfg, paramdef_t *params, int numparams, const char *prefix)
 {
   int st=0;
 
@@ -105,7 +105,7 @@ int config_execcheck(configmodule_interface_t *cfg, paramdef_t *params, int nump
   return st;
 }
 
-int config_paramidx_fromname(paramdef_t *params, int numparams, char *name) {
+int config_paramidx_fromname(paramdef_t *params, int numparams, const char *name) {
   for (int i=0; i<numparams ; i++) {
     if (strcmp(name,params[i].optname) == 0)
       return i;
@@ -115,7 +115,7 @@ int config_paramidx_fromname(paramdef_t *params, int numparams, char *name) {
   return -1;
 }
 
-int config_get(configmodule_interface_t *cfgif, paramdef_t *params, int numparams, char *prefix)
+int config_get(configmodule_interface_t *cfgif, paramdef_t *params, int numparams, const char *prefix)
 {
   int ret= -1;
 

@@ -19,11 +19,11 @@
  *      contact@openairinterface.org
  */
 
+#include "PHY/defs_nr_common.h"
 #define _GNU_SOURCE // For pthread_setname_np
 #include <pthread.h>
 #include <openair1/PHY/impl_defs_top.h>
 #include "executables/nr-uesoftmodem.h"
-#include "PHY/phy_extern_nr_ue.h"
 #include "PHY/INIT/nr_phy_init.h"
 #include "NR_MAC_UE/mac_proto.h"
 #include "RRC/NR_UE/rrc_proto.h"
@@ -31,13 +31,10 @@
 #include "SCHED_NR_UE/defs.h"
 #include "PHY/NR_UE_TRANSPORT/nr_transport_proto_ue.h"
 #include "executables/softmodem-common.h"
-#include "PHY/NR_REFSIG/refsig_defs_ue.h"
 #include "radio/COMMON/common_lib.h"
 #include "LAYER2/nr_pdcp/nr_pdcp_oai_api.h"
 #include "LAYER2/nr_rlc/nr_rlc_oai_api.h"
-#include "RRC/NR/MESSAGES/asn1_msg.h"
 #include "openair1/PHY/TOOLS/phy_scope_interface.h"
-#include "PHY/MODULATION/nr_modulation.h"
 #include "instrumentation.h"
 #include "common/utils/threadPool/notified_fifo.h"
 #include "position_interface.h"
@@ -101,8 +98,6 @@
  * By example, for LTE, subframe processing is spread over 4 different threads.
  *
  */
-
-static void *NRUE_phy_stub_standalone_pnf_task(void *arg);
 
 static void start_process_slot_tx(void* arg) {
   notifiedFIFO_elt_t *newTx = arg;
@@ -181,8 +176,7 @@ void init_nr_ue_vars(PHY_VARS_NR_UE *ue, uint8_t UE_id)
   ue->dci_thres   = 0;
   ue->target_Nid_cell = -1;
 
-  ue->ntn_config_message = CALLOC(1, sizeof(*ue->ntn_config_message));
-  ue->ntn_config_message->update = false;
+  ue->nrUE_config.ntn_config.params_changed = false;
 
   // initialize all signal buffers
   init_nr_ue_signal(ue, nb_connected_gNB);
@@ -193,189 +187,6 @@ void init_nr_ue_vars(PHY_VARS_NR_UE *ue, uint8_t UE_id)
   ue->ta_frame = -1;
   ue->ta_slot = -1;
 }
-
-void init_nrUE_standalone_thread(int ue_idx)
-{
-  int standalone_tx_port = 3611 + ue_idx * 2;
-  int standalone_rx_port = 3612 + ue_idx * 2;
-  nrue_init_standalone_socket(standalone_tx_port, standalone_rx_port);
-
-  NR_UE_MAC_INST_t *mac = get_mac_inst(0);
-  pthread_mutex_init(&mac->mutex_dl_info, NULL);
-
-  pthread_t thread;
-  if (pthread_create(&thread, NULL, nrue_standalone_pnf_task, NULL) != 0) {
-    LOG_E(NR_MAC, "pthread_create failed for calling nrue_standalone_pnf_task");
-  }
-  pthread_setname_np(thread, "oai:nrue-stand");
-  pthread_t phy_thread;
-  if (pthread_create(&phy_thread, NULL, NRUE_phy_stub_standalone_pnf_task, NULL) != 0) {
-    LOG_E(NR_MAC, "pthread_create failed for calling NRUE_phy_stub_standalone_pnf_task");
-  }
-  pthread_setname_np(phy_thread, "oai:nrue-stand-phy");
-}
-
-static void process_queued_nr_nfapi_msgs(NR_UE_MAC_INST_t *mac, int sfn, int slot)
-{
-  struct sfn_slot_s sfn_slot = {.sfn = sfn, .slot = slot};
-  nfapi_nr_rach_indication_t *rach_ind = unqueue_matching(&nr_rach_ind_queue, MAX_QUEUE_SIZE, sfn_slot_matcher, &sfn_slot);
-  nfapi_nr_dl_tti_request_t *dl_tti_request = get_queue(&nr_dl_tti_req_queue);
-  nfapi_nr_ul_dci_request_t *ul_dci_request = get_queue(&nr_ul_dci_req_queue);
-
-  for (int i = 0; i < NR_MAX_HARQ_PROCESSES; i++) {
-    LOG_D(NR_MAC,
-          "Try to get a ul_tti_req by matching CRC active sfn/slot %d.%d from queue with %lu items\n",
-          sfn,
-          slot,
-          nr_ul_tti_req_queue.num_items);
-    struct sfn_slot_s sfn_sf = {.sfn = mac->nr_ue_emul_l1.harq[i].active_ul_harq_sfn, .slot = mac->nr_ue_emul_l1.harq[i].active_ul_harq_slot };
-    nfapi_nr_ul_tti_request_t *ul_tti_request_crc = unqueue_matching(&nr_ul_tti_req_queue, MAX_QUEUE_SIZE, sfn_slot_matcher, &sfn_sf);
-    if (ul_tti_request_crc && ul_tti_request_crc->n_pdus > 0) {
-      check_and_process_dci(NULL, NULL, NULL, ul_tti_request_crc);
-      free_and_zero(ul_tti_request_crc);
-    }
-  }
-
-  if (rach_ind && rach_ind->number_of_pdus > 0) {
-      NR_UL_IND_t UL_INFO = {
-        .rach_ind = *rach_ind,
-      };
-      send_nsa_standalone_msg(&UL_INFO, rach_ind->header.message_id);
-      free_and_zero(rach_ind->pdu_list);
-      free_and_zero(rach_ind);
-  }
-  if (dl_tti_request) {
-    struct sfn_slot_s sfn_slot = {.sfn = dl_tti_request->SFN, .slot = dl_tti_request->Slot};
-    nfapi_nr_tx_data_request_t *tx_data_request = unqueue_matching(&nr_tx_req_queue, MAX_QUEUE_SIZE, sfn_slot_matcher, &sfn_slot);
-    if (!tx_data_request) {
-      LOG_E(NR_MAC, "[%d.%d] No corresponding tx_data_request for given dl_tti_request sfn/slot\n",
-            dl_tti_request->SFN, dl_tti_request->Slot);
-      if (get_softmodem_params()->nsa)
-        save_nr_measurement_info(dl_tti_request);
-      free_and_zero(dl_tti_request);
-    }
-    else if (dl_tti_request->dl_tti_request_body.nPDUs > 0 && tx_data_request->Number_of_PDUs > 0) {
-      if (get_softmodem_params()->nsa)
-        save_nr_measurement_info(dl_tti_request);
-      check_and_process_dci(dl_tti_request, tx_data_request, NULL, NULL);
-      free_and_zero(dl_tti_request);
-      free_and_zero(tx_data_request);
-    }
-    else {
-      AssertFatal(false, "We dont have PDUs in either dl_tti %d or tx_req %d\n",
-                  dl_tti_request->dl_tti_request_body.nPDUs, tx_data_request->Number_of_PDUs);
-    }
-  }
-  if (ul_dci_request && ul_dci_request->numPdus > 0) {
-    check_and_process_dci(NULL, NULL, ul_dci_request, NULL);
-    free_and_zero(ul_dci_request);
-  }
-}
-
-static void *NRUE_phy_stub_standalone_pnf_task(void *arg)
-{
-  LOG_I(MAC, "Clearing Queues\n");
-  reset_queue(&nr_rach_ind_queue);
-  reset_queue(&nr_rx_ind_queue);
-  reset_queue(&nr_crc_ind_queue);
-  reset_queue(&nr_uci_ind_queue);
-  reset_queue(&nr_dl_tti_req_queue);
-  reset_queue(&nr_tx_req_queue);
-  reset_queue(&nr_ul_dci_req_queue);
-  reset_queue(&nr_ul_tti_req_queue);
-
-  int last_sfn_slot = -1;
-  uint16_t sfn_slot = 0;
-
-  module_id_t mod_id = 0;
-  NR_UE_MAC_INST_t *mac = get_mac_inst(mod_id);
-  for (int i = 0; i < NR_MAX_HARQ_PROCESSES; i++) {
-      mac->nr_ue_emul_l1.harq[i].active = false;
-      mac->nr_ue_emul_l1.harq[i].active_ul_harq_sfn = -1;
-      mac->nr_ue_emul_l1.harq[i].active_ul_harq_slot = -1;
-  }
-
-  while (!oai_exit) {
-    if (sem_wait(&sfn_slot_semaphore) != 0) {
-      LOG_E(NR_MAC, "sem_wait() error\n");
-      abort();
-    }
-    uint16_t *slot_ind = get_queue(&nr_sfn_slot_queue);
-    nr_phy_channel_params_t *ch_info = get_queue(&nr_chan_param_queue);
-    if (!slot_ind && !ch_info) {
-      LOG_D(MAC, "get nr_sfn_slot_queue and nr_chan_param_queue == NULL!\n");
-      continue;
-    }
-    if (slot_ind) {
-      sfn_slot = *slot_ind;
-      free_and_zero(slot_ind);
-    }
-    else if (ch_info) {
-      sfn_slot = ch_info->sfn_slot;
-      free_and_zero(ch_info);
-    }
-
-    int mu = 1; // NR-UE emul-L1 is hardcoded to 30kHZ, see check_and_process_dci()
-    frame_t frame = NFAPI_SFNSLOTDEC2SFN(mu, sfn_slot);
-    int slot = NFAPI_SFNSLOTDEC2SLOT(mu, sfn_slot);
-    if (sfn_slot == last_sfn_slot) {
-      LOG_D(NR_MAC, "repeated sfn_sf = %d.%d\n",
-            frame, slot);
-      continue;
-    }
-    last_sfn_slot = sfn_slot;
-
-    LOG_D(NR_MAC, "The received sfn/slot [%d %d] from proxy\n",
-          frame, slot);
-
-    if (IS_SA_MODE(get_softmodem_params()) && mac->mib == NULL) {
-      LOG_D(NR_MAC, "We haven't gotten MIB. Lets see if we received it\n");
-      nr_ue_dl_indication(&mac->dl_info);
-      process_queued_nr_nfapi_msgs(mac, frame, slot);
-    }
-
-    int CC_id = 0;
-    uint8_t gNB_id = 0;
-    int slots_per_frame = 20; //30 kHZ subcarrier spacing
-    int slot_ahead = 2; // TODO: Make this dynamic
-    nr_uplink_indication_t ul_info = {.cc_id = CC_id,
-                                      .gNB_index = gNB_id,
-                                      .module_id = mod_id,
-                                      .slot = (slot + slot_ahead) % slots_per_frame,
-                                      .frame = (slot + slot_ahead >= slots_per_frame) ? (frame + 1) % 1024 : frame};
-
-    if (pthread_mutex_lock(&mac->mutex_dl_info)) abort();
-
-    if (ch_info) {
-      mac->nr_ue_emul_l1.pmi = ch_info->csi[0].pmi;
-      mac->nr_ue_emul_l1.ri = ch_info->csi[0].ri;
-      mac->nr_ue_emul_l1.cqi = ch_info->csi[0].cqi;
-      free_and_zero(ch_info);
-    }
-
-    if (is_dl_slot(slot, &mac->frame_structure)) {
-      memset(&mac->dl_info, 0, sizeof(mac->dl_info));
-      mac->dl_info.cc_id = CC_id;
-      mac->dl_info.gNB_index = gNB_id;
-      mac->dl_info.module_id = mod_id;
-      mac->dl_info.frame = frame;
-      mac->dl_info.slot = slot;
-      mac->dl_info.dci_ind = NULL;
-      mac->dl_info.rx_ind = NULL;
-      nr_ue_dl_indication(&mac->dl_info);
-    }
-
-    if (pthread_mutex_unlock(&mac->mutex_dl_info)) abort();
-
-    if (is_ul_slot(ul_info.slot, &mac->frame_structure)) {
-      LOG_D(NR_MAC, "Slot %d. calling nr_ue_ul_ind()\n", ul_info.slot);
-      nr_ue_ul_scheduler(mac, &ul_info);
-    }
-    process_queued_nr_nfapi_msgs(mac, frame, slot);
-  }
-  return NULL;
-}
-
 
 /*!
  * It performs band scanning and synchonization.
@@ -445,7 +256,7 @@ static void UE_synch(void *arg) {
         + round((float)((ret.rx_offset << 1) % fp->samples_per_subframe) / fp->samples_per_slot0);
 
     if (get_nrUE_params()->cont_fo_comp) {
-      UE->freq_offset = freq_offset;
+      UE->freq_offset = freq_offset - UE->dl_Doppler_shift;
     } else {
       // rerun with new cell parameters and frequency-offset
       nr_rf_card_config_freq(cfg0, ul_carrier, dl_carrier, freq_offset);
@@ -571,7 +382,7 @@ static void RU_write(nr_rxtx_thread_data_t *rxtxD, bool sl_tx_action, c16_t **tx
   openair0_timestamp writeTimestamp = proc->timestamp_tx;
   int writeBlockSize = rxtxD->writeBlockSize;
   // if writeBlockSize gets longer that slot size, fill with dummy
-  const int maxWriteBlockSize = fp->get_samples_per_slot(proc->nr_slot_tx, fp);
+  const int maxWriteBlockSize = get_samples_per_slot(proc->nr_slot_tx, fp);
   while (writeBlockSize > maxWriteBlockSize) {
     const int dummyBlockSize = min(writeBlockSize - maxWriteBlockSize, maxWriteBlockSize);
     int tmp = openair0_write_reorder(&UE->rfdevice, writeTimestamp, (void **)txp, dummyBlockSize, fp->nb_antennas_tx, flags);
@@ -586,8 +397,15 @@ static void RU_write(nr_rxtx_thread_data_t *rxtxD, bool sl_tx_action, c16_t **tx
     double ul_freq_offset = -UE->freq_offset * ((double)fp->ul_CarrierFreq / (double)fp->dl_CarrierFreq);
     if (get_nrUE_params()->cont_fo_comp == 2) // different from LO frequency error compensation, Doppler UL pre-compensation has to be negative
       ul_freq_offset = -ul_freq_offset;
+    else if (get_nrUE_params()->cont_fo_comp == 3) // do not consider residual DL FO for UL pre-compensation at all
+      ul_freq_offset = 0;
     for (int i = 0; i < fp->nb_antennas_tx; i++)
-      nr_fo_compensation(ul_freq_offset, fp->samples_per_subframe, writeTimestamp, txp[i], txp[i], writeBlockSize);
+      nr_fo_compensation(UE->ul_Doppler_shift + ul_freq_offset,
+                         fp->samples_per_subframe,
+                         writeTimestamp,
+                         txp[i],
+                         txp[i],
+                         writeBlockSize);
   }
 
   int tmp = openair0_write_reorder(&UE->rfdevice, writeTimestamp, (void **)txp, writeBlockSize, fp->nb_antennas_tx, flags);
@@ -611,7 +429,7 @@ void processSlotTX(void *arg)
   NR_DL_FRAME_PARMS *fp = &UE->frame_parms;
   c16_t *txp[fp->nb_antennas_tx];
   for (int i = 0; i < fp->nb_antennas_tx; i++) {
-    txp[i] = UE->common_vars.txData[i] + fp->get_samples_slot_timestamp(proc->nr_slot_tx, fp, 0);
+    txp[i] = UE->common_vars.txData[i] + get_samples_slot_timestamp(fp, proc->nr_slot_tx);
   }
 
   if (proc->tx_slot_type == NR_UPLINK_SLOT || proc->tx_slot_type == NR_MIXED_SLOT) {
@@ -622,8 +440,10 @@ void processSlotTX(void *arg)
         nr_sidelink_indication_t sl_indication = {.module_id = UE->Mod_id,
                                                   .gNB_index = proc->gNB_id,
                                                   .cc_id = UE->CC_id,
+                                                  .hfn_tx = proc->hfn_tx,
                                                   .frame_tx = proc->frame_tx,
                                                   .slot_tx = proc->nr_slot_tx,
+                                                  .hfn_rx = proc->hfn_rx,
                                                   .frame_rx = proc->frame_rx,
                                                   .slot_rx = proc->nr_slot_rx,
                                                   .slot_type = SIDELINK_SLOT_TYPE_TX,
@@ -701,6 +521,12 @@ static int handle_sync_req_from_mac(PHY_VARS_NR_UE *UE)
       init_symbol_rotation(fp);
     }
 
+    // Apply Doppler based on NTN-Config for target cell
+    if (UE->nrUE_config.ntn_config.is_targetcell)
+      apply_ntn_timing_advance_and_doppler(UE, fp, -1);
+    // Apply NTN DL Doppler as initial FO
+    UE->initial_fo = UE->dl_Doppler_shift;
+
     /* Clearing UE harq while DL actors are active causes race condition.
         So we let the current execution to complete here.*/
     for (int i = 0; i < get_nrUE_params()->num_dl_actors; i++) {
@@ -752,7 +578,8 @@ static int UE_dl_preprocessing(PHY_VARS_NR_UE *UE,
       UE->if_inst->dl_indication(&dl_indication);
     }
 
-    sampleShift = pbch_pdcch_processing(UE, proc, phy_data);
+    sampleShift = pbch_processing(UE, proc, phy_data);
+    pdcch_processing(UE, proc, phy_data);
     if (phy_data->dlsch[0].active
         && (phy_data->dlsch[0].rnti_type == TYPE_C_RNTI_ || phy_data->dlsch[0].rnti_type == TYPE_RA_RNTI_)) {
       // indicate to tx thread to wait for DLSCH decoding
@@ -841,24 +668,25 @@ void readFrame(PHY_VARS_NR_UE *UE, openair0_timestamp *timestamp, int duration_r
   void *rxp[NB_ANTENNAS_RX];
   if (toTrash)
     for (int i = 0; i < fp->nb_antennas_rx; i++)
-      rxp[i] = malloc16(fp->get_samples_per_slot(0, fp) * 4);
+      rxp[i] = malloc16(get_samples_per_slot(0, fp) * 4);
 
   for (int x = 0; x < num_frames * NR_NUMBER_OF_SUBFRAMES_PER_FRAME; x++) { // two frames for initial sync
     for (int slot = 0; slot < fp->slots_per_subframe; slot++) {
       if (!toTrash)
         for (int i = 0; i < fp->nb_antennas_rx; i++)
-          rxp[i] = ((void *)&UE->common_vars.rxdata[i][0])
-                   + 4 * ((x * fp->samples_per_subframe) + fp->get_samples_slot_timestamp(slot, fp, 0));
+          rxp[i] =
+              ((void *)&UE->common_vars.rxdata[i][0]) + 4 * ((x * fp->samples_per_subframe) + get_samples_slot_timestamp(fp, slot));
 
-      int read_block_size = fp->get_samples_per_slot(slot, fp);
+      int read_block_size = get_samples_per_slot(slot, fp);
       int tmp = UE->rfdevice.trx_read_func(&UE->rfdevice, timestamp, rxp, read_block_size, fp->nb_antennas_rx);
       UEscopeCopy(UE, ueTimeDomainSamplesBeforeSync, rxp[0], sizeof(c16_t), 1, read_block_size, 0);
       AssertFatal(read_block_size == tmp, "");
 
       if (IS_SOFTMODEM_RFSIM) {
+        int ta = UE->timing_advance + UE->timing_advance_ntn;
         const openair0_timestamp writeTimestamp =
-            *timestamp + fp->get_samples_slot_timestamp(slot, fp, duration_rx_to_tx) - UE->N_TA_offset - UE->timing_advance;
-        dummyWrite(UE, writeTimestamp, fp->get_samples_per_slot(slot, fp));
+            *timestamp + get_samples_slot_duration(fp, slot, duration_rx_to_tx) - UE->N_TA_offset - ta;
+        dummyWrite(UE, writeTimestamp, get_samples_per_slot(slot, fp));
       }
     }
   }
@@ -879,12 +707,13 @@ static void syncInFrame(PHY_VARS_NR_UE *UE, openair0_timestamp *timestamp, int d
   int slot = 0;
   int size = rx_offset;
   while (size > 0) {
-    const int unitTransfer = min(fp->get_samples_per_slot(slot, fp), size);
+    const int unitTransfer = min(get_samples_per_slot(slot, fp), size);
     const int res = UE->rfdevice.trx_read_func(&UE->rfdevice, timestamp, (void **)UE->common_vars.rxdata, unitTransfer, fp->nb_antennas_rx);
     DevAssert(unitTransfer == res);
     if (IS_SOFTMODEM_RFSIM) {
+      int ta = UE->timing_advance + UE->timing_advance_ntn;
       const openair0_timestamp writeTimestamp =
-          *timestamp + fp->get_samples_slot_timestamp(slot, fp, duration_rx_to_tx) - UE->N_TA_offset - UE->timing_advance;
+          *timestamp + get_samples_slot_duration(fp, slot, duration_rx_to_tx) - UE->N_TA_offset - ta;
       dummyWrite(UE, writeTimestamp, unitTransfer);
     }
     slot = (slot + 1) % fp->slots_per_subframe;
@@ -893,71 +722,15 @@ static void syncInFrame(PHY_VARS_NR_UE *UE, openair0_timestamp *timestamp, int d
 }
 
 static inline int get_firstSymSamp(uint16_t slot, NR_DL_FRAME_PARMS *fp) {
-  if (fp->numerology_index == 0)
-    return fp->nb_prefix_samples0 + fp->ofdm_symbol_size;
-  int num_samples = (slot%(fp->slots_per_subframe/2)) ? fp->nb_prefix_samples : fp->nb_prefix_samples0;
-  num_samples += fp->ofdm_symbol_size;
-  return num_samples;
+  return get_samples_symbol_duration(fp, slot, 0, 1);
 }
 
 static inline int get_readBlockSize(uint16_t slot, NR_DL_FRAME_PARMS *fp) {
-  int rem_samples = fp->get_samples_per_slot(slot, fp) - get_firstSymSamp(slot, fp);
+  int rem_samples = get_samples_per_slot(slot, fp) - get_firstSymSamp(slot, fp);
   int next_slot_first_symbol = 0;
   if (slot < (fp->slots_per_frame-1))
     next_slot_first_symbol = get_firstSymSamp(slot+1, fp);
   return rem_samples + next_slot_first_symbol;
-}
-
-static inline void apply_ntn_config(PHY_VARS_NR_UE *UE,
-                                    NR_DL_FRAME_PARMS *fp,
-                                    int frame_rx,
-                                    int slot_rx,
-                                    int *duration_rx_to_tx,
-                                    int *timing_advance,
-                                    int *ntn_koffset)
-{
-  if (UE->ntn_config_message->update) {
-    UE->ntn_config_message->update = false;
-
-    const int mu = fp->numerology_index;
-    const int koffset = UE->ntn_config_message->ntn_config_params.cell_specific_k_offset;
-
-    *duration_rx_to_tx = NR_UE_CAPABILITY_SLOT_RX_TO_TX + (koffset << mu);
-    if (koffset > *ntn_koffset)
-      *timing_advance += fp->get_samples_slot_timestamp(slot_rx, fp, (koffset - *ntn_koffset) << mu);
-    else if (koffset < *ntn_koffset)
-      *timing_advance -= fp->get_samples_slot_timestamp(slot_rx, fp, (*ntn_koffset - koffset) << mu);
-    *ntn_koffset = koffset;
-
-    const int abs_subframe_tx = 10 * frame_rx + ((slot_rx + *duration_rx_to_tx) >> mu);
-    const int abs_subframe_epoch =
-        10 * UE->ntn_config_message->ntn_config_params.epoch_sfn + UE->ntn_config_message->ntn_config_params.epoch_subframe;
-    int ms_since_epoch = abs_subframe_tx - abs_subframe_epoch;
-    // cope with sfn wrap-around
-    //   this currently limits us to epoch times that are not more than 5.12 seconds in the future (allowed are up to 10.24 seconds)
-    //   and ntn-UlSyncValidityDuration < 5.12 seconds (allowed are up to 900 seconds)
-    //   TODO: fix this limitation by introducing the hyper frame number HFN
-    if (ms_since_epoch < -5120)
-      ms_since_epoch += 10240;
-    else if (ms_since_epoch > 5120)
-      ms_since_epoch -= 10240;
-
-    const double total_ta_ms = UE->ntn_config_message->ntn_config_params.ntn_total_time_advance_ms;
-    const double total_ta_drift = UE->ntn_config_message->ntn_config_params.ntn_total_time_advance_drift; // µs/s
-    const double total_ta_drift_variant = UE->ntn_config_message->ntn_config_params.ntn_total_time_advance_drift_variant; // µs/s²
-    UE->timing_advance = fp->samples_per_subframe * (total_ta_ms + (total_ta_drift / 1000.0) * (ms_since_epoch / 1000.0) + (total_ta_drift_variant / 1000.0) * (ms_since_epoch / 1000.0) * (ms_since_epoch / 1000.0));
-
-    LOG_I(PHY,
-          "k_offset = %d ms (%d slots), total_ta_ms = %f ms, total_ta_drift = %f µs/s, total_ta_drift_variant = %f µs/s², ms_since_epoch = %d ms, computed "
-          "timing_advance = %d samples\n",
-          *ntn_koffset,
-          *ntn_koffset << mu,
-          total_ta_ms,
-          total_ta_drift,
-          total_ta_drift_variant,
-          ms_since_epoch,
-          UE->timing_advance);
-  }
 }
 
 void *UE_thread(void *arg)
@@ -992,11 +765,17 @@ void *UE_thread(void *arg)
   notifiedFIFO_t freeBlocks;
   initNotifiedFIFO_nothreadSafe(&freeBlocks);
 
-  double ntn_init_time_drift = get_nrUE_params()->ntn_init_time_drift;
-  int ntn_koffset = 0;
+  const double ntn_init_time_drift = get_nrUE_params()->ntn_init_time_drift;
+  if (get_nrUE_params()->time_sync_I)
+    // ntn_init_time_drift is in µs/s, max_pos_acc * time_sync_I is in samples/frame
+    UE->max_pos_acc = ntn_init_time_drift * 1e-6 * fp->samples_per_frame / get_nrUE_params()->time_sync_I;
+  else
+    UE->max_pos_acc = 0;
 
+  bool ntn_targetcell = false;
+  int ntn_koffset = 0;
   int duration_rx_to_tx = NR_UE_CAPABILITY_SLOT_RX_TO_TX;
-  int timing_advance = UE->timing_advance;
+  int timing_advance = UE->timing_advance + UE->timing_advance_ntn;
   UE->N_TA_offset = determine_N_TA_offset(UE);
   NR_UE_MAC_INST_t *mac = get_mac_inst(UE->Mod_id);
 
@@ -1090,10 +869,6 @@ void *UE_thread(void *arg)
       syncMsg->UE = UE;
       memset(&syncMsg->proc, 0, sizeof(syncMsg->proc));
       pushNotifiedFIFO(&UE->sync_actor.fifo, Msg);
-      if (ntn_koffset == 0) { // reset timing_advance for TN
-        timing_advance = 0;
-        UE->timing_advance = 0;
-      }
       trashed_frames = 0;
       syncRunning = true;
       continue;
@@ -1103,13 +878,8 @@ void *UE_thread(void *arg)
       stream_status = STREAM_STATUS_SYNCING;
       syncInFrame(UE, &sync_timestamp, duration_rx_to_tx, intialSyncOffset);
       openair0_write_reorder_clear_context(&UE->rfdevice);
-      if (get_nrUE_params()->time_sync_I)
-        // ntn_init_time_drift is in µs/s, max_pos_acc * time_sync_I is in samples/frame
-        UE->max_pos_acc = ntn_init_time_drift * 1e-6 * fp->samples_per_frame / get_nrUE_params()->time_sync_I;
-      else
-        UE->max_pos_acc = 0;
       shiftForNextFrame = -(UE->init_sync_frame + trashed_frames + 2) * UE->max_pos_acc * get_nrUE_params()->time_sync_I; // compensate for the time drift that happened during initial sync
-      LOG_D(PHY, "max_pos_acc = %d, shiftForNextFrame = %d\n", UE->max_pos_acc, shiftForNextFrame);
+      LOG_I(PHY, "max_pos_acc = %d, shiftForNextFrame = %d\n", UE->max_pos_acc, shiftForNextFrame);
       // read in first symbol
       AssertFatal(fp->ofdm_symbol_size + fp->nb_prefix_samples0
                       == UE->rfdevice.trx_read_func(&UE->rfdevice,
@@ -1121,12 +891,35 @@ void *UE_thread(void *arg)
       // we have the decoded frame index in the return of the synch process
       // and we shifted above to the first slot of next frame
       decoded_frame_rx = (decoded_frame_rx + 1) % MAX_FRAME_NUMBER;
+      const int prev_frame_rx = (absolute_slot / nb_slot_frame) % MAX_FRAME_NUMBER;
+      const int prev_hfn_rx = (absolute_slot / nb_slot_frame) / MAX_FRAME_NUMBER;
+      int decoded_hfn_rx = prev_hfn_rx;
+      if (decoded_frame_rx <= prev_frame_rx)
+        decoded_hfn_rx++;
       // we do ++ first in the regular processing, so it will be begin of frame;
-      absolute_slot = decoded_frame_rx * nb_slot_frame - 1;
+      absolute_slot = (decoded_hfn_rx * MAX_FRAME_NUMBER + decoded_frame_rx) * nb_slot_frame - 1;
       if (UE->sl_mode == 2) {
         // Set to the slot where the SL-SSB was decoded
         absolute_slot += UE->SL_UE_PHY_PARAMS.sync_params.slot_offset;
       }
+      // With the correct frame and slot numbers, we can now fix the UL timing
+      fix_ntn_epoch_hfn(UE, decoded_hfn_rx, decoded_frame_rx);
+      if (UE->nrUE_config.ntn_config.params_changed) {
+        apply_ntn_config(UE,
+                         fp,
+                         decoded_hfn_rx,
+                         decoded_frame_rx,
+                         0,
+                         &duration_rx_to_tx,
+                         &timing_advance,
+                         &ntn_koffset,
+                         &ntn_targetcell);
+      } else {
+        const int abs_subframe_tx = (absolute_slot + 1 + duration_rx_to_tx) / fp->slots_per_subframe;
+        apply_ntn_timing_advance_and_doppler(UE, fp, abs_subframe_tx);
+        ntn_targetcell = false;
+      }
+      UE->timing_advance = 0;
       // We have resynchronized, maybe after RF loss so we need to purge any existing context
       memset(tx_wait_for_dlsch, 0, sizeof(tx_wait_for_dlsch));
       for (int i = 0; i < NUM_PROCESS_SLOT_TX_BARRIERS; i++) {
@@ -1155,6 +948,8 @@ void *UE_thread(void *arg)
     curMsg.proc.nr_slot_tx  = (absolute_slot + duration_rx_to_tx) % nb_slot_frame;
     curMsg.proc.frame_rx    = (absolute_slot / nb_slot_frame) % MAX_FRAME_NUMBER;
     curMsg.proc.frame_tx    = ((absolute_slot + duration_rx_to_tx) / nb_slot_frame) % MAX_FRAME_NUMBER;
+    curMsg.proc.hfn_rx      = (absolute_slot / nb_slot_frame) / MAX_FRAME_NUMBER;
+    curMsg.proc.hfn_tx      = ((absolute_slot + duration_rx_to_tx) / nb_slot_frame) / MAX_FRAME_NUMBER;
     if (UE->received_config_request) {
       if (UE->sl_mode) {
         curMsg.proc.rx_slot_type = sl_nr_ue_slot_select(sl_cfg, curMsg.proc.nr_slot_rx, TDD);
@@ -1171,16 +966,23 @@ void *UE_thread(void *arg)
 
     int firstSymSamp = get_firstSymSamp(slot_nr, fp);
     for (int i = 0; i < fp->nb_antennas_rx; i++)
-      rxp[i] = (void *)&UE->common_vars.rxdata[i][firstSymSamp + fp->get_samples_slot_timestamp(slot_nr, fp, 0)];
+      rxp[i] = (void *)&UE->common_vars.rxdata[i][firstSymSamp + get_samples_slot_timestamp(fp, slot_nr)];
 
     int iq_shift_to_apply = 0;
     if (slot_nr == nb_slot_frame - 1) {
       // we shift of half of measured drift, at each beginning of frame for both rx and tx
       iq_shift_to_apply = shiftForNextFrame;
-      // TODO: remove this autonomous TA and use up-to-date values of ta-Common, ta-CommonDrift and ta-CommonDriftVariant from received SIB19 instead
-      if (get_nrUE_params()->autonomous_ta)
-        UE->timing_advance -= 2 * shiftForNextFrame;
+      // autonomous timing advance calculation, which does not use SIB19 information
+      if (ntn_koffset && get_nrUE_params()->autonomous_ta)
+        UE->timing_advance_ntn -= 2 * shiftForNextFrame;
       shiftForNextFrame = -round(UE->max_pos_acc * get_nrUE_params()->time_sync_I);
+    }
+
+    // Calculate new TA based on SIB19 information for each subframe in NTN mode, if "autonomous_ta" is not enabled
+    if (ntn_koffset && !ntn_targetcell && !get_nrUE_params()->autonomous_ta
+        && (absolute_slot + duration_rx_to_tx) % fp->slots_per_subframe == 0) {
+      const int abs_subframe_tx = (absolute_slot + duration_rx_to_tx) / fp->slots_per_subframe;
+      apply_ntn_timing_advance_and_doppler(UE, fp, abs_subframe_tx);
     }
 
     const int readBlockSize = get_readBlockSize(slot_nr, fp) - iq_shift_to_apply;
@@ -1212,8 +1014,8 @@ void *UE_thread(void *arg)
     }
 
     // use previous timing_advance value to compute writeTimestamp
-    const openair0_timestamp writeTimestamp = rx_timestamp + fp->get_samples_slot_timestamp(slot_nr, fp, duration_rx_to_tx)
-                                              - firstSymSamp - UE->N_TA_offset - timing_advance;
+    const openair0_timestamp writeTimestamp =
+        rx_timestamp + get_samples_slot_duration(fp, slot_nr, duration_rx_to_tx) - firstSymSamp - UE->N_TA_offset - timing_advance;
 
     // Calculate TX deadline, approximately 1 symbol before the first sample should be written
     const uint64_t samples_diff = writeTimestamp - rx_timestamp - fp->ofdm_symbol_size;
@@ -1221,8 +1023,8 @@ void *UE_thread(void *arg)
     const uint64_t absolute_deadline_us = current_time.tv_sec * 1e6 + current_time.tv_nsec / 1e3 + deadline_us;
 
     // but use current UE->timing_advance value to compute writeBlockSize
-    int writeBlockSize = fp->get_samples_per_slot((slot_nr + duration_rx_to_tx) % nb_slot_frame, fp) - iq_shift_to_apply;
-    int new_timing_advance = UE->timing_advance;
+    int writeBlockSize = get_samples_per_slot((slot_nr + duration_rx_to_tx) % nb_slot_frame, fp) - iq_shift_to_apply;
+    int new_timing_advance = UE->timing_advance + UE->timing_advance_ntn;
     if (new_timing_advance != timing_advance) {
       writeBlockSize -= new_timing_advance - timing_advance;
       timing_advance = new_timing_advance;
@@ -1233,9 +1035,14 @@ void *UE_thread(void *arg)
       writeBlockSize -= new_N_TA_offset - UE->N_TA_offset;
       UE->N_TA_offset = new_N_TA_offset;
     }
+    if (writeBlockSize < 0) {
+      timing_advance += writeBlockSize - 1;
+      LOG_I(PHY, "writeBlockSize is %d, setting it to 1 and changing timing_advance to %d\n", writeBlockSize, timing_advance);
+      writeBlockSize = 1;
+    }
 
     if (curMsg.proc.nr_slot_rx == 0)
-      nr_ue_rrc_timer_trigger(UE->Mod_id, curMsg.proc.frame_rx, curMsg.proc.gNB_id);
+      nr_ue_rrc_timer_trigger(UE->Mod_id, curMsg.proc.hfn_rx, curMsg.proc.frame_rx, curMsg.proc.gNB_id);
 
     // RX slot processing. We launch and forget.
     notifiedFIFO_elt_t *newRx = newNotifiedFIFO_elt(sizeof(nr_rxtx_thread_data_t), curMsg.proc.nr_slot_tx, NULL, UE_dl_processing);
@@ -1251,7 +1058,15 @@ void *UE_thread(void *arg)
     }
 
     // apply new NTN timing information
-    apply_ntn_config(UE, fp, curMsg.proc.frame_rx, curMsg.proc.nr_slot_rx, &duration_rx_to_tx, &timing_advance, &ntn_koffset);
+    apply_ntn_config(UE,
+                     fp,
+                     curMsg.proc.hfn_rx,
+                     curMsg.proc.frame_rx,
+                     curMsg.proc.nr_slot_rx,
+                     &duration_rx_to_tx,
+                     &timing_advance,
+                     &ntn_koffset,
+                     &ntn_targetcell);
 
     // Start TX slot processing here. It runs in parallel with RX slot processing
     // in current code, DURATION_RX_TO_TX constant is the limit to get UL data to encode from a RX slot
@@ -1265,7 +1080,7 @@ void *UE_thread(void *arg)
     curMsgTx->absolute_deadline_us = absolute_deadline_us;
 
     int slot = curMsgTx->proc.nr_slot_tx;
-    int slot_and_frame = slot + curMsgTx->proc.frame_tx * UE->frame_parms.slots_per_frame;
+    int slot_and_frame = slot + curMsgTx->proc.frame_tx * nb_slot_frame;
     int next_tx_slot_and_frame = absolute_slot + duration_rx_to_tx + 1;
     int wait_for_prev_slot = stream_status == STREAM_STATUS_SYNCED ? 1 : 0;
 
@@ -1278,7 +1093,7 @@ void *UE_thread(void *arg)
     stream_status = STREAM_STATUS_SYNCED;
     tx_wait_for_dlsch[slot] = 0;
   }
-
+  LOG_W(NR_PHY, "UE main thread is ending\n");
   return NULL;
 }
 

@@ -248,7 +248,7 @@ int main(int argc, char* argv[])
   channel_desc_t *channel;
 
   srand(0);
-  randominit(0);
+  randominit();
   set_taus_seed(0);
 
   channel = new_channel_desc_scm(nb_antennas,

@@ -191,7 +191,7 @@ int ngap_ue_context_release_req(instance_t instance,
     for (int i = 0; i < ue_release_req_p->nb_of_pdusessions; i++) {
       NGAP_PDUSessionResourceItemCxtRelReq_t     *item;
       item = (NGAP_PDUSessionResourceItemCxtRelReq_t *)calloc(1,sizeof(NGAP_PDUSessionResourceItemCxtRelReq_t));
-      item->pDUSessionID = ue_release_req_p->pdusessions[i].pdusession_id;
+      item->pDUSessionID = ue_release_req_p->pdusession_ids[i];
       asn1cSeqAdd(&ie->value.choice.PDUSessionResourceListCxtRelReq.list, item);
     }
   }

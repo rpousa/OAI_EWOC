@@ -25,7 +25,6 @@
 #include "common/utils/LOG/vcd_signal_dumper.h"
 #include "PHY/defs_nr_UE.h"
 #include "SCHED_NR_UE/harq_nr.h"
-#include "PHY/phy_extern_nr_ue.h"
 #include "PHY/CODING/coding_extern.h"
 #include "PHY/CODING/coding_defs.h"
 #include "PHY/CODING/nrLDPC_coding/nrLDPC_coding_interface.h"

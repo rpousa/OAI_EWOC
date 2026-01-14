@@ -59,10 +59,10 @@
 #define CONFIG_ABORT          (1<<21)           // config failed,abort execution 
 #define CONFIG_NOOOPT         (1<<22)           // no -O option found when parsing command line
 struct configmodule_interface;
-typedef int (*configmodule_getfunc_t)(struct configmodule_interface *, paramdef_t *, int numparams, char *prefix);
+typedef int (*configmodule_getfunc_t)(struct configmodule_interface *, paramdef_t *, int numparams, const char *prefix);
 typedef int (
     *configmodule_getlistfunc_t)(struct configmodule_interface *, paramlist_def_t *, paramdef_t *, int numparams, char *prefix);
-typedef int (*configmodule_setfunc_t)(paramdef_t *cfgoptions, int numoptions, char *prefix);
+typedef int (*configmodule_setfunc_t)(paramdef_t *cfgoptions, int numoptions, const char *prefix);
 typedef void (*configmodule_endfunc_t)(struct configmodule_interface *cfg);
 
 typedef int (*configmodule_initfunc_t)(struct configmodule_interface *cfg);

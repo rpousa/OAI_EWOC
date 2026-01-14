@@ -30,20 +30,28 @@
     310000
     800813
     330101
-    330102
-    330103
     310001
     400001
     350000
-    370001
-    370000
-    370002
     370003
     370004
+    370002
     360001
     100002
     360002
     350000
+    410002
+    370012
+    400002
+    410003
+    370013
+    400003
+    410000
+    350000
+    400000
+    410001
+    350000
+    400001
     310011
     310002
     330201
@@ -88,24 +96,10 @@
   </testCase>
   <testCase id="330101">
     <class>Deploy_Object</class>
-    <desc>Deploy gNB-CU-CP in a container</desc>
+    <desc>Deploy gNB-CU-CP/gNB-CU-UP/gNB-DU (TDD/n76/40MHz/B200)</desc>
     <node>ofqot</node>
     <yaml_path>ci-scripts/yaml_files/sa_e1_b200_gnb</yaml_path>
-    <services>gnb_cucp</services>
-  </testCase>
-  <testCase id="330102">
-    <class>Deploy_Object</class>
-    <desc>Deploy gNB-CU-UP in a container</desc>
-    <node>ofqot</node>
-    <yaml_path>ci-scripts/yaml_files/sa_e1_b200_gnb</yaml_path>
-    <services>gnb_cuup</services>
-  </testCase>
-  <testCase id="330103">
-    <class>Deploy_Object</class>
-    <desc>Deploy gNB-DU (TDD/Band78/40MHz/B200) in a container</desc>
-    <node>ofqot</node>
-    <yaml_path>ci-scripts/yaml_files/sa_e1_b200_gnb</yaml_path>
-    <services>gnb_du_tdd</services>
+    <services>gnb_cucp gnb_cuup gnb_du_tdd</services>
   </testCase>
 
   <testCase id="300000">
@@ -132,16 +126,6 @@
     <ping_rttavg_threshold>25</ping_rttavg_threshold>
   </testCase>
 
-  <testCase id="370000">
-    <class>Iperf</class>
-    <desc>iperf (DL/80Mbps/UDP)(30 sec)</desc>
-    <iperf_args>-u -b 80M -t 30 -R</iperf_args>
-    <id>idefix</id>
-    <svr_id>sabox-nepes</svr_id>
-    <iperf_packetloss_threshold>10</iperf_packetloss_threshold>
-    <iperf_bitrate_threshold>95</iperf_bitrate_threshold>
-  </testCase>
-
   <testCase id="400001">
     <class>Custom_Command</class>
     <desc>Check UE is on dedicated BWP ID 1</desc>
@@ -149,19 +133,76 @@
     <command>echo ci get_current_bwp | nc -N 127.0.0.1 9091 | grep 'DL BWP ID 1 (dedicated) UL BWP ID 1 (dedicated)'</command>
   </testCase>
 
-  <testCase id="370001">
+  <testCase id="410001">
+    <class>Custom_Command</class>
+    <desc>Switch to dedicated BWP ID 1</desc>
+    <node>ofqot</node>
+    <command>echo ci trigger_bwp_switch 1 | nc -N 127.0.0.1 9091 | grep 'triggered BWP switch to BWP ID 1 for UE'</command>
+  </testCase>
+
+  <testCase id="400000">
+    <class>Custom_Command</class>
+    <desc>Check UE is on initial BWP ID 0</desc>
+    <node>ofqot</node>
+    <command>echo ci get_current_bwp | nc -N 127.0.0.1 9091 | grep 'DL BWP ID 0 (initial) UL BWP ID 0 (initial)'</command>
+  </testCase>
+
+  <testCase id="410002">
+    <class>Custom_Command</class>
+    <desc>Switch to dedicated BWP ID 2</desc>
+    <node>ofqot</node>
+    <command>echo ci trigger_bwp_switch 2 | nc -N 127.0.0.1 9091 | grep 'triggered BWP switch to BWP ID 2 for UE'</command>
+  </testCase>
+
+  <testCase id="370012">
     <class>Iperf</class>
-    <desc>iperf (UL/8Mbps/UDP)(30 sec)</desc>
-    <iperf_args>-u -b 8M -t 30</iperf_args>
+    <desc>iperf (DL/TCP)(10 sec)(single-ue profile)</desc>
+    <iperf_args>-t 10 -R</iperf_args>
     <id>idefix</id>
     <svr_id>sabox-nepes</svr_id>
-    <iperf_packetloss_threshold>1</iperf_packetloss_threshold>
-    <iperf_bitrate_threshold>95</iperf_bitrate_threshold>
+    <iperf_tcp_rate_target>35</iperf_tcp_rate_target>
+  </testCase>
+
+  <testCase id="400002">
+    <class>Custom_Command</class>
+    <desc>Check UE is on dedicated BWP ID 2</desc>
+    <node>ofqot</node>
+    <command>echo ci get_current_bwp | nc -N 127.0.0.1 9091 | grep 'DL BWP ID 2 (dedicated) UL BWP ID 2 (dedicated)'</command>
+  </testCase>
+
+  <testCase id="410003">
+    <class>Custom_Command</class>
+    <desc>Switch to dedicated BWP ID 3</desc>
+    <node>ofqot</node>
+    <command>echo ci trigger_bwp_switch 3 | nc -N 127.0.0.1 9091 | grep 'triggered BWP switch to BWP ID 3 for UE'</command>
+  </testCase>
+
+  <testCase id="370013">
+    <class>Iperf</class>
+    <desc>iperf (DL/TCP)(10 sec)(single-ue profile)</desc>
+    <iperf_args>-t 10 -R</iperf_args>
+    <id>idefix</id>
+    <svr_id>sabox-nepes</svr_id>
+    <iperf_tcp_rate_target>65</iperf_tcp_rate_target>
+  </testCase>
+
+  <testCase id="400003">
+    <class>Custom_Command</class>
+    <desc>Check UE is on dedicated BWP ID 3</desc>
+    <node>ofqot</node>
+    <command>echo ci get_current_bwp | nc -N 127.0.0.1 9091 | grep 'DL BWP ID 3 (dedicated) UL BWP ID 3 (dedicated)'</command>
+  </testCase>
+
+  <testCase id="410000">
+    <class>Custom_Command</class>
+    <desc>Switch to initial BWP ID 0</desc>
+    <node>ofqot</node>
+    <command>echo ci trigger_bwp_switch 0 | nc -N 127.0.0.1 9091 | grep 'triggered BWP switch to BWP ID 0 for UE'</command>
   </testCase>
 
   <testCase id="370002">
     <class>Iperf</class>
-    <desc>iperf (BIDIR TCP)(10 sec)(single-ue profile)</desc>
+    <desc>iperf (BIDIR TCP)(20 sec)(single-ue profile)</desc>
     <iperf_args>-t 20 --bidir</iperf_args>
     <id>idefix</id>
     <svr_id>sabox-nepes</svr_id>
@@ -169,17 +210,17 @@
 
   <testCase id="370003">
     <class>Iperf</class>
-    <desc>iperf (DL/TCP)(30 sec)(single-ue profile)</desc>
-    <iperf_args>-t 30 -R</iperf_args>
+    <desc>iperf (DL/TCP)(20 sec)(single-ue profile)</desc>
+    <iperf_args>-t 20 -R</iperf_args>
     <id>idefix</id>
     <svr_id>sabox-nepes</svr_id>
-    <iperf_tcp_rate_target>30</iperf_tcp_rate_target>
+    <iperf_tcp_rate_target>140</iperf_tcp_rate_target>
   </testCase>
 
   <testCase id="370004">
     <class>Iperf</class>
-    <desc>iperf (UL/TCP)(30 sec)(single-ue profile)</desc>
-    <iperf_args>-t 30</iperf_args>
+    <desc>iperf (UL/TCP)(20 sec)(single-ue profile)</desc>
+    <iperf_args>-t 20</iperf_args>
     <id>idefix</id>
     <svr_id>sabox-nepes</svr_id>
     <iperf_tcp_rate_target>15</iperf_tcp_rate_target>

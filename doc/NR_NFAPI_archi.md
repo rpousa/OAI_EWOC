@@ -161,9 +161,9 @@ unpack function is called.
 ## P7 DL Transmission by VNF
 
 DL messages are scheduled at the VNF, through gNB_dlsch_ulsch_scheduler(). gNB_dlsch_ulsch_scheduler() is called when
-handling a SLOT.indication message in trigger_scheduler().
+handling a SLOT.indication message in phy_nr_slot_indication().
 
-The function trigger_scheduler(nfapi_nr_slot_indication_scf_t *slot_ind) calls the functions oai_nfapi_[DL P7 msg]_
+The function phy_nr_slot_indication(nfapi_nr_slot_indication_scf_t *slot_ind) calls the functions oai_nfapi_[DL P7 msg]_
 req(), calling in turn call the send_p7_msg function pointer, which contain the logic to pack the message into a buffer
 and send it to the PNF.
 Finally, NR_UL_indication is called to process the other P7 messages received from the PNF that were put in theire
@@ -215,7 +215,7 @@ bool nfapi_vnf_p7_tx_data_req(nfapi_vnf_p7_config_t* config, nfapi_nr_tx_data_re
 graph TD
     softmodem_start[nr-softmodem init] --> P5_configuration[configure_nr_nfapi_vnf] --> transport_init[Transport mechanism init] --> send_first_msg[Send first P5 message to PNF]
     transport_init[Transport mechanism init] --> P5_recv_loop[P5 receive loop] -- P5 Message processing --> P5_recv_loop[P5 receive loop]
-    P5_recv_loop[P5 receive loop] -- Start.response callback called --> P7_config[P7 Configuration] --> P7_loop[P7 Loop] --> P7_msg_recv[P7 message received] --> call_vnf_handle_p7[Call vnf_nr_handle_p7_msg] --> hdr_unpack[Unpack header] --> call_specific_p7_handler[Call specific P7 message handler] --> slot_ind[Is a SLOT.indication?] -- Yes --> trig_scheduler[Call trigger_scheduler] --> gNB_ulsch_dlsch_sched[Call gNB_dlsch_ulsch_scheduler] --> send_p7_dl[Process and send P7 messages to PNF] --> call_ul_ind[Call NR_UL_indication] --> proc_p7[Process P7 messages in queue] --> P7_loop[P7 Loop]
+    P5_recv_loop[P5 receive loop] -- Start.response callback called --> P7_config[P7 Configuration] --> P7_loop[P7 Loop] --> P7_msg_recv[P7 message received] --> call_vnf_handle_p7[Call vnf_nr_handle_p7_msg] --> hdr_unpack[Unpack header] --> call_specific_p7_handler[Call specific P7 message handler] --> slot_ind[Is a SLOT.indication?] -- Yes --> trig_scheduler[Call phy_nr_slot_indication] --> gNB_ulsch_dlsch_sched[Call gNB_dlsch_ulsch_scheduler] --> send_p7_dl[Process and send P7 messages to PNF] --> call_ul_ind[Call NR_UL_indication] --> proc_p7[Process P7 messages in queue] --> P7_loop[P7 Loop]
     slot_ind[Is a SLOT.indication?] -- No --> put_queue[Put message in queue] --> P7_loop[P7 Loop];
 
 

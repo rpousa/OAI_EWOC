@@ -145,7 +145,13 @@ static const char *const log_level_highlight_end[] =
     {LOG_RESET, LOG_RESET, LOG_RESET, LOG_RESET, LOG_RESET, LOG_RESET}; /*!< \brief Optional end-format strings for highlighting */
 static void log_output_memory(log_component_t *c, const char *file, const char *func, int line, int comp, int level, const char* format,va_list args);
 
-int write_file_matlab(const char *fname, const char *vname, void *data, int length, int dec, unsigned int format, int multiVec)
+int write_file_matlab(const char *fname,
+                      const char *vname,
+                      const void *data,
+                      int length,
+                      int dec,
+                      unsigned int format,
+                      int multiVec)
 {
   FILE *fp=NULL;
   int i;
@@ -455,9 +461,15 @@ int register_log_component(const char *name, const char *fext, int compidx)
   }
 
   if (computed_compidx >= 0 && computed_compidx <MAX_LOG_COMPONENTS) {
-    g_log->log_component[computed_compidx].name = strdup(name);
-    g_log->log_component[computed_compidx].stream = stdout;
-    g_log->log_component[computed_compidx].filelog = 0;
+    log_component_t *c = &g_log->log_component[computed_compidx];
+    c->name = strdup(name);
+    int n = snprintf(c->headerName, sizeof(c->headerName), "[%s", c->name);
+    if (n >= sizeof(c->headerName) - 1) // snprintf() truncated
+      n = sizeof(c->headerName) - 2;
+    c->headerName[n] = ']';
+    c->headerName[n + 1] = 0;
+    c->stream = stdout;
+    c->filelog = 0;
     g_log->log_rarely_used[computed_compidx].filelog_name = calloc(1, strlen(name) + 16); /* /tmp/<name>.%s  */
     sprintf(g_log->log_rarely_used[computed_compidx].filelog_name, "/tmp/%s.", name);
     strncat(g_log->log_rarely_used[computed_compidx].filelog_name, fext, 3);
@@ -503,11 +515,14 @@ int logInit (void)
   for (int i = 0; i < MAX_LOG_PREDEF_COMPONENTS; i++)
     register_log_component(comp_name[i], comp_extension[i], i);
 
-  for (int i=0 ; log_level_names[i].name != NULL ; i++)
-    g_log->level2string[i] = toupper(log_level_names[i].name[0]); // uppercased first letter of level name
-  
   g_log->filelog_name = "/tmp/openair.log";
   log_getconfig(g_log);
+
+  for (int i = 0; log_level_names[i].name != NULL; i++)
+    if (g_log->flag & FLAG_LEVEL)
+      snprintf(g_log->level2string[i], sizeof g_log->level2string[i], " %c ", toupper(log_level_names[i].name[0]));
+    else
+      snprintf(g_log->level2string[i], sizeof g_log->level2string[i], " ");
 
   // set all unused component items to 0, they are for non predefined components
   for (int i=MAX_LOG_PREDEF_COMPONENTS; i < MAX_LOG_COMPONENTS; i++) {
@@ -569,8 +584,7 @@ static inline int log_header(log_component_t *c,
       struct tm utc_time;
       if (gmtime_r(&t.tv_sec, &utc_time) == NULL)
         abort();
-      snprintf(timeString, sizeof(timeString), "%04d-%02d-%02d %02d:%02d:%02d.%06lu UTC ",
-               utc_time.tm_year + 1900, utc_time.tm_mon + 1, utc_time.tm_mday,
+      snprintf(timeString, sizeof(timeString), "[%02d:%02d:%02d.%06lu] ",
                utc_time.tm_hour, utc_time.tm_min, utc_time.tm_sec, t.tv_nsec / 1000);
     } else {
       snprintf(timeString, sizeof(timeString), "%lu.%06lu ",
@@ -587,15 +601,18 @@ static inline int log_header(log_component_t *c,
   } else {
     threadIdString[0] = 0;
   }
-  return snprintf(log_buffer, buffsize, "%s%s%s[%s] %c %s%s",
-		   flag & FLAG_NOCOLOR ? "" : log_level_highlight_start[level],
-		   timeString,
-		   threadIdString,
-		   c->name,
-		   flag & FLAG_LEVEL ? g_log->level2string[level] : ' ',
-		   l,
-		   threadname
-		   );
+
+  return snprintf(log_buffer,
+                  buffsize,
+                  "%s%s%s%-8s%s%-*s%s",
+                  flag & FLAG_NOCOLOR ? "" : log_level_highlight_start[level],
+                  timeString,
+                  threadIdString,
+                  c->headerName,
+                  g_log->level2string[level], // will print space if no level selected
+                  l[0] == 0 ? 0 : 32,
+                  l,
+                  threadname);
 }
 
 void logRecord_mt(const char *file,

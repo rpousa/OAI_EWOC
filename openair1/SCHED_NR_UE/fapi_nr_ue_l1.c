@@ -31,7 +31,6 @@
  */
 
 #include <stdio.h>
-
 #include "fapi_nr_ue_interface.h"
 #include "fapi_nr_ue_l1.h"
 #include "harq_nr.h"
@@ -39,247 +38,12 @@
 #include "PHY/defs_nr_UE.h"
 #include "PHY/impl_defs_nr.h"
 #include "utils.h"
-#include "openair2/PHY_INTERFACE/queue_t.h"
 #include "SCHED_NR_UE/phy_sch_processing_time.h"
-#include "openair1/PHY/phy_extern_nr_ue.h"
+
+extern PHY_VARS_NR_UE ***PHY_vars_UE_g;
 
 const char *const dl_pdu_type[] = {"DCI", "DLSCH", "RA_DLSCH", "SI_DLSCH", "P_DLSCH", "CSI_RS", "CSI_IM", "TA"};
 const char *const ul_pdu_type[] = {"PRACH", "PUCCH", "PUSCH", "SRS"};
-queue_t nr_rx_ind_queue;
-queue_t nr_crc_ind_queue;
-queue_t nr_uci_ind_queue;
-queue_t nr_rach_ind_queue;
-
-static void fill_uci_2_3_4(nfapi_nr_uci_pucch_pdu_format_2_3_4_t *pdu_2_3_4,
-                           fapi_nr_ul_config_pucch_pdu *pucch_pdu)
-{
-  NR_UE_MAC_INST_t *mac = get_mac_inst(0);
-  memset(pdu_2_3_4, 0, sizeof(*pdu_2_3_4));
-  pdu_2_3_4->handle = 0;
-  pdu_2_3_4->rnti = pucch_pdu->rnti;
-  pdu_2_3_4->pucch_format = 2;
-  pdu_2_3_4->ul_cqi = 255;
-  pdu_2_3_4->timing_advance = 0;
-  pdu_2_3_4->rssi = 0;
-  // TODO: Eventually check 38.212:Sect.631 to know when to use csi_part2, for now only using csi_part1
-  pdu_2_3_4->pduBitmap = 4;
-  pdu_2_3_4->csi_part1.csi_part1_bit_len = mac->nr_ue_emul_l1.num_csi_reports;
-  int csi_part1_byte_len = (int)((pdu_2_3_4->csi_part1.csi_part1_bit_len / 8) + 1);
-  AssertFatal(!pdu_2_3_4->csi_part1.csi_part1_payload, "pdu_2_3_4->csi_part1.csi_part1_payload != NULL\n");
-  pdu_2_3_4->csi_part1.csi_part1_payload = CALLOC(csi_part1_byte_len,
-                                                  sizeof(pdu_2_3_4->csi_part1.csi_part1_payload));
-  for (int k = 0; k < csi_part1_byte_len; k++)
-  {
-    pdu_2_3_4->csi_part1.csi_part1_payload[k] = (pucch_pdu->payload >> (k * 8)) & 0xff;
-  }
-  pdu_2_3_4->csi_part1.csi_part1_crc = 0;
-}
-
-static void free_uci_inds(nfapi_nr_uci_indication_t *uci_ind)
-{
-    for (int k = 0; k < uci_ind->num_ucis; k++)
-    {
-        if (uci_ind->uci_list[k].pdu_type == NFAPI_NR_UCI_FORMAT_0_1_PDU_TYPE)
-        {
-            //nfapi_nr_uci_pucch_pdu_format_0_1_t *pdu_0_1 = &uci_ind->uci_list[k].pucch_pdu_format_0_1;
-            // Warning: pdu_0_1 is unused
-        }
-        if (uci_ind->uci_list[k].pdu_type == NFAPI_NR_UCI_FORMAT_2_3_4_PDU_TYPE)
-        {
-            nfapi_nr_uci_pucch_pdu_format_2_3_4_t *pdu_2_3_4 = &uci_ind->uci_list[k].pucch_pdu_format_2_3_4;
-            free(pdu_2_3_4->sr.sr_payload);
-            pdu_2_3_4->sr.sr_payload = NULL;
-            free(pdu_2_3_4->harq.harq_payload);
-            pdu_2_3_4->harq.harq_payload = NULL;
-        }
-    }
-    free(uci_ind->uci_list);
-    uci_ind->uci_list = NULL;
-    free(uci_ind);
-}
-
-int8_t nr_ue_scheduled_response_stub(nr_scheduled_response_t *scheduled_response) {
-
-  NR_UE_MAC_INST_t *mac = get_mac_inst(0);
-
-  if (scheduled_response && scheduled_response->ul_config) {
-    int frame = scheduled_response->ul_config->frame;
-    int slot = scheduled_response->ul_config->slot;
-    fapi_nr_ul_config_request_pdu_t *it = fapiLockIterator(scheduled_response->ul_config, frame, slot);
-    while (it->pdu_type != FAPI_NR_END) {
-      switch (it->pdu_type) {
-        case FAPI_NR_UL_CONFIG_TYPE_PRACH: {
-          fapi_nr_ul_config_prach_pdu *prach_pdu = &it->prach_config_pdu;
-          nfapi_nr_rach_indication_t *rach_ind = CALLOC(1, sizeof(*rach_ind));
-          rach_ind->sfn = frame;
-          rach_ind->slot = slot;
-          rach_ind->header.message_id = NFAPI_NR_PHY_MSG_TYPE_RACH_INDICATION;
-          uint8_t pdu_index = 0;
-          rach_ind->pdu_list = CALLOC(1, sizeof(*rach_ind->pdu_list));
-          rach_ind->number_of_pdus = 1;
-          rach_ind->pdu_list[pdu_index].phy_cell_id = prach_pdu->phys_cell_id;
-          rach_ind->pdu_list[pdu_index].symbol_index = prach_pdu->prach_start_symbol;
-          rach_ind->pdu_list[pdu_index].slot_index = prach_pdu->prach_slot;
-          rach_ind->pdu_list[pdu_index].freq_index = prach_pdu->num_ra;
-          rach_ind->pdu_list[pdu_index].avg_rssi = 128;
-          rach_ind->pdu_list[pdu_index].avg_snr = 0xff; // invalid for now
-          const int num_p = rach_ind->pdu_list[pdu_index].num_preamble;
-          AssertFatal(num_p == 1, "can handle only one preamble in preamble_list\n");
-          rach_ind->pdu_list[pdu_index].num_preamble = 1;
-          rach_ind->pdu_list[pdu_index].preamble_list[0].preamble_index = prach_pdu->ra_PreambleIndex;
-          rach_ind->pdu_list[pdu_index].preamble_list[0].timing_advance = 0;
-          rach_ind->pdu_list[pdu_index].preamble_list[0].preamble_pwr = 0xffffffff;
-
-          if (!put_queue(&nr_rach_ind_queue, rach_ind)) {
-            free(rach_ind->pdu_list);
-            free(rach_ind);
-          }
-          LOG_D(NR_MAC, "We have successfully filled the rach_ind queue with the recently filled rach ind\n");
-          break;
-        }
-        case (FAPI_NR_UL_CONFIG_TYPE_PUSCH): {
-          nfapi_nr_rx_data_indication_t *rx_ind = CALLOC(1, sizeof(*rx_ind));
-          nfapi_nr_crc_indication_t *crc_ind = CALLOC(1, sizeof(*crc_ind));
-          nfapi_nr_ue_pusch_pdu_t *pusch_config_pdu = &it->pusch_config_pdu;
-          if (pusch_config_pdu->tx_request_body.fapiTxPdu) {
-            rx_ind->header.message_id = NFAPI_NR_PHY_MSG_TYPE_RX_DATA_INDICATION;
-            rx_ind->sfn = frame;
-            rx_ind->slot = slot;
-            rx_ind->number_of_pdus = 1;
-            rx_ind->pdu_list = CALLOC(rx_ind->number_of_pdus, sizeof(*rx_ind->pdu_list));
-            for (int j = 0; j < rx_ind->number_of_pdus; j++) {
-              fapi_nr_tx_request_body_t *tx_req_body = &pusch_config_pdu->tx_request_body;
-              rx_ind->pdu_list[j].handle = pusch_config_pdu->handle;
-              rx_ind->pdu_list[j].harq_id = pusch_config_pdu->pusch_data.harq_process_id;
-              rx_ind->pdu_list[j].pdu_length = tx_req_body->pdu_length;
-              rx_ind->pdu_list[j].pdu = CALLOC(tx_req_body->pdu_length, sizeof(*rx_ind->pdu_list[j].pdu));
-              memcpy(rx_ind->pdu_list[j].pdu, tx_req_body->fapiTxPdu, tx_req_body->pdu_length * sizeof(*rx_ind->pdu_list[j].pdu));
-              rx_ind->pdu_list[j].rnti = pusch_config_pdu->rnti;
-              /* TODO: Implement channel modeling to abstract TA and CQI. For now,
-                 we hard code the values below since they are set in L1 and we are
-                 abstracting L1. */
-              rx_ind->pdu_list[j].timing_advance = 31;
-              rx_ind->pdu_list[j].ul_cqi = 255;
-            }
-
-            crc_ind->header.message_id = NFAPI_NR_PHY_MSG_TYPE_CRC_INDICATION;
-            crc_ind->number_crcs = rx_ind->number_of_pdus;
-            crc_ind->sfn = frame;
-            crc_ind->slot = slot;
-            crc_ind->crc_list = CALLOC(crc_ind->number_crcs, sizeof(*crc_ind->crc_list));
-            for (int j = 0; j < crc_ind->number_crcs; j++) {
-              crc_ind->crc_list[j].handle = pusch_config_pdu->handle;
-              crc_ind->crc_list[j].harq_id = pusch_config_pdu->pusch_data.harq_process_id;
-              LOG_D(NR_MAC, "This is the harq pid %d for crc_list[%d]\n", crc_ind->crc_list[j].harq_id, j);
-              LOG_D(NR_MAC, "This is sched sfn/sl [%d %d] and crc sfn/sl [%d %d]\n", frame, slot, crc_ind->sfn, crc_ind->slot);
-              crc_ind->crc_list[j].num_cb = pusch_config_pdu->pusch_data.num_cb;
-              crc_ind->crc_list[j].rnti = pusch_config_pdu->rnti;
-              crc_ind->crc_list[j].tb_crc_status = 0;
-              crc_ind->crc_list[j].timing_advance = 31;
-              crc_ind->crc_list[j].ul_cqi = 255;
-              emul_l1_harq_t *harq = &mac->nr_ue_emul_l1.harq[crc_ind->crc_list[j].harq_id];
-              AssertFatal(harq->active_ul_harq_sfn == -1 && harq->active_ul_harq_slot == -1,
-                          "We did not send an active CRC when we should have!\n");
-              harq->active_ul_harq_sfn = crc_ind->sfn;
-              harq->active_ul_harq_slot = crc_ind->slot;
-              LOG_D(NR_MAC,
-                    "This is sched sfn/sl [%d %d] and crc sfn/sl [%d %d] with mcs_index in ul_cqi -> %d\n",
-                    frame,
-                    slot,
-                    crc_ind->sfn,
-                    crc_ind->slot,
-                    pusch_config_pdu->mcs_index);
-            }
-
-            if (!put_queue(&nr_rx_ind_queue, rx_ind)) {
-              LOG_E(NR_MAC, "Put_queue failed for rx_ind\n");
-              for (int i = 0; i < rx_ind->number_of_pdus; i++) {
-                free(rx_ind->pdu_list[i].pdu);
-                rx_ind->pdu_list[i].pdu = NULL;
-              }
-
-              free(rx_ind->pdu_list);
-              rx_ind->pdu_list = NULL;
-              free(rx_ind);
-              rx_ind = NULL;
-            }
-            if (!put_queue(&nr_crc_ind_queue, crc_ind)) {
-              LOG_E(NR_MAC, "Put_queue failed for crc_ind\n");
-              free(crc_ind->crc_list);
-              crc_ind->crc_list = NULL;
-              free(crc_ind);
-              crc_ind = NULL;
-            }
-
-            LOG_D(PHY, "In %s: Filled queue rx/crc_ind which was filled by ulconfig. \n", __FUNCTION__);
-          }
-          break;
-        }
-        case FAPI_NR_UL_CONFIG_TYPE_PUCCH: {
-          nfapi_nr_uci_indication_t *uci_ind = CALLOC(1, sizeof(*uci_ind));
-          uci_ind->header.message_id = NFAPI_NR_PHY_MSG_TYPE_UCI_INDICATION;
-          uci_ind->sfn = frame;
-          uci_ind->slot = slot;
-          uci_ind->num_ucis = 1;
-          uci_ind->uci_list = CALLOC(uci_ind->num_ucis, sizeof(*uci_ind->uci_list));
-          for (int j = 0; j < uci_ind->num_ucis; j++) {
-            LOG_D(NR_MAC, "pucch_config_pdu.n_bit = %d\n", it->pucch_config_pdu.n_bit);
-            if (it->pucch_config_pdu.n_bit > 3 && mac->nr_ue_emul_l1.num_csi_reports > 0) {
-              uci_ind->uci_list[j].pdu_type = NFAPI_NR_UCI_FORMAT_2_3_4_PDU_TYPE;
-              uci_ind->uci_list[j].pdu_size = sizeof(nfapi_nr_uci_pucch_pdu_format_2_3_4_t);
-              nfapi_nr_uci_pucch_pdu_format_2_3_4_t *pdu_2_3_4 = &uci_ind->uci_list[j].pucch_pdu_format_2_3_4;
-              fill_uci_2_3_4(pdu_2_3_4, &it->pucch_config_pdu);
-            } else {
-              nfapi_nr_uci_pucch_pdu_format_0_1_t *pdu_0_1 = &uci_ind->uci_list[j].pucch_pdu_format_0_1;
-              uci_ind->uci_list[j].pdu_type = NFAPI_NR_UCI_FORMAT_0_1_PDU_TYPE;
-              uci_ind->uci_list[j].pdu_size = sizeof(nfapi_nr_uci_pucch_pdu_format_0_1_t);
-              memset(pdu_0_1, 0, sizeof(*pdu_0_1));
-              pdu_0_1->handle = 0;
-              pdu_0_1->rnti = it->pucch_config_pdu.rnti;
-              pdu_0_1->pucch_format = 1;
-              pdu_0_1->ul_cqi = 255;
-              pdu_0_1->timing_advance = 0;
-              pdu_0_1->rssi = 0;
-              if (mac->nr_ue_emul_l1.num_harqs > 0) {
-                int harq_index = 0;
-                pdu_0_1->pduBitmap = 2; // (value->pduBitmap >> 1) & 0x01) == HARQ and (value->pduBitmap) & 0x01) == SR
-                pdu_0_1->harq.num_harq = mac->nr_ue_emul_l1.num_harqs;
-                pdu_0_1->harq.harq_confidence_level = 0;
-                int harq_pid = -1;
-                for (int k = 0; k < NR_MAX_HARQ_PROCESSES; k++) {
-                  if (mac->nr_ue_emul_l1.harq[k].active && mac->nr_ue_emul_l1.harq[k].active_dl_harq_sfn == uci_ind->sfn
-                      && mac->nr_ue_emul_l1.harq[k].active_dl_harq_slot == uci_ind->slot) {
-                    mac->nr_ue_emul_l1.harq[k].active = false;
-                    harq_pid = k;
-                    AssertFatal(harq_index < pdu_0_1->harq.num_harq, "Invalid harq_index %d\n", harq_index);
-                    pdu_0_1->harq.harq_list[harq_index].harq_value = !mac->dl_harq_info[k].ack;
-                    harq_index++;
-                  }
-                }
-                AssertFatal(harq_pid != -1, "No active harq_pid, sfn_slot = %u.%u", uci_ind->sfn, uci_ind->slot);
-              }
-            }
-          }
-
-          LOG_D(NR_PHY, "Sending UCI with %d PDUs in sfn.slot %d/%d\n", uci_ind->num_ucis, uci_ind->sfn, uci_ind->slot);
-          NR_UL_IND_t ul_info = {
-              .uci_ind = *uci_ind,
-          };
-          send_nsa_standalone_msg(&ul_info, uci_ind->header.message_id);
-          free_uci_inds(uci_ind);
-          break;
-        }
-
-        default:
-          LOG_W(NR_MAC, "Unknown ul_config->pdu_type %d\n", it->pdu_type);
-          break;
-      }
-      it++;
-    }
-    release_ul_config(it, true);
-  }
-  return 0;
-}
 
 static void configure_dlsch(NR_UE_DLSCH_t *dlsch0,
                             NR_DL_UE_HARQ_t *harq_list,
@@ -287,26 +51,6 @@ static void configure_dlsch(NR_UE_DLSCH_t *dlsch0,
                             NR_UE_MAC_INST_t *mac,
                             int rnti)
 {
-  // Temporary code to process type0 as type1 when the RB allocation is contiguous
-  if (dlsch_config_pdu->resource_alloc == 0) {
-    dlsch_config_pdu->number_rbs = count_bits(dlsch_config_pdu->rb_bitmap, sizeofArray(dlsch_config_pdu->rb_bitmap));
-    int state = 0;
-    for (int i = 0; i < sizeof(dlsch_config_pdu->rb_bitmap) * 8; i++) {
-      int allocated = dlsch_config_pdu->rb_bitmap[i / 8] & (1 << (i % 8));
-      if (allocated) {
-        if (state == 0) {
-          dlsch_config_pdu->start_rb = i;
-          state = 1;
-        } else
-          AssertFatal(state == 1, "non-contiguous RB allocation in RB allocation type 0 not implemented");
-      } else {
-        if (state == 1) {
-          state = 2;
-        }
-      }
-    }
-  }
-
   const uint8_t current_harq_pid = dlsch_config_pdu->harq_process_nbr;
   dlsch0->active = true;
   dlsch0->rnti = rnti;
@@ -344,21 +88,6 @@ static void configure_dlsch(NR_UE_DLSCH_t *dlsch0,
     LOG_W(NR_MAC, "dlsch0_harq->status not ACTIVE due to false retransmission harq pid: %d\n", current_harq_pid);
     update_harq_status(mac, current_harq_pid, dlsch0_harq->decodeResult);
   }
-}
-
-static void configure_ntn_params(PHY_VARS_NR_UE *ue, fapi_nr_dl_ntn_config_command_pdu* ntn_params_message)
-{
-  if (!ue->ntn_config_message) {
-    ue->ntn_config_message = CALLOC(1, sizeof(*ue->ntn_config_message));
-  }
-
-  ue->ntn_config_message->ntn_config_params.epoch_sfn = ntn_params_message->epoch_sfn;
-  ue->ntn_config_message->ntn_config_params.epoch_subframe = ntn_params_message->epoch_subframe;
-  ue->ntn_config_message->ntn_config_params.cell_specific_k_offset = ntn_params_message->cell_specific_k_offset;
-  ue->ntn_config_message->ntn_config_params.ntn_total_time_advance_ms = ntn_params_message->ntn_total_time_advance_ms;
-  ue->ntn_config_message->ntn_config_params.ntn_total_time_advance_drift = ntn_params_message->ntn_total_time_advance_drift;
-  ue->ntn_config_message->ntn_config_params.ntn_total_time_advance_drift_variant = ntn_params_message->ntn_total_time_advance_drift_variant;
-  ue->ntn_config_message->update = true;
 }
 
 static void configure_ta_command(PHY_VARS_NR_UE *ue, fapi_nr_ta_command_pdu *ta_command_pdu)
@@ -477,14 +206,93 @@ static void nr_ue_scheduled_response_dl(NR_UE_MAC_INST_t *mac,
       case FAPI_NR_CONFIG_TA_COMMAND:
         configure_ta_command(phy, &pdu->ta_command_pdu);
         break;
-      case FAPI_NR_DL_NTN_CONFIG_PARAMS:
-        configure_ntn_params(phy, &pdu->ntn_config_command_pdu);
-        break;
       default:
         LOG_W(PHY, "unhandled dl pdu type %d \n", pdu->pdu_type);
     }
   }
   dl_config->number_pdus = 0;
+}
+
+static void dump_pusch_pdu(int instance, int frame, int slot, nfapi_nr_ue_pusch_pdu_t *pusch_pdu)
+{
+  LOG_D(PHY,
+        "[UE %d] %d.%d ULSCH PDU pdu_bit_map %u "
+        "rnti %u "
+        "handle %u "
+        "bwp_size %u "
+        "bwp_start %u "
+        "subcarrier_spacing %u "
+        "cyclic_prefix %u "
+        "target_code_rate %u "
+        "qam_mod_order %u "
+        "mcs_index %u "
+        "mcs_table %u "
+        "transform_precoding %u "
+        "data_scrambling_id %u "
+        "nrOfLayers %u "
+        "Tpmi %u "
+        "ul_dmrs_symb_pos %u "
+        "dmrs_config_type %u "
+        "ul_dmrs_scrambling_id %u "
+        "scid %u "
+        "num_dmrs_cdm_grps_no_data %u "
+        "dmrs_ports %u "
+        "resource_alloc %u "
+        "rb_start %u "
+        "rb_size %u "
+        "vrb_to_prb_mapping %u "
+        "frequency_hopping %u "
+        "tx_direct_current_location %u "
+        "uplink_frequency_shift_7p5khz %u "
+        "start_symbol_index %u "
+        "nr_of_symbols %u "
+        "tbslbrm %u "
+        "ldpcBaseGraph %u "
+        "ulsch_indicator %u "
+        "pusch_data->rv_index %u "
+        "pusch_data->harq_process_id %u "
+        "pusch_data->new_data_indicator %u "
+        "pusch_data->num_cb %u\n",
+        instance,
+        frame,
+        slot,
+        pusch_pdu->pdu_bit_map,
+        pusch_pdu->rnti,
+        pusch_pdu->handle,
+        pusch_pdu->bwp_size,
+        pusch_pdu->bwp_start,
+        pusch_pdu->subcarrier_spacing,
+        pusch_pdu->cyclic_prefix,
+        pusch_pdu->target_code_rate,
+        pusch_pdu->qam_mod_order,
+        pusch_pdu->mcs_index,
+        pusch_pdu->mcs_table,
+        pusch_pdu->transform_precoding,
+        pusch_pdu->data_scrambling_id,
+        pusch_pdu->nrOfLayers,
+        pusch_pdu->Tpmi,
+        pusch_pdu->ul_dmrs_symb_pos,
+        pusch_pdu->dmrs_config_type,
+        pusch_pdu->ul_dmrs_scrambling_id,
+        pusch_pdu->scid,
+        pusch_pdu->num_dmrs_cdm_grps_no_data,
+        pusch_pdu->dmrs_ports,
+        pusch_pdu->resource_alloc,
+        pusch_pdu->rb_start,
+        pusch_pdu->rb_size,
+        pusch_pdu->vrb_to_prb_mapping,
+        pusch_pdu->frequency_hopping,
+        pusch_pdu->tx_direct_current_location,
+        pusch_pdu->uplink_frequency_shift_7p5khz,
+        pusch_pdu->start_symbol_index,
+        pusch_pdu->nr_of_symbols,
+        pusch_pdu->tbslbrm,
+        pusch_pdu->ldpcBaseGraph,
+        pusch_pdu->ulsch_indicator,
+        pusch_pdu->pusch_data.rv_index,
+        pusch_pdu->pusch_data.harq_process_id,
+        pusch_pdu->pusch_data.new_data_indicator,
+        pusch_pdu->pusch_data.num_cb);
 }
 
 static void nr_ue_scheduled_response_ul(PHY_VARS_NR_UE *phy, fapi_nr_ul_config_request_t *ul_config, nr_phy_data_tx_t *phy_data)
@@ -508,6 +316,7 @@ static void nr_ue_scheduled_response_ul(PHY_VARS_NR_UE *phy, fapi_nr_ul_config_r
               pdu->pusch_config_pdu.num_dmrs_cdm_grps_no_data);
 
         memcpy(pusch_pdu, &pdu->pusch_config_pdu, sizeof(*pusch_pdu));
+        dump_pusch_pdu(phy->Mod_id, ul_config->frame, ul_config->slot, pusch_pdu);
         if (pdu->pusch_config_pdu.tx_request_body.fapiTxPdu) {
           LOG_D(PHY,
                 "%d.%d Copying %d bytes to harq_process_ul_ue->a (harq_pid %d)\n",

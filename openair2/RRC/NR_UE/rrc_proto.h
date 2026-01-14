@@ -46,9 +46,6 @@ NR_UE_RRC_INST_t* get_NR_UE_rrc_inst(int instance);
 void init_nsa_message (NR_UE_RRC_INST_t *rrc, char* reconfig_file, char* rbconfig_file);
 
 void process_nsa_message(NR_UE_RRC_INST_t *rrc, nsa_message_t nsa_message_type, void *message, int msg_len);
-
-void nr_rrc_cellgroup_configuration(NR_UE_RRC_INST_t *rrc, NR_CellGroupConfig_t *cellGroupConfig, int gNB_index);
-
 void nr_rrc_going_to_IDLE(NR_UE_RRC_INST_t *rrc,
                           NR_Release_Cause_t release_cause,
                           NR_RRCRelease_t *RRCRelease);
@@ -68,20 +65,12 @@ void nr_rrc_handle_timers(NR_UE_RRC_INST_t *rrc);
 void handle_rlf_detection(NR_UE_RRC_INST_t *rrc);
 void handle_302_expired_stopped(NR_UE_RRC_INST_t *rrc);
 
-/**\brief RRC NSA UE task.
-   \param void *args_p Pointer on arguments to start the task. */
-void *recv_msgs_from_lte_ue(void *args_p);
-
-void init_connections_with_lte_ue(void);
-
-extern void start_oai_nrue_threads(void);
-
 int get_from_lte_ue_fd();
 
 void nr_rrc_SI_timers(NR_UE_RRC_SI_INFO *SInfo);
 void init_SI_timers(NR_UE_RRC_SI_INFO *SInfo);
 
-void nr_ue_rrc_timer_trigger(int module_id, int frame, int gnb_id);
+void nr_ue_rrc_timer_trigger(int module_id, int hfn, int frame, int gnb_id);
 void handle_t300_expiry(NR_UE_RRC_INST_t *rrc);
 void handle_t430_expiry(NR_UE_RRC_INST_t *rrc);
 

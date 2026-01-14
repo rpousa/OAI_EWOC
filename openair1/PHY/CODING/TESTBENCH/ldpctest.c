@@ -438,7 +438,7 @@ int main(int argc, char *argv[])
   int n_trials = 1;
   double SNR_step = 0.1;
 
-  randominit(0);
+  randominit();
   int test_uncoded = 0;
   n_iter_stats_t dec_iter[400] = {0};
 

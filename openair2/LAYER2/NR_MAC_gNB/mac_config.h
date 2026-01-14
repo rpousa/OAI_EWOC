@@ -43,4 +43,6 @@ typedef struct gnb_sat_position_update_s {
 
 bool nr_update_sib19(const gnb_sat_position_update_t *sat_position);
 
+bool nr_trigger_bwp_switch(uint16_t rnti, int bwp_id);
+
 #endif /*__LAYER2_NR_MAC_CONFIG_H__*/

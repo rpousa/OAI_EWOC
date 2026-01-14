@@ -111,7 +111,7 @@ class Module_UE:
 			return self._collectTrace(ctx)
 		return None
 
-	def attach(self, attach_tries = 4, attach_timeout = 60):
+	def attach(self, attach_tries = 3, attach_timeout = 40):
 		ip = None
 		while attach_tries > 0:
 			self._command(self.cmd_dict["attach"])
@@ -125,6 +125,7 @@ class Module_UE:
 			if ip:
 				break
 			logging.warning(f"UE did not receive IP address after {attach_timeout} s, detaching")
+			attach_timeout += 20
 			attach_tries -= 1
 			self._command(self.cmd_dict["detach"])
 			time.sleep(5)

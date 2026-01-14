@@ -32,7 +32,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <assert.h>
-
+#include "common/platform_types.h"
 #include "PHY/sse_intrin.h"
 
 #include "common/utils/assertions.h"
@@ -50,39 +50,6 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#define ALIGNARRAYSIZE(a, b) (((a + b - 1) / b) * b)
-#define ALNARS_16_4(a) ALIGNARRAYSIZE(a, 4)
-
-  typedef struct complexd {
-    double r;
-    double i;
-  } cd_t;
-
-  typedef struct complexf {
-    float r;
-    float i;
-  } cf_t;
-
-  typedef struct complex8 {
-    int8_t r;
-    int8_t i;
-  } c8_t;
-
-  typedef struct complex16 {
-    int16_t r;
-    int16_t i;
-  } c16_t;
-
-  typedef struct complex32 {
-    int32_t r;
-    int32_t i;
-  } c32_t;
-
-  typedef struct complex64 {
-    int64_t r;
-    int64_t i;
-  } c64_t;
 
   typedef struct {
     int dim1;
@@ -219,6 +186,7 @@ extern "C" {
   {
     return (c16_t){.r = (int16_t)((a.r * b) >> Shift), .i = (int16_t)((a.i * b) >> Shift)};
   }
+
   __attribute__((always_inline)) inline c16_t c16MulConjShift(const c16_t a, const c16_t b, const int Shift)
   {
     return (c16_t) {
@@ -231,6 +199,14 @@ extern "C" {
     return (c16_t) {
       .r = (int16_t)(((a.r * b.r - a.i * b.i ) >> Shift) + c.r),
       .i = (int16_t)(((a.r * b.i + a.i * b.r ) >> Shift) + c.i)
+    };
+  }
+
+  __attribute__((always_inline)) inline c16_t c16maddConjShift(const c16_t a, const c16_t b, c16_t c, const int Shift)
+  {
+    return (c16_t) {
+      .r = (int16_t)(((a.r * b.r + a.i * b.i ) >> Shift) + c.r),
+      .i = (int16_t)(((a.r * b.i - a.i * b.r ) >> Shift) + c.i)
     };
   }
 

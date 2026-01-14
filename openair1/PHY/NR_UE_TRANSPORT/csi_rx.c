@@ -35,7 +35,6 @@
 
 #include "executables/nr-softmodem-common.h"
 #include "nr_transport_proto_ue.h"
-#include "PHY/phy_extern_nr_ue.h"
 #include "PHY/NR_REFSIG/nr_refsig.h"
 #include "common/utils/nr/nr_common.h"
 #include "PHY/NR_UE_ESTIMATION/filt16a_32.h"
@@ -905,6 +904,11 @@ void nr_ue_csi_rs_procedures(PHY_VARS_NR_UE *ue,
                        rxdataF);
 
 
+  if (csirs_config_pdu->measurement_bitmap == 0) {
+    LOG_D(NR_PHY, "No CSI-RS measurements configured\n");
+    return;
+  }
+
   uint32_t noise_power = 0;
   int16_t log2_re = 0;
   int16_t log2_maxh = 0;
@@ -987,7 +991,7 @@ void nr_ue_csi_rs_procedures(PHY_VARS_NR_UE *ue,
     .meas_type = NFAPI_NR_CSI_MEAS,
     .Nid_cell = frame_parms->Nid_cell,
     .is_neighboring_cell = false,
-    .rsrp_dBm = BOUNDED_EVAL(16, rsrp_dBm + 157, 113), // TS 38.133 - Table 10.1.6.1-1
+    .rsrp_dBm = rsrp_dBm,
     .rank_indicator = rank_indicator,
     .i1 = *i1,
     .i2 = *i2,

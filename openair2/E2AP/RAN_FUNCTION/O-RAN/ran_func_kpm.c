@@ -54,9 +54,11 @@ typedef struct {
   ue_id_e2sm_t* ue_id;
 
   // Optional
-  // only used to retreive MAC/RLC stats
+  // only used to retrieve MAC/RLC stats
   NR_UE_info_t** ue_info_list;
 }arr_ue_id_t;
+
+static e2_node_level_stats_t node_stats[2] = {0}; // [0] node stats collected in previous reporting period; [1] current node stats
 
 static meas_data_lst_t fill_kpm_meas_data_item(const meas_info_format_1_lst_t* meas_info_lst, const size_t len, const uint32_t gran_period_ms, cudu_ue_info_pair_t ue_info, const size_t ue_idx)
 {
@@ -74,7 +76,7 @@ static meas_data_lst_t fill_kpm_meas_data_item(const meas_info_format_1_lst_t* m
 
     char* meas_info_name_str = cp_ba_to_str(meas_info_lst[i].meas_type.name);
 
-    data_item.meas_record_lst[i] = get_kpm_meas_value(meas_info_name_str, gran_period_ms, ue_info, ue_idx);
+    data_item.meas_record_lst[i] = get_kpm_meas_value(meas_info_name_str, gran_period_ms, ue_info, ue_idx, node_stats);
 
     free(meas_info_name_str);
   }
@@ -152,6 +154,8 @@ static kpm_ind_msg_format_3_t fill_kpm_ind_msg_frm_3(arr_ue_id_t* arr_ue_id, con
     // Fill UE measurements
     msg_frm_3.meas_report_per_ue[i].ind_msg_format_1 = fill_kpm_ind_msg_frm_1(ue_info, i, act_def_fr_1);
   }
+
+  node_stats[0] = cp_node_level_stats(&node_stats[1]);
 
   return msg_frm_3;
 }
@@ -288,8 +292,10 @@ static arr_ue_id_t filter_ues_by_s_nssai_in_du_or_monolithic(const test_info_lst
 
   const ngran_node_t node_type = get_e2_node_type();
 
+  gNB_MAC_INST *mac = RC.nrmac[0];
+  NR_SCHED_LOCK(&mac->sched_lock);
   // Take MAC info
-  UE_iterator(RC.nrmac[0]->UE_info.connected_ue_list, ue) {
+  UE_iterator(mac->UE_info.connected_ue_list, ue) {
     NR_UE_sched_ctrl_t *sched_ctrl = &ue->UE_sched_ctrl;
     // UE matches if any of its DRBs matches
     for (size_t l = 0; l < seq_arr_size(&sched_ctrl->lc_config); ++l) {
@@ -315,6 +321,10 @@ static arr_ue_id_t filter_ues_by_s_nssai_in_du_or_monolithic(const test_info_lst
     }
     AssertFatal(arr_ue_id.sz < MAX_MOBILES_PER_GNB, "cannot have more UEs than global UE number maximum\n");
   }
+
+  node_stats[1].mac_stats.dl.total_prb_aggregate = mac->mac_stats.dl.total_prb_aggregate;
+  node_stats[1].mac_stats.ul.total_prb_aggregate = mac->mac_stats.ul.total_prb_aggregate;
+  NR_SCHED_UNLOCK(&mac->sched_lock);
 
   free(sd); // if NULL, nothing happens
 

@@ -33,6 +33,39 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#define ALIGNARRAYSIZE(a, b) (((a + b - 1) / b) * b)
+#define ALNARS_16_4(a) ALIGNARRAYSIZE(a, 4)
+
+typedef struct complexd {
+  double r;
+  double i;
+} cd_t;
+
+typedef struct complexf {
+  float r;
+  float i;
+} cf_t;
+
+typedef struct complex8 {
+  int8_t r;
+  int8_t i;
+} c8_t;
+
+typedef struct complex16 {
+  int16_t r;
+  int16_t i;
+} c16_t;
+
+typedef struct complex32 {
+  int32_t r;
+  int32_t i;
+} c32_t;
+
+typedef struct complex64 {
+  int64_t r;
+  int64_t i;
+} c64_t;
+
 //-----------------------------------------------------------------------------
 // GENERIC ACCESS STRATUM TYPES
 //-----------------------------------------------------------------------------
@@ -45,7 +78,6 @@ typedef uint16_t module_id_t;
 typedef uint8_t slice_id_t;
 typedef uint8_t eNB_index_t;
 typedef uint64_t ue_id_t;
-typedef int16_t smodule_id_t;
 typedef long rb_id_t;
 typedef long srb_id_t;
 
@@ -74,24 +106,7 @@ typedef enum {
   FDD = 0
 } frame_type_t;
 
-typedef enum link_direction_e { UNKNOWN_DIR = 0, DIR_UPLINK = 1, DIR_DOWNLINK = 2 } link_direction_t;
-
-typedef enum rb_type_e { UNKNOWN_RADIO_BEARER = 0, SIGNALLING_RADIO_BEARER = 1, RADIO_ACCESS_BEARER = 2 } rb_type_t;
-
-typedef enum { CR_ROUND = 0, CR_SRB12 = 1, CR_HOL = 2, CR_LC = 3, CR_CQI = 4, CR_LCP = 5, CR_NUM = 6 } sorting_criterion_t;
-
-typedef enum { POL_FAIR = 0, POL_GREEDY = 1, POL_NUM = 2 } accounting_policy_t;
-//-----------------------------------------------------------------------------
-// PHY TYPES
-//-----------------------------------------------------------------------------
-typedef uint8_t crc8_t;
-typedef uint16_t crc16_t;
-typedef uint32_t crc32_t;
 typedef unsigned int crc_t;
-
-//-----------------------------------------------------------------------------
-// MAC TYPES
-//-----------------------------------------------------------------------------
 typedef sdu_size_t tbs_size_t;
 typedef sdu_size_t tb_size_t;
 typedef unsigned int logical_chan_id_t;
@@ -103,9 +118,6 @@ typedef uint8_t mac_enb_index_t;
 //-----------------------------------------------------------------------------
 typedef unsigned int mui_t;
 typedef unsigned int confirm_t;
-typedef unsigned int rlc_tx_status_t;
-typedef int16_t rlc_sn_t;
-typedef uint16_t rlc_usn_t;
 typedef int32_t rlc_buffer_occupancy_t;
 typedef signed int rlc_op_status_t;
 
@@ -130,7 +142,6 @@ typedef struct {
 //-----------------------------------------------------------------------------
 typedef uint16_t pdcp_sn_t;
 typedef uint32_t pdcp_hfn_t;
-typedef int16_t pdcp_hfn_offset_t;
 
 typedef enum pdcp_transmission_mode_e {
   PDCP_TRANSMISSION_MODE_UNKNOWN = 0,
@@ -177,7 +188,6 @@ typedef struct net_ip_address_s {
 typedef uint32_t mbms_session_id_t;
 typedef uint16_t mbms_service_id_t;
 typedef uint16_t rnti_t;
-typedef uint8_t rrc_enb_index_t;
 typedef uint8_t mme_code_t;
 typedef uint32_t m_tmsi_t;
 
@@ -188,7 +198,6 @@ typedef uint32_t m_tmsi_t;
 #define P_RNTI (rnti_t)0xFFFE
 #define SI_RNTI (rnti_t)0xFFFF
 #define CBA_RNTI (rnti_t)0xfff4
-#define OAI_C_RNTI (rnti_t)0x1234
 typedef enum config_action_e {
   CONFIG_ACTION_NULL = 0,
   CONFIG_ACTION_ADD = 1,
@@ -256,8 +265,6 @@ typedef struct protocol_ctxt_s {
   eNB_index_t eNB_index; /*!< \brief  valid for UE indicating the index of connected eNB(s)      */
   bool brOption;
 } protocol_ctxt_t;
-// warning time hardcoded
-#define PROTOCOL_CTXT_TIME_MILLI_SECONDS(CtXt_h) ((CtXt_h)->frame * 10 + (CtXt_h)->subframe)
 
 #define UE_MODULE_ID_TO_INSTANCE(mODULE_iD) mODULE_iD + RC.nb_inst
 #define ENB_MODULE_ID_TO_INSTANCE(mODULE_iD) mODULE_iD
@@ -308,12 +315,6 @@ typedef struct protocol_ctxt_s {
 #define PROTOCOL_CTXT_FMT "[FRAME %05u][%s][MOD %02d][RNTI %" PRIx64 "]"
 #define PROTOCOL_CTXT_ARGS(CTXT_Pp) \
   (CTXT_Pp)->frame, ((CTXT_Pp)->enb_flag == ENB_FLAG_YES) ? "eNB" : " UE", (CTXT_Pp)->module_id, (CTXT_Pp)->rntiMaybeUEid
-
-#define PROTOCOL_NR_CTXT_ARGS(CTXT_Pp) \
-  (CTXT_Pp)->frame, ((CTXT_Pp)->enb_flag == GNB_FLAG_YES) ? "gNB" : " UE", (CTXT_Pp)->module_id, (CTXT_Pp)->rntiMaybeUEid
-
-#define CHECK_CTXT_ARGS(CTXT_Pp)
-
 
 static inline int ceil_mod(const unsigned int v, const unsigned int mod)
 {

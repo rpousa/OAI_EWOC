@@ -249,7 +249,7 @@ void lte_param_init(unsigned char N_tx, unsigned char N_rx,unsigned char transmi
   PHY_vars_UE[1] = malloc(sizeof(PHY_VARS_UE));
   //PHY_config = malloc(sizeof(PHY_CONFIG));
   mac_xface = malloc(sizeof(MAC_xface));
-  randominit(0);
+  randominit();
   set_taus_seed(0);
   lte_frame_parms = &(PHY_vars_eNB->lte_frame_parms);
   lte_frame_parms->N_RB_DL            = N_RB_DL;   //50 for 10MHz and 25 for 5 MHz

@@ -1,5 +1,5 @@
 add_library(rfsimulator MODULE
-            simulator.c
+            simulator.cpp
             apply_channelmod.c
             ../../openair1/PHY/TOOLS/signal_energy.c
 )

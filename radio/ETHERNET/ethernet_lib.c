@@ -540,40 +540,6 @@ int transport_init(openair0_device *device,
 
     eth->if_name = eth_params->local_if_name;
     device->priv = eth;
-
-    
-    /* device specific */
-    //  openair0_cfg[0].iq_rxrescale = 15;//rescale iqs
-    //  openair0_cfg[0].iq_txshift = eth_params->iq_txshift;// shift
-    //  openair0_cfg[0].tx_sample_advance = eth_params->tx_sample_advance;
-
-    /* RRU does not have any information to make this configuration atm */
-    /*
-    if (device->host_type == RAU_HOST) {
-
-      switch ((int)openair0_cfg[0].sample_rate) {
-      case 30720000:
-        openair0_cfg[0].samples_per_packet    = 3840;
-        break;
-      case 23040000:
-        openair0_cfg[0].samples_per_packet    = 2880;
-        break;
-      case 15360000:
-        openair0_cfg[0].samples_per_packet    = 1920;
-        break;
-      case 7680000:
-        openair0_cfg[0].samples_per_packet    = 960;
-        break;
-      case 1920000:
-        openair0_cfg[0].samples_per_packet    = 240;
-        break;
-      default:
-        printf("Error: unknown sampling rate %f\n",openair0_cfg[0].sample_rate);
-        exit(-1);
-        break;
-      }
-      }*/
-
     device->openair0_cfg=&openair0_cfg[0];
     return 0;
 }

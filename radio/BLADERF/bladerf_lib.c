@@ -957,8 +957,6 @@ int device_init(openair0_device *device,
     /* device specific */
     //openair0_cfg->txlaunch_wait = 1;//manage when TX processing is triggered
     //openair0_cfg->txlaunch_wait_slotcount = 1; //manage when TX processing is triggered
-    openair0_cfg->iq_txshift = 0;// shift
-    openair0_cfg->iq_rxrescale = 15;//rescale iqs
 
     // init required params
     switch ((int)openair0_cfg->sample_rate) {
@@ -983,8 +981,6 @@ int device_init(openair0_device *device,
         exit(-1);
         break;
     }
-    openair0_cfg->iq_txshift= 0;
-    openair0_cfg->iq_rxrescale = 15; /*not sure*/
     openair0_cfg->rx_gain_calib_table = calib_table_fx4;
 
     //  The number of buffers to use in the underlying data stream

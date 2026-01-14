@@ -22,11 +22,6 @@
 #ifndef __POSITION_INTERFACE__H__
 #define __POSITION_INTERFACE__H__
 
-#include <executables/nr-softmodem-common.h>
-#include <executables/softmodem-common.h>
-#include "PHY/defs_nr_UE.h"
-#include "executables/nr-uesoftmodem.h"
-
 /* position configuration parameters name */
 #define CONFIG_STRING_POSITION_X "x"
 #define CONFIG_STRING_POSITION_Y "y"

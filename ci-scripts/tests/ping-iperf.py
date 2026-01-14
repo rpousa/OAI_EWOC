@@ -23,7 +23,7 @@ class TestPingIperf(unittest.TestCase):
 		self.html.testCaseId = "000000"
 		self.ci = cls_oaicitest.OaiCiTest()
 		self.ci.ue_ids = ["test"]
-		self.ci.nodes = ["localhost"]
+		self.node = "localhost"
 		self.ctx = TestCaseCtx.Default(tempfile.mkdtemp())
 	def tearDown(self):
 		with cls_cmd.LocalCmd() as c:
@@ -35,7 +35,7 @@ class TestPingIperf(unittest.TestCase):
 		self.ci.svr_id = "test"
 		infra_file = "tests/config/infra_ping_iperf.yaml"
 		# TODO Should need nothing but options and UE(s) to use
-		success = self.ci.Ping(self.ctx, self.html, infra_file=infra_file)
+		success = self.ci.Ping(self.ctx, self.node, self.html, infra_file=infra_file)
 		self.assertTrue(success)
 
 	def test_iperf(self):
@@ -50,7 +50,7 @@ class TestPingIperf(unittest.TestCase):
 		self.ci.iperf_profile = "balanced"
 		infra_file = "tests/config/infra_ping_iperf.yaml"
 		# TODO Should need nothing but options and UE(s) to use
-		success = self.ci.Iperf(self.ctx, self.html, infra_file=infra_file)
+		success = self.ci.Iperf(self.ctx, self.node, self.html, infra_file=infra_file)
 		self.assertTrue(success)
 
 	def test_iperf2_unidir(self):
@@ -62,7 +62,7 @@ class TestPingIperf(unittest.TestCase):
 		self.ci.iperf_profile = "balanced"
 		infra_file = "tests/config/infra_ping_iperf.yaml"
 		# TODO Should need nothing but options and UE(s) to use
-		success = self.ci.Iperf2_Unidir(self.ctx, self.html, infra_file=infra_file)
+		success = self.ci.Iperf2_Unidir(self.ctx, self.node, self.html, infra_file=infra_file)
 		self.assertTrue(success)
 
 	def test_iperf_highrate(self):
@@ -77,7 +77,7 @@ class TestPingIperf(unittest.TestCase):
 		self.ci.iperf_profile = "balanced"
 		infra_file = "tests/config/infra_ping_iperf.yaml"
 		# TODO Should need nothing but options and UE(s) to use
-		success = self.ci.Iperf(self.ctx, self.html, infra_file=infra_file)
+		success = self.ci.Iperf(self.ctx, self.node, self.html, infra_file=infra_file)
 		self.assertTrue(success)
 
 if __name__ == '__main__':

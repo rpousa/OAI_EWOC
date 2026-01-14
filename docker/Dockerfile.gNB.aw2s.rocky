@@ -51,7 +51,8 @@ RUN dnf update -y && \
         lksctp-tools \
         tzdata \
         net-tools \
-        iputils && \
+        iputils \
+        yaml-cpp-devel && \
     echo "/usr/local/lib" > /etc/ld.so.conf.d/local-lib.conf && \
     echo "/usr/local/lib64" >> /etc/ld.so.conf.d/local-lib.conf
 
@@ -95,6 +96,7 @@ RUN ln -s /usr/local/lib/libaw2sori_transpro.so /usr/local/lib/libthirdparty_tra
 
 WORKDIR /opt/oai-gnb-aw2s
 
+COPY --from=gnb-base /usr/local/bin/yq /usr/local/bin/yq
 COPY --from=gnb-base /tini /tini
 ENTRYPOINT ["/tini", "-v", "--", "/opt/oai-gnb-aw2s/bin/entrypoint.sh"]
 CMD ["/opt/oai-gnb-aw2s/bin/nr-softmodem"]

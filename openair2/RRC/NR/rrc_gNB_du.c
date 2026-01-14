@@ -257,6 +257,11 @@ static bool valid_du_in_neighbour_configs(const seq_arr_t *neighbour_cell_config
               nc->absoluteFrequencySSB);
         return false;
       }
+      // Check neighbour band
+      if (get_dl_band(cell) != nc->band) {
+        LOG_W(NR_RRC, "Cell %ld in neighbour config: Band mismatch (%d vs %d)\n", cell->nr_cellid, get_dl_band(cell), nc->band);
+        return false;
+      }
       if (get_ssb_scs(cell) != nc->subcarrierSpacing) {
         LOG_W(NR_RRC,
               "Cell %ld in neighbour config: SCS mismatch (%d vs %d)\n",

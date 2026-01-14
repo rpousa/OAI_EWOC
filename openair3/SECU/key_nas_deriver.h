@@ -16,7 +16,7 @@ typedef enum {
   UP_INT_ALG = 0x06
 } algorithm_type_dist_t;
 
-void derive_kgnb(uint8_t kamf[32], uint32_t count, uint8_t *kgnb);
+void derive_kgnb(const uint8_t kamf[32], const uint32_t count, uint8_t *kgnb);
 
 void derive_keNB(const uint8_t kasme[32], const uint32_t nas_count, uint8_t *keNB);
 

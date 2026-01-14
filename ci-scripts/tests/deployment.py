@@ -60,6 +60,33 @@ class TestDeploymentMethods(unittest.TestCase):
 		self.assertTrue(deploy)
 		self.assertTrue(undeploy)
 
+	def test_stop_services(self):
+		self.cont.yamlPath = 'tests/simple-undep/'
+		self.cont.deploymentTag = "noble"
+		# should deploy both testA and testB
+		deploy = self.cont.DeployObject(self.ctx, self.node, self.html)
+		# should fail (no such service)
+		self.cont.services = "testC"
+		stopC = self.cont.StopObject(self.ctx, self.node, self.html)
+		# should stop testA
+		self.cont.services = "testA"
+		stopA = self.cont.StopObject(self.ctx, self.node, self.html)
+		# should (re-)stop testA (no-op)
+		self.cont.services = "testA"
+		stopA2 = self.cont.StopObject(self.ctx, self.node, self.html)
+		# should deploy testB
+		self.cont.services = "testB"
+		stopB = self.cont.StopObject(self.ctx, self.node, self.html)
+		# should not undeploy anything (everything already stopped)
+		self.cont.services = None
+		undeployAll = self.cont.UndeployObject(self.ctx, self.node, self.html, self.ran)
+		self.assertTrue(deploy)
+		self.assertFalse(stopC)
+		self.assertTrue(stopA)
+		self.assertTrue(stopA2)
+		self.assertTrue(stopB)
+		self.assertTrue(undeployAll)
+
 	def test_deployfails(self):
 		# fails reliably
 		old = self.cont.yamlPath

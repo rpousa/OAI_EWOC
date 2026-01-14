@@ -106,7 +106,7 @@ ngap_cause_t decode_ngap_cause(const NGAP_Cause_t *in)
 nr_guami_t decode_ngap_guami(const NGAP_GUAMI_t *in)
 {
   nr_guami_t out = {0};
-  TBCD_TO_MCC_MNC(&in->pLMNIdentity, out.mcc, out.mnc, out.mnc_len);
+  TBCD_TO_MCC_MNC(&in->pLMNIdentity, out.plmn.mcc, out.plmn.mnc, out.plmn.mnc_digit_length);
   OCTET_STRING_TO_INT8(&in->aMFRegionID, out.amf_region_id);
   OCTET_STRING_TO_INT16(&in->aMFSetID, out.amf_set_id);
   OCTET_STRING_TO_INT8(&in->aMFPointer, out.amf_pointer);

@@ -174,7 +174,7 @@ int main(int argc, char **argv)
   for (i = 0; i<4; i++)
     ch[i] = (struct complexd*) malloc(channel_length * sizeof(struct complexd));
 
-  randominit(0);
+  randominit();
   set_taus_seed(0);
 
 #ifdef RF

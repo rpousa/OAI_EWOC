@@ -1254,6 +1254,10 @@ uint8_t pack_nr_p5_message_body(nfapi_nr_p4_p5_message_header_t *header,
       result = pack_stop_request(header, ppWritePackedMsg, end, config);
       break;
 
+    case NFAPI_NR_PHY_MSG_TYPE_STOP_INDICATION:
+      result = pack_nr_stop_indication(header, ppWritePackedMsg, end, config);
+      break;
+
     case NFAPI_NR_PHY_MSG_TYPE_STOP_RESPONSE:
       result = pack_stop_response(header, ppWritePackedMsg, end, config);
       break;
@@ -2445,6 +2449,10 @@ bool nfapi_nr_p5_message_unpack(void *pMessageBuf,
 
     case NFAPI_NR_PHY_MSG_TYPE_STOP_REQUEST:
       result = unpack_stop_request(&pReadPackedMessage, end, pMessageHeader, config);
+      break;
+
+    case NFAPI_NR_PHY_MSG_TYPE_STOP_INDICATION:
+      result = unpack_nr_stop_indication(&pReadPackedMessage, end, pMessageHeader, config);
       break;
 
     case NFAPI_NR_PHY_MSG_TYPE_STOP_RESPONSE:

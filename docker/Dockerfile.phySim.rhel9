@@ -106,4 +106,11 @@ COPY --from=phy-sim-build \
     /oai-ran/cmake_targets/ran_build/build/openair1/SIMULATION/tests/CTestTestfile.cmake \
     /opt/oai-physim/
 
+RUN mkdir -p /oai-ran/openair1/SIMULATION/tests
+
+COPY --from=phy-sim-build \
+    /oai-ran/openair1/SIMULATION/tests/RunTimedTest.cmake \
+    /oai-ran/openair1/SIMULATION/tests/analyze-timing.sh \
+    /oai-ran/openair1/SIMULATION/tests/
+
 #CMD ["sleep", "infinity"]

@@ -70,6 +70,7 @@ void math_dft(cd_t *in, cd_t *out, int len)
 int main(void)
 {
   int ret = 0;
+  randominit();
   load_dftslib();
   c16_t *d16 = malloc16(12 * dftFtab[sizeofArray(dftFtab) - 1].size * sizeof(*d16));
   c16_t *o16 = malloc16(12 * dftFtab[sizeofArray(dftFtab) - 1].size * sizeof(*d16));

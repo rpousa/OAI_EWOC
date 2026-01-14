@@ -64,9 +64,6 @@
 #include "LTE_UECapabilityEnquiry.h"
 #include "LTE_UE-CapabilityRequest.h"
 
-#include "NR_RAT-Type.h"
-#include "NR_UE-CapabilityRAT-Container.h"
-
 #include "common/utils/tun_if.h"
 #if ENABLE_RAL
   #include "rrc_UE_ral.h"
@@ -97,9 +94,6 @@
 //for D2D
 int ctrl_sock_fd;
 struct sockaddr_in prose_app_addr;
-static const char nsa_ipaddr[] = "127.0.0.1";
-static int from_nr_ue_fd = -1;
-static int to_nr_ue_fd = -1;
 int slrb_id;
 int send_ue_information = 0;
 // TimeToTrigger enum mapping table (36.331 TimeToTrigger IE)
@@ -144,21 +138,9 @@ typedef struct rrc_dcch_data_copy_t
     LTE_DL_DCCH_Message_t *dl_dcch_msg;
 } rrc_dcch_data_copy_t;
 
-typedef struct rrc_nrue_cap_info_t
-{
-    uint8_t mesg[RRC_BUF_SIZE];
-    size_t mesg_len;
-    LTE_DL_DCCH_Message_t *dl_dcch_msg;
-} rrc_nrue_cap_info_t;
-
 static void rrc_ue_process_ueCapabilityEnquiry(const protocol_ctxt_t *const ctxt_pP,
                                                LTE_UECapabilityEnquiry_t *UECapabilityEnquiry,
                                                uint8_t eNB_index);
-
-static void rrc_ue_process_nrueCapabilityEnquiry(const protocol_ctxt_t *const ctxt_pP,
-                                                 LTE_UECapabilityEnquiry_t *UECapabilityEnquiry,
-                                                 rrc_nrue_cap_info_t *nrue_cap_info,
-                                                 uint8_t eNB_index);
 
 /** \brief Generates/Encodes RRCConnnectionSetupComplete message at UE
  *  \param ctxt_pP Running context
@@ -184,8 +166,6 @@ static void rrc_ue_generate_RRCConnectionReconfigurationComplete(const protocol_
 
 static void rrc_ue_generate_MeasurementReport(protocol_ctxt_t *const ctxt_pP, uint8_t eNB_index );
 
-static void rrc_ue_generate_nrMeasurementReport(protocol_ctxt_t *const ctxt_pP, uint8_t eNB_index );
-
 static uint8_t check_trigger_meas_event(
   module_id_t module_idP,
   frame_t frameP,
@@ -208,8 +188,6 @@ rrc_ue_process_MBMSCountingRequest(
   uint8_t eNB_index
 		);
 
-static void process_nr_nsa_msg(nsa_msg_t *msg, int msg_len);
-static void nsa_sendmsg_to_nrue(const void *message, size_t msg_len, Rrc_Msg_Type_t msg_type);
 protocol_ctxt_t ctxt_pP_local;
 
 
@@ -838,25 +816,6 @@ rrc_ue_process_measConfig(
                   measObj->measObject.choice.measObjectEUTRA.allowedMeasBandwidth,
                   measObj->measObject.choice.measObjectEUTRA.presenceAntennaPort1,
                   measObj->measObject.choice.measObjectEUTRA.neighCellConfig.buf[0]);
-          } else if (measObj->measObject.present == LTE_MeasObjectToAddMod__measObject_PR_measObjectNR_r15) {
-            ue->subframeCount = 0;
-            LOG_I(RRC, "NR_r15 Measurement: carrierFreq: %ld\n",
-                  measObj->measObject.choice.measObjectNR_r15.carrierFreq_r15);
-            if (!get_softmodem_params()->nsa) {
-              LOG_E(RRC, "Not in NSA mode but attempting to send measurement request to NR-UE\n");
-              return;
-            }
-            uint8_t buffer[RRC_BUF_SIZE];
-            asn_enc_rval_t enc_rval = uper_encode_to_buffer(&asn_DEF_LTE_MeasObjectToAddMod,
-                                                            NULL,
-                                                            measObj,
-                                                            buffer,
-                                                            sizeof(buffer));
-            AssertFatal (enc_rval.encoded > 0, "ASN1 message encoding failed (%s, %zu)!\n",
-                          enc_rval.failed_type->name, enc_rval.encoded);
-            nsa_sendmsg_to_nrue(buffer, (enc_rval.encoded + 7)/8, RRC_MEASUREMENT_PROCEDURE);
-            LOG_A(RRC, "Encoded measurement object %zu bits (%zu bytes) and sent to NR UE\n",
-                  enc_rval.encoded, (enc_rval.encoded + 7)/8);
           }
           LOG_D(RRC, "Adding measurement object [%d][%ld]\n", eNB_index, ind);
           ue->MeasObj[eNB_index][ind-1]=measObj;
@@ -1697,102 +1656,6 @@ rrc_ue_process_MBMSCountingRequest(
 
 }
 
-
-//-----------------------------------------------------------------------------
-void
-rrc_ue_process_nrueCapabilityEnquiry(
-  const protocol_ctxt_t *const ctxt_pP,
-  LTE_UECapabilityEnquiry_t *UECapabilityEnquiry,
-  rrc_nrue_cap_info_t *nrue_cap_info,
-  uint8_t eNB_index
-)
-//-----------------------------------------------------------------------------
-{
-  asn_enc_rval_t enc_rval;
-  uint8_t buffer[RRC_BUF_SIZE];
-  LOG_I(RRC,"[UE %d] Frame %d: Receiving from SRB1 (DL-DCCH), Processing NRUECapabilityEnquiry (eNB %d)\n",
-        ctxt_pP->module_id,
-        ctxt_pP->frame,
-        eNB_index);
-  LTE_UL_DCCH_Message_t ul_dcch_msg;
-  memset(&ul_dcch_msg, 0, sizeof(ul_dcch_msg));
-  LTE_UECapabilityInformation_t *ue_cap = &ul_dcch_msg.message.choice.c1.choice.ueCapabilityInformation;
-  ul_dcch_msg.message.present = LTE_UL_DCCH_MessageType_PR_c1;
-  ul_dcch_msg.message.choice.c1.present = LTE_UL_DCCH_MessageType__c1_PR_ueCapabilityInformation;
-  ue_cap->rrc_TransactionIdentifier = UECapabilityEnquiry->rrc_TransactionIdentifier;
-
-  NR_UE_CapabilityRAT_Container_t ue_CapabilityRAT_Container;
-  memset(&ue_CapabilityRAT_Container, 0, sizeof(ue_CapabilityRAT_Container));
-  ue_CapabilityRAT_Container.rat_Type = NR_RAT_Type_nr;
-  OCTET_STRING_fromBuf(&ue_CapabilityRAT_Container.ue_CapabilityRAT_Container,
-                       (const char *)nrue_cap_info->mesg,
-                       nrue_cap_info->mesg_len);
-  # if(1) // TODO: The MRDC capabilites should be filled in the NR UE
-  NR_UE_CapabilityRAT_Container_t ue_CapabilityRAT_Container_mrdc;
-  memset(&ue_CapabilityRAT_Container_mrdc, 0, sizeof(ue_CapabilityRAT_Container_mrdc));
-  uint8_t buffer_mrdc[RRC_BUF_SIZE];
-  NR_UE_MRDC_Capability_t *UE_Capability_MRDC = CALLOC(1, sizeof(NR_UE_MRDC_Capability_t));
-  asn_enc_rval_t enc_rval_mrdc = uper_encode_to_buffer(&asn_DEF_NR_UE_MRDC_Capability,
-                                   NULL,
-                                   (void *)UE_Capability_MRDC,
-                                   &buffer_mrdc,
-                                   sizeof(buffer_mrdc));
-  AssertFatal (enc_rval_mrdc.encoded > 0, "ASN1 message encoding failed (%s, %lu)!\n",
-               enc_rval_mrdc.failed_type->name, enc_rval_mrdc.encoded);
-  LOG_I(RRC, "[NR_RRC] NRUE MRDC Capability encoded, %ld bytes (%ld bits)\n",
-        (enc_rval_mrdc.encoded + 7) / 8, enc_rval_mrdc.encoded + 7);
-
-  ue_CapabilityRAT_Container_mrdc.rat_Type = NR_RAT_Type_eutra_nr;
-  OCTET_STRING_fromBuf(&ue_CapabilityRAT_Container_mrdc.ue_CapabilityRAT_Container,
-                       (const char *)buffer_mrdc,
-                       (enc_rval_mrdc.encoded + 7) / 8);
-  #endif
-
-  ue_cap->criticalExtensions.present           = LTE_UECapabilityInformation__criticalExtensions_PR_c1;
-  ue_cap->criticalExtensions.choice.c1.present = LTE_UECapabilityInformation__criticalExtensions__c1_PR_ueCapabilityInformation_r8;
-  ue_cap->criticalExtensions.choice.c1.choice.ueCapabilityInformation_r8.ue_CapabilityRAT_ContainerList.list.count = 0;
-  int count = UECapabilityEnquiry->criticalExtensions.choice.c1.choice.ueCapabilityEnquiry_r8.ue_CapabilityRequest.list.count;
-  xer_fprint(stdout, &asn_DEF_NR_UE_CapabilityRAT_Container, (void *)&ue_CapabilityRAT_Container);
-  LTE_UE_CapabilityRequest_t *cap_req = &UECapabilityEnquiry->criticalExtensions.choice.c1.choice.ueCapabilityEnquiry_r8.ue_CapabilityRequest;
-  for (int i = 0; i < count; i++) {
-    enc_rval.encoded = 0;
-    if (*cap_req->list.array[i] == LTE_RAT_Type_nr) {
-        asn1cSeqAdd(&ue_cap->criticalExtensions.choice.c1.choice.ueCapabilityInformation_r8.ue_CapabilityRAT_ContainerList.list,
-                         &ue_CapabilityRAT_Container);
-        ue_cap->criticalExtensions.choice.c1.choice.ueCapabilityInformation_r8.ue_CapabilityRAT_ContainerList.list.array[i]->rat_Type = LTE_RAT_Type_nr;
-        asn_enc_rval_t enc_rval_nr = uper_encode_to_buffer(&asn_DEF_LTE_UL_DCCH_Message, NULL, (void *) &ul_dcch_msg, buffer, sizeof(buffer));
-        AssertFatal (enc_rval_nr.encoded > 0, "ASN1 message encoding failed (%s, %jd)!\n",
-                     enc_rval_nr.failed_type->name, enc_rval_nr.encoded);
-        enc_rval.encoded = enc_rval.encoded + enc_rval_nr.encoded;
-        xer_fprint(stdout, &asn_DEF_LTE_UL_DCCH_Message, (void *)&ul_dcch_msg);
-        LOG_A(RRC, "%s: NR_UECapInfo LTE_RAT_Type_nr Encoded %zd bits (%zd bytes)\n",
-              __FUNCTION__, enc_rval.encoded, (enc_rval.encoded+7)/8);
-    }
-    else if (*cap_req->list.array[i] == LTE_RAT_Type_eutra_nr) {
-        asn1cSeqAdd(&ue_cap->criticalExtensions.choice.c1.choice.ueCapabilityInformation_r8.ue_CapabilityRAT_ContainerList.list,
-                         &ue_CapabilityRAT_Container_mrdc);
-        ue_cap->criticalExtensions.choice.c1.choice.ueCapabilityInformation_r8.ue_CapabilityRAT_ContainerList.list.array[i]->rat_Type = LTE_RAT_Type_eutra_nr;
-        asn_enc_rval_t enc_rval_eutra_nr = uper_encode_to_buffer(&asn_DEF_LTE_UL_DCCH_Message, NULL, (void *) &ul_dcch_msg, buffer, sizeof(buffer));
-        AssertFatal (enc_rval_eutra_nr.encoded > 0, "ASN1 message encoding failed (%s, %jd)!\n",
-                     enc_rval_eutra_nr.failed_type->name, enc_rval_eutra_nr.encoded);
-        enc_rval.encoded = enc_rval.encoded + enc_rval_eutra_nr.encoded;
-        xer_fprint(stdout, &asn_DEF_LTE_UL_DCCH_Message, (void *)&ul_dcch_msg);
-        LOG_A(RRC, "%s: NR_UECapInfo LTE_RAT_Type_eutra_nr Encoded %zd bits (%zd bytes)\n",
-              __FUNCTION__, enc_rval.encoded, (enc_rval.encoded+7)/8);
-    }
-    rrc_data_req_ue (
-      ctxt_pP,
-      DCCH,
-      rrc_mui++,
-      SDU_CONFIRM_NO,
-      (enc_rval.encoded + 7) / 8,
-      buffer,
-      PDCP_TRANSMISSION_MODE_CONTROL);
-  }
-}
-
-
-
 //-----------------------------------------------------------------------------
 void
 rrc_ue_process_ueCapabilityEnquiry(
@@ -1861,57 +1724,9 @@ rrc_ue_process_ueCapabilityEnquiry(
         buffer,
         PDCP_TRANSMISSION_MODE_CONTROL);
     }
-    else if (*UECapabilityEnquiry->criticalExtensions.choice.c1.choice.ueCapabilityEnquiry_r8.ue_CapabilityRequest.list.array[i]
-            == LTE_RAT_Type_nr) {
-        asn1cSeqAdd(
-          &ul_dcch_msg.message.choice.c1.choice.ueCapabilityInformation.criticalExtensions.choice.c1.choice.ueCapabilityInformation_r8.ue_CapabilityRAT_ContainerList.list,
-          &ue_CapabilityRAT_Container);
-        enc_rval = uper_encode_to_buffer(&asn_DEF_LTE_UL_DCCH_Message, NULL, (void *) &ul_dcch_msg, buffer, 100);
-        AssertFatal (enc_rval.encoded > 0, "ASN1 message encoding failed (%s, %jd)!\n",
-                    enc_rval.failed_type->name, enc_rval.encoded);
-
-        if ( LOG_DEBUGFLAG(DEBUG_ASN1) ) {
-          xer_fprint(stdout, &asn_DEF_LTE_UL_DCCH_Message, (void *)&ul_dcch_msg);
-        }
-
-        LOG_A(RRC, "%s: NR_UECapabilityInformation Encoded %zd bits (%zd bytes)\n",
-              __FUNCTION__, enc_rval.encoded,(enc_rval.encoded+7)/8);
-        rrc_data_req_ue (
-          ctxt_pP,
-          DCCH,
-          rrc_mui++,
-          SDU_CONFIRM_NO,
-          (enc_rval.encoded + 7) / 8,
-          buffer,
-          PDCP_TRANSMISSION_MODE_CONTROL);
-        }
   }
 }
 
-static bool is_nr_r15_config_present(LTE_RRCConnectionReconfiguration_r8_IEs_t *c)
-{
-#define NCE nonCriticalExtension
-#define chk(x) do { \
-  if ((x) == NULL) { \
-    LOG_I(RRC, "NULL at %d\n", __LINE__); \
-    return false; \
-  } \
-} while(0)
-  chk(c);
-  chk(c->NCE);
-  chk(c->NCE->NCE);
-  chk(c->NCE->NCE->NCE);
-  chk(c->NCE->NCE->NCE->NCE);
-  chk(c->NCE->NCE->NCE->NCE->NCE);
-  chk(c->NCE->NCE->NCE->NCE->NCE->NCE);
-  chk(c->NCE->NCE->NCE->NCE->NCE->NCE->NCE);
-  chk(c->NCE->NCE->NCE->NCE->NCE->NCE->NCE->NCE);
-  return c->NCE->NCE->NCE->NCE->NCE->NCE->NCE->NCE->nr_Config_r15->present ==
-         LTE_RRCConnectionReconfiguration_v1510_IEs__nr_Config_r15_PR_setup;
-
-#undef NCE
-#undef chk
-}
 /** \brief process the received rrcConnectionReconfiguration message at UE
     \param ctxt_pP Running context
     \param *rrcConnectionReconfiguration pointer to the sturcture
@@ -1931,42 +1746,6 @@ static void rrc_ue_process_rrcConnectionReconfiguration(const protocol_ctxt_t *c
       LTE_RRCConnectionReconfiguration_r8_IEs_t *r_r8 = &rrcConnectionReconfiguration->
                                                          criticalExtensions.choice.c1.
                                                          choice.rrcConnectionReconfiguration_r8;
-
-      if (is_nr_r15_config_present(r_r8)) {
-          OCTET_STRING_t *nr_RadioBearer = r_r8->nonCriticalExtension->nonCriticalExtension->
-                                            nonCriticalExtension->nonCriticalExtension->nonCriticalExtension->
-                                            nonCriticalExtension->nonCriticalExtension->nonCriticalExtension->
-                                            nr_RadioBearerConfig1_r15;
-          OCTET_STRING_t *nr_SecondaryCellGroup = r_r8->nonCriticalExtension->nonCriticalExtension->
-                                            nonCriticalExtension->nonCriticalExtension->nonCriticalExtension->
-                                            nonCriticalExtension->nonCriticalExtension->nonCriticalExtension->
-                                            nr_Config_r15->choice.setup.nr_SecondaryCellGroupConfig_r15;
-          uint32_t total_size = nr_RadioBearer->size + nr_SecondaryCellGroup->size;
-          struct msg {
-                uint32_t RadioBearer_size;
-                uint32_t SecondaryCellGroup_size;
-                uint8_t trans_id;
-                uint8_t padding[3];
-                uint8_t *buffer;
-          } msg;
-
-          msg.buffer = calloc(total_size, sizeof(*msg.buffer));
-          AssertFatal(msg.buffer != NULL, "Error in memory allocation\n");
-          msg.RadioBearer_size = nr_RadioBearer->size;
-          msg.SecondaryCellGroup_size = nr_SecondaryCellGroup->size;
-          msg.trans_id = rrcConnectionReconfiguration->rrc_TransactionIdentifier;
-          memcpy(msg.buffer, nr_RadioBearer->buf, nr_RadioBearer->size);
-          memcpy(msg.buffer + nr_RadioBearer->size, nr_SecondaryCellGroup->buf, nr_SecondaryCellGroup->size);
-
-          LOG_D(RRC, "nr_RadioBearerConfig1_r15 size %ld nr_SecondaryCellGroupConfig_r15 size %ld, sizeof(msg) = %zu\n",
-                      nr_RadioBearer->size,
-                      nr_SecondaryCellGroup->size,
-                      sizeof(msg));
-
-          nsa_sendmsg_to_nrue(&msg, sizeof(msg), RRC_CONFIG_COMPLETE_REQ);
-          free(msg.buffer);
-          LOG_A(RRC, "Sent RRC_CONFIG_COMPLETE_REQ to the NR UE\n");
-      }
 
       if (r_r8->mobilityControlInfo) {
         LOG_I(RRC,"Mobility Control Information is present\n");
@@ -2483,52 +2262,7 @@ static void rrc_ue_decode_dcch(const protocol_ctxt_t *const ctxt_pP,
                 ctxt_pP->module_id,
                 eNB_indexP);
 
-          LTE_UE_CapabilityRequest_t *ue_cap = &dl_dcch_msg->message.choice.c1.choice.ueCapabilityEnquiry.criticalExtensions.
-                                                choice.c1.choice.ueCapabilityEnquiry_r8.ue_CapabilityRequest;
-          bool have_received_nrue_cap = false;
-          for (int i = 0; i < ue_cap->list.count; i++) {
-            if (*ue_cap->list.array[i] == LTE_RAT_Type_nr || *ue_cap->list.array[i] == LTE_RAT_Type_eutra_nr) {
-                have_received_nrue_cap = true;
-                break;
-            }
-          }
-          if (have_received_nrue_cap) {
-                LTE_UECapabilityEnquiry_t *ueCapabilityEnquiry_nsa = &dl_dcch_msg->message.choice.c1.choice.ueCapabilityEnquiry;
-                OCTET_STRING_t * requestedFreqBandsNR = ueCapabilityEnquiry_nsa->
-                                      criticalExtensions.choice.c1.choice.ueCapabilityEnquiry_r8.nonCriticalExtension->
-                                      nonCriticalExtension->nonCriticalExtension->nonCriticalExtension->
-                                      nonCriticalExtension->requestedFreqBandsNR_MRDC_r15;
-                nsa_sendmsg_to_nrue(requestedFreqBandsNR->buf, requestedFreqBandsNR->size, NRUE_CAPABILITY_ENQUIRY);
-                LOG_A(RRC, "Second ueCapabilityEnquiry (request for NR capabilities) sent to NR UE with size %zu\n",
-                      requestedFreqBandsNR->size);
-                // Save ueCapabilityEnquiry so we can use in nsa mode after nrUE response is received
-                UE_RRC_INFO *info = &UE_rrc_inst[ctxt_pP->module_id].Info[eNB_indexP];
-                if (info->dl_dcch_msg != NULL) {
-                  info->dl_dcch_msg = NULL;
-                }
-                info->dl_dcch_msg = dl_dcch_msg;
-                dl_dcch_msg = NULL;
-          } else if (get_softmodem_params()->nsa && !have_received_nrue_cap) {
-              LTE_UECapabilityEnquiry_t *ueCapabilityEnquiry_nsa = &dl_dcch_msg->message.choice.c1.choice.ueCapabilityEnquiry;
-              OCTET_STRING_t * requestedFreqBandsNR = ueCapabilityEnquiry_nsa->
-                                    criticalExtensions.choice.c1.choice.ueCapabilityEnquiry_r8.nonCriticalExtension->
-                                    nonCriticalExtension->nonCriticalExtension->nonCriticalExtension->
-                                    nonCriticalExtension->requestedFreqBandsNR_MRDC_r15;
-              nsa_sendmsg_to_nrue(requestedFreqBandsNR->buf, requestedFreqBandsNR->size, UE_CAPABILITY_ENQUIRY);
-              LOG_A(RRC, "Initial ueCapabilityEnquiry sent to NR UE with size %zu\n", requestedFreqBandsNR->size);
-              // Save ueCapabilityEnquiry so we can use in nsa mode after nrUE response is received
-              UE_RRC_INFO *info = &UE_rrc_inst[ctxt_pP->module_id].Info[eNB_indexP];
-              if (info->dl_dcch_msg != NULL) {
-                info->dl_dcch_msg = NULL;
-              }
-              info->dl_dcch_msg = dl_dcch_msg;
-              dl_dcch_msg = NULL;
-          } else {
-            rrc_ue_process_ueCapabilityEnquiry(
-              ctxt_pP,
-              &dl_dcch_msg->message.choice.c1.choice.ueCapabilityEnquiry,
-              eNB_indexP);
-          }
+          rrc_ue_process_ueCapabilityEnquiry(ctxt_pP, &dl_dcch_msg->message.choice.c1.choice.ueCapabilityEnquiry, eNB_indexP);
           break;
 
         case LTE_DL_DCCH_MessageType__c1_PR_counterCheck:
@@ -4285,43 +4019,6 @@ void ue_meas_filtering( const protocol_ctxt_t *const ctxt_pP, const uint8_t eNB_
     }
   }
 }
-//Below routine implements Measurement Reporting procedure from 36.331 Section 5.5.5
-//-----------------------------------------------------------------------------
-void rrc_ue_generate_nrMeasurementReport(protocol_ctxt_t *const ctxt_pP, uint8_t eNB_index ) {
-  uint8_t buffer[RRC_BUF_SIZE];
-  UE_RRC_INST *ue = &UE_rrc_inst[ctxt_pP->module_id];
-  uint8_t target_eNB_offset = ue->Info[0].handoverTarget;
-  LTE_PhysCellId_t targetCellId = ue->HandoverInfoUe.targetCellId;
-
-  for (int i = 0; i < MAX_MEAS_ID; i++) {
-    if (ue->measReportList[eNB_index][i] != NULL) {
-      LTE_MeasId_t measId = ue->measReportList[eNB_index][i]->measId;
-      long rsrp_s = binary_search_float(RSRP_meas_mapping, 98, ue->rsrp_db_filtered[eNB_index]);
-      long rsrq_s = binary_search_float(RSRQ_meas_mapping, 35, ue->rsrq_db_filtered[eNB_index]);
-      long rsrp_tar = binary_search_float(RSRP_meas_mapping, 98, ue->rsrp_db_filtered[target_eNB_offset]);
-      long rsrq_tar = binary_search_float(RSRQ_meas_mapping, 35, ue->rsrq_db_filtered[target_eNB_offset]);
-
-      LOG_I(RRC,"[UE %d] Frame %d: source eNB: %d target eNB: %d servingCell(%d) targetCell(%ld)\n",
-            ctxt_pP->module_id,
-            ctxt_pP->frame,
-            eNB_index,
-            target_eNB_offset,
-            get_adjacent_cell_id(ctxt_pP->module_id, eNB_index),
-            targetCellId);
-
-      if (ctxt_pP->frame != 0) {
-        LOG_I(RRC, "measId %ld, targetCellId %ld, rsrp_s %ld, rsrq_s %ld, rsrp_t %ld, rsrq_t %ld\n",
-                    measId, targetCellId, rsrp_s, rsrq_s, rsrp_tar, rsrq_tar);
-        ssize_t size = do_nrMeasurementReport(buffer, sizeof(buffer), measId, targetCellId, rsrp_s, rsrq_s, rsrp_tar, rsrq_tar);
-        AssertFatal(size >= 0, "do_nrMeasurementReport failed \n");
-        LOG_I(RRC, "[UE %d] Frame %d : Generating Measurement Report for eNB %d\n",
-              ctxt_pP->module_id, ctxt_pP->frame, eNB_index);
-        const bool result = pdcp_data_req(ctxt_pP,  SRB_FLAG_YES, DCCH, rrc_mui++, 0, size, buffer, PDCP_TRANSMISSION_MODE_DATA,NULL, NULL);
-        AssertFatal (result == true, "PDCP data request failed!\n");
-      }
-    }
-  }
-}
 
 //Below routine implements Measurement Reporting procedure from 36.331 Section 5.5.5
 //-----------------------------------------------------------------------------
@@ -4394,39 +4091,6 @@ void rrc_ue_generate_MeasurementReport(protocol_ctxt_t *const ctxt_pP, uint8_t e
     }
   }
 }
-
-static bool does_rrcConnReconfig_have_nr(const UE_RRC_INST *ue) {
-  for (int i = 0; i < NB_CNX_UE; i++) {
-    for (int j = 0; j < MAX_MEAS_ID; j++) {
-      LTE_ReportConfigId_t reportConfigId = ue->MeasId[i][j]->reportConfigId;
-      AssertFatal(reportConfigId >= 1 && reportConfigId <= MAX_MEAS_CONFIG, "Bad index\n");
-      const LTE_ReportConfigToAddMod_t *rc = ue->ReportConfig[i][reportConfigId-1];
-      if (rc == NULL) {
-        LOG_D(RRC, "UE_rrc_inst[ctxt_pP->module_id]->ReportConfig[%d][%ld] = NULL\n", i, reportConfigId-1);
-        continue;
-      }
-      if (rc->reportConfig.present != LTE_ReportConfigToAddMod__reportConfig_PR_reportConfigInterRAT) {
-        LOG_D(RRC, "reportConfig.present = %d, not LTE_ReportConfigToAddMod__reportConfig_PR_reportConfigInterRAT\n",
-              rc->reportConfig.present);
-        continue;
-      }
-      LTE_ReportConfigInterRAT_t irat = rc->reportConfig.choice.reportConfigInterRAT;
-      if (irat.triggerType.present != LTE_ReportConfigInterRAT__triggerType_PR_event) {
-        LOG_D(RRC, "irat.triggerType.present = %d, not LTE_ReportConfigInterRAT__triggerType_PR_event\n",
-              irat.triggerType.present);
-        continue;
-      }
-      if (irat.triggerType.choice.event.eventId.present != LTE_ReportConfigInterRAT__triggerType__event__eventId_PR_eventB1_NR_r15) {
-        LOG_D(RRC, "irat.triggerType.choice.event.eventId.present = %d\n",
-              irat.triggerType.choice.event.eventId.present);
-        continue;
-      }
-      return true;
-    }
-  }
-  return false;
-}
-
 
 // Measurement report triggering, described in 36.331 Section 5.5.4.1: called periodically
 //-----------------------------------------------------------------------------
@@ -4526,49 +4190,6 @@ void ue_measurement_report_triggering(protocol_ctxt_t *const ctxt_pP, const uint
                         ue->ReportConfig[i][j]->reportConfig.choice.reportConfigEUTRA.triggerType.present);
                   break;
               }
-            }
-          }
-
-          if (ue->MeasObj[i][measObjId-1]->measObject.present == LTE_MeasObjectToAddMod__measObject_PR_measObjectNR_r15) {
-            if (!does_rrcConnReconfig_have_nr(ue))
-              break;
-            LTE_ReportConfigInterRAT_t *rc = &ue->ReportConfig[i][reportConfigId-1]->reportConfig.choice.reportConfigInterRAT;
-            LTE_TimeToTrigger_t trig_per = rc->triggerType.choice.event.timeToTrigger;
-            ttt_ms = timeToTrigger_ms[trig_per];
-            LOG_D(RRC, "[UE %d] Frame %d: B1_NR_r15 event. count %d, ttt %ld\n",
-                  ctxt_pP->module_id, ctxt_pP->frame, ue->subframeCount, ttt_ms);
-            if (ue->subframeCount < ttt_ms) {
-              ++ue->subframeCount;
-              break;
-            }
-            ue->subframeCount = 0;
-            bool is_state_connected = false;
-            bool is_t304_inactive = false;
-            bool have_meas_flag = false;
-            if (ue->Info[0].State >= RRC_CONNECTED)
-              is_state_connected = true;
-            if (ue->Info[0].T304_active == 0)
-              is_t304_inactive = true;
-            if (ue->HandoverInfoUe.measFlag == 1)
-              have_meas_flag = true;
-
-            if (is_state_connected && is_t304_inactive && have_meas_flag) {
-              LOG_I(RRC,"[UE %d] Frame %d: Triggering generation of Meas Report for NR_r15. count = %d\n",
-                    ctxt_pP->module_id, ctxt_pP->frame, ue->subframeCount);
-              if (ue->measReportList[i][j] == NULL) {
-                ue->measReportList[i][j] = malloc(sizeof(MEAS_REPORT_LIST));
-              }
-              ue->measReportList[i][j]->measId = ue->MeasId[i][j]->measId;
-              ue->measReportList[i][j]->numberOfReportsSent = 0;
-              rrc_ue_generate_nrMeasurementReport(ctxt_pP, eNB_index);
-              ue->HandoverInfoUe.measFlag = 1;
-              LOG_I(RRC,"[UE %d] Frame %d: RSRB detected, state: %d \n",
-                    ctxt_pP->module_id, ctxt_pP->frame, ue->Info[0].State);
-            } else {
-                if(ue->measReportList[i][j] != NULL) {
-                  free(ue->measReportList[i][j]);
-                }
-                ue->measReportList[i][j] = NULL;
             }
           }
         }
@@ -4970,38 +4591,6 @@ void *rrc_ue_task( void *args_p ) {
         break;
       }
 
-      case RRC_NRUE_CAP_INFO_IND:
-      {
-        PROTOCOL_CTXT_SET_BY_MODULE_ID(&ctxt, RRC_NRUE_CAP_INFO_IND (msg_p).module_id,
-                                       ENB_FLAG_NO, RRC_NRUE_CAP_INFO_IND (msg_p).rnti,
-                                       RRC_NRUE_CAP_INFO_IND (msg_p).frame,
-                                       0,
-                                       RRC_NRUE_CAP_INFO_IND (msg_p).eNB_index);
-        LOG_I(RRC, "[UE %d] Received %s. Now calling rrc_ue_process_nrueCapabilityEnquiry\n",
-              ue_mod_id, ITTI_MSG_NAME (msg_p));
-        rrc_nrue_cap_info_t *nrue_cap_info = (void *)RRC_NRUE_CAP_INFO_IND (msg_p).sdu_p;
-        AssertFatal(RRC_NRUE_CAP_INFO_IND (msg_p).sdu_size == sizeof(*nrue_cap_info), "Size of nrue_cap_info incorrect\n");
-        rrc_ue_process_nrueCapabilityEnquiry(
-              &ctxt,
-              &nrue_cap_info->dl_dcch_msg->message.choice.c1.choice.ueCapabilityEnquiry,
-              nrue_cap_info,
-              RRC_NRUE_CAP_INFO_IND (msg_p).eNB_index);
-        SEQUENCE_free(&asn_DEF_LTE_DL_DCCH_Message, nrue_cap_info->dl_dcch_msg, ASFM_FREE_EVERYTHING);
-        result = itti_free (ITTI_MSG_ORIGIN_ID(msg_p), RRC_NRUE_CAP_INFO_IND (msg_p).sdu_p);
-        AssertFatal (result == EXIT_SUCCESS, "Failed to free memory (%d)!\n", result);
-        break;
-      }
-      case NAS_OAI_TUN_NSA:
-      {
-        LOG_D(NAS, "Received %s: length %lu. About to send this to the NR UE\n", ITTI_MSG_NAME (msg_p),
-              sizeof(NAS_OAI_TUN_NSA (msg_p).buffer));
-        char buffer[RRC_BUF_SIZE];
-        memcpy(buffer, NAS_OAI_TUN_NSA(msg_p).buffer, sizeof(buffer));
-        nsa_sendmsg_to_nrue(buffer, sizeof(buffer), OAI_TUN_IFACE_NSA);
-        break;
-      }
-
-
       case NAS_KENB_REFRESH_REQ:
         memcpy((void *)UE_rrc_inst[ue_mod_id].kenb, (void *)NAS_KENB_REFRESH_REQ(msg_p).kenb, sizeof(UE_rrc_inst[ue_mod_id].kenb));
         LOG_D(RRC, "[UE %d] Received %s: refreshed RRC::KeNB = "
@@ -5331,8 +4920,7 @@ openair_rrc_top_init_ue(
     memset (UE_rrc_inst, 0, NB_UE_INST * sizeof(UE_RRC_INST));
     LOG_D(RRC, "ALLOCATE %d Bytes for UE_RRC_INST @ %p\n", (unsigned int)(NB_UE_INST*sizeof(UE_RRC_INST)), UE_rrc_inst);
     // fill UE capability
-    bool received_nr_msg = false;
-    UECap = fill_ue_capability (uecap_xer, received_nr_msg);
+    UECap = fill_ue_capability (uecap_xer);
 
     for (module_id = 0; module_id < NB_UE_INST; module_id++) {
       UE_rrc_inst[module_id].UECap = UECap;
@@ -6404,230 +5992,4 @@ rrc_rx_tx_ue(
 
   VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME(VCD_SIGNAL_DUMPER_FUNCTIONS_RRC_RX_TX,VCD_FUNCTION_OUT);
   return (RRC_OK);
-}
-
-void *recv_msgs_from_nr_ue(void *args_p)
-{
-    itti_mark_task_ready (TASK_RRC_NSA_UE);
-    for (;;)
-    {
-        nsa_msg_t msg;
-        int recvLen = recvfrom(from_nr_ue_fd, &msg, sizeof(msg),
-                               MSG_WAITALL | MSG_TRUNC, NULL, NULL);
-        if (recvLen == -1)
-        {
-            LOG_E(RRC, "%s: recvfrom: %s\n", __func__, strerror(errno));
-            continue;
-        }
-        if (recvLen > sizeof(msg))
-        {
-            LOG_E(NR_RRC, "%s: Received a truncated message %d\n", __func__, recvLen);
-            continue;
-        }
-        LOG_D(RRC, "We have received a %d msg (%d bytes). Calling process_nr_nsa_msg\n", msg.msg_type, recvLen);
-        process_nr_nsa_msg(&msg, recvLen);
-    }
-
-}
-
-void nsa_sendmsg_to_nrue(const void *message, size_t msg_len, Rrc_Msg_Type_t msg_type)
-{
-    LOG_I(RRC, "Entered %s \n", __FUNCTION__);
-    nsa_msg_t n_msg;
-    if (msg_len > sizeof(n_msg.msg_buffer))
-    {
-        LOG_E(RRC, "%s: message too big: %zu\n", __func__, msg_len);
-        abort();
-    }
-    n_msg.msg_type = msg_type;
-    memcpy(n_msg.msg_buffer, message, msg_len);
-    size_t to_send = sizeof(n_msg.msg_type) + msg_len;
-
-    struct sockaddr_in sa =
-    {
-        .sin_family = AF_INET,
-        .sin_port = htons(6008 + ue_id_g * 2),
-    };
-    int sent = sendto(to_nr_ue_fd, &n_msg, to_send, 0,
-                      (struct sockaddr *)&sa, sizeof(sa));
-    if (sent == -1)
-    {
-        LOG_E(RRC, "%s: sendto: %s\n", __func__, strerror(errno));
-        return;
-    }
-    if (sent != to_send)
-    {
-        LOG_E(RRC, "%s: Short send %d != %zu\n", __func__, sent, to_send);
-        return;
-    }
-    LOG_I(RRC, "Sent a %d message to the nrUE (%d bytes) \n", msg_type, sent);
-}
-
-void init_connections_with_nr_ue()
-{
-    struct sockaddr_in sa =
-    {
-        .sin_family = AF_INET,
-        .sin_port = htons(6007 + ue_id_g * 2),
-    };
-    AssertFatal(from_nr_ue_fd == -1, "from_nr_ue_fd was assigned already");
-    from_nr_ue_fd = socket(AF_INET, SOCK_DGRAM, 0);
-    if (from_nr_ue_fd == -1)
-    {
-        LOG_E(RRC, "%s: Error opening socket %d (%d:%s)\n", __FUNCTION__, from_nr_ue_fd, errno, strerror(errno));
-        abort();
-    }
-
-    if (inet_aton(nsa_ipaddr, &sa.sin_addr) == 0)
-    {
-        LOG_E(RRC, "Bad nsa_ipaddr '%s'\n", nsa_ipaddr);
-        abort();
-    }
-
-    if (bind(from_nr_ue_fd, (struct sockaddr *) &sa, sizeof(sa)) == -1)
-    {
-        LOG_E(RRC,"%s: Failed to bind the socket\n", __FUNCTION__);
-        abort();
-    }
-
-    AssertFatal(to_nr_ue_fd == -1, "to_nr_ue_fd was assigned already");
-    to_nr_ue_fd = socket(AF_INET, SOCK_DGRAM, 0);
-    if (to_nr_ue_fd == -1)
-    {
-        LOG_E(RRC, "%s: Error opening socket %d (%d:%s)\n", __FUNCTION__, to_nr_ue_fd, errno, strerror(errno));
-        abort();
-    }
-
-}
-
-void process_nr_nsa_msg(nsa_msg_t *msg, int msg_len)
-{
-    if (msg_len < sizeof(msg->msg_type))
-    {
-        LOG_E(RRC, "Msg_len = %d\n", msg_len);
-        return;
-    }
-    LOG_D(RRC, "We are processing an NSA message %d \n", msg->msg_type);
-    Rrc_Msg_Type_t msg_type = msg->msg_type;
-    uint8_t *const msg_buffer = msg->msg_buffer;
-    msg_len -= sizeof(msg->msg_type);
-    bool received_nr_msg = true;
-    protocol_ctxt_t ctxt;
-    module_id_t module_id = 0;
-    eNB_index_t eNB_index = 0;
-
-    switch (msg_type)
-    {
-        case NRUE_CAPABILITY_INFO:
-        {
-            LOG_I(RRC, "Create itti msg to send received NRUE_CAPABILITY_INFO to eNB\n");
-
-            MessageDef *message_p;
-            rrc_nrue_cap_info_t *nrue_cap_buf = itti_malloc (TASK_RRC_NSA_UE,
-                                                             TASK_RRC_UE,
-                                                             sizeof(rrc_nrue_cap_info_t));
-            AssertFatal(msg_len <= sizeof(nrue_cap_buf->mesg), "msg_len = %d\n", msg_len);
-            memcpy(nrue_cap_buf->mesg, msg_buffer, msg_len);
-            nrue_cap_buf->mesg_len = msg_len;
-            UE_RRC_INFO *info = &UE_rrc_inst[module_id].Info[eNB_index];
-            nrue_cap_buf->dl_dcch_msg = info->dl_dcch_msg;
-            info->dl_dcch_msg = NULL;
-            message_p = itti_alloc_new_message (TASK_RRC_UE, 0, RRC_NRUE_CAP_INFO_IND);
-            RRC_NRUE_CAP_INFO_IND (message_p).sdu_p = (void *)nrue_cap_buf;
-            RRC_NRUE_CAP_INFO_IND (message_p).sdu_size = sizeof(*nrue_cap_buf);
-            RRC_NRUE_CAP_INFO_IND (message_p).module_id = module_id;
-            RRC_NRUE_CAP_INFO_IND (message_p).rnti = info->rnti;
-            RRC_NRUE_CAP_INFO_IND (message_p).eNB_index = eNB_index;
-            itti_send_msg_to_task (TASK_RRC_UE, 0, message_p);
-            LOG_I(RRC, "Sent itti RRC_NRUE_CAP_INFO_IND\n");
-            break;
-        }
-        case UE_CAPABILITY_DUMMY:
-        {
-            fill_ue_capability(NULL, received_nr_msg);
-            UE_rrc_inst[module_id].UECap = UE_rrc_inst->UECap;
-            if (!is_en_dc_supported(UE_rrc_inst->UECap->UE_EUTRA_Capability))
-            {
-              LOG_E(RRC, "en_dc is NOT supported! Not sending RRC_DCCH_DATA_COPY_IND to update UE_Capability_INFO\n");
-              break;
-            }
-
-            LOG_I(RRC, "Send itti msg to trigger processing of capabilites b/c we have a UE_CAPABILITY_DUMMY\n");
-            MessageDef *message_p;
-            rrc_dcch_data_copy_t *dl_dcch_buffer = itti_malloc (TASK_RRC_NSA_UE,
-                                                                TASK_RRC_UE,
-                                                                sizeof(rrc_dcch_data_copy_t));
-            UE_RRC_INFO *info = &UE_rrc_inst[module_id].Info[eNB_index];
-            dl_dcch_buffer->dl_dcch_msg = info->dl_dcch_msg;
-            info->dl_dcch_msg = NULL;
-            message_p = itti_alloc_new_message (TASK_RRC_UE, 0, RRC_DCCH_DATA_COPY_IND);
-            RRC_DCCH_DATA_COPY_IND (message_p).sdu_p = (void *)dl_dcch_buffer;
-            RRC_DCCH_DATA_COPY_IND (message_p).sdu_size = sizeof(rrc_dcch_data_copy_t);
-            RRC_DCCH_DATA_COPY_IND (message_p).module_id = module_id;
-            RRC_DCCH_DATA_COPY_IND (message_p).rnti = info->rnti;
-            RRC_DCCH_DATA_COPY_IND (message_p).eNB_index = eNB_index;
-            itti_send_msg_to_task (TASK_RRC_UE, 0, message_p);
-            LOG_I(RRC, "Sent itti RRC_DCCH_DATA_COPY_IND\n");
-            break;
-        }
-
-        case NR_UE_RRC_MEASUREMENT:
-        {
-            nfapi_p7_message_header_t header;
-            if (nfapi_p7_message_header_unpack((void *)msg_buffer, msg_len, &header, sizeof(header), NULL) < 0)
-            {
-                LOG_E(MAC, "Header unpack failed in %s \n", __FUNCTION__);
-                break;
-            }
-            if (header.message_id != NFAPI_NR_PHY_MSG_TYPE_DL_TTI_REQUEST)
-            {
-                LOG_E(MAC, "%s: Unexpected nfapi message type: %d\n", __FUNCTION__, header.message_id);
-                break;
-            }
-
-            nfapi_nr_dl_tti_request_t dl_tti_request;
-            const bool result =
-                nfapi_nr_p7_message_unpack((void *)msg_buffer, msg_len, &dl_tti_request, sizeof(nfapi_nr_dl_tti_request_t), NULL);
-            if (!result) {
-              LOG_E(RRC, "%s: SSB PDU unpack failed \n", __FUNCTION__);
-              break;
-            }
-            int num_pdus = dl_tti_request.dl_tti_request_body.nPDUs;
-            if (num_pdus <= 0)
-            {
-                LOG_E(RRC, "%s: dl_tti_request number of PDUS <= 0\n", __FUNCTION__);
-                abort();
-            }
-            for (int i = 0; i < num_pdus; i++)
-            {
-                nfapi_nr_dl_tti_request_pdu_t *pdu_list = &dl_tti_request.dl_tti_request_body.dl_tti_pdu_list[i];
-                if (pdu_list->PDUType == NFAPI_NR_DL_TTI_SSB_PDU_TYPE)
-                {
-                    LOG_I(RRC, "Got an NR_UE_RRC_MEASUREMENT. pdulist[%d].ssbRsrp = %d\n",
-                         i, pdu_list->ssb_pdu.ssb_pdu_rel15.ssbRsrp);
-                }
-            }
-            break;
-        }
-
-        case NR_RRC_CONFIG_COMPLETE_REQ:
-        {
-            LOG_I(RRC, "Got an NR_RRC_CONFIG_COMPLETE_REQ. Now make octet string and call below!\n");
-            OCTET_STRING_t rrcConfigurationComplete;
-            memset(&rrcConfigurationComplete, 0, sizeof(rrcConfigurationComplete));
-            OCTET_STRING_fromBuf(&rrcConfigurationComplete,
-                                (const char *)msg_buffer,
-                                msg_len);
-            UE_RRC_INFO *info = &UE_rrc_inst[module_id].Info[eNB_index];
-            uint8_t t_id = info->dl_dcch_msg->message.choice.c1.choice.
-                           rrcConnectionReconfiguration.rrc_TransactionIdentifier;
-            PROTOCOL_CTXT_SET_BY_MODULE_ID(&ctxt, module_id,
-                                           ENB_FLAG_NO, info->rnti,
-                                           0, 0, eNB_index);
-            rrc_ue_generate_RRCConnectionReconfigurationComplete(&ctxt, ctxt.eNB_index, t_id, &rrcConfigurationComplete);
-            break;
-        }
-        default:
-            LOG_E(RRC, "No NSA Message Found\n");
-    }
 }

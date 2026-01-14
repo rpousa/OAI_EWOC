@@ -55,7 +55,6 @@
 #include "PHY/INIT/phy_init.h"
 #include "PHY/INIT/nr_phy_init.h"
 #include "PHY/LTE_TRANSPORT/transport_proto.h"
-#include "openair1/SCHED_NR/fapi_nr_l1.h"
 #include "openair1/PHY/NR_TRANSPORT/nr_dlsch.h"
 #include "openair1/PHY/defs_gNB.h"
 #include <openair1/SCHED/fapi_l1.h>
@@ -1108,17 +1107,6 @@ void pnf_nr_phy_deallocate_p7_vendor_ext(void *header)
   free(header);
 }
 
-extern void nr_schedule_ul_dci_req(PHY_VARS_gNB *gNB, nfapi_nr_ul_dci_request_t *UL_dci_req);
-int pnf_phy_ul_dci_req(gNB_L1_rxtx_proc_t *proc, nfapi_pnf_p7_config_t *pnf_p7, nfapi_nr_ul_dci_request_t *req)
-{
-  DevAssert(RC.gNB != NULL && RC.gNB[0] != NULL);
-  PHY_VARS_gNB *gNB = RC.gNB[0]; // phy_inst?
-  
-  nr_schedule_ul_dci_req(gNB, req);
-
-  return 0;
-}
-
 
 int pnf_phy_hi_dci0_req(L1_rxtx_proc_t *proc, nfapi_pnf_p7_config_t *pnf_p7, nfapi_hi_dci0_request_t *req) {
   if (req->hi_dci0_request_body.number_of_dci == 0 && req->hi_dci0_request_body.number_of_hi == 0)
@@ -1144,21 +1132,6 @@ int pnf_phy_hi_dci0_req(L1_rxtx_proc_t *proc, nfapi_pnf_p7_config_t *pnf_p7, nfa
       LOG_E(PHY,"[PNF] HI_DCI0_REQ sfn_sf:%d PDU[%d] - unknown pdu type:%d\n", NFAPI_SFNSF2DEC(req->sfn_sf), i, req->hi_dci0_request_body.hi_dci0_pdu_list[i].pdu_type);
     }
   }
-
-  return 0;
-}
-
-
-// from dl_tti_req_fn fptr
-extern void nr_schedule_dl_tti_req(PHY_VARS_gNB *gNB, nfapi_nr_dl_tti_request_t *DL_req);
-int pnf_phy_dl_tti_req(gNB_L1_rxtx_proc_t *proc, nfapi_pnf_p7_config_t *pnf_p7, nfapi_nr_dl_tti_request_t *DL_req) 
-{
-  DevAssert(proc == NULL);
-  DevAssert(sync_var == 0);
-  DevAssert(RC.gNB != NULL && RC.gNB[0] != NULL);
-  PHY_VARS_gNB *gNB = RC.gNB[0]; // phy_inst?
-
-  nr_schedule_dl_tti_req(gNB, DL_req);
 
   return 0;
 }
@@ -1256,18 +1229,6 @@ int pnf_phy_dl_config_req(L1_rxtx_proc_t *proc, nfapi_pnf_p7_config_t *pnf_p7, n
 }
 
 
-extern void nr_schedule_tx_req(PHY_VARS_gNB *gNB, nfapi_nr_tx_data_request_t *TX_req);
-int pnf_phy_tx_data_req(nfapi_pnf_p7_config_t *pnf_p7, nfapi_nr_tx_data_request_t *req)
-{
-  DevAssert(RC.gNB != NULL && RC.gNB[0] != NULL);
-  PHY_VARS_gNB *gNB = RC.gNB[0]; // phy_inst?
-
-  nr_schedule_tx_req(gNB, req);
-
-  return 0;
-}
-
-
 int pnf_phy_tx_req(nfapi_pnf_p7_config_t *pnf_p7, nfapi_tx_request_t *req) {
   uint16_t sfn = NFAPI_SFNSF2SFN(req->sfn_sf);
   uint16_t sf = NFAPI_SFNSF2SF(req->sfn_sf);
@@ -1290,16 +1251,6 @@ int pnf_phy_tx_req(nfapi_pnf_p7_config_t *pnf_p7, nfapi_tx_request_t *req) {
     }
   }
 
-  return 0;
-}
-
-extern void nr_schedule_ul_tti_req(PHY_VARS_gNB *gNB, nfapi_nr_ul_tti_request_t *UL_tti_req);
-int pnf_phy_ul_tti_req(gNB_L1_rxtx_proc_t *proc, nfapi_pnf_p7_config_t *pnf_p7, nfapi_nr_ul_tti_request_t *req)
-{
-  DevAssert(RC.gNB != NULL && RC.gNB[0] != NULL);
-  PHY_VARS_gNB *gNB = RC.gNB[0]; // phy_inst?
-
-  nr_schedule_ul_tti_req(gNB, req);
   return 0;
 }
 
@@ -1711,10 +1662,10 @@ int nr_start_request(nfapi_pnf_config_t *config, nfapi_pnf_phy_config_t *phy, nf
   }
 
   // NR
-  p7_config->dl_tti_req_fn = &pnf_phy_dl_tti_req;
-  p7_config->ul_tti_req_fn = &pnf_phy_ul_tti_req;
-  p7_config->ul_dci_req_fn = &pnf_phy_ul_dci_req;
-  p7_config->tx_data_req_fn = &pnf_phy_tx_data_req;
+  p7_config->dl_tti_req_fn = NULL;
+  p7_config->ul_tti_req_fn = NULL;
+  p7_config->ul_dci_req_fn = NULL;
+  p7_config->tx_data_req_fn = NULL;
 
   // LTE
   p7_config->dl_config_req = &pnf_phy_dl_config_req;
@@ -1825,14 +1776,36 @@ int nr_start_request(nfapi_pnf_config_t *config, nfapi_pnf_phy_config_t *phy, nf
   nfapi_nr_send_pnf_start_resp(config, p7_config->phy_id);
   printf("[PNF] Sending first P7 slot indication\n");
 #endif
-#if 1
-  nfapi_pnf_p7_slot_ind(p7_config, p7_config->phy_id, 0, 0);
-  printf("[PNF] Sent first P7 slot ind\n");
-#else
-  nfapi_pnf_p7_subframe_ind(p7_config, p7_config->phy_id, 0); // SFN_SF set to zero - correct???
-  printf("[PNF] Sent first P7 subframe ind\n");
-#endif
 
+  return 0;
+}
+
+void stop_nr_nfapi_pnf()
+{
+#ifdef ENABLE_WLS
+  wls_fapi_nr_pnf_stop();
+#endif
+#ifdef ENABLE_SOCKET
+  socket_nfapi_nr_pnf_stop();
+#endif
+}
+static bool has_sent_stop_ind = false;
+int nr_stop_request(nfapi_pnf_config_t *config, nfapi_pnf_phy_config_t *phy, nfapi_nr_stop_request_scf_t *req)
+{
+  if (has_sent_stop_ind) {
+    // STOP.indication already sent, nothing to do
+    return 0;
+  }
+  NFAPI_TRACE(NFAPI_TRACE_INFO, "Send STOP.indication\n");
+  nfapi_nr_stop_indication_scf_t resp = {.header.message_id = NFAPI_NR_PHY_MSG_TYPE_STOP_INDICATION,
+                                         .header.phy_id = req->header.phy_id};
+  nfapi_nr_stop_indication(config, &resp);
+  has_sent_stop_ind = true;
+#ifdef ENABLE_WLS
+  wls_pnf_close(pnf_p5_init_and_receive_pthread);
+#endif
+  // raise the SIGTERM to simulate CTRL+C
+  raise(SIGTERM);
   return 0;
 }
 
@@ -2191,6 +2164,7 @@ void configure_nr_nfapi_pnf(char *vnf_ip_addr, int vnf_p5_port, char *pnf_ip_add
   config->nr_param_req = &nr_param_request;
   config->nr_config_req = &nr_config_request;
   config->nr_start_req = &nr_start_request;
+  config->nr_stop_req = &nr_stop_request;
   config->rssi_req = &rssi_request;
   config->broadcast_detect_req = &broadcast_detect_request;
   config->system_information_schedule_req = &system_information_schedule_request;
@@ -2321,7 +2295,7 @@ static void maybe_slow_down_pnf(int mu)
   last_execution = current_execution;
 }
 
-void handle_nr_slot_ind(uint16_t sfn, uint16_t slot)
+void handle_nr_slot_ind(uint16_t sfn, uint16_t slot, NR_Sched_Rsp_t *sched_resp)
 {
   nfapi_pnf_p7_config_t *config = p7_config_g;
   pnf_p7_t *_this = (pnf_p7_t *)(config);
@@ -2341,7 +2315,7 @@ void handle_nr_slot_ind(uint16_t sfn, uint16_t slot)
 #ifndef ENABLE_WLS
   int slot_ahead = 2 << mu;
 #else
-  int slot_ahead = 1;
+  int slot_ahead = 1 << mu;
 #endif
   uint16_t sfn_tx = sfn;
   uint16_t slot_tx = slot;
@@ -2352,7 +2326,14 @@ void handle_nr_slot_ind(uint16_t sfn, uint16_t slot)
   oai_nfapi_nr_slot_indication(&ind);
 
   // copy data from appropriate p7 slot buffers into channel structures for PHY processing
-  nfapi_pnf_p7_slot_ind(config, config->phy_id, sfn, slot);
+  nfapi_pnf_p7_get_msgs(config,
+                        config->phy_id,
+                        sfn,
+                        slot,
+                        &sched_resp->DL_req,
+                        &sched_resp->UL_tti_req,
+                        &sched_resp->UL_dci_req,
+                        &sched_resp->TX_req);
 
   return;
 }

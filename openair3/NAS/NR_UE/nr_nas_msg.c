@@ -1772,7 +1772,7 @@ static void send_nas_5gmm_ind(instance_t instance, const Guti5GSMobileIdentity_t
   itti_send_msg_to_task(TASK_RRC_NRUE, instance, msg);
 }
 
-static void request_pdusession(nr_ue_nas_t *nas, int pdusession_id)
+void request_pdusession(nr_ue_nas_t *nas, int pdusession_id)
 {
   MessageDef *message_p = itti_alloc_new_message(TASK_NAS_NRUE, nas->UE_id, NAS_PDU_SESSION_REQ);
   NAS_PDU_SESSION_REQ(message_p).pdusession_id = pdusession_id;
@@ -2160,7 +2160,7 @@ void *nas_nrue(void *args_p)
 
       case NAS_INIT_NOS1_IF: {
         const int pdu_session_id = get_softmodem_params()->default_pdu_session_id;
-        const char *ip = !get_softmodem_params()->nsa ? "10.0.1.2" : "10.0.1.3";
+        const char *ip = "10.0.1.2";
         const int qfi = 7;
         create_ue_ip_if(ip, NULL, nas->UE_id, pdu_session_id);
         set_qfi(qfi, pdu_session_id, nas->UE_id);

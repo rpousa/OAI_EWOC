@@ -41,7 +41,6 @@
 #include "nfapi/oai_integration/gnb_ind_vars.h"
 #include "nfapi/oai_integration/vendor_ext.h"
 #include "nfapi_interface.h"
-#include "openair2/NR_PHY_INTERFACE/nr_sched_response.h"
 #include "openair2/PHY_INTERFACE/queue_t.h"
 #include "utils.h"
 #include "nfapi/oai_integration/nfapi_pnf.h"
@@ -379,52 +378,25 @@ static void match_crc_rx_pdu(nfapi_nr_rx_data_indication_t *rx_ind, nfapi_nr_crc
   }
 }
 
-extern void handle_nr_slot_ind(uint16_t sfn, uint16_t slot);
-static void pnf_send_slot_ind(module_id_t module_id, int CC_id, int frame, int slot)
+extern void handle_nr_slot_ind(uint16_t sfn, uint16_t slot, NR_Sched_Rsp_t *sched_response);
+static void pnf_send_slot_ind(const nfapi_nr_slot_indication_scf_t *ind, NR_Sched_Rsp_t *rsp)
 {
-  (void)module_id;
-  (void)CC_id;
-  handle_nr_slot_ind(frame, slot);
+  module_id_t module_id = 0;
+  int CC_id = 0;
+  reset_sched_response(rsp, ind->sfn, ind->slot, module_id, CC_id);
+  handle_nr_slot_ind(ind->sfn, ind->slot, rsp);
 }
 
-static void run_scheduler_monolithic(module_id_t module_id, int CC_id, int frame, int slot)
+static void run_scheduler_monolithic(const nfapi_nr_slot_indication_scf_t *ind, NR_Sched_Rsp_t *rsp)
 {
-  NR_IF_Module_t *ifi = nr_if_inst[module_id];
-
-  LOG_D(NR_MAC, "Calling scheduler for %d.%d\n", frame, slot);
-  NR_Sched_Rsp_t *sched_info = allocate_sched_response();
-
-  // clear UL DCI prior to handling ULSCH
-  sched_info->UL_dci_req.numPdus = 0;
-  gNB_dlsch_ulsch_scheduler(module_id, frame, slot, sched_info);
-  ifi->CC_mask = 0;
-  sched_info->module_id = module_id;
-  sched_info->CC_id = CC_id;
-  sched_info->frame = frame;
-  sched_info->slot = slot;
-  /*
-  sched_info->DL_req      = &mac->DL_req[CC_id];
-  sched_info->UL_dci_req  = &mac->UL_dci_req[CC_id];
-
-  sched_info->UL_tti_req  = mac->UL_tti_req[CC_id];
-
-  sched_info->TX_req      = &mac->TX_req[CC_id];
-  */
-#ifdef DUMP_FAPI
-  dump_dl(sched_info);
-#endif
-
-  AssertFatal(ifi->NR_Schedule_response != NULL, "nr_schedule_response is null (mod %d, cc %d)\n", module_id, CC_id);
-  ifi->NR_Schedule_response(sched_info);
-
-  LOG_D(NR_PHY,
-        "NR_Schedule_response: SFN SLOT:%d %d dl_pdus:%d\n",
-        sched_info->frame,
-        sched_info->slot,
-        sched_info->DL_req.dl_tti_request_body.nPDUs);
+  module_id_t module_id = 0;
+  int CC_id = 0;
+  reset_sched_response(rsp, ind->sfn, ind->slot, module_id, CC_id);
+  gNB_dlsch_ulsch_scheduler(rsp->module_id, ind->sfn, ind->slot, rsp);
 }
 
-void NR_UL_indication(NR_UL_IND_t *UL_info) {
+static void NR_UL_indication(NR_UL_IND_t *UL_info)
+{
   AssertFatal(UL_info!=NULL,"UL_info is null\n");
   module_id_t module_id = UL_info->module_id;
   int CC_id = UL_info->CC_id;
@@ -501,17 +473,47 @@ NR_IF_Module_t *NR_IF_Module_init(int Mod_id) {
 
     nr_if_inst[Mod_id]->CC_mask=0;
     nr_if_inst[Mod_id]->NR_UL_indication = NR_UL_indication;
-    if (NFAPI_MODE == NFAPI_MONOLITHIC)
+    if (NFAPI_MODE == NFAPI_MONOLITHIC) {
       nr_if_inst[Mod_id]->NR_slot_indication = run_scheduler_monolithic;
-    else if (NFAPI_MODE == NFAPI_MODE_PNF)
+    } else if (NFAPI_MODE == NFAPI_MODE_PNF) {
       nr_if_inst[Mod_id]->NR_slot_indication = pnf_send_slot_ind;
-    else // NFAPI_MODE_VNF
-      NULL;
+    } else { // NFAPI_MODE_VNF
+      DevAssert(NFAPI_MODE == NFAPI_MODE_VNF || NFAPI_MODE == NFAPI_MODE_AERIAL);
+      nr_if_inst[Mod_id]->NR_slot_indication = run_scheduler_monolithic;
+    }
     AssertFatal(pthread_mutex_init(&nr_if_inst[Mod_id]->if_mutex,NULL)==0,
                 "allocation of nr_if_inst[%d]->if_mutex fails\n",Mod_id);
   }
 
-  init_sched_response();
-
   return nr_if_inst[Mod_id];
+}
+
+void reset_sched_response(NR_Sched_Rsp_t *sched_response, int frame, int slot, int module_id, int CC_id)
+{
+  sched_response->module_id = module_id;
+  sched_response->CC_id = CC_id;
+  sched_response->frame = frame;
+  sched_response->slot = slot;
+
+
+  nfapi_nr_dl_tti_request_t *DL_req = &sched_response->DL_req;
+  DL_req->SFN = frame;
+  DL_req->Slot = slot;
+  DL_req->dl_tti_request_body.nPDUs = 0;
+  DL_req->dl_tti_request_body.nGroup = 0;
+
+  nfapi_nr_ul_dci_request_t *UL_dci_req = &sched_response->UL_dci_req;
+  UL_dci_req->SFN = frame;
+  UL_dci_req->Slot = slot;
+  UL_dci_req->numPdus = 0;
+
+  nfapi_nr_ul_tti_request_t *UL_tti_req = &sched_response->UL_tti_req;
+  UL_tti_req->SFN = frame;
+  UL_tti_req->Slot = slot;
+  UL_tti_req->n_pdus = 0;
+
+  nfapi_nr_tx_data_request_t *TX_req = &sched_response->TX_req;
+  TX_req->SFN = frame;
+  TX_req->Slot = slot;
+  TX_req->Number_of_PDUs = 0;
 }

@@ -54,7 +54,7 @@ void send_srb0_rrc(int ue_id, const uint8_t *sdu, sdu_size_t sdu_len, void *data
 void nr_ue_init_mac(NR_UE_MAC_INST_t *mac)
 {
   LOG_I(NR_MAC, "[UE%d] Initializing MAC\n", mac->ue_id);
-  nr_ue_reset_sync_state(mac);
+  nr_ue_reset_sync_state(mac, false);
   mac->get_sib1 = false;
   for (int i = 0; i < MAX_SI_GROUPS; i++)
     mac->get_otherSI[i] = false;
@@ -69,7 +69,7 @@ void nr_ue_init_mac(NR_UE_MAC_INST_t *mac)
   mac->p_Max = INT_MIN;
   mac->p_Max_alt = INT_MIN;
   mac->msg3_C_RNTI = false;
-  mac->ntn_ta.ntn_params_changed = false;
+  mac->phy_config.config_req.ntn_config.params_changed = false;
   initNotifiedFIFO(&mac->input_nf);
   reset_mac_inst(mac);
 
@@ -117,10 +117,10 @@ void nr_ue_send_synch_request(NR_UE_MAC_INST_t *mac, module_id_t module_id, int 
   mac->if_module->synch_request(&mac->synch_request);
 }
 
-void nr_ue_reset_sync_state(NR_UE_MAC_INST_t *mac)
+void nr_ue_reset_sync_state(NR_UE_MAC_INST_t *mac, bool reconf)
 {
   // reset synchornization status
-  mac->state = UE_NOT_SYNC;
+  mac->state = reconf ? UE_NOT_SYNC_RECONF : UE_NOT_SYNC;
   mac->ra.ra_state = nrRA_UE_IDLE;
 }
 
@@ -307,7 +307,7 @@ void release_mac_configuration(NR_UE_MAC_INST_t *mac, NR_UE_MAC_reset_cause_t ca
     release_ul_BWP(mac, i);
 
   memset(&mac->ssb_measurements, 0, sizeof(mac->ssb_measurements));
-  memset(&mac->l1_measurements, 0, sizeof(mac->l1_measurements));
+  memset(&mac->csirs_measurements, 0, sizeof(mac->csirs_measurements));
   memset(&mac->ul_time_alignment, 0, sizeof(mac->ul_time_alignment));
   for (int i = mac->TAG_list.count; i > 0 ; i--)
     asn_sequence_del(&mac->TAG_list, i - 1, 1);

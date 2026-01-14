@@ -56,11 +56,13 @@ bool aerial_send_P7_msg_with_data(void *packedBuf,
                                  void *dataBuf,
                                  uint32_t dataLength,
                                  nfapi_nr_p7_message_header_t *header);
-void set_config(nfapi_vnf_config_t *conf);
+
 int nvIPC_Init(nvipc_params_t nvipc_params_s);
 int oai_fapi_send_end_request(int cell_id, uint32_t frame, uint32_t slot);
 int oai_fapi_ul_tti_req(nfapi_nr_ul_tti_request_t *ul_tti_req);
 int oai_fapi_ul_dci_req(nfapi_nr_ul_dci_request_t *ul_dci_req);
 int oai_fapi_tx_data_req(nfapi_nr_tx_data_request_t *tx_data_req);
 int oai_fapi_dl_tti_req(nfapi_nr_dl_tti_request_t *dl_config_req);
+void nvIPC_Stop();
+void nvIPC_send_stop_request();
 #endif // OPENAIRINTERFACE_FAPI_NVIPC_H

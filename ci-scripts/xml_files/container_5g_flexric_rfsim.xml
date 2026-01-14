@@ -42,6 +42,13 @@
  002006
  444444
  100002
+ 100003
+ 100004
+ 100005
+ 100006
+ 100007
+ 100008
+ 100009
  100001
  222221
  222222
@@ -95,10 +102,10 @@
 
         <testCase id="000002">
                 <class>Deploy_Object</class>
-                <desc>Deploy OAI FlexRIC</desc>
+                <desc>Deploy OAI nearRT-RIC</desc>
                 <node>localhost</node>
                 <yaml_path>ci-scripts/yaml_files/5g_rfsimulator_flexric</yaml_path>
-                <services>oai-flexric</services>
+                <services>nearRT-RIC</services>
         </testCase>
 
         <testCase id="000003">
@@ -121,7 +128,7 @@
                 <class>Ping</class>
                 <desc>Ping ext-dn from both UEs</desc>
                 <id>rfsim5g_ue rfsim5g_ue2</id>
-                <nodes>carabe carabe</nodes>
+                <node>carabe</node>
                 <svr_id>oai_ext_dn</svr_id>
                 <svr_node>carabe</svr_node>
                 <ping_args>-c 20</ping_args>
@@ -132,14 +139,14 @@
                 <class>Attach_UE</class>
                 <desc>Attach OAI UE 1 and 2</desc>
                 <id>rfsim5g_ue rfsim5g_ue2</id>
-                <nodes>carabe carabe</nodes>
+                <node>carabe</node>
         </testCase>
 
         <testCase id="444444">
                 <class>Detach_UE</class>
                 <desc>Detach OAI UE 1 and 2</desc>
                 <id>rfsim5g_ue rfsim5g_ue2</id>
-                <nodes>carabe carabe</nodes>
+                <node>carabe</node>
         </testCase>
 
         <testCase id="100001">
@@ -151,16 +158,72 @@
         </testCase>
 
         <testCase id="100002">
+                <class>Stop_Object</class>
+                <desc>Stop RC monitoring xApp</desc>
+                <node>localhost</node>
+                <yaml_path>ci-scripts/yaml_files/5g_rfsimulator_flexric</yaml_path>
+                <services>xapp-rc-moni</services>
+        </testCase>
+
+        <testCase id="100003">
+                <class>Stop_Object</class>
+                <desc>Stop KPM monitoring xApp</desc>
+                <node>localhost</node>
+                <yaml_path>ci-scripts/yaml_files/5g_rfsimulator_flexric</yaml_path>
+                <services>xapp-kpm-moni</services>
+        </testCase>
+
+        <testCase id="100004">
+                <class>Stop_Object</class>
+                <desc>Stop KPM monitoring and RC control xApp</desc>
+                <node>localhost</node>
+                <yaml_path>ci-scripts/yaml_files/5g_rfsimulator_flexric</yaml_path>
+                <services>xapp-kpm-rc</services>
+        </testCase>
+
+        <testCase id="100005">
+                <class>Stop_Object</class>
+                <desc>Stop custom SMs monitoring xApp</desc>
+                <node>localhost</node>
+                <yaml_path>ci-scripts/yaml_files/5g_rfsimulator_flexric</yaml_path>
+                <services>xapp-gtp-mac-rlc-pdcp-moni</services>
+        </testCase>
+
+        <testCase id="100006">
+                <class>Stop_Object</class>
+                <desc>Stop OAI UEs</desc>
+                <node>localhost</node>
+                <yaml_path>ci-scripts/yaml_files/5g_rfsimulator_flexric</yaml_path>
+                <services>oai-nr-ue oai-nr-ue2</services>
+        </testCase>
+
+        <testCase id="100007">
+                <class>Stop_Object</class>
+                <desc>Stop OAI gNB</desc>
+                <node>localhost</node>
+                <yaml_path>ci-scripts/yaml_files/5g_rfsimulator_flexric</yaml_path>
+                <services>oai-gnb</services>
+        </testCase>
+
+        <testCase id="100008">
+                <class>Stop_Object</class>
+                <desc>Stop nearRT-RIC</desc>
+                <node>localhost</node>
+                <yaml_path>ci-scripts/yaml_files/5g_rfsimulator_flexric</yaml_path>
+                <services>nearRT-RIC</services>
+        </testCase>
+
+        <testCase id="100009">
                 <class>Undeploy_Object</class>
-                <desc>Undeploy RAN and Flexric</desc>
+                <desc>Undeploy RAN and FlexRIC</desc>
                 <node>localhost</node>
                 <yaml_path>ci-scripts/yaml_files/5g_rfsimulator_flexric</yaml_path>
                 <always_exec>true</always_exec>
-        </testCase>
+	</testCase>
 
         <testCase id="010000">
                 <class>Deploy_Object</class>
-                <desc>RC monitoring</desc>
+                <desc>Deploy RC monitoring</desc>
                 <node>localhost</node>
                 <yaml_path>ci-scripts/yaml_files/5g_rfsimulator_flexric</yaml_path>
                 <services>xapp-rc-moni</services>
@@ -168,7 +231,7 @@
 
         <testCase id="010001">
                 <class>Deploy_Object</class>
-                <desc>KPM monitoring</desc>
+                <desc>Deploy KPM monitoring</desc>
                 <node>localhost</node>
                 <yaml_path>ci-scripts/yaml_files/5g_rfsimulator_flexric</yaml_path>
                 <services>xapp-kpm-moni</services>
@@ -176,7 +239,7 @@
 
         <testCase id="010002">
                 <class>Deploy_Object</class>
-                <desc>KPM monitoring and RC control</desc>
+                <desc>Deploy KPM monitoring and RC control</desc>
                 <node>localhost</node>
                 <yaml_path>ci-scripts/yaml_files/5g_rfsimulator_flexric</yaml_path>
                 <services>xapp-kpm-rc</services>
@@ -184,7 +247,7 @@
 
         <testCase id="010003">
                 <class>Deploy_Object</class>
-                <desc>Custom SMs monitoring</desc>
+                <desc>Deploy custom SMs monitoring</desc>
                 <node>localhost</node>
                 <yaml_path>ci-scripts/yaml_files/5g_rfsimulator_flexric</yaml_path>
                 <services>xapp-gtp-mac-rlc-pdcp-moni</services>

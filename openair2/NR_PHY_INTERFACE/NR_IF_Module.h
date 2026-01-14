@@ -91,7 +91,7 @@ typedef struct {
 // Downlink slot P7
 
 
-typedef struct {
+typedef struct NR_Sched_Rsp {
   /// the ID of this sched_response - used by sched_reponse memory management
   int sched_response_id;
   /// Module ID
@@ -111,6 +111,7 @@ typedef struct {
   /// Pointers to DL SDUs
   nfapi_nr_tx_data_request_t TX_req;
 } NR_Sched_Rsp_t;
+void reset_sched_response(NR_Sched_Rsp_t *sched_response, int frame, int slot, int module_id, int CC_id);
 
 typedef struct {
   uint8_t Mod_id;
@@ -121,8 +122,7 @@ typedef struct {
 typedef struct NR_IF_Module_s {
   //define the function pointer
   void (*NR_UL_indication)(NR_UL_IND_t *UL_INFO);
-  void (*NR_Schedule_response)(NR_Sched_Rsp_t *Sched_INFO);
-  void (*NR_slot_indication)(module_id_t module_idP, int CC_id, int frame, int slot);
+  void (*NR_slot_indication)(const nfapi_nr_slot_indication_scf_t *ind, NR_Sched_Rsp_t *rsp);
   void (*NR_PHY_config_req)(NR_PHY_Config_t *config_INFO);
   uint32_t CC_mask;
   uint16_t current_frame;
@@ -135,12 +135,5 @@ typedef struct NR_IF_Module_s {
 NR_IF_Module_t *NR_IF_Module_init(int Mod_id);
 
 void NR_IF_Module_kill(int Mod_id);
-
-void NR_UL_indication(NR_UL_IND_t *UL_INFO);
-
-void RCconfig_nr_ue_macrlc(void);
-
-/*Interface for Downlink, transmitting the DLSCH SDU, DCI SDU*/
-void NR_Schedule_Response(NR_Sched_Rsp_t *Sched_INFO);
 
 #endif /*_NFAPI_INTERFACE_NR_H_*/

@@ -130,6 +130,7 @@ WORKDIR /opt/oai-gnb
 #EXPOSE 50000/udp # IF5 / ORI (control)
 #EXPOSE 50001/udp # IF5 / ECPRI (data)
 
+COPY --from=gnb-base /usr/local/bin/yq /usr/local/bin/yq
 COPY --from=gnb-base /tini /tini
 ENTRYPOINT ["/tini", "-v", "--", "/opt/oai-gnb/bin/entrypoint.sh"]
 CMD ["/opt/oai-gnb/bin/nr-softmodem"]

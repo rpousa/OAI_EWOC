@@ -764,7 +764,7 @@ uint32_t calc_pucch_1x_interference(PHY_VARS_eNB *eNB,
   uint8_t m,l;
   uint8_t n_cs,alpha_ind;
   int16_t tmp_re,tmp_im,W_re=0,W_im=0;
-  int16_t W4_nouse[4]={32767,32767,-32768,-32768};
+  int16_t W4_nouse[4] = {32767, 32767, -32767, -32767};
   int32_t n0_IQ[2];
   double interference_power;
   int16_t *rxptr;

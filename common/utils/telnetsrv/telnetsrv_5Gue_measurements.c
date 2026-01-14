@@ -50,7 +50,9 @@
 #include "telnetsrv_ltemeasur_def.h"
 #include "telnetsrv_cpumeasur_def.h"
 #include "openair2/LAYER2/NR_MAC_UE/mac_defs.h"
-#include "openair1/PHY/phy_extern_nr_ue.h"
+#include "openair1/PHY/defs_nr_UE.h"
+
+extern PHY_VARS_NR_UE ***PHY_vars_UE_g;
 
 void measurcmd_display_macstats(telnet_printfunc_t prnt);
 void measurcmd_display_macstats_ue(telnet_printfunc_t prnt);

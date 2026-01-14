@@ -10,6 +10,7 @@
 #define _NFAPI_NR_INTERFACE_SCF_H_
 
 #include "stddef.h"
+#include "common/platform_types.h"
 #include "nfapi_interface.h"
 #include "nfapi_nr_interface.h"
 
@@ -488,11 +489,7 @@ typedef struct {
 } nfapi_nr_dbt_tlv_ve_t;
 
 // Table 3–62 Precoding matrix (PM) PDU (v.222.10.04)
-typedef struct {
-  int16_t precoder_weight_Re;
-  int16_t precoder_weight_Im;
-} nfapi_nr_pm_weights_t;
-
+typedef c16_t nfapi_nr_pm_weights_t;
 
 typedef struct {
   uint16_t pm_idx;
@@ -515,8 +512,6 @@ typedef struct {
 typedef struct {
   nfapi_uint8_tlv_t num_beams_period_vendor_ext;
   nfapi_uint8_tlv_t analog_bf_vendor_ext;
-  nfapi_uint8_tlv_t total_num_beams_vendor_ext;
-  nfapi_uint8_tlv_t *analog_beam_list;
 } nfapi_nr_analog_beamforming_ve_t;
 
 // ERROR enums
@@ -1484,7 +1479,10 @@ typedef enum {
   NFAPI_NR_UL_CONFIG_PUCCH_PDU_TYPE,
   NFAPI_NR_UL_CONFIG_SRS_PDU_TYPE,
 } nfapi_nr_ul_config_pdu_type_e;
-
+static const char* const txt_nfapi_nr_ul_config_pdu_type[] = {"NFAPI_NR_UL_CONFIG_PRACH_PDU_TYPE",
+                                                              "NFAPI_NR_UL_CONFIG_PUSCH_PDU_TYPE",
+                                                              "NFAPI_NR_UL_CONFIG_PUCCH_PDU_TYPE",
+                                                              "NFAPI_NR_UL_CONFIG_SRS_PDU_TYPE"};
 typedef struct
 {
   uint16_t pdu_type;//0: PRACH PDU, 1: PUSCH PDU, 2: PUCCH PDU, 3: SRS PDU

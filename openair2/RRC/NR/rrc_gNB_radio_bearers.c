@@ -141,6 +141,62 @@ rrc_pdu_session_param_t *add_pduSession(seq_arr_t *sessions_ptr, const pdusessio
   return added;
 }
 
+static bool eq_drb_pdu_session_id(const void *vval, const void *vit)
+{
+  const int *id = (const int *)vval;
+  const drb_t *elem = (const drb_t *)vit;
+  return elem->pdusession_id == *id;
+}
+
+/** @brief Finds the first DRB with the given PDU session ID.
+ *  @return Pointer to matching drb_t or NULL if not found. */
+static drb_t *find_drb_by_pdusession_id(seq_arr_t *seq, int pdusession_id)
+{
+  DevAssert(seq);
+  DevAssert(pdusession_id > 0 && pdusession_id <= NGAP_MAX_PDU_SESSION);
+  elm_arr_t elm = find_if(seq, &pdusession_id, eq_drb_pdu_session_id);
+  if (elm.found)
+    return (drb_t *)elm.it;
+  return NULL;
+}
+
+/** @brief Removes a DRB from the list
+ *  @param drbs The DRB list
+ *  @param drb Pointer to the DRB to remove */
+static void nr_rrc_rm_drb(seq_arr_t *drbs, drb_t *drb)
+{
+  DevAssert(drbs);
+  DevAssert(drb);
+  LOG_I(NR_RRC, "Removing DRB ID %d (PDU Session ID=%d)\n", drb->drb_id, drb->pdusession_id);
+  seq_arr_erase_deep(drbs, drb, free_drb);
+}
+
+/** @brief Removes a PDU Session from the list by ID
+ *  Also removes all associated DRBs for this PDU session.
+ *  @return true if successfully removed, false if not found */
+bool rm_pduSession(seq_arr_t *sessions, seq_arr_t *drbs, int pdusession_id)
+{
+  DevAssert(sessions);
+  DevAssert(drbs);
+
+  rrc_pdu_session_param_t *session = find_pduSession(sessions, pdusession_id);
+
+  if (session) {
+    LOG_I(NR_RRC, "Removing PDU Session %d from RRC setup list\n", pdusession_id);
+    // Remove all associated DRBs first
+    drb_t *drb;
+    while ((drb = find_drb_by_pdusession_id(drbs, pdusession_id))) {
+      nr_rrc_rm_drb(drbs, drb);
+    }
+    // Then remove the PDU session
+    seq_arr_erase_deep(sessions, session, free_pdusession);
+    return true;
+  }
+
+  LOG_W(NR_RRC, "pdusession_id=%d not found to remove\n", pdusession_id);
+  return false;
+}
+
 /** @brief Add drb_t item in the UE context list for @param pdusession_id */
 drb_t *nr_rrc_add_drb(seq_arr_t *drb_ptr, int pdusession_id, nr_pdcp_configuration_t *pdcp)
 {

@@ -347,7 +347,7 @@ channel_desc_t *new_channel_desc_scm(uint8_t nb_tx,
                                      double path_loss_dB,
                                      float noise_power_dB);
 
-channel_desc_t *find_channel_desc_fromname( char *modelname );
+channel_desc_t *find_channel_desc_fromname(const char *modelname);
 
 
 /**
@@ -528,10 +528,9 @@ int gauss(unsigned int *gauss_LUT,unsigned char Nbits);
 
 void fill_random(void *buf, size_t sz);
 double gaussdouble(double,double);
-void randominit(unsigned long seed_init);
+void randominit(); // fix seed number by env variable OAI_RNGSEED
 double uniformrandom(void);
 double gaussZiggurat(double mean, double variance);
-void tableNor(unsigned long seed);
 int freq_channel(channel_desc_t *desc,uint16_t nb_rb, int16_t n_samples,int scs);
 int init_freq_channel(channel_desc_t *desc,uint16_t nb_rb,int16_t n_samples,int scs);
 void term_freq_channel(void);

@@ -1,7 +1,7 @@
 services:
-    oai-flexric:
-        image: ${REGISTRY:-oaisoftwarealliance}/oai-flexric:${FLEXRIC_TAG:-develop}
-        container_name: oai-flexric
+    nearRT-RIC:
+        image: ${REGISTRY-oaisoftwarealliance/}oai-flexric:${FLEXRIC_TAG:-develop}
+        container_name: nearRT-RIC
         networks:
             public_net:
                 ipv4_address: 192.168.70.150
@@ -13,11 +13,11 @@ services:
             timeout: 5s
 
     xapp-rc-moni:
-        image: ${REGISTRY:-oaisoftwarealliance}/oai-flexric:${FLEXRIC_TAG:-develop}
+        image: ${REGISTRY-oaisoftwarealliance/}oai-flexric:${FLEXRIC_TAG:-develop}
         command: "stdbuf -o0 /usr/local/flexric/xApp/c/monitor/xapp_rc_moni"
         container_name: xapp-rc-moni
         depends_on:
-            - oai-flexric
+            - nearRT-RIC
             - oai-gnb
         networks:
             public_net:
@@ -30,11 +30,11 @@ services:
             timeout: 5s
 
     xapp-kpm-moni:
-        image: ${REGISTRY:-oaisoftwarealliance}/oai-flexric:${FLEXRIC_TAG:-develop}
+        image: ${REGISTRY-oaisoftwarealliance/}oai-flexric:${FLEXRIC_TAG:-develop}
         command: "stdbuf -o0 /usr/local/flexric/xApp/c/monitor/xapp_kpm_moni"
         container_name: xapp-kpm-moni
         depends_on:
-            - oai-flexric
+            - nearRT-RIC
             - oai-gnb
         networks:
             public_net:
@@ -47,11 +47,11 @@ services:
             timeout: 5s
 
     xapp-kpm-rc:
-        image: ${REGISTRY:-oaisoftwarealliance}/oai-flexric:${FLEXRIC_TAG:-develop}
+        image: ${REGISTRY-oaisoftwarealliance/}oai-flexric:${FLEXRIC_TAG:-develop}
         command: "stdbuf -o0 /usr/local/flexric/xApp/c/kpm_rc/xapp_kpm_rc"
         container_name: xapp-kpm-rc
         depends_on:
-            - oai-flexric
+            - nearRT-RIC
             - oai-gnb
         networks:
             public_net:
@@ -64,11 +64,11 @@ services:
             timeout: 5s
 
     xapp-gtp-mac-rlc-pdcp-moni:
-        image: ${REGISTRY:-oaisoftwarealliance}/oai-flexric:${FLEXRIC_TAG:-develop}
+        image: ${REGISTRY-oaisoftwarealliance/}oai-flexric:${FLEXRIC_TAG:-develop}
         command: "stdbuf -o0 /usr/local/flexric/xApp/c/monitor/xapp_gtp_mac_rlc_pdcp_moni"
         container_name: xapp-gtp-mac-rlc-pdcp-moni
         depends_on:
-            - oai-flexric
+            - nearRT-RIC
             - oai-gnb
         networks:
             public_net:
@@ -81,14 +81,14 @@ services:
             timeout: 5s
 
     oai-gnb:
-        image: ${REGISTRY:-oaisoftwarealliance}/${GNB_IMG:-oai-gnb}:${TAG:-develop}
+        image: ${REGISTRY-oaisoftwarealliance/}${GNB_IMG:-oai-gnb}:${TAG:-develop}
         privileged: true
         container_name: rfsim5g-oai-gnb
         environment:
             USE_ADDITIONAL_OPTIONS: -E --rfsim --log_config.global_log_options level,nocolor,time
             ASAN_OPTIONS: detect_leaks=0
         depends_on:
-            - oai-flexric
+            - nearRT-RIC
         networks:
             public_net:
                 ipv4_address: 192.168.70.151
@@ -101,7 +101,7 @@ services:
             retries: 5
 
     oai-nr-ue:
-        image: ${REGISTRY:-oaisoftwarealliance}/${NRUE_IMG:-oai-nr-ue}:${TAG:-develop}
+        image: ${REGISTRY-oaisoftwarealliance/}${NRUE_IMG:-oai-nr-ue}:${TAG:-develop}
         privileged: true
         container_name: rfsim5g-oai-nr-ue
         environment:
@@ -120,7 +120,7 @@ services:
             retries: 5
 
     oai-nr-ue2:
-        image: ${REGISTRY:-oaisoftwarealliance}/${NRUE_IMG:-oai-nr-ue}:${TAG:-develop}
+        image: ${REGISTRY-oaisoftwarealliance/}${NRUE_IMG:-oai-nr-ue}:${TAG:-develop}
         privileged: true
         container_name: rfsim5g-oai-nr-ue2
         environment:

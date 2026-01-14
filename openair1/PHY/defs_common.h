@@ -993,6 +993,9 @@ extern int sync_var;
 #define MBSFN_FDD_SF6 0x10
 #define MBSFN_FDD_SF7 0x08
 #define MBSFN_FDD_SF8 0x04
+
+#define NUMBER_OF_NR_RU_PRACH_OCCASIONS_MAX 12
+
 typedef struct {
   pthread_mutex_t mutex_failure;
   bool failed;

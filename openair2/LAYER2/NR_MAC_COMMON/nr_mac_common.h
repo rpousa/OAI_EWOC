@@ -159,7 +159,6 @@ uint16_t nr_dci_size(const NR_UE_DL_BWP_t *DL_BWP,
                      nr_dci_format_t format,
                      nr_rnti_type_t rnti_type,
                      NR_ControlResourceSet_t *coreset,
-                     int bwp_id,
                      int ss_type,
                      uint16_t cset0_bwp_size,
                      uint16_t alt_size);

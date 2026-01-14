@@ -93,15 +93,6 @@ unsigned short config_frames[4] = {2,9,11,13};
 THREAD_STRUCT thread_struct;
 nrUE_params_t nrUE_params = {0};
 
-// Thread variables
-pthread_cond_t nfapi_sync_cond;
-pthread_mutex_t nfapi_sync_mutex;
-int nfapi_sync_var=-1; //!< protected by mutex \ref nfapi_sync_mutex
-pthread_cond_t sync_cond;
-pthread_mutex_t sync_mutex;
-int sync_var=-1; //!< protected by mutex \ref sync_mutex.
-int config_sync_var=-1;
-
 // not used in UE
 instance_t CUuniqInstance=0;
 instance_t DUuniqInstance=0;
@@ -110,7 +101,6 @@ int get_node_type() {return -1;}
 
 RAN_CONTEXT_t RC;
 int oai_exit = 0;
-
 
 static int      tx_max_power[MAX_NUM_CCs] = {0};
 
@@ -121,10 +111,7 @@ int32_t         uplink_frequency_offset[MAX_NUM_CCs][4];
 uint64_t        sidelink_frequency[MAX_NUM_CCs][4];
 
 // UE and OAI config variables
-int16_t           node_synch_ref[MAX_NUM_CCs];
-int               otg_enabled;
 double            cpuf;
-uint32_t       N_RB_DL    = 106;
 
 int create_tasks_nrue(uint32_t ue_nb) {
   LOG_D(NR_RRC, "%s(ue_nb:%d)\n", __FUNCTION__, ue_nb);
@@ -136,13 +123,6 @@ int create_tasks_nrue(uint32_t ue_nb) {
     if (itti_create_task(TASK_RRC_NRUE, rrc_nrue_task, &parmsRRC) < 0) {
       LOG_E(NR_RRC, "Create task for RRC UE failed\n");
       return -1;
-    }
-    if (get_softmodem_params()->nsa) {
-      init_connections_with_lte_ue();
-      if (itti_create_task (TASK_RRC_NSA_NRUE, recv_msgs_from_lte_ue, NULL) < 0) {
-        LOG_E(NR_RRC, "Create task for RRC NSA nr-UE failed\n");
-        return -1;
-      }
     }
     const ittiTask_parms_t parmsNAS = {NULL, nas_nrue};
     if (itti_create_task(TASK_NAS_NRUE, nas_nrue_task, &parmsNAS) < 0) {
@@ -159,10 +139,7 @@ int create_tasks_nrue(uint32_t ue_nb) {
 void exit_function(const char *file, const char *function, const int line, const char *s, const int assert)
 {
   int CC_id;
-
-  if (s != NULL) {
-    printf("%s:%d %s() Exiting OAI softmodem: %s\n",file,line, function, s);
-  }
+  LOG_W(NR_PHY, "called by: %s:%d %s() Exiting OAI softmodem: %s\n", file, line, function, s ? s : "no msg");
 
   oai_exit = 1;
 
@@ -305,14 +282,6 @@ void init_openair0(PHY_VARS_NR_UE *ue)
   }
 }
 
-static void init_pdcp(int ue_id)
-{
-  if (get_softmodem_params()->nsa && nr_rlc_module_init(NR_RLC_OP_MODE_UE) != 0) {
-    LOG_I(RLC, "Problem at RLC initiation \n");
-  }
-  nr_pdcp_layer_init();
-}
-
 // Stupid function addition because UE itti messages queues definition is common with eNB
 void *rrc_enb_process_msg(void *notUsed) {
   return NULL;
@@ -340,40 +309,6 @@ static void trigger_deregistration(int sig)
   } else {
     itti_wait_tasks_unblock();
   }
-}
-
-static void get_channel_model_mode(configmodule_interface_t *cfg)
-{
-  paramdef_t GNBParams[]  = GNBPARAMS_DESC;
-  config_get(cfg, GNBParams, sizeofArray(GNBParams), NULL);
-  int num_xp_antennas = *GNBParams[GNB_PDSCH_ANTENNAPORTS_XP_IDX].iptr;
-
-  if (num_xp_antennas == 2)
-    init_nr_bler_table("NR_MIMO2x2_AWGN_RESULTS_DIR");
-  else
-    init_nr_bler_table("NR_AWGN_RESULTS_DIR");
-}
-
-void start_oai_nrue_threads()
-{
-    init_queue(&nr_rach_ind_queue);
-    init_queue(&nr_rx_ind_queue);
-    init_queue(&nr_crc_ind_queue);
-    init_queue(&nr_uci_ind_queue);
-    init_queue(&nr_sfn_slot_queue);
-    init_queue(&nr_chan_param_queue);
-    init_queue(&nr_dl_tti_req_queue);
-    init_queue(&nr_tx_req_queue);
-    init_queue(&nr_ul_dci_req_queue);
-    init_queue(&nr_ul_tti_req_queue);
-
-    if (sem_init(&sfn_slot_semaphore, 0, 0) != 0)
-    {
-      LOG_E(MAC, "sem_init() error\n");
-      abort();
-    }
-
-    init_nrUE_standalone_thread(ue_id_g);
 }
 
 int NB_UE_INST = 1;
@@ -405,7 +340,6 @@ int main(int argc, char **argv)
   T_Config_Init();
 #endif
   initTpool(get_softmodem_params()->threadPoolConfig, &(nrUE_params.Tpool), cpumeas(CPUMEAS_GETSTATE));
-  //randominit (0);
   set_taus_seed (0);
 
   if (!has_cap_sys_nice())
@@ -442,23 +376,10 @@ int main(int argc, char **argv)
     exit(-1); // need a softer mode
   }
 
-  int mode_offset = get_softmodem_params()->nsa ? NUMBER_OF_UE_MAX : 1;
-  uint16_t node_number = get_softmodem_params()->node_number;
-  ue_id_g = (node_number == 0) ? 0 : node_number - 2;
-  AssertFatal(ue_id_g >= 0, "UE id is expected to be nonnegative.\n");
-
-  if (node_number == 0)
-    init_pdcp(0);
-  else
-    init_pdcp(mode_offset + ue_id_g);
+  nr_pdcp_layer_init();
   nas_init_nrue(NB_UE_INST);
 
   init_NR_UE(NB_UE_INST, get_nrUE_params()->uecap_file, get_nrUE_params()->reconfig_file, get_nrUE_params()->rbconfig_file);
-
-  if (get_softmodem_params()->emulate_l1) {
-    RCconfig_nr_ue_macrlc();
-    get_channel_model_mode(uniqCfg);
-  }
 
   // start time manager with some reasonable default for the running mode
   // (may be overwritten in configuration file or command line)
@@ -475,96 +396,89 @@ int main(int argc, char **argv)
                      IS_SOFTMODEM_RFSIM ? TIME_SOURCE_IQ_SAMPLES
                                         : TIME_SOURCE_REALTIME);
 
-  if (!get_softmodem_params()->nsa && get_softmodem_params()->emulate_l1)
-    start_oai_nrue_threads();
-
-  if (!get_softmodem_params()->emulate_l1) {
-    for (int inst = 0; inst < NB_UE_INST; inst++) {
-      PHY_VARS_NR_UE *UE[MAX_NUM_CCs];
-      for (int CC_id = 0; CC_id < MAX_NUM_CCs; CC_id++) {
-        UE[CC_id] = PHY_vars_UE_g[inst][CC_id];
-
-        set_options(CC_id, UE[CC_id]);
-        NR_UE_MAC_INST_t *mac = get_mac_inst(inst);
-        init_nr_ue_phy_cpu_stats(&UE[CC_id]->phy_cpu_stats);
-
-        if (IS_SA_MODE(get_softmodem_params()) || get_softmodem_params()->sl_mode) { // set frame config to initial values from command line
-                                                                            // and assume that the SSB is centered on the grid
-          uint16_t nr_band = get_softmodem_params()->band;
-          mac->nr_band = nr_band;
-          mac->ssb_start_subcarrier = UE[CC_id]->frame_parms.ssb_start_subcarrier;
-          nr_init_frame_parms_ue_sa(&UE[CC_id]->frame_parms,
-                                    downlink_frequency[CC_id][0],
-                                    uplink_frequency_offset[CC_id][0],
-                                    get_softmodem_params()->numerology,
-                                    nr_band);
-        } else {
-          do {
-            notifiedFIFO_elt_t *elt = pollNotifiedFIFO(&mac->input_nf);
-            if (!elt) {
-              break;
-            }
-            process_msg_rcc_to_mac(NotifiedFifoData(elt), inst);
-            delNotifiedFIFO_elt(elt);
-          } while (true);
-          fapi_nr_config_request_t *nrUE_config = &UE[CC_id]->nrUE_config;
-          nr_init_frame_parms_ue(&UE[CC_id]->frame_parms, nrUE_config, mac->nr_band);
-        }
-
-        UE[CC_id]->sl_mode = get_softmodem_params()->sl_mode;
-        init_actor(&UE[CC_id]->sync_actor, "SYNC_", -1);
-        if (get_nrUE_params()->num_dl_actors > 0) {
-          UE[CC_id]->dl_actors = calloc_or_fail(get_nrUE_params()->num_dl_actors, sizeof(*UE[CC_id]->dl_actors));
-          for (int i = 0; i < get_nrUE_params()->num_dl_actors; i++) {
-            init_actor(&UE[CC_id]->dl_actors[i], "DL_", -1);
+  for (int inst = 0; inst < NB_UE_INST; inst++) {
+    PHY_VARS_NR_UE *UE[MAX_NUM_CCs];
+    for (int CC_id = 0; CC_id < MAX_NUM_CCs; CC_id++) {
+      UE[CC_id] = PHY_vars_UE_g[inst][CC_id];
+      set_options(CC_id, UE[CC_id]);
+      NR_UE_MAC_INST_t *mac = get_mac_inst(inst);
+      init_nr_ue_phy_cpu_stats(&UE[CC_id]->phy_cpu_stats);
+      // set frame config to initial values from command line and assume that the SSB is centered on the grid
+      if (IS_SA_MODE(get_softmodem_params()) || get_softmodem_params()->sl_mode) {
+        uint16_t nr_band = get_softmodem_params()->band;
+        mac->nr_band = nr_band;
+        mac->ssb_start_subcarrier = UE[CC_id]->frame_parms.ssb_start_subcarrier;
+        nr_init_frame_parms_ue_sa(&UE[CC_id]->frame_parms,
+                                  downlink_frequency[CC_id][0],
+                                  uplink_frequency_offset[CC_id][0],
+                                  get_softmodem_params()->numerology,
+                                  nr_band);
+      } else {
+        do {
+          notifiedFIFO_elt_t *elt = pollNotifiedFIFO(&mac->input_nf);
+          if (!elt) {
+            break;
           }
-        }
-        if (get_nrUE_params()->num_ul_actors > 0) {
-          UE[CC_id]->ul_actors = calloc_or_fail(get_nrUE_params()->num_ul_actors, sizeof(*UE[CC_id]->ul_actors));
-          for (int i = 0; i < get_nrUE_params()->num_ul_actors; i++) {
-            init_actor(&UE[CC_id]->ul_actors[i], "UL_", -1);
-          }
-        }
-        init_nr_ue_vars(UE[CC_id], inst);
-
-        if (UE[CC_id]->sl_mode) {
-          AssertFatal(UE[CC_id]->sl_mode == 2, "Only Sidelink mode 2 supported. Mode 1 not yet supported\n");
-          DevAssert(mac->if_module != NULL && mac->if_module->sl_phy_config_request != NULL);
-          nr_sl_phy_config_t *phycfg = &mac->SL_MAC_PARAMS->sl_phy_config;
-          phycfg->sl_config_req.sl_carrier_config.sl_num_rx_ant = get_nrUE_params()->nb_antennas_rx;
-          phycfg->sl_config_req.sl_carrier_config.sl_num_tx_ant = get_nrUE_params()->nb_antennas_tx;
-          mac->if_module->sl_phy_config_request(phycfg);
-          sl_nr_ue_phy_params_t *sl_phy = &UE[CC_id]->SL_UE_PHY_PARAMS;
-          nr_init_frame_parms_ue_sl(&sl_phy->sl_frame_params,
-                                    &sl_phy->sl_config,
-                                    get_softmodem_params()->threequarter_fs,
-                                    get_nrUE_params()->ofdm_offset_divisor);
-          sl_ue_phy_init(UE[CC_id]);
-        }
-        init_openair0(UE[CC_id]);
+          process_msg_rcc_to_mac(NotifiedFifoData(elt), inst);
+          delNotifiedFIFO_elt(elt);
+        } while (true);
+        fapi_nr_config_request_t *nrUE_config = &UE[CC_id]->nrUE_config;
+        nr_init_frame_parms_ue(&UE[CC_id]->frame_parms, nrUE_config, mac->nr_band);
       }
-    }
 
-    lock_memory_to_ram();
+      UE[CC_id]->sl_mode = get_softmodem_params()->sl_mode;
+      init_actor(&UE[CC_id]->sync_actor, "SYNC_", -1);
+      if (get_nrUE_params()->num_dl_actors > 0) {
+        UE[CC_id]->dl_actors = calloc_or_fail(get_nrUE_params()->num_dl_actors, sizeof(*UE[CC_id]->dl_actors));
+        for (int i = 0; i < get_nrUE_params()->num_dl_actors; i++) {
+          init_actor(&UE[CC_id]->dl_actors[i], "DL_", -1);
+        }
+      }
+      if (get_nrUE_params()->num_ul_actors > 0) {
+        UE[CC_id]->ul_actors = calloc_or_fail(get_nrUE_params()->num_ul_actors, sizeof(*UE[CC_id]->ul_actors));
+        for (int i = 0; i < get_nrUE_params()->num_ul_actors; i++) {
+          init_actor(&UE[CC_id]->ul_actors[i], "UL_", -1);
+        }
+      }
+      init_nr_ue_vars(UE[CC_id], inst);
 
-    if (IS_SOFTMODEM_DOSCOPE) {
-      load_softscope("nr", PHY_vars_UE_g[0][0]);
+      if (UE[CC_id]->sl_mode) {
+        AssertFatal(UE[CC_id]->sl_mode == 2, "Only Sidelink mode 2 supported. Mode 1 not yet supported\n");
+        DevAssert(mac->if_module != NULL && mac->if_module->sl_phy_config_request != NULL);
+        nr_sl_phy_config_t *phycfg = &mac->SL_MAC_PARAMS->sl_phy_config;
+        phycfg->sl_config_req.sl_carrier_config.sl_num_rx_ant = get_nrUE_params()->nb_antennas_rx;
+        phycfg->sl_config_req.sl_carrier_config.sl_num_tx_ant = get_nrUE_params()->nb_antennas_tx;
+        mac->if_module->sl_phy_config_request(phycfg);
+        sl_nr_ue_phy_params_t *sl_phy = &UE[CC_id]->SL_UE_PHY_PARAMS;
+        nr_init_frame_parms_ue_sl(&sl_phy->sl_frame_params,
+                                  &sl_phy->sl_config,
+                                  get_softmodem_params()->threequarter_fs,
+                                  get_nrUE_params()->ofdm_offset_divisor);
+        sl_ue_phy_init(UE[CC_id]);
+      }
+      init_openair0(UE[CC_id]);
     }
-    if (IS_SOFTMODEM_IMSCOPE_ENABLED) {
-      load_softscope("im", PHY_vars_UE_g[0][0]);
-    }
-    AssertFatal(!(IS_SOFTMODEM_IMSCOPE_ENABLED && IS_SOFTMODEM_IMSCOPE_RECORD_ENABLED),
-                "Data recoding and ImScope cannot be enabled at the same time\n");
-    if (IS_SOFTMODEM_IMSCOPE_RECORD_ENABLED) {
-      load_module_shlib("imscope_record", NULL, 0, PHY_vars_UE_g[0][0]);
-    }
-
-    for (int inst = 0; inst < NB_UE_INST; inst++) {
-      LOG_I(PHY,"Intializing UE Threads for instance %d ...\n", inst);
-      init_NR_UE_threads(PHY_vars_UE_g[inst][0]);
-    }
-    printf("UE threads created by %ld\n", gettid());
   }
+
+  lock_memory_to_ram();
+
+  if (IS_SOFTMODEM_DOSCOPE) {
+    load_softscope("nr", PHY_vars_UE_g[0][0]);
+  }
+  if (IS_SOFTMODEM_IMSCOPE_ENABLED) {
+    load_softscope("im", PHY_vars_UE_g[0][0]);
+  }
+  AssertFatal(!(IS_SOFTMODEM_IMSCOPE_ENABLED && IS_SOFTMODEM_IMSCOPE_RECORD_ENABLED),
+              "Data recoding and ImScope cannot be enabled at the same time\n");
+  if (IS_SOFTMODEM_IMSCOPE_RECORD_ENABLED) {
+    load_module_shlib("imscope_record", NULL, 0, PHY_vars_UE_g[0][0]);
+  }
+
+  for (int inst = 0; inst < NB_UE_INST; inst++) {
+    LOG_I(PHY,"Intializing UE Threads for instance %d ...\n", inst);
+    init_NR_UE_threads(PHY_vars_UE_g[inst][0]);
+  }
+  printf("UE threads created by %ld\n", gettid());
 
   // wait for end of program
   printf("TYPE <CTRL-C> TO TERMINATE\n");
@@ -578,9 +492,8 @@ int main(int argc, char **argv)
   printf("Entering ITTI signals handler\n");
   printf("TYPE <CTRL-C> TO TERMINATE\n");
   itti_wait_tasks_end(trigger_deregistration);
-  printf("Returned from ITTI signal handler\n");
-  oai_exit=1;
-  printf("oai_exit=%d\n",oai_exit);
+  LOG_W(NR_PHY, "Returned from ITTI signal handler\n");
+  oai_exit = 1;
 
   if (ouput_vcd)
     vcd_signal_dumper_close();

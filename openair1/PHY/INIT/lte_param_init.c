@@ -77,7 +77,7 @@ void lte_param_init(PHY_VARS_eNB **eNBp,
   eNB->RU_list[0] = ru;
   ru->num_eNB=1;
   srand(0);
-  randominit(0);
+  randominit();
   set_taus_seed(0);
   frame_parms = &(eNB->frame_parms);
   frame_parms->N_RB_DL            = N_RB_DL;   //50 for 10MHz and 25 for 5 MHz

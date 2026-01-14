@@ -150,8 +150,23 @@ void nr_derive_key(algorithm_type_dist_t alg_type, uint8_t alg_id, const uint8_t
  * NOTE: knas is dynamically allocated by the KDF function
  */
 
-/** @brief KgNB derivation (A.9 3GPP TS 33.501) */
-void derive_kgnb(uint8_t kamf[32], uint32_t count, uint8_t *kgnb)
+/** @brief KgNB derivation function (Annex A.9 3GPP TS 33.501)
+ *
+ * Derives KgNB from K_AMF and the uplink NAS COUNT.
+ * This function is applied when cryptographically protected 5G radio bearers are
+ * established and when a key change on-the-fly is performed.
+ *
+ * KDF input S structure (per Annex A.9):
+ * - FC = 0x6E
+ * - P0 = Uplink NAS COUNT (count parameter)
+ * - L0 = length of uplink NAS COUNT (0x00 0x04)
+ * - P1 = Access type distinguisher (0x01 for 3GPP access)
+ * - L1 = length of Access type distinguisher (0x00 0x01)
+ *
+ * @param[in] kamf 256-bit K_AMF key (input key KEY to KDF)
+ * @param[in] count Uplink NAS COUNT value (P0 in KDF input S)
+ * @param[out] kgnb Derived 256-bit KgNB key */
+void derive_kgnb(const uint8_t kamf[32], const uint32_t count, uint8_t *kgnb)
 {
   /* Compute the KDF input parameter
    * S = FC(0x6E) || UL NAS Count || 0x00 0x04 || 0x01 || 0x00 0x01

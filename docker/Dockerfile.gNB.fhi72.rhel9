@@ -126,6 +126,8 @@ RUN ldconfig && \
         /opt/phy/fhi_lib/lib/build/libxran.so
 
 WORKDIR /opt/oai-gnb
+
+COPY --from=gnb-base /usr/local/bin/yq /usr/local/bin/yq
 COPY --from=gnb-base /tini /tini
 ENTRYPOINT ["/tini", "-v", "--", "/opt/oai-gnb/bin/entrypoint.sh"]
 CMD ["/opt/oai-gnb/bin/nr-softmodem"]

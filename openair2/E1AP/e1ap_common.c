@@ -226,7 +226,7 @@ int e1ap_encode_send(E1_t type, sctp_assoc_t assoc_id, E1AP_E1AP_PDU_t *pdu, uin
 
   void *buffer = NULL;
   ssize_t encoded = aper_encode_to_new_buffer(&asn_DEF_E1AP_E1AP_PDU, 0, pdu, &buffer);
-  ASN_STRUCT_FREE_CONTENTS_ONLY(asn_DEF_E1AP_E1AP_PDU, pdu);
+  ASN_STRUCT_FREE(asn_DEF_E1AP_E1AP_PDU, pdu);
 
   if (encoded < 0) {
     LOG_E(E1AP, "%s: Failed to encode E1AP message\n", func);

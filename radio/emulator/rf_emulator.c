@@ -364,6 +364,8 @@ int device_init(openair0_device *device, openair0_config_t *openair0_cfg)
   device->trx_read_func = emulator_read;
 
   emulator_readconfig(emulator_state);
+  if (emulator_state->enable_noise)
+    randominit(); // for noise device
 
   return 0;
 }

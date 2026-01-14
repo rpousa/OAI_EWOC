@@ -247,7 +247,7 @@ int connect_rau(RU_t *ru) {
 void fh_if5_south_out(RU_t *ru, int frame, int slot, uint64_t timestamp) {
   if (ru == RC.ru[0])
     VCD_SIGNAL_DUMPER_DUMP_VARIABLE_BY_NAME(VCD_SIGNAL_DUMPER_VARIABLES_TRX_TST, ru->proc.timestamp_tx & 0xffffffff);
-  int offset = ru->nr_frame_parms->get_samples_slot_timestamp(slot,ru->nr_frame_parms,0);
+  int offset = get_samples_slot_timestamp(ru->nr_frame_parms, slot);
   void *buffs[ru->nb_tx];
   for (int aid = 0; aid < ru->nb_tx; aid++)
     buffs[aid] = (void*)&ru->common.txdata[aid][offset];
@@ -260,15 +260,9 @@ void fh_if5_south_out(RU_t *ru, int frame, int slot, uint64_t timestamp) {
         timestamp,
         buffs[0],
         buffs[1],
-        10 * log10((double)signal_energy(buffs[0], ru->nr_frame_parms->get_samples_per_slot(slot, ru->nr_frame_parms))),
+        10 * log10((double)signal_energy(buffs[0], get_samples_per_slot(slot, ru->nr_frame_parms))),
         (int)txmeas.tv_nsec);
-  ru->ifdevice.trx_write_func2(&ru->ifdevice,
-                               timestamp,
-                               buffs,
-                               0,
-                               ru->nr_frame_parms->get_samples_per_slot(slot,ru->nr_frame_parms),
-                               0,
-                               ru->nb_tx);
+  ru->ifdevice.trx_write_func2(&ru->ifdevice, timestamp, buffs, 0, get_samples_per_slot(slot, ru->nr_frame_parms), 0, ru->nb_tx);
 }
 
 // southbound IF4p5 fronthaul
@@ -295,11 +289,11 @@ void fh_if5_south_in(RU_t *ru,
   VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME( VCD_SIGNAL_DUMPER_FUNCTIONS_RECV_IF5, 1 );   
   start_meas(&ru->rx_fhaul);
 
-  ru->ifdevice.trx_read_func2(&ru->ifdevice, &proc->timestamp_rx, NULL, fp->get_samples_per_slot(*tti, fp));
+  ru->ifdevice.trx_read_func2(&ru->ifdevice, &proc->timestamp_rx, NULL, get_samples_per_slot(*tti, fp));
   if (proc->first_rx == 1)
     ru->ts_offset = proc->timestamp_rx;
   proc->frame_rx = ((proc->timestamp_rx - ru->ts_offset) / (fp->samples_per_subframe * 10)) & 1023;
-  proc->tti_rx = fp->get_slot_from_timestamp(proc->timestamp_rx - ru->ts_offset, fp);
+  proc->tti_rx = get_slot_from_timestamp(proc->timestamp_rx - ru->ts_offset, fp);
 
   if (proc->first_rx == 0) {
     if (proc->tti_rx != *tti) {
@@ -383,7 +377,7 @@ void fh_if4p5_south_in(RU_t *ru,
   //caculate timestamp_rx, timestamp_tx based on frame and subframe
   proc->tti_rx   = sl;
   proc->frame_rx = f;
-  proc->timestamp_rx = (proc->frame_rx * fp->samples_per_subframe * 10)  + fp->get_samples_slot_timestamp(proc->tti_rx, fp, 0);
+  proc->timestamp_rx = (proc->frame_rx * fp->samples_per_subframe * 10) + get_samples_slot_timestamp(fp, proc->tti_rx);
   //  proc->timestamp_tx = proc->timestamp_rx +  (4*fp->samples_per_subframe);
   proc->tti_tx   = (sl+ru->sl_ahead)%fp->slots_per_frame;
   proc->frame_tx = (sl > (fp->slots_per_frame - 1 - (ru->sl_ahead))) ? (f + 1) & 1023 : f;
@@ -528,7 +522,7 @@ void fh_if4p5_north_asynch_in(RU_t *ru,int *frame,int *slot) {
     proc->frame_tx_unwrap += 1024;
 
   proc->timestamp_tx =
-      ((uint64_t)frame_tx + proc->frame_tx_unwrap) * fp->samples_per_subframe * 10 + fp->get_samples_slot_timestamp(slot_tx, fp, 0);
+      ((uint64_t)frame_tx + proc->frame_tx_unwrap) * fp->samples_per_subframe * 10 + get_samples_slot_timestamp(fp, slot_tx);
   LOG_D(PHY, "RU %d/%d TST %lu, frame %d, subframe %d\n", ru->idx, 0, proc->timestamp_tx, frame_tx, slot_tx);
 
   // dump VCD output for first RU in list
@@ -566,14 +560,14 @@ static void rx_rf(RU_t *ru, int *frame, int *slot)
   RU_proc_t *proc = &ru->proc;
   NR_DL_FRAME_PARMS *fp = ru->nr_frame_parms;
   openair0_config_t *cfg   = &ru->openair0_cfg;
-  uint32_t samples_per_slot = fp->get_samples_per_slot(*slot, fp);
+  uint32_t samples_per_slot = get_samples_per_slot(*slot, fp);
   AssertFatal(*slot < fp->slots_per_frame && *slot >= 0, "slot %d is illegal (%d)\n", *slot, fp->slots_per_frame);
 
   start_meas(&ru->rx_fhaul);
   int nb = ru->nb_rx * ru->num_beams_period;
   void *rxp[nb];
   for (int i = 0; i < nb; i++)
-    rxp[i] = (void *)&ru->common.rxdata[i][fp->get_samples_slot_timestamp(*slot, fp, 0)];
+    rxp[i] = (void *)&ru->common.rxdata[i][get_samples_slot_timestamp(fp, *slot)];
 
   VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME(VCD_SIGNAL_DUMPER_FUNCTIONS_TRX_READ, 1);
   openair0_timestamp old_ts = proc->timestamp_rx;
@@ -590,7 +584,7 @@ static void rx_rf(RU_t *ru, int *frame, int *slot)
     LOG_E(PHY, "rx_rf: Asked for %d samples, got %d from USRP\n", samples_per_slot, rxs);
 
   if (proc->first_rx != 1) {
-    uint32_t samples_per_slot_prev = fp->get_samples_per_slot((*slot - 1) % fp->slots_per_frame, fp);
+    uint32_t samples_per_slot_prev = get_samples_per_slot((*slot - 1) % fp->slots_per_frame, fp);
 
     if (proc->timestamp_rx - old_ts != samples_per_slot_prev) {
       LOG_D(PHY,
@@ -609,7 +603,7 @@ static void rx_rf(RU_t *ru, int *frame, int *slot)
 
   // in fact the following line is the same as long as the timestamp_rx is synchronized to GPS. 
   proc->frame_rx    = (proc->timestamp_rx / (fp->samples_per_subframe*10))&1023;
-  proc->tti_rx = fp->get_slot_from_timestamp(proc->timestamp_rx,fp);
+  proc->tti_rx = get_slot_from_timestamp(proc->timestamp_rx, fp);
   // synchronize first reception to frame 0 subframe 0
   LOG_D(PHY,
         "RU %d/%d TS %ld, GPS %f, SR %f, frame %d, slot %d.%d / %d\n",
@@ -725,9 +719,9 @@ void tx_rf(RU_t *ru, int frame,int slot, uint64_t timestamp)
     T_INT(frame),
     T_INT(slot),
     T_INT(0),
-    T_BUFFER(&ru->common.txdata[0][fp->get_samples_slot_timestamp(slot, fp, 0)], fp->get_samples_per_slot(slot, fp) * 4));
+    T_BUFFER(&ru->common.txdata[0][get_samples_slot_timestamp(fp, slot)], get_samples_per_slot(slot, fp) * 4));
   int sf_extension = 0;
-  int siglen=fp->get_samples_per_slot(slot,fp);
+  int siglen = get_samples_per_slot(slot, fp);
   radio_tx_burst_flag_t flags_burst = TX_BURST_INVALID;
   radio_tx_gpio_flag_t flags_gpio = 0;
 
@@ -786,7 +780,7 @@ void tx_rf(RU_t *ru, int frame,int slot, uint64_t timestamp)
   int nt = ru->nb_tx * ru->num_beams_period;
   void *txp[nt];
   for (int i = 0; i < nt; i++)
-    txp[i] = (void *)&ru->common.txdata[i][fp->get_samples_slot_timestamp(slot, fp, 0)] - sf_extension * sizeof(int32_t);
+    txp[i] = (void *)&ru->common.txdata[i][get_samples_slot_timestamp(fp, slot)] - sf_extension * sizeof(int32_t);
 
   VCD_SIGNAL_DUMPER_DUMP_VARIABLE_BY_NAME(VCD_SIGNAL_DUMPER_VARIABLES_TRX_TST, (timestamp + ru->ts_offset) & 0xffffffff);
   VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME(VCD_SIGNAL_DUMPER_FUNCTIONS_TRX_WRITE, 1);
@@ -902,6 +896,7 @@ static void fill_split7_2_config(split7_config_t *split7, const nfapi_nr_config_
     }
   }
 
+  split7->prach_fftSize = prach_config->prach_sequence_length.value == 0 ? 10 : 8; // need to handle 5kHz cases better than this
   split7->fftSize = log2(fp->ofdm_symbol_size);
 
   // M-plane related parameters
@@ -1034,7 +1029,7 @@ void *ru_thread(void *param)
   RU_t               *ru      = (RU_t *)param;
   RU_proc_t          *proc    = &ru->proc;
   NR_DL_FRAME_PARMS  *fp      = ru->nr_frame_parms;
-  PHY_VARS_gNB       *gNB     = RC.gNB[0];
+  PHY_VARS_gNB *gNB = RC.gNB[0]; // this RU main loop handes only one RU
   int                ret;
   int                slot     = fp->slots_per_frame-1;
   int                frame    = 1023;
@@ -1047,7 +1042,7 @@ void *ru_thread(void *param)
   // set default return value
   sprintf(threadname,"ru_thread %u",ru->idx);
   LOG_I(PHY,"Starting RU %d (%s,%s) on cpu %d\n",ru->idx,NB_functions[ru->function],NB_timing[ru->if_timing],sched_getcpu());
-  ru->config = RC.gNB[0]->gNB_config;
+  ru->config = gNB->gNB_config;
 
   nr_init_frame_parms(&ru->config, fp);
   nr_dump_frame_parms(fp);
@@ -1176,15 +1171,20 @@ void *ru_thread(void *param)
     }
     proc->timestamp_tx = proc->timestamp_rx;
     for (int i = proc->tti_rx; i < proc->tti_rx + ru->sl_ahead; i++)
-      proc->timestamp_tx += fp->get_samples_per_slot(i % fp->slots_per_frame, fp);
+      proc->timestamp_tx += get_samples_per_slot(i % fp->slots_per_frame, fp);
     proc->tti_tx = (proc->tti_rx + ru->sl_ahead) % fp->slots_per_frame;
     proc->frame_tx = proc->tti_rx > proc->tti_tx ? (proc->frame_rx + 1) & 1023 : proc->frame_rx;
-    LOG_D(PHY,"AFTER fh_south_in - SFN/SL:%d%d RU->proc[RX:%d.%d TX:%d.%d] RC.gNB[0]:[RX:%d%d TX(SFN):%d]\n",
-          frame,slot,
-          proc->frame_rx,proc->tti_rx,
-          proc->frame_tx,proc->tti_tx,
-          RC.gNB[0]->proc.frame_rx,RC.gNB[0]->proc.slot_rx,
-          RC.gNB[0]->proc.frame_tx);
+    LOG_D(PHY,
+          "AFTER fh_south_in - SFN/SL:%d%d RU->proc[RX:%d.%d TX:%d.%d] RC.gNB[0]:[RX:%d%d TX(SFN):%d]\n",
+          frame,
+          slot,
+          proc->frame_rx,
+          proc->tti_rx,
+          proc->frame_tx,
+          proc->tti_tx,
+          gNB->proc.frame_rx,
+          gNB->proc.slot_rx,
+          gNB->proc.frame_tx);
 
     if (ru->idx != 0)
       proc->frame_tx = (proc->frame_tx + proc->frame_offset) & 1023;
@@ -1199,7 +1199,7 @@ void *ru_thread(void *param)
         LOG_D(NR_PHY, "Setting %d.%d (%d) to busy\n", proc->frame_rx, proc->tti_rx, proc->tti_rx % RU_RX_SLOT_DEPTH);
         //LOG_M("rxdata.m","rxs",ru->common.rxdata[0],1228800,1,1);
         LOG_D(PHY,"RU proc: frame_rx = %d, tti_rx = %d\n", proc->frame_rx, proc->tti_rx);
-        gNBscopeCopy(RC.gNB[0],
+        gNBscopeCopy(gNB,
                      gNBRxdataF,
                      ru->common.rxdataF[0],
                      sizeof(c16_t),
@@ -1208,34 +1208,11 @@ void *ru_thread(void *param)
                      proc->tti_rx * gNB->frame_parms.samples_per_slot_wCP);
 
         // Do PRACH RU processing
-        int prach_id = find_nr_prach_ru(ru, proc->frame_rx, proc->tti_rx, SEARCH_EXIST);
-        if (prach_id >= 0) {
+        prach_item_t *p = find_nr_prach(&gNB->prach_list, proc->frame_rx, proc->tti_rx, SEARCH_EXIST);
+        if (p) {
           VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME( VCD_SIGNAL_DUMPER_FUNCTIONS_PHY_RU_PRACH_RX, 1 );
-
-          T(T_GNB_PHY_PRACH_INPUT_SIGNAL,
-            T_INT(proc->frame_rx),
-            T_INT(proc->tti_rx),
-            T_INT(0),
-            T_BUFFER(&ru->common.rxdata[0][fp->get_samples_slot_timestamp(proc->tti_rx - 1, fp, 0) /*-ru->N_TA_offset*/],
-                     (fp->get_samples_per_slot(proc->tti_rx - 1, fp) + fp->get_samples_per_slot(proc->tti_rx, fp)) * 4));
-          RU_PRACH_list_t *p = ru->prach_list + prach_id;
-          int N_dur = get_nr_prach_duration(p->fmt);
-
-          for (int prach_oc = 0; prach_oc < p->num_prach_ocas; prach_oc++) {
-            int prachStartSymbol = p->prachStartSymbol + prach_oc * N_dur;
-            int beam_id = ru->prach_list[prach_id].beam ? ru->prach_list[prach_id].beam[prach_oc] : 0;
-            //comment FK: the standard 38.211 section 5.3.2 has one extra term +14*N_RA_slot. This is because there prachStartSymbol is given wrt to start of the 15kHz slot or 60kHz slot. Here we work slot based, so this function is anyway only called in slots where there is PRACH. Its up to the MAC to schedule another PRACH PDU in the case there are there N_RA_slot \in {0,1}.
-            rx_nr_prach_ru(ru,
-                           p->fmt, // could also use format
-                           p->numRA,
-                           beam_id,
-                           prachStartSymbol,
-                           p->slot,
-                           prach_oc,
-                           proc->frame_rx,
-                           proc->tti_rx);
-          }
-          free_nr_ru_prach_entry(ru,prach_id);
+          // need to extract RACH data for lqter processing by rx_nr_prach()
+          rx_nr_prach_ru(p, ru->common.rxdata, ru->nr_frame_parms, ru->N_TA_offset);
           VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME(VCD_SIGNAL_DUMPER_FUNCTIONS_PHY_RU_PRACH_RX, 0);
         } // end if (prach_id >= 0)
       } // end if (ru->feprx)

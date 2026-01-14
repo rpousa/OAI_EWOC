@@ -40,7 +40,6 @@ Linking C shared module libldpc_aal.so
 At runtime, to successfully use LDPC accelerators (e.g., Xilinx T2/Intel ACCs), you will need to install the corresponding drivers and tools.
 Please refer to the dedicated documentation at [LDPC_OFFLOAD_SETUP.md](file://../../../../doc/LDPC_OFFLOAD_SETUP.md).
 
-<<<<<<< HEAD
 ```
 ./nr-softmodem -O  libconfig:gnb.band78.sa.fr1.106PRB.usrpb210.conf:dbgl5 --rfsim --rfsimulator.serveraddr server  --log_config.gtpu_log_level info  --loader.ldpc.shlibversion _aal --nrLDPC_coding_aal.dpdk_dev 01:00.0 --nrLDPC_coding_aal.dpdk_core_list 0-1
 ```

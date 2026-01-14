@@ -1836,7 +1836,6 @@ INPUT                  = \
 @CMAKE_CURRENT_SOURCE_DIR@/../openair2/RRC/common.h \
 @CMAKE_CURRENT_SOURCE_DIR@/../openair2/RRC/NR_UE/rrc_UE.c \
 @CMAKE_CURRENT_SOURCE_DIR@/../openair2/RRC/NR_UE/rrc_sl_preconfig.c \
-@CMAKE_CURRENT_SOURCE_DIR@/../openair2/RRC/NR_UE/rrc_nsa.c \
 @CMAKE_CURRENT_SOURCE_DIR@/../openair2/RRC/NR_UE/rrc_proto.h \
 @CMAKE_CURRENT_SOURCE_DIR@/../openair2/RRC/NR_UE/rrc_vars.h \
 @CMAKE_CURRENT_SOURCE_DIR@/../openair2/RRC/NR_UE/sl_preconfig_paramvalues.h \
@@ -1917,8 +1916,6 @@ INPUT                  = \
 @CMAKE_CURRENT_SOURCE_DIR@/../openair2/E1AP/e1ap_api.h \
 @CMAKE_CURRENT_SOURCE_DIR@/../openair2/E1AP/e1ap_setup.c \
 @CMAKE_CURRENT_SOURCE_DIR@/../openair2/E1AP/e1ap_asnc.h \
-@CMAKE_CURRENT_SOURCE_DIR@/../openair2/NR_PHY_INTERFACE/nr_sched_response.h \
-@CMAKE_CURRENT_SOURCE_DIR@/../openair2/NR_PHY_INTERFACE/nr_sched_response.c \
 @CMAKE_CURRENT_SOURCE_DIR@/../openair2/NR_PHY_INTERFACE/NR_IF_Module.h \
 @CMAKE_CURRENT_SOURCE_DIR@/../openair2/NR_PHY_INTERFACE/NR_IF_Module.c \
 @CMAKE_CURRENT_SOURCE_DIR@/../openair2/SDAP/nr_sdap/nr_sdap.h \
@@ -1927,7 +1924,6 @@ INPUT                  = \
 @CMAKE_CURRENT_SOURCE_DIR@/../openair2/SDAP/nr_sdap/nr_sdap_entity.c \
 @CMAKE_CURRENT_SOURCE_DIR@/../openair1/PHY/defs_gNB.h \
 @CMAKE_CURRENT_SOURCE_DIR@/../openair1/PHY/impl_defs_top.h \
-@CMAKE_CURRENT_SOURCE_DIR@/../openair1/PHY/phy_extern_nr_ue.h \
 @CMAKE_CURRENT_SOURCE_DIR@/../openair1/PHY/INIT/lte_parms.c \
 @CMAKE_CURRENT_SOURCE_DIR@/../openair1/PHY/INIT/nr_init_ru.c \
 @CMAKE_CURRENT_SOURCE_DIR@/../openair1/PHY/INIT/nr_parms.c \
@@ -2013,7 +2009,6 @@ INPUT                  = \
 @CMAKE_CURRENT_SOURCE_DIR@/../openair1/PHY/NR_TRANSPORT/nr_transport_common_proto.h \
 @CMAKE_CURRENT_SOURCE_DIR@/../openair1/PHY/NR_TRANSPORT/nr_sss.c \
 @CMAKE_CURRENT_SOURCE_DIR@/../openair1/PHY/NR_TRANSPORT/nr_uci_tools_common.c \
-@CMAKE_CURRENT_SOURCE_DIR@/../openair1/PHY/NR_TRANSPORT/nr_dlsch_tools.c \
 @CMAKE_CURRENT_SOURCE_DIR@/../openair1/PHY/NR_TRANSPORT/nr_dlsch_coding.c \
 @CMAKE_CURRENT_SOURCE_DIR@/../openair1/PHY/NR_TRANSPORT/nr_prach.c \
 @CMAKE_CURRENT_SOURCE_DIR@/../openair1/PHY/NR_TRANSPORT/nr_scrambling.c \
@@ -2295,10 +2290,8 @@ INPUT                  = \
 @CMAKE_CURRENT_SOURCE_DIR@/../openair1/SCHED_NR/phy_frame_config_nr.c \
 @CMAKE_CURRENT_SOURCE_DIR@/../openair1/SCHED_NR/phy_frame_config_nr.h \
 @CMAKE_CURRENT_SOURCE_DIR@/../openair1/SCHED_NR/nr_prach_procedures.c \
-@CMAKE_CURRENT_SOURCE_DIR@/../openair1/SCHED_NR/fapi_nr_l1.h \
 @CMAKE_CURRENT_SOURCE_DIR@/../openair1/SCHED_NR/phy_procedures_nr_gNB.c \
 @CMAKE_CURRENT_SOURCE_DIR@/../openair1/SCHED_NR/sched_nr.h \
-@CMAKE_CURRENT_SOURCE_DIR@/../openair1/SCHED_NR/fapi_nr_l1.c \
 @CMAKE_CURRENT_SOURCE_DIR@/../openair1/SCHED_NR/nr_ru_procedures.c \
 @CMAKE_CURRENT_SOURCE_DIR@/../radio/ETHERNET/if_defs.h \
 @CMAKE_CURRENT_SOURCE_DIR@/../radio/ETHERNET/ethernet_lib.h \

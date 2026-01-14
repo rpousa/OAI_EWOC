@@ -168,8 +168,9 @@ static const char *const flag_name[] = {FOREACH_FLAG(FLAG_TEXT) ""};
   COMP_DEF(GNB_APP, log)        \
   COMP_DEF(NR_RRC, log)         \
   COMP_DEF(NR_MAC, log)         \
-  COMP_DEF(NR_MAC_DCI, log)         \
-  COMP_DEF(NR_PHY_DCI, log)         \
+  COMP_DEF(NR_MAC_DCI, log)     \
+  COMP_DEF(NR_PHY_DCI, log)     \
+  COMP_DEF(NR_PHY_RACH, log)    \
   COMP_DEF(NR_PHY, log)         \
   COMP_DEF(LOADER, log)         \
   COMP_DEF(ASN1, log)           \
@@ -205,6 +206,7 @@ typedef struct {
 
 typedef struct  {
   const char        *name;
+  char headerName[19];
   int level;
   int filelog;
   FILE              *stream;
@@ -216,7 +218,7 @@ typedef struct  {
 typedef struct {
   log_component_t         log_component[MAX_LOG_COMPONENTS];
   log_component_back_t log_rarely_used[MAX_LOG_COMPONENTS];
-  char                    level2string[NUM_LOG_LEVEL];
+  char level2string[NUM_LOG_LEVEL][4];
   int                     flag;
   char                   *filelog_name;
   debug_flags_t debug_mask;
@@ -316,8 +318,14 @@ void close_log_mem(void);
 #define MATLAB_CSHORT_BRACKET1 13
 #define MATLAB_CSHORT_BRACKET2 14
 #define MATLAB_CSHORT_BRACKET3 15
-  
-int32_t write_file_matlab(const char *fname, const char *vname, void *data, int length, int dec, unsigned int format, int multiVec);
+
+int32_t write_file_matlab(const char *fname,
+                          const char *vname,
+                          const void *data,
+                          int length,
+                          int dec,
+                          unsigned int format,
+                          int multiVec);
 #define write_output(a, b, c, d, e, f) write_file_matlab(a, b, c, d, e, f, 0)
 
 /*----------------macro definitions for reading log configuration from the config module */

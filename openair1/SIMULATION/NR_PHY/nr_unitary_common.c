@@ -163,6 +163,7 @@ typedef uint32_t channel_t;
 int8_t nr_mac_rrc_data_ind_ue(const module_id_t module_id,
                               const int CC_id,
                               const uint8_t gNB_index,
+                              const int hfn,
                               const frame_t frame,
                               const int slot,
                               const rnti_t rnti,
@@ -184,6 +185,6 @@ void nr_mac_rrc_meas_ind_ue(module_id_t module_id,
                             uint16_t Nid_cell,
                             bool csi_meas,
                             bool is_neighboring_cell,
-                            uint8_t rsrp_dBm)
+                            int rsrp_dBm)
 {
 }

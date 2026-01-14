@@ -97,7 +97,6 @@ typedef enum pdu_session_satus_e {
   PDU_SESSION_STATUS_TOMODIFY, // ENDC NSA
   PDU_SESSION_STATUS_FAILED,
   PDU_SESSION_STATUS_TORELEASE, // to release DRB between eNB and UE
-  PDU_SESSION_STATUS_RELEASED
 } pdu_session_status_t;
 
 typedef struct pdusession_s {
@@ -149,6 +148,12 @@ typedef enum {
   RRC_UECAPABILITY_ENQUIRY,
 } rrc_action_t;
 
+/* Small state for delaying NG-triggered actions (setup/release) */
+typedef struct {
+  int max_delays;
+  bool ongoing_transaction;
+} delayed_action_state_t;
+
 typedef struct nr_redcap_ue_cap {
   bool support_of_redcap_r17;
   bool support_of_16drb_redcap_r17;
@@ -166,8 +171,6 @@ typedef struct nr_handover_context_s nr_handover_context_t;
 
 typedef struct gNB_RRC_UE_s {
   time_t last_seen; // last time this UE has been accessed
-
-  NR_DRB_ToReleaseList_t            *DRB_ReleaseList;
 
   NR_SRB_INFO_TABLE_ENTRY Srb[NR_NUM_SRB];
   NR_MeasConfig_t                   *measConfig;
@@ -188,7 +191,6 @@ typedef struct gNB_RRC_UE_s {
 
   /* KgNB as derived from KASME received from EPC */
   uint8_t kgnb[32];
-  int8_t  kgnb_ncc;
   uint8_t nh[32];
   int8_t  nh_ncc;
 
@@ -209,6 +211,8 @@ typedef struct gNB_RRC_UE_s {
   uint64_t amf_ue_ngap_id;
   // Globally Unique AMF Identifier
   nr_guami_t ue_guami;
+  // Serving PLMN of the UE
+  plmn_id_t serving_plmn;
 
   ngap_security_capabilities_t       security_capabilities;
   //NSA block
@@ -243,8 +247,7 @@ typedef struct gNB_RRC_UE_s {
   byte_array_t nas_pdu;
 
   /* hack, see rrc_gNB_process_NGAP_PDUSESSION_SETUP_REQ() for more info */
-  int max_delays_pdu_session;
-  bool ongoing_pdusession_setup_request;
+  delayed_action_state_t delayed_action;
 
   nr_redcap_ue_cap_t *redcap_cap;
 } gNB_RRC_UE_t;

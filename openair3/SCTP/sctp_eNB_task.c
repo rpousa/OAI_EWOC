@@ -477,6 +477,7 @@ static void sctp_handle_new_association_req(const instance_t instance,
         if (errno != EINPROGRESS) {
           SCTP_ERROR("Connect failed: %s\n", strerror(errno));
           sctp_itti_send_association_resp(requestor, instance, -1, req->ulp_cnx_id, SCTP_STATE_UNREACHABLE, 0, 0);
+          freeaddrinfo(serv);
           close(sd);
           return;
         } else {

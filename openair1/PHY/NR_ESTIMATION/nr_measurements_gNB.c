@@ -136,7 +136,7 @@ void gNB_I0_measurements(PHY_VARS_gNB *gNB, int slot, int first_symb, int num_sy
 
   // TODO modify the measurements to take into account concurrent beams
   for (int s = first_symb; s < first_symb + num_symb; s++) {
-    int offset0 = ((slot&3)*frame_parms->symbols_per_slot + s) * frame_parms->ofdm_symbol_size;
+    int offset0 = ((slot % RU_RX_SLOT_DEPTH) * frame_parms->symbols_per_slot + s) * frame_parms->ofdm_symbol_size;
     for (int rb = 0; rb < frame_parms->N_RB_UL; rb++) {
       if ((rb_mask_ul[s][rb >> 5] & (1U << (rb & 31))) == 0 && // check that rb was not used in this subframe
           !(I0_SKIP_DC && rb == frame_parms->N_RB_UL >> 1)) { // skip middle PRB because of artificial noise possibly created by FFT
@@ -187,75 +187,4 @@ void gNB_I0_measurements(PHY_VARS_gNB *gNB, int slot, int first_symb, int num_sy
        measurements->n0_subband_power_avg_perANT_dB[aarx] = dB_fixed(n0_subband_tot_perANT[aarx]/nb_rb);
      }
   }
-}
-
-// Scope: This function computes the UL SNR from the UL channel estimates
-//
-// Todo:
-// - averaging IIR filter for RX power and noise
-void nr_gnb_measurements(PHY_VARS_gNB *gNB,
-                         NR_gNB_ULSCH_t *ulsch,
-                         NR_gNB_PUSCH *pusch_vars,
-                         unsigned char symbol,
-                         uint8_t nrOfLayers)
-{
-  uint32_t rx_power_tot = 0;
-  unsigned short rx_power_avg_dB;
-  unsigned short rx_power_tot_dB;
-  RU_t *ru = gNB->RU_list[0];
-  double rx_gain, rx_gain_offset;
-  if (ru && ru->rfdevice.openair0_cfg) {
-    rx_gain = ru->rfdevice.openair0_cfg->rx_gain[0];
-    rx_gain_offset = ru->rfdevice.openair0_cfg->rx_gain_offset[0];
-  } else if (ru && ru->ifdevice.openair0_cfg) {
-    rx_gain = ru->ifdevice.openair0_cfg->rx_gain[0];
-    rx_gain_offset = ru->ifdevice.openair0_cfg->rx_gain_offset[0];
-  } else {
-    LOG_W(NR_PHY, "no device for rx gain, take arbitrary gain = 1)\n");
-    rx_gain = 1;
-    rx_gain_offset = 0;
-  }
-  PHY_MEASUREMENTS_gNB *meas = &gNB->measurements;
-  NR_DL_FRAME_PARMS      *fp = &gNB->frame_parms;
-  int              ch_offset = fp->ofdm_symbol_size * symbol;
-  int N_RB_UL = ulsch->harq_process->ulsch_pdu.rb_size;
-  ulsch_measurements_gNB *ulsch_measurements = &ulsch->ulsch_measurements;
-
-  int rx_power[fp->nb_antennas_rx];
-  int rx_spatial_power[nrOfLayers][fp->nb_antennas_rx];
-  for (int aarx = 0; aarx < fp->nb_antennas_rx; aarx++){
-    rx_power[aarx] = 0;
-
-    for (int aatx = 0; aatx < nrOfLayers; aatx++){
-      rx_spatial_power[aatx][aarx] =
-          (signal_energy_nodc((c16_t*)&pusch_vars->ul_ch_estimates[aatx * fp->nb_antennas_rx + aarx][ch_offset],
-                              N_RB_UL * NR_NB_SC_PER_RB));
-
-      if (rx_spatial_power[aatx][aarx] < 0) {
-        rx_spatial_power[aatx][aarx] = 0;
-      }
-
-      rx_power[aarx] += rx_spatial_power[aatx][aarx];
-    }
-    LOG_D(PHY, "[RNTI %04x] RX power in antenna %d = %d\n", ulsch->rnti, aarx, rx_power[aarx]);
-
-    rx_power_tot += rx_power[aarx];
-  }
-
-  rx_power_tot_dB = (unsigned short)dB_fixed(rx_power_tot);
-  rx_power_avg_dB = rx_power_tot_dB;
-
-  ulsch_measurements->wideband_cqi_tot = dB_fixed2(rx_power_tot, meas->n0_power_tot);
-  ulsch_measurements->rx_rssi_dBm =
-      rx_power_avg_dB + 30 - SQ15_SQUARED_NORM_FACTOR_DB - (rx_gain - rx_gain_offset) - dB_fixed(fp->ofdm_symbol_size);
-
-  LOG_D(PHY,
-        "[RNTI %04x] RSSI %d dBm/RE, RSSI (digital) %d dB (N_RB_UL %d), WBand CQI tot %d dB, N0 Power tot %d, RX Power tot %d\n",
-        ulsch->rnti,
-        ulsch_measurements->rx_rssi_dBm,
-        rx_power_avg_dB,
-        N_RB_UL,
-        ulsch_measurements->wideband_cqi_tot,
-        meas->n0_power_tot,
-        rx_power_tot);
 }

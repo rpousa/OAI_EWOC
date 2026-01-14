@@ -51,19 +51,23 @@ static void nr_pdcch_scrambling(uint32_t *in, uint32_t size, uint32_t Nid, uint3
     out[i] = in[i] ^ seq[i];
 }
 
-static void nr_generate_dci(PHY_VARS_gNB *gNB,
-                            nfapi_nr_dl_tti_pdcch_pdu_rel15_t *pdcch_pdu_rel15,
-                            int txdataF_offset,
-                            NR_DL_FRAME_PARMS *frame_parms,
-                            int slot)
+void nr_generate_dci(PHY_VARS_gNB *gNB,
+                     const nfapi_nr_dl_tti_pdcch_pdu_rel15_t *pdcch_pdu_rel15,
+                     int txdataF_offset,
+                     NR_DL_FRAME_PARMS *frame_parms,
+                     int slot)
 {
   // fill reg list per symbol
   int reg_list[MAX_DCI_CORESET][NR_MAX_PDCCH_AGG_LEVEL * NR_NB_REG_PER_CCE];
   nr_fill_reg_list(reg_list, pdcch_pdu_rel15);
   // compute rb_offset and n_prb based on frequency allocation
-  int rb_offset;
-  int n_rb;
-  get_coreset_rballoc(pdcch_pdu_rel15->FreqDomainResource,&n_rb,&rb_offset);
+  int n_rb, cset_start;
+  get_coreset_rballoc(pdcch_pdu_rel15->FreqDomainResource, &n_rb, &cset_start);
+  int additional_offset = 0;
+  // first common RB of the first group of 6 PRBs has common RB index equal to 6 * ⌈BWP_start / 6⌉
+  if (pdcch_pdu_rel15->CoreSetType == 1)
+    additional_offset = (pdcch_pdu_rel15->BWPStart + 5) / 6 * 6 - pdcch_pdu_rel15->BWPStart;
+  int rb_offset = cset_start + additional_offset;
   uint16_t cset_start_sc = frame_parms->first_carrier_offset + (pdcch_pdu_rel15->BWPStart + rb_offset) * NR_NB_SC_PER_RB;
   int idx1 = pdcch_pdu_rel15->StartSymbolIndex+pdcch_pdu_rel15->DurationSymbols;
   int idx2 = (((n_rb + rb_offset + pdcch_pdu_rel15->BWPStart) * 3) + 15) & ~15;
@@ -83,7 +87,6 @@ static void nr_generate_dci(PHY_VARS_gNB *gNB,
     int bitmap = SL_to_bitmap(cset_start_symb, pdcch_pdu_rel15->DurationSymbols);
     int beam_nb = beam_index_allocation(gNB->enable_analog_das,
                                         dci_pdu->precodingAndBeamforming.prgs_list[0].dig_bf_interface_list[0].beam_idx,
-                                        &gNB->gNB_config.analog_beamforming_ve,
                                         &gNB->common_vars,
                                         slot,
                                         frame_parms->symbols_per_slot,
@@ -195,7 +198,7 @@ static void nr_generate_dci(PHY_VARS_gNB *gNB,
         // dmrs index depends on reference point for k according to 38.211 7.4.1.3.2
         int dmrs_idx;
         if (pdcch_pdu_rel15->CoreSetType == NFAPI_NR_CSET_CONFIG_PDCCH_CONFIG)
-          dmrs_idx = (reg_list[d][reg_count] + pdcch_pdu_rel15->BWPStart) * 3;
+          dmrs_idx = (reg_list[d][reg_count] + pdcch_pdu_rel15->BWPStart + rb_offset) * 3;
         else
           dmrs_idx = (reg_list[d][reg_count] + rb_offset) * 3;
 
@@ -237,16 +240,3 @@ static void nr_generate_dci(PHY_VARS_gNB *gNB,
           *(unsigned long long *)dci_pdu->Payload);
   } // for (int d=0;d<pdcch_pdu_rel15->numDlDci;d++)
 }
-
-void nr_generate_dci_top(processingData_L1tx_t *msgTx, int slot, int txdataF_offset)
-{
-  PHY_VARS_gNB *gNB = msgTx->gNB;
-  NR_DL_FRAME_PARMS *frame_parms = &gNB->frame_parms;
-  start_meas(&gNB->dci_generation_stats);
-  for (int i = 0; i < msgTx->num_ul_pdcch; i++)
-    nr_generate_dci(msgTx->gNB, &msgTx->ul_pdcch_pdu[i].pdcch_pdu.pdcch_pdu_rel15, txdataF_offset, frame_parms, slot);
-  for (int i = 0; i < msgTx->num_dl_pdcch; i++)
-    nr_generate_dci(msgTx->gNB, &msgTx->pdcch_pdu[i].pdcch_pdu_rel15, txdataF_offset, frame_parms, slot);
-  stop_meas(&gNB->dci_generation_stats);
-}
-

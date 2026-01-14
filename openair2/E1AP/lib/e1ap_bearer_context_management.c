@@ -1631,6 +1631,20 @@ E1AP_E1AP_PDU_t *encode_E1_bearer_context_mod_request(const e1ap_bearer_mod_req_
       *ieC3_1 = e1_encode_pdu_session_to_mod_item(i);
     }
   }
+
+  // NG-RAN PDU Session Resource To Remove List (O)
+  if (in->numPDUSessionsRem) {
+    asn1cSequenceAdd(out->protocolIEs.list, E1AP_BearerContextModificationRequestIEs_t, remList);
+    E1AP_NG_RAN_BearerContextModificationRequest_t *msgNGRAN = encode_ng_ran_to_mod(remList);
+    msgNGRAN->id = E1AP_ProtocolIE_ID_id_PDU_Session_Resource_To_Remove_List;
+    msgNGRAN->criticality = E1AP_Criticality_reject;
+    msgNGRAN->value.present = E1AP_NG_RAN_BearerContextModificationRequest__value_PR_PDU_Session_Resource_To_Remove_List;
+    E1AP_PDU_Session_Resource_To_Remove_List_t *pdu2Remove = &msgNGRAN->value.choice.PDU_Session_Resource_To_Remove_List;
+    for (const pdu_session_to_remove_t *i = in->pduSessionRem; i < in->pduSessionRem + in->numPDUSessionsRem; i++) {
+      asn1cSequenceAdd(pdu2Remove->list, E1AP_PDU_Session_Resource_To_Remove_Item_t, ieC4_1);
+      ieC4_1->pDU_Session_ID = i->sessionId;
+    }
+  }
   return pdu;
 }
 
@@ -1854,6 +1868,19 @@ bool decode_E1_bearer_context_mod_request(const E1AP_E1AP_PDU_t *pdu, e1ap_beare
                     CHECK_E1AP_DEC(e1_decode_pdu_session_to_mod_item(out->pduSessionMod + i, modList->list.array[i]));
                   }
                   break;
+                case E1AP_ProtocolIE_ID_id_PDU_Session_Resource_To_Remove_List:
+                  /* PDU Session Resource To Remove List (see 9.3.3.12 of TS 38.463) */
+                  _E1_EQ_CHECK_INT(msgNGRAN->value.present,
+                                   E1AP_NG_RAN_BearerContextModificationRequest__value_PR_PDU_Session_Resource_To_Remove_List);
+                  E1AP_PDU_Session_Resource_To_Remove_List_t *remList = &msgNGRAN->value.choice.PDU_Session_Resource_To_Remove_List;
+                  out->numPDUSessionsRem = remList->list.count;
+                  // Loop through all PDU sessions to remove
+                  for (int i = 0; i < remList->list.count; i++) {
+                    E1AP_PDU_Session_Resource_To_Remove_Item_t *remItem = remList->list.array[i];
+                    pdu_session_to_remove_t *pduRem = &out->pduSessionRem[i];
+                    pduRem->sessionId = remItem->pDU_Session_ID;
+                  }
+                  break;
                 default:
                   PRINT_ERROR("Unknown msgNGRAN->id in E1 Setup Modification Request\n");
                   return false;
@@ -1924,6 +1951,9 @@ e1ap_bearer_mod_req_t cp_bearer_context_mod_request(const e1ap_bearer_mod_req_t 
     cp.pduSession[i] = cp_pdu_session_item(&msg->pduSession[i]);
   for (int i = 0; i < msg->numPDUSessionsMod; i++)
     cp.pduSessionMod[i] = cp_pdu_session_to_mod_item(&msg->pduSessionMod[i]);
+  // Copy PDU sessions to remove (simple struct copy, no deep copy needed)
+  for (int i = 0; i < msg->numPDUSessionsRem; i++)
+    cp.pduSessionRem[i] = msg->pduSessionRem[i];
   return cp;
 }
 
@@ -2037,6 +2067,15 @@ bool eq_bearer_context_mod_request(const e1ap_bearer_mod_req_t *a, const e1ap_be
     if (!eq_pdu_session_to_mod_item(&a->pduSessionMod[i], &b->pduSessionMod[i]))
       return false;
   }
+  // PDU Sessions to Remove
+  _E1_EQ_CHECK_INT(a->numPDUSessionsRem, b->numPDUSessionsRem);
+  for (int i = 0; i < a->numPDUSessionsRem; i++) {
+    const pdu_session_to_remove_t *pduRemA = &a->pduSessionRem[i];
+    const pdu_session_to_remove_t *pduRemB = &b->pduSessionRem[i];
+    _E1_EQ_CHECK_LONG(pduRemA->sessionId, pduRemB->sessionId);
+    _E1_EQ_CHECK_INT(pduRemA->cause.type, pduRemB->cause.type);
+    _E1_EQ_CHECK_INT(pduRemA->cause.value, pduRemB->cause.value);
+  }
   return true;
 }
 
@@ -2114,129 +2153,129 @@ struct E1AP_E1AP_PDU *encode_E1_bearer_context_mod_response(const e1ap_bearer_mo
   ie2->criticality = E1AP_Criticality_reject;
   ie2->value.present = E1AP_BearerContextModificationResponseIEs__value_PR_GNB_CU_UP_UE_E1AP_ID;
   ie2->value.choice.GNB_CU_UP_UE_E1AP_ID = msg->gNB_cu_up_ue_id;
-  // NG-RAN PDU Session Resource Modified List (O)
-  asn1cSequenceAdd(out->protocolIEs.list, E1AP_BearerContextModificationResponseIEs_t, ie3);
-  ie3->id = E1AP_ProtocolIE_ID_id_System_BearerContextModificationResponse;
-  ie3->criticality = E1AP_Criticality_ignore;
-  // CHOICE System (O)
-  ie3->value.present = E1AP_BearerContextModificationResponseIEs__value_PR_System_BearerContextModificationResponse;
-  E1AP_System_BearerContextModificationResponse_t *sys = &ie3->value.choice.System_BearerContextModificationResponse;
-  // NG-RAN
-  E1AP_ProtocolIE_Container_4932P29_t *ngran = calloc_or_fail(1, sizeof(*ngran));
-  sys->present = E1AP_System_BearerContextModificationResponse_PR_nG_RAN_BearerContextModificationResponse;
-  sys->choice.nG_RAN_BearerContextModificationResponse = (struct E1AP_ProtocolIE_Container *)ngran;
-  asn1cSequenceAdd(ngran->list, E1AP_NG_RAN_BearerContextModificationResponse_t, list);
-  // PDU Session Resource Modified List (O)
-  list->id = E1AP_ProtocolIE_ID_id_PDU_Session_Resource_Modified_List;
-  list->criticality = E1AP_Criticality_reject;
-  list->value.present = E1AP_NG_RAN_BearerContextModificationResponse__value_PR_PDU_Session_Resource_Modified_List;
-  E1AP_PDU_Session_Resource_Modified_List_t *pdu_mod_l = &list->value.choice.PDU_Session_Resource_Modified_List;
-  for (int i = 0; i < msg->numPDUSessionsMod; ++i) {
-    // PDU Session Resource Modified Item (1..maxnoofPDUSessionResource)
-    const pdu_session_modif_t *pdu = &msg->pduSessionMod[i];
-    asn1cSequenceAdd(pdu_mod_l->list, E1AP_PDU_Session_Resource_Modified_Item_t, iePdu);
-    // PDU Session ID (M)
-    iePdu->pDU_Session_ID = pdu->id;
-    // Security Result (O)
-    if (pdu->confidentialityProtectionIndication || pdu->integrityProtectionIndication) {
-      iePdu->securityResult = calloc_or_fail(1, sizeof(*iePdu->securityResult));
-      if (pdu->confidentialityProtectionIndication)
-        iePdu->securityResult->confidentialityProtectionResult = *pdu->confidentialityProtectionIndication;
-      if (pdu->integrityProtectionIndication)
-        iePdu->securityResult->integrityProtectionResult = *pdu->integrityProtectionIndication;
-    }
-    // NG DL UP Transport Layer Information (O)
-    if (pdu->ng_DL_UP_TL_info) {
-      iePdu->nG_DL_UP_TNL_Information = calloc_or_fail(1, sizeof(*iePdu->nG_DL_UP_TNL_Information));
-      *iePdu->nG_DL_UP_TNL_Information = e1_encode_up_tnl_info(pdu->ng_DL_UP_TL_info);
-    }
-    // DRB Modified List (O)
-    if (pdu->numDRBModified > 0) {
-      iePdu->dRB_Modified_List_NG_RAN = calloc_or_fail(1, sizeof(*iePdu->dRB_Modified_List_NG_RAN));
-      E1AP_DRB_Modified_List_NG_RAN_t *drb_mod_l = iePdu->dRB_Modified_List_NG_RAN;
-      for (int j = 0; j < pdu->numDRBModified; ++j) {
-        const DRB_nGRAN_modified_t *drb = &pdu->DRBnGRanModList[j];
-        asn1cSequenceAdd(drb_mod_l->list, E1AP_DRB_Modified_Item_NG_RAN_t, drb_mod);
-        // DRB ID (M)
-        drb_mod->dRB_ID = drb->id;
-        // Flow Setup List (O)
-        if (drb->numQosFlowSetup)
-          drb_mod->flow_Setup_List = calloc_or_fail(1, sizeof(*drb_mod->flow_Setup_List));
-        for (int q = 0; q < drb->numQosFlowSetup; ++q) {
-          asn1cSequenceAdd(drb_mod->flow_Setup_List->list, E1AP_QoS_Flow_Item_t, qos_mod);
-          qos_mod->qoS_Flow_Identifier = drb->qosFlows[q].qfi;
-        }
-        // Flow Failed List (O)
-        if (drb->numQosFlowFailed)
-          drb_mod->flow_Failed_List = calloc_or_fail(1, sizeof(*drb_mod->flow_Failed_List));
-        for (int q = 0; q < drb->numQosFlowFailed; ++q) {
-          asn1cSequenceAdd(drb_mod->flow_Failed_List->list, E1AP_QoS_Flow_Failed_Item_t, fail);
-          encode_qos_flow_failed_item(fail, &drb->qosFlowsFailed[q]);
-        }
-
-        // PDCP Status Information (O)
-        if (drb->pdcp_status) {
-          asn1cCalloc(drb_mod->pDCP_SN_Status_Information, pdcp);
-          *pdcp = encode_pdcp_status_info(drb->pdcp_status);
-        }
-
-        // UL UP Parameters (O)
-        if (drb->numUpParam)
-          drb_mod->uL_UP_Transport_Parameters = calloc_or_fail(1, sizeof(*drb_mod->uL_UP_Transport_Parameters));
-        for (const up_params_t *k = drb->ul_UP_Params; k < drb->ul_UP_Params + drb->numUpParam; k++) {
-          asn1cSequenceAdd(drb_mod->uL_UP_Transport_Parameters->list, E1AP_UP_Parameters_Item_t, up);
-          up->uP_TNL_Information = e1_encode_up_tnl_info(&k->tl_info);
-          up->cell_Group_ID = k->cell_group_id;
+  if (msg->numPDUSessionsMod > 0) {
+    // NG-RAN PDU Session Resource Modified List (O)
+    asn1cSequenceAdd(out->protocolIEs.list, E1AP_BearerContextModificationResponseIEs_t, ie3);
+    ie3->id = E1AP_ProtocolIE_ID_id_System_BearerContextModificationResponse;
+    ie3->criticality = E1AP_Criticality_ignore;
+    // CHOICE System (O)
+    ie3->value.present = E1AP_BearerContextModificationResponseIEs__value_PR_System_BearerContextModificationResponse;
+    E1AP_System_BearerContextModificationResponse_t *sys = &ie3->value.choice.System_BearerContextModificationResponse;
+    // NG-RAN
+    E1AP_ProtocolIE_Container_4932P29_t *ngran = calloc_or_fail(1, sizeof(*ngran));
+    sys->present = E1AP_System_BearerContextModificationResponse_PR_nG_RAN_BearerContextModificationResponse;
+    sys->choice.nG_RAN_BearerContextModificationResponse = (struct E1AP_ProtocolIE_Container *)ngran;
+    asn1cSequenceAdd(ngran->list, E1AP_NG_RAN_BearerContextModificationResponse_t, list);
+    // PDU Session Resource Modified List (O)
+    list->id = E1AP_ProtocolIE_ID_id_PDU_Session_Resource_Modified_List;
+    list->criticality = E1AP_Criticality_reject;
+    list->value.present = E1AP_NG_RAN_BearerContextModificationResponse__value_PR_PDU_Session_Resource_Modified_List;
+    E1AP_PDU_Session_Resource_Modified_List_t *pdu_mod_l = &list->value.choice.PDU_Session_Resource_Modified_List;
+    for (int i = 0; i < msg->numPDUSessionsMod; ++i) {
+      // PDU Session Resource Modified Item (1..maxnoofPDUSessionResource)
+      const pdu_session_modif_t *pdu = &msg->pduSessionMod[i];
+      asn1cSequenceAdd(pdu_mod_l->list, E1AP_PDU_Session_Resource_Modified_Item_t, iePdu);
+      // PDU Session ID (M)
+      iePdu->pDU_Session_ID = pdu->id;
+      // Security Result (O)
+      if (pdu->confidentialityProtectionIndication || pdu->integrityProtectionIndication) {
+        iePdu->securityResult = calloc_or_fail(1, sizeof(*iePdu->securityResult));
+        if (pdu->confidentialityProtectionIndication)
+          iePdu->securityResult->confidentialityProtectionResult = *pdu->confidentialityProtectionIndication;
+        if (pdu->integrityProtectionIndication)
+          iePdu->securityResult->integrityProtectionResult = *pdu->integrityProtectionIndication;
+      }
+      // NG DL UP Transport Layer Information (O)
+      if (pdu->ng_DL_UP_TL_info) {
+        iePdu->nG_DL_UP_TNL_Information = calloc_or_fail(1, sizeof(*iePdu->nG_DL_UP_TNL_Information));
+        *iePdu->nG_DL_UP_TNL_Information = e1_encode_up_tnl_info(pdu->ng_DL_UP_TL_info);
+      }
+      // DRB Modified List (O)
+      if (pdu->numDRBModified > 0) {
+        iePdu->dRB_Modified_List_NG_RAN = calloc_or_fail(1, sizeof(*iePdu->dRB_Modified_List_NG_RAN));
+        E1AP_DRB_Modified_List_NG_RAN_t *drb_mod_l = iePdu->dRB_Modified_List_NG_RAN;
+        for (int j = 0; j < pdu->numDRBModified; ++j) {
+          const DRB_nGRAN_modified_t *drb = &pdu->DRBnGRanModList[j];
+          asn1cSequenceAdd(drb_mod_l->list, E1AP_DRB_Modified_Item_NG_RAN_t, drb_mod);
+          // DRB ID (M)
+          drb_mod->dRB_ID = drb->id;
+          // Flow Setup List (O)
+          if (drb->numQosFlowSetup)
+            drb_mod->flow_Setup_List = calloc_or_fail(1, sizeof(*drb_mod->flow_Setup_List));
+          for (int q = 0; q < drb->numQosFlowSetup; ++q) {
+            asn1cSequenceAdd(drb_mod->flow_Setup_List->list, E1AP_QoS_Flow_Item_t, qos_mod);
+            qos_mod->qoS_Flow_Identifier = drb->qosFlows[q].qfi;
+          }
+          // Flow Failed List (O)
+          if (drb->numQosFlowFailed)
+            drb_mod->flow_Failed_List = calloc_or_fail(1, sizeof(*drb_mod->flow_Failed_List));
+          for (int q = 0; q < drb->numQosFlowFailed; ++q) {
+            asn1cSequenceAdd(drb_mod->flow_Failed_List->list, E1AP_QoS_Flow_Failed_Item_t, fail);
+            encode_qos_flow_failed_item(fail, &drb->qosFlowsFailed[q]);
+          }
+          // PDCP Status Information (O)
+          if (drb->pdcp_status) {
+            asn1cCalloc(drb_mod->pDCP_SN_Status_Information, pdcp);
+            *pdcp = encode_pdcp_status_info(drb->pdcp_status);
+          }
+          // UL UP Parameters (O)
+          if (drb->numUpParam)
+            drb_mod->uL_UP_Transport_Parameters = calloc_or_fail(1, sizeof(*drb_mod->uL_UP_Transport_Parameters));
+          for (const up_params_t *k = drb->ul_UP_Params; k < drb->ul_UP_Params + drb->numUpParam; k++) {
+            asn1cSequenceAdd(drb_mod->uL_UP_Transport_Parameters->list, E1AP_UP_Parameters_Item_t, up);
+            up->uP_TNL_Information = e1_encode_up_tnl_info(&k->tl_info);
+            up->cell_Group_ID = k->cell_group_id;
+          }
         }
       }
-    }
-    // DRB Failed To Modify List (O)
-    if (pdu->numDRBFailedToMod > 0) {
-      iePdu->dRB_Failed_To_Modify_List_NG_RAN = calloc_or_fail(1, sizeof(*iePdu->dRB_Failed_To_Modify_List_NG_RAN));
-      E1AP_DRB_Failed_To_Modify_List_NG_RAN_t *ngran = iePdu->dRB_Failed_To_Modify_List_NG_RAN;
-      for (int j = 0; j < pdu->numDRBFailedToMod; ++j) {
-        const DRB_nGRAN_failed_t *drb = &pdu->DRBnGRanFailedModList[j];
-        asn1cSequenceAdd(ngran->list, E1AP_DRB_Failed_To_Modify_Item_NG_RAN_t, fail_to_mod);
-        encode_drb_failed_item((E1AP_DRB_Failed_Item_NG_RAN_t *)fail_to_mod, drb);
-      }
-    }
-    // DRB Setup List (O)
-    if (pdu->numDRBSetup > 0) {
-      iePdu->dRB_Setup_List_NG_RAN = calloc_or_fail(1, sizeof(*iePdu->dRB_Setup_List_NG_RAN));
-      E1AP_DRB_Setup_List_NG_RAN_t *drb_setup = iePdu->dRB_Setup_List_NG_RAN;
-      for (int j = 0; j < pdu->numDRBModified; ++j) {
-        const DRB_nGRAN_setup_t *drb = &pdu->DRBnGRanSetupList[j];
-        asn1cSequenceAdd(drb_setup->list, E1AP_DRB_Setup_Item_NG_RAN_t, item);
-        // DRB ID (M)
-        item->dRB_ID = drb->id;
-        // UL UP Parameters (M)
-        for (const up_params_t *k = drb->UpParamList; k < drb->UpParamList + drb->numUpParam; k++) {
-          asn1cSequenceAdd(item->uL_UP_Transport_Parameters.list, E1AP_UP_Parameters_Item_t, up);
-          up->uP_TNL_Information = e1_encode_up_tnl_info(&k->tl_info);
-          up->cell_Group_ID = drb->UpParamList->cell_group_id;
-        }
-        // Flow Setup List (M)
-        for (int q = 0; q < drb->numQosFlowSetup; ++q) {
-          asn1cSequenceAdd(item->flow_Setup_List.list, E1AP_QoS_Flow_Item_t, qos);
-          qos->qoS_Flow_Identifier = drb->qosFlows[q].qfi;
-        }
-        // Flow Failed List (O)
-        if (drb->numQosFlowFailed)
-          item->flow_Failed_List = calloc_or_fail(1, sizeof(*item->flow_Failed_List));
-        for (int q = 0; q < drb->numQosFlowFailed; ++q) {
-          asn1cSequenceAdd(item->flow_Failed_List->list, E1AP_QoS_Flow_Failed_Item_t, fail);
-          encode_qos_flow_failed_item(fail, &drb->qosFlowsFailed[q]);
+      // DRB Failed To Modify List (O)
+      if (pdu->numDRBFailedToMod > 0) {
+        iePdu->dRB_Failed_To_Modify_List_NG_RAN = calloc_or_fail(1, sizeof(*iePdu->dRB_Failed_To_Modify_List_NG_RAN));
+        E1AP_DRB_Failed_To_Modify_List_NG_RAN_t *ngran = iePdu->dRB_Failed_To_Modify_List_NG_RAN;
+        for (int j = 0; j < pdu->numDRBFailedToMod; ++j) {
+          const DRB_nGRAN_failed_t *drb = &pdu->DRBnGRanFailedModList[j];
+          asn1cSequenceAdd(ngran->list, E1AP_DRB_Failed_To_Modify_Item_NG_RAN_t, fail_to_mod);
+          encode_drb_failed_item((E1AP_DRB_Failed_Item_NG_RAN_t *)fail_to_mod, drb);
         }
       }
-    }
-    // DRB Failed List (O)
-    if (pdu->numDRBFailed) {
-      iePdu->dRB_Failed_List_NG_RAN = calloc_or_fail(1, sizeof(*iePdu->dRB_Failed_List_NG_RAN));
-      E1AP_DRB_Failed_List_NG_RAN_t *ngran = iePdu->dRB_Failed_List_NG_RAN;
-      for (int j = 0; j < pdu->numDRBFailed; ++j) {
-        const DRB_nGRAN_failed_t *drb = &pdu->DRBnGRanFailedList[j];
-        asn1cSequenceAdd(ngran->list, E1AP_DRB_Failed_Item_NG_RAN_t, fail);
-        encode_drb_failed_item(fail, drb);
+      // DRB Setup List (O)
+      if (pdu->numDRBSetup > 0) {
+        iePdu->dRB_Setup_List_NG_RAN = calloc_or_fail(1, sizeof(*iePdu->dRB_Setup_List_NG_RAN));
+        E1AP_DRB_Setup_List_NG_RAN_t *drb_setup = iePdu->dRB_Setup_List_NG_RAN;
+        for (int j = 0; j < pdu->numDRBModified; ++j) {
+          const DRB_nGRAN_setup_t *drb = &pdu->DRBnGRanSetupList[j];
+          asn1cSequenceAdd(drb_setup->list, E1AP_DRB_Setup_Item_NG_RAN_t, item);
+          // DRB ID (M)
+          item->dRB_ID = drb->id;
+          // UL UP Parameters (M)
+          for (const up_params_t *k = drb->UpParamList; k < drb->UpParamList + drb->numUpParam; k++) {
+            asn1cSequenceAdd(item->uL_UP_Transport_Parameters.list, E1AP_UP_Parameters_Item_t, up);
+            up->uP_TNL_Information = e1_encode_up_tnl_info(&k->tl_info);
+            up->cell_Group_ID = drb->UpParamList->cell_group_id;
+          }
+          // Flow Setup List (M)
+          for (int q = 0; q < drb->numQosFlowSetup; ++q) {
+            asn1cSequenceAdd(item->flow_Setup_List.list, E1AP_QoS_Flow_Item_t, qos);
+            qos->qoS_Flow_Identifier = drb->qosFlows[q].qfi;
+          }
+          // Flow Failed List (O)
+          if (drb->numQosFlowFailed)
+            item->flow_Failed_List = calloc_or_fail(1, sizeof(*item->flow_Failed_List));
+          for (int q = 0; q < drb->numQosFlowFailed; ++q) {
+            asn1cSequenceAdd(item->flow_Failed_List->list, E1AP_QoS_Flow_Failed_Item_t, fail);
+            encode_qos_flow_failed_item(fail, &drb->qosFlowsFailed[q]);
+          }
+        }
+      }
+      // DRB Failed List (O)
+      if (pdu->numDRBFailed) {
+        iePdu->dRB_Failed_List_NG_RAN = calloc_or_fail(1, sizeof(*iePdu->dRB_Failed_List_NG_RAN));
+        E1AP_DRB_Failed_List_NG_RAN_t *ngran = iePdu->dRB_Failed_List_NG_RAN;
+        for (int j = 0; j < pdu->numDRBFailed; ++j) {
+          const DRB_nGRAN_failed_t *drb = &pdu->DRBnGRanFailedList[j];
+          asn1cSequenceAdd(ngran->list, E1AP_DRB_Failed_Item_NG_RAN_t, fail);
+          encode_drb_failed_item(fail, drb);
+        }
       }
     }
   }

@@ -25,7 +25,6 @@
         <htmlTabName>AERIAL 100 MHz TDD SA</htmlTabName>
         <htmlTabIcon>tasks</htmlTabIcon>
         <TestCaseRequestedList>
-                555000
                 111111
                 000222
                 800813
@@ -40,15 +39,8 @@
                 000222
                 222222
                 333333
-                000555
         </TestCaseRequestedList>
         <TestCaseExclusionList></TestCaseExclusionList>
-        <testCase id="555000">
-                <class>DeployCoreNetwork</class>
-                <desc>Initialize 5G Core</desc>
-                <cn_id>oc-cn5g-20897-aerial</cn_id>
-        </testCase>
-
         <testCase id="111111">
                 <class>Pull_Local_Registry</class>
                 <desc>Pull Images from Local Registry</desc>
@@ -96,8 +88,8 @@
 
         <testCase id="000022">
                 <class>Iperf</class>
-                <desc>iperf (DL/UDP/500M)(30 sec)(single-ue profile)</desc>
-                <iperf_args>-u -b 500M -t 30 -R</iperf_args>
+                <desc>iperf (DL/UDP/800M)(30 sec)(single-ue profile)</desc>
+                <iperf_args>-u -b 800M -t 30 -R</iperf_args>
                 <svr_id>oc-cn5g-20897-aerial</svr_id>
                 <id>up2-aerial</id>
                 <iperf_packetloss_threshold>25</iperf_packetloss_threshold>
@@ -106,8 +98,8 @@
 
         <testCase id="000033">
                 <class>Iperf</class>
-                <desc>iperf (UL/UDP/40M)(30 sec)(single-ue profile)</desc>
-                <iperf_args>-u -b 40M -t 30 -l 1428</iperf_args>
+                <desc>iperf (UL/UDP/150M)(30 sec)(single-ue profile)</desc>
+                <iperf_args>-u -b 150M -t 30 -l 1428</iperf_args>
                 <svr_id>oc-cn5g-20897-aerial</svr_id>
                 <id>up2-aerial</id>
                 <iperf_packetloss_threshold>25</iperf_packetloss_threshold>
@@ -127,9 +119,9 @@
 
         <testCase id="300033">
                 <class>Iperf</class>
-                <desc>Optional iperf (UL/UDP/90M)(30 sec)(single-ue profile)</desc>
+                <desc>Optional iperf (UL/UDP/200M)(30 sec)(single-ue profile)</desc>
                 <may_fail>true</may_fail>
-                <iperf_args>-u -b 90M -t 30 -l 1428</iperf_args>
+                <iperf_args>-u -b 200M -t 30 -l 1428</iperf_args>
                 <svr_id>oc-cn5g-20897-aerial</svr_id>
                 <id>up2-aerial</id>
                 <iperf_packetloss_threshold>25</iperf_packetloss_threshold>
@@ -159,13 +151,6 @@
                 <desc>Clean Test Images on Test Server</desc>
                 <node>gracehopper1-oai</node>
                 <images>oai-gnb-aerial</images>
-        </testCase>
-
-        <testCase id="000555">
-                <class>UndeployCoreNetwork</class>
-                <always_exec>true</always_exec>
-                <desc>Terminate 5G Core</desc>
-                <cn_id>oc-cn5g-20897-aerial</cn_id>
         </testCase>
 </testCaseList>
 

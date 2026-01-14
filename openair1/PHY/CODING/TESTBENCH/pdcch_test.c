@@ -47,7 +47,7 @@ void lte_param_init(unsigned char N_tx, unsigned char N_rx)
   PHY_config = malloc(sizeof(PHY_CONFIG));
   mac_xface = malloc(sizeof(MAC_xface));
 
-  randominit(0);
+  randominit();
   set_taus_seed(0);
 
   lte_frame_parms = &(PHY_config->lte_frame_parms);
@@ -241,8 +241,7 @@ int main(int argc, char *argv[])
   PHY_vars = malloc(sizeof(PHY_VARS));
   mac_xface = malloc(sizeof(MAC_xface));
 
-
-  randominit(0);
+  randominit();
   set_taus_seed(0);
 
   ccodelte_init();

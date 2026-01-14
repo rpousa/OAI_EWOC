@@ -37,11 +37,16 @@
 #include "openair2/LAYER2/NR_MAC_UE/mac_defs.h"
 #include "openair2/LAYER2/NR_MAC_UE/mac_proto.h"
 #include "openair2/RRC/NR_UE/rrc_proto.h"
+#include "openair1/PHY/defs_nr_common.h"
+#include "openair1/PHY/defs_nr_UE.h"
+#include "openair3/NAS/NR_UE/nr_nas_msg.h"
 
 #define TELNETSERVERCODE
 #include "telnetsrv.h"
 
 #define ERROR_MSG_RET(mSG, aRGS...) do { prnt(mSG, ##aRGS); return 1; } while (0)
+
+extern PHY_VARS_NR_UE ***PHY_vars_UE_g;
 
 /* UE L2 state string */
 const char* NR_UE_L2_STATE_STR[] = {
@@ -49,6 +54,14 @@ const char* NR_UE_L2_STATE_STR[] = {
   NR_UE_L2_STATES
 #undef UE_STATE
 };
+
+static int get_default_ue_id(void)
+{
+  NR_UE_RRC_INST_t *rrc = get_NR_UE_rrc_inst(0);
+  if (!rrc)
+    return -1;
+  return rrc->ue_id;
+}
 
 /**
  * Get the synchronization state of a UE.
@@ -110,6 +123,60 @@ static int force_deregistration(char *buf, int debug, telnet_printfunc_t prnt)
   return 0;
 }
 
+extern float get_prs_max_dl_toa(prs_meas_t *prs_meas);
+static int get_dl_toa(char *buf, int debug, telnet_printfunc_t prnt)
+{
+  // TODO multiple antennas, resources, gNBs?
+  int gNB_id = 0;
+  int rsc_id = 0;
+  int ant = 0;
+
+  PHY_VARS_NR_UE *UE = PHY_vars_UE_g[0][0];
+  if (!UE || !UE->prs_vars[gNB_id])
+    ERROR_MSG_RET("no UE/prs_vars found!\n");
+  NR_PRS_RESOURCE_t *prs_res = &UE->prs_vars[gNB_id]->prs_resource[rsc_id];
+  if (!prs_res->prs_meas || !prs_res->prs_meas[ant])
+    ERROR_MSG_RET("prs_meas not initialized!\n");
+
+  float max = get_prs_max_dl_toa(prs_res->prs_meas[ant]);
+  prnt("UE max PRS DL ToA %.3f\n", max);
+  return 0;
+}
+
+static int add_pdu_session(char *buf, int debug, telnet_printfunc_t prnt)
+{
+  int ue_id = -1;
+  int pdusession_id = -1;
+
+  if (!buf) {
+    ERROR_MSG_RET("Missing argument: expected PDUSessionID[,UE_ID]\n");
+  }
+
+  // Try parsing values in the form: "PDUSessionID[,UE_ID]"
+  int n = sscanf(buf, "%d,%d", &pdusession_id, &ue_id);
+  if (n == 1) {
+    // Only PDUSessionID provided: use default UE ID
+    ue_id = get_default_ue_id();
+    if (ue_id < 0)
+      ERROR_MSG_RET("No default UE context found\n");
+  } else if (n != 2) {
+    ERROR_MSG_RET("Invalid format: expected PDUSessionID[,UE_ID]\n");
+  }
+
+  if (pdusession_id < 0 || pdusession_id > 255)
+    ERROR_MSG_RET("PDUSessionID must be in range [0,255]\n");
+  if (ue_id < 0)
+    ERROR_MSG_RET("UE_ID must be >= 0\n");
+
+  nr_ue_nas_t *nas = get_ue_nas_info(ue_id);
+  if (!nas)
+    ERROR_MSG_RET("No NAS context found for UE_ID %d\n", ue_id);
+
+  request_pdusession(nas, pdusession_id);
+  prnt("Triggered PDU session request for UE %d with ID %d\n", ue_id, pdusession_id);
+  return 0;
+}
+
 /* Telnet shell command definitions */
 static telnetshell_cmddef_t cicmds[] = {
   {"sync_state", "[UE_ID(int,opt)]", get_sync_state},
@@ -117,6 +184,8 @@ static telnetshell_cmddef_t cicmds[] = {
   {"force_RRC_IDLE", "", force_RRC_IDLE},
   {"force_crnti_ra", "", force_crnti_ra},
   {"deregistration", "", force_deregistration},
+  {"get_max_dl_toa", "[ant]", get_dl_toa},
+  {"add_pdu_session", "[PDUSessionID(int)],[UE_ID(int,opt)]", add_pdu_session},
   {"", "", NULL},
 };
 

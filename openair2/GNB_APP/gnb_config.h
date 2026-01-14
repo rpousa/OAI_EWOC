@@ -64,7 +64,7 @@ f1ap_gnb_du_system_info_t *get_sys_info(NR_BCCH_BCH_Message_t *mib, const NR_BCC
 int gNB_app_handle_f1ap_gnb_cu_configuration_update(f1ap_gnb_cu_configuration_update_t *gnb_cu_cfg_update);
 MessageDef *RCconfig_NR_CU_E1(const E1_t *entity);
 ngran_node_t get_node_type(void);
-
+void nfapi_stop_l1();
 #ifdef E2_AGENT
 #include "openair2/E2AP/e2_agent_arg.h"
 e2_agent_args_t RCconfig_NR_E2agent(void);

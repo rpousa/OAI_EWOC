@@ -9,5 +9,3 @@ set_target_properties(oai_eth_transpro PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMA
 add_custom_command(TARGET oai_eth_transpro POST_BUILD
                    COMMAND ${CMAKE_COMMAND} -E create_symlink liboai_eth_transpro.so liboai_transpro.so
                    WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
-
-add_subdirectory(benetel)

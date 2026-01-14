@@ -47,7 +47,6 @@ static void reblock_tun_socket(int fd)
 bool sdap_data_req(protocol_ctxt_t *ctxt_p,
                    const ue_id_t ue_id,
                    const srb_flag_t srb_flag,
-                   const rb_id_t rb_id,
                    const mui_t mui,
                    const confirm_t confirm,
                    const sdu_size_t sdu_buffer_size,
@@ -69,7 +68,6 @@ bool sdap_data_req(protocol_ctxt_t *ctxt_p,
   bool ret = sdap_entity->tx_entity(sdap_entity,
                                     ctxt_p,
                                     srb_flag,
-                                    rb_id,
                                     mui,
                                     confirm,
                                     sdu_buffer_size,
@@ -82,7 +80,7 @@ bool sdap_data_req(protocol_ctxt_t *ctxt_p,
   return ret;
 }
 
-void sdap_data_ind(rb_id_t pdcp_entity,
+void sdap_data_ind(int pdcp_entity,
                    int is_gnb,
                    bool has_sdap_rx,
                    int pdusession_id,
@@ -100,7 +98,6 @@ void sdap_data_ind(rb_id_t pdcp_entity,
   sdap_entity->rx_entity(sdap_entity,
                          pdcp_entity,
                          is_gnb,
-                         has_sdap_rx,
                          pdusession_id,
                          ue_id,
                          buf,
@@ -115,8 +112,6 @@ static void *sdap_tun_read_thread(void *arg)
   char rx_buf[NL_MAX_PAYLOAD];
   int len;
   reblock_tun_socket(entity->pdusession_sock);
-
-  int rb_id = 1;
 
   while (!entity->stop_thread) {
     len = read(entity->pdusession_sock, &rx_buf, NL_MAX_PAYLOAD);
@@ -148,7 +143,6 @@ static void *sdap_tun_read_thread(void *arg)
     entity->tx_entity(entity,
                       &ctxt,
                       SRB_FLAG_NO,
-                      rb_id,
                       RLC_MUI_UNDEFINED,
                       RLC_SDU_CONFIRM_NO,
                       len,

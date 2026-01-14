@@ -110,17 +110,6 @@ void nr_fill_rx_indication(fapi_nr_rx_indication_t *rx_ind,
 {
 }
 
-int nr_ue_pdcch_procedures(PHY_VARS_NR_UE *ue,
-                           const UE_nr_rxtx_proc_t *proc,
-                           int32_t pdcch_est_size,
-                           c16_t pdcch_dl_ch_estimates[][pdcch_est_size],
-                           nr_phy_data_t *phy_data,
-                           int n_ss,
-                           c16_t rxdataF[][ue->frame_parms.samples_per_slot_wCP])
-{
-  return 0;
-}
-
 configmodule_interface_t *uniqCfg = NULL;
 int main(int argc, char **argv)
 {
@@ -187,8 +176,6 @@ int main(int argc, char **argv)
 
   float target_error_rate = 0.01;
 
-  int seed = 0;
-
   cpuf = get_cpu_freq_GHz();
 
   if ((uniqCfg = load_configmodule(argc, argv, CONFIG_ENABLECMDLINEONLY)) == 0) {
@@ -196,8 +183,7 @@ int main(int argc, char **argv)
   }
 
   int c;
-  while ((c = getopt (argc, argv, "--:O:c:F:g:hIL:m:M:n:N:o:P:r:R:s:S:x:y:z:")) != -1) {
-
+  while ((c = getopt(argc, argv, "--:O:c:F:g:hIL:m:M:n:N:o:P:R:s:S:x:y:z:")) != -1) {
     /* ignore long options starting with '--', option '-O' and their arguments that are handled by configmodule */
     /* with this opstring getopt returns 1 for non-option arguments, refer to 'man 3 getopt' */
     if (c == 1 || c == '-' || c == 'O')
@@ -323,20 +309,6 @@ int main(int argc, char **argv)
         printf("Illegal PBCH phase (0-3) got %d\n",pbch_phase);
       break;
 
-    /*
-    case 'r':
-      ricean_factor = pow(10,-.1*atof(optarg));
-      if (ricean_factor>1) {
-        printf("Ricean factor must be between 0 and 1\n");
-        exit(-1);
-      }
-      break;
-    */
-
-    case 'r':
-      seed = atoi(optarg);
-      break;
-
     case 'R':
       N_RB_DL = atoi(optarg);
       break;
@@ -390,8 +362,10 @@ int main(int argc, char **argv)
 
     default:
     case 'h':
-      printf("%s -F input_filename -g channel_mod -h(elp) -I(nitial sync) -L log_lvl -n n_frames -M SSBs -n frames -N cell_id -o FO -P phase -r seed -R RBs -s snr0 -S snr1 -x transmission_mode -y TXant -z RXant\n",
-             argv[0]);
+      printf(
+          "OAI_RNGSEED=xxx ./%s -F input_filename -g channel_mod -h(elp) -I(nitial sync) -L log_lvl -n n_frames -M SSBs -n frames "
+          "-N cell_id -o FO -P phase -R RBs -s snr0 -S snr1 -x transmission_mode -y TXant -z RXant\n",
+          argv[0]);
       //printf("-A Interpolation_filname Run with Abstraction to generate Scatter plot using interpolation polynomial in file\n");
       printf("-c SSB subcarrier offset\n");
       //printf("-C Generate Calibration information for Abstraction (effective SNR adjustment to remove Pe bias w.r.t. AWGN)\n");
@@ -412,7 +386,6 @@ int main(int argc, char **argv)
       //printf("-O oversampling factor (1,2,4,8,16)\n");
       //printf("-p Use extended prefix mode\n");
       printf("-P PBCH phase, allowed values 0-3\n");
-      printf("-r set the random number generator seed (default: 0 = current time)\n");
       printf("-R N_RB_DL\n");
       printf("-s Starting SNR, runs from SNR0 to SNR0 + 10 dB if not -S given. If -n 1, then just SNR is simulated\n");
       printf("-S Ending SNR, runs from SNR0 to SNR1\n");
@@ -425,7 +398,7 @@ int main(int argc, char **argv)
     }
   }
 
-  randominit(seed);
+  randominit();
 
   logInit();
   set_glog(loglvl);
@@ -530,10 +503,10 @@ int main(int argc, char **argv)
     exit(-1);
   }
 
-  processingData_L1tx_t msgDataTx;
   // generate signal
   const uint32_t rxdataF_sz = UE->frame_parms.samples_per_slot_wCP;
   __attribute__ ((aligned(32))) c16_t rxdataF[UE->frame_parms.nb_antennas_rx][rxdataF_sz];
+  nfapi_nr_dl_tti_ssb_pdu ssb_pdu[64] = {0};
   if (input_fd==NULL) {
 
     for (i=0; i<frame_parms->Lmax; i++) {
@@ -541,10 +514,10 @@ int main(int argc, char **argv)
 
         const int sc_offset = frame_parms->freq_range == FR1 ? ssb_subcarrier_offset<<mu : ssb_subcarrier_offset;
         const int prb_offset = frame_parms->freq_range == FR1 ? gNB->gNB_config.ssb_table.ssb_offset_point_a.value<<mu : gNB->gNB_config.ssb_table.ssb_offset_point_a.value << (mu - 2);
-        msgDataTx.ssb[i].ssb_pdu.ssb_pdu_rel15.bchPayload = 0x55dd33;
-        msgDataTx.ssb[i].ssb_pdu.ssb_pdu_rel15.SsbBlockIndex = i;
-        msgDataTx.ssb[i].ssb_pdu.ssb_pdu_rel15.SsbSubcarrierOffset = sc_offset;
-        msgDataTx.ssb[i].ssb_pdu.ssb_pdu_rel15.ssbOffsetPointA = prb_offset;
+        ssb_pdu[i].ssb_pdu_rel15.bchPayload = 0x55dd33;
+        ssb_pdu[i].ssb_pdu_rel15.SsbBlockIndex = i;
+        ssb_pdu[i].ssb_pdu_rel15.SsbSubcarrierOffset = sc_offset;
+        ssb_pdu[i].ssb_pdu_rel15.ssbOffsetPointA = prb_offset;
 
         start_symbol = nr_get_ssb_start_symbol(frame_parms,i);
         int slot = start_symbol/14;
@@ -552,9 +525,9 @@ int main(int argc, char **argv)
         for (aa=0; aa<gNB->frame_parms.nb_antennas_tx; aa++)
           memset(gNB->common_vars.txdataF[0][aa], 0, frame_parms->samples_per_slot_wCP * sizeof(int32_t));
 
-        nr_common_signal_procedures (gNB,frame,slot,msgDataTx.ssb[i].ssb_pdu);
+        nr_common_signal_procedures (gNB,frame,slot, &ssb_pdu[i]);
 
-        int samp = frame_parms->get_samples_slot_timestamp(slot, frame_parms, 0);
+        int samp = get_samples_slot_timestamp(frame_parms, slot);
         for (aa=0; aa<gNB->frame_parms.nb_antennas_tx; aa++) {
           if (cyclic_prefix_type == 1) {
             apply_nr_rotation_TX(frame_parms,
@@ -755,7 +728,7 @@ int main(int argc, char **argv)
                                                              gNB->gNB_config.ssb_table.ssb_subcarrier_offset.value,
                                                              frame_parms->Lmax);
           int payload_ret = (result.xtra_byte == xtra_byte);
-          nfapi_nr_dl_tti_ssb_pdu_rel15_t *pdu = &msgDataTx.ssb[ssb_index].ssb_pdu.ssb_pdu_rel15;
+          nfapi_nr_dl_tti_ssb_pdu_rel15_t *pdu = &ssb_pdu[ssb_index].ssb_pdu_rel15;
           for (int i = 0; i < 3; i++)
             payload_ret += (result.decoded_output[i] == ((pdu->bchPayload >> (8 * i)) & 0xff));
           // printf("ret %d\n", payload_ret);

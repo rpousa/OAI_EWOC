@@ -254,7 +254,6 @@ typedef struct {
   pthread_mutex_t mutex_RUs;
   tpool_t *threadPool;
   int nbDecode;
-  notifiedFIFO_t *respDecode;
   int first_rx;
 } L1_rxtx_proc_t;
 

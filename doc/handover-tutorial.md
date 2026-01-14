@@ -1,6 +1,15 @@
 This tutorial explains how to perform handovers. It covers both F1 handovers
 (intra-gNB, within a single gNB between DUs) and N2 handovers (inter-gNB).
 
+This document assumes familiarity with the F1 split architecture and basic
+OAI knowledge. Please refer to the prerequisite documentation listed below:
+
+- To run the [Core Network](https://gitlab.eurecom.fr/oai/openairinterface5g/-/blob/develop/doc/NR_SA_Tutorial_OAI_CN5G.md)
+- To run [OAI full stack with COTS UE](https://gitlab.eurecom.fr/oai/openairinterface5g/-/blob/develop/doc/NR_SA_Tutorial_COTS_UE.md)
+- [F1 split design document](https://gitlab.eurecom.fr/oai/openairinterface5g/-/blob/develop/doc/F1AP/F1-design.md?ref_type=heads)
+for details on the F1 architecture and the networking relationships between
+the CU and the associated DUs.
+
 [[_TOC_]]
 
 # Considered setup for F1 handover
@@ -13,22 +22,22 @@ same.
 
 ![F1 Handover setup](./RRC/ho.png)
 
-# What is a gNB neighbor?
+# gNB neighbour definition
 
-Network continuity is a key aspect of 5G. In the 5G architecture, gNB neighbors
+Network continuity is a key aspect of 5G. In the 5G architecture, gNB neighbours
 play a central role in maintaining service continuity through mechanisms such
-as handover and load balancing. By definition, a gNB neighbor is another gNB
+as handover and load balancing. By definition, a gNB neighbour is another gNB
 that can be measured and linked by the UE. If the current serving gNB is no
-longer optimal, the UE may connect to a neighbor gNB.
+longer optimal, the UE may connect to a neighbour gNB.
 
 To support this behavior, the network configuration specifies additional frequencies
 and cells that the UE should measure. The UE reports these measurements to the
 network, which then decides whether or not to initiate a handover.
 
-Neighbor types include:
-- **Intra-gNB neighbors** - cells belonging to the same gNB
-- **Inter-gNB neighbors** - cells belonging to different gNBs
-- **Inter-RAT neighbors** - cells belonging to another RAT (e.g., LTE)
+Neighbour types include:
+- **Intra-gNB neighbours** - cells belonging to the same gNB
+- **Inter-gNB neighbours** - cells belonging to different gNBs
+- **Inter-RAT neighbours** - cells belonging to another RAT (e.g., LTE)
 
 # Steps to run F1 handover with OAI UE
 
@@ -45,10 +54,6 @@ build both gNB and UE as well as activate the build of telnet to that purpose:
     ./build_oai --ninja --nrUE --gNB --build-lib telnetsrv
 
 ## Run the setup
-
-This tutorial assumes you have a core network running; [refer to the
-corresponding tutorial](./NR_SA_Tutorial_OAI_CN5G.md) if this is not the case
-yet.
 
 We will use the TDD configuration files in the repository for the
 [CU](../targets/PROJECTS/GENERIC-NR-5GC/CONF/gnb-cu.sa.f1.conf) as well for
@@ -139,19 +144,23 @@ directory of the CU.
 You can do handover across DUs with a COTS UE. Note that these DUs should be
 separated by at least multiple meters to ensure that the UE will receive
 different signal strengths when moving between cells.
+In the CI setup we use a digital 4 channel attenuator that allows us to "control"
+the transmitted signal from both RUs. This allows us to create a setup in
+which the UE thinks it's changing positions between 2 cells, but in reality
+it's not moving.
 
-We support both intra-frequency and inter-frequency handovers. We have verified with USRPs
-only, although other radios should work as well.
+We support both intra-frequency and inter-frequency handovers. We have verified
+with USRPs only, although other radios should work as well.
 
-For UEs, we verified Quectel modules and iPhones. Note, though, that not all
-phones might work; for instance, we did not achieve handovers with a OnePlus
-Nord, yet.
+For UEs, we verified Quectel modules, iPhones and Samsung S23 Ultra. Note,
+though, that not all phones might work; for instance, we did not achieve
+handovers with a OnePlus Nord, yet.
 
 ## Steps
 
-First, make sure that you can run both DUs with the CU independently. Use the
-same radio hardware for both radios to ensure that both cells can be received
-equally good by the UE.
+First, make sure that you can run both DUs with the CU independently.
+Use the same radio hardware for both radios to ensure that both cells can be
+received equally good by the UE.
 
 In order to enable handovers (triggered by the UE), you have to configure the
 neighbour relation of the DUs at the CU. To do so, proceed as follows:
@@ -163,11 +172,13 @@ neighbour relation of the DUs at the CU. To do so, proceed as follows:
    ```
    cat nrRRC_stats.log
    ```
-1. Fill in the [`neighbour-config.conf`](../ci-scripts/conf_files/neighbour-config.conf) configuration file as shown below, and
-   `@include` it in the CU file.
-1. Start the CU and both DUs.
+1. Fill in the [`neighbour-config.conf`](../ci-scripts/conf_files/neighbour-config.conf)
+   configuration file as shown below, and `@include` it in the CU file.
+1. Start the CU and both DUs. If you are using an attenuator, make sure that
+   the signal on one DU is stronger than the other.
+
 1. Bring the phone close to one cell, and leave flight mode. It should connect
-   to the DU to which it is closer.
+   to the DU to which it is closer/stronger signal.
 1. Move the UE towards the other DU; it should trigger an "A3 event" (Neighbour
    Becomes Better than Serving), and the CU will trigger the handover to the
    other DU.
@@ -175,7 +186,14 @@ neighbour relation of the DUs at the CU. To do so, proceed as follows:
 The output on the terminal should be the same as with RFsim. If no handover is
 triggered:
 
-- Make sure that both DUs use the same hardware.
+- Make sure that both DUs use the same hardware. In case of USRPs, make sure that
+  they are synched:
+  - By connecting them to a GPS or an Octoclock to provide a common time and clock
+    reference.
+  - By synchronizing the RU hosts.
+  - By using Openairinterface starting tag [2025.w42](https://gitlab.eurecom.fr/oai/openairinterface5g/-/tree/2025.w42?ref_type=tags)
+    (A fix was added to force the USRP to "use" the time/clock provided by the
+    external source instead to its own master clock. for more info see [MR](https://gitlab.eurecom.fr/oai/openairinterface5g/-/merge_requests/3693)).
 - Make sure that the UE sees both cells. For instance, you can switch to flight
   mode, go closer to the other DU, and switch off flight mode -- the UE should
   connect to that second DU.
@@ -187,6 +205,17 @@ decision about a handover is always at the network-side, the UE only "assists"
 through measurements telling the CU that one DU is stronger than others.
 Hence, "forcing" a handover just means that you manually trigger the handover,
 instead of waiting for UE measurement report.)
+ 
+Our CI setup consists of:
+- 2 USRPs B210 that are synchronized by connecting them to an Octoclock over
+  10MHz refrence and a PPS signal. The RU hosts are synchronized via NTP.
+- Mini-Circuits RC4DAT-6G-60 programmable attenuator. To control the digital attenuator,
+  a Python script was developed `ci-scripts/attenuatorctl.py`.
+- Quectel RM520 as a UE.
+- The setup is run using Docker `ci-scripts/yaml_files/5g_sa_f1_b210_ho`.
+
+To run the setup using Docker:
+- We consider 2 synchronized servers. One for each DU.
 
 ## Example neighbour configuration
 
@@ -209,70 +238,100 @@ Concretely, the first cell is `12345678` (on DU `[2]`), and it has `11111111`
 
 The below configuration further enables periodic measurements, A2 event
 ("Serving becomes worse than threshold"), and A3 events ("Neighbour Becomes
-Better than Serving"). The A2 event can be disabled by setting `enable = 0`. A3
-events cannot be disabled as of now. Further, the A3 events can be made
-specific to cells; `cell_id = -1` means "any cell".
+Better than Serving").
+The A2 event can be disabled by setting `enable = 0`.
+The A3 event cannot be disabled as of now. It can be made
+specific to cells or set to `cell_id = -1` which means "any cell".
 
+`hysteresis` is a margin added to the serving cell measurements to
+prevent unnecessary or frequent handovers. It ensures that the neighbouring
+cell must show sufficiently better signal quality before a handover is
+triggered. It is an integer between 0 and 30.
+
+`timeToTrigger` the time during which specific criteria for the event
+needs to be met in order to trigger a measurement report. It is an enumerated
+parameter and in the configuration below it is set to 1 which corresponds to
+`ms40` or 40 milliseconds.
+
+*Note*: For more information please refer to 3GPP TS 38.331 specifications.
 ```
-neighbour_list = (
-  {
-    nr_cellid = 12345678;
-    neighbour_cell_configuration = (
-      {
-        gNB_ID = 0xe01;
-        nr_cellid = 11111111;
-        physical_cellId = 1;
-        absoluteFrequencySSB = 643296;
-        subcarrierSpacing = 1; #30 KHz
-        band = 78;
-        plmn = { mcc = 001; mnc = 01; mnc_length = 2};
-        tracking_area_code = 1;
-      }
-    )
-  },
-  {
-    nr_cellid = 11111111;
-    neighbour_cell_configuration = (
-      {
-        gNB_ID = 0xe00;
-        nr_cellid = 12345678;
-        physical_cellId = 0;
-        absoluteFrequencySSB = 643296;
-        subcarrierSpacing = 1; #30 KHz
-        band = 78;
-        plmn = { mcc = 001; mnc = 01; mnc_length = 2};
-        tracking_area_code = 1;
-      }
-    )
-  }
- );
+############################################################
+#  gNB-to-gNB neighbour list + measurement configuration   #
+#  for the 2-cell rfsim setup (gNB_ID 0xe00 & 0xb00)       #
+############################################################
 
+neighbour_list = (
+  ##########################################################
+  #  Entry USED BY gNB_ID = 0xe00  (nr_cellid = 12345678L) #
+  ##########################################################
+  {
+    nr_cellid = 12345678;                 #  Serving cell of gNB 0xe00
+    neighbour_cell_configuration = (
+      {
+        gNB_ID               = 0xe01;
+        nr_cellid            = 11111111;    #  Cell served by gNB 0xe01
+        physical_cellId      = 1;
+        absoluteFrequencySSB = 643296;
+        subcarrierSpacing    = 1;           # 30 kHz
+        band                 = 77;
+        plmn                 = { mcc = 001; mnc = 01; mnc_length = 2 };
+        tracking_area_code   = 1;
+      }
+    );
+  },
+
+  ##########################################################
+  #  Entry USED BY gNB_ID = 0xe01  (nr_cellid = 11111111)  #
+  ##########################################################
+  {
+    nr_cellid = 11111111;                   #  Serving cell of gNB 0xe01
+    neighbour_cell_configuration = (
+      {
+        gNB_ID               = 0xe00;
+        nr_cellid            = 12345678L;   #  Cell served by gNB 0xe00
+        physical_cellId      = 0;
+        absoluteFrequencySSB = 643296;
+        subcarrierSpacing    = 1;           # 30 kHz
+        band                 = 77;
+        plmn                 = { mcc = 001; mnc = 01; mnc_length = 2 };
+        tracking_area_code   = 1;
+      }
+    );
+  }
+);
+
+############################################################
+#  Common NR measurement-event configuration               #
+############################################################
 
 nr_measurement_configuration = {
   Periodical = {
-    enable = 1;
-    includeBeamMeasurements = 1;
-    maxNrofRS_IndexesToReport = 4;
+    enable                     = 1;
+    includeBeamMeasurements    = 1;
+    maxNrofRS_IndexesToReport  = 4;
   };
 
   A2 = {
-    enable = 1;
-    threshold = 60;
+    enable        = 1;
+    threshold     = 60;
     timeToTrigger = 1;
   };
 
-  A3 = ({
-    cell_id = -1; #Default
-    offset = 10;
-    hysteresis = 0;
-    timeToTrigger = 1
-  })
+  A3 = (
+    {
+      cell_id        = -1;
+      offset         = 10;
+      hysteresis     = 0;
+      timeToTrigger  = 1;
+    }
+  )
 };
 ```
+
 `@include` this configuration file inside the gNB section of CU file as shown below.
 
 ```
-    plmn_list = ({ mcc = 222; mnc = 01; mnc_length = 2; snssaiList = ({ sst = 1, sd = 0xffffff })});
+    plmn_list = ({ mcc = 001; mnc = 01; mnc_length = 2; snssaiList = ({ sst = 1, sd = 0xffffff })});
 
 
     @include "neighbour-config.conf"
@@ -364,30 +423,37 @@ done
 
 ## Run the setup
 
-An N2 handover involves the transfer of a UE from one gNB to another via the 5G core network. Unlike F1 handover, where the CU handles the process internally between its DUs, N2 handover requires signaling through the AMF, making it a core-network-based handover.
+An N2 handover involves the transfer of a UE from one gNB to another via the
+5G core network. Unlike F1 handover, where the CU handles the process internally
+between its DUs, N2 handover requires signaling through the AMF, making it
+a core-network-based handover.
 
 We assume:
 
 * Two independent gNBs connected to the same 5GC via N2 interface.
 * A UE initially connected to gNB-PCI0, which will be handed over to gNB-PCI1.
-* Handover is triggered by either a decision based measurement event (e.g. A3) or telnet command.
+* Handover is triggered by either a decision based measurement event (e.g. A3) or
+telnet command.
 
 ## Steps to run N2 handover with OAI UE
 
-**Note for same-machine setup:** When running both gNBs on the same machine, you need to assign a unique IP address to the second gNB to avoid network conflicts. For example:
+**Note for same-machine setup:** When running both gNBs on the same machine,
+you need to assign a unique IP address to the second gNB to avoid network conflicts.
+For example:
 
 ```sh
 sudo ip addr add 192.168.71.180/24 dev rfsim5g-public
 ```
 
-1. Similarly to F1 handover, UE does not support any measurement reporting and handover is triggered by
-telnet command. Therefore, ensure that both gNBs and UE are built with telnet support:
+1. Similarly to F1 handover, UE does not support any measurement reporting and
+handover is triggered by telnet command. Therefore, ensure that both gNBs and
+UE are built with telnet support:
 
 ```sh
 ./build_oai --ninja --nrUE --gNB --build-lib telnetsrv
 ```
 
-Run the 5G Core Network if not already running. See [OAI CN5G tutorial](./NR_SA_Tutorial_OAI_CN5G.md).
+Run the 5G Core Network if not already running.
 
 2. Start the source gNB (gNB-PCI0) e.g.
 
@@ -409,7 +475,8 @@ Ensure the UE successfully registers with the network.
 sudo ./nr-softmodem -O ../../../targets/PROJECTS/GENERIC-NR-5GC/CONF/gnb.sa.band78.fr1.106PRB.pci1.rfsim.conf --rfsim --telnetsrv --telnetsrv.shrmod ci --gNBs.[0].min_rxtxtime 6 --rfsimulator.serveraddr 127.0.0.1
 ```
 
-**Note for same-machine setup:** When running both gNBs on the same machine, add the following network interface options to the target gNB command, e.g.:
+**Note for same-machine setup:** When running both gNBs on the same machine,
+add the following network interface options to the target gNB command, e.g.:
 
 ```sh
 --gNBs.[0].NETWORK_INTERFACES.GNB_IPV4_ADDRESS_FOR_NG_AMF 192.168.71.180
@@ -423,96 +490,15 @@ From gNB-PCI0, trigger handover on target gNB with PCI 1 for UE ID 1:
 ```sh
 echo ci trigger_n2_ho 1,1 | nc 127.0.0.1 9090 && echo
 ```
-where the input parameters correspond to the PCI of the neighbor cell and the RRC ID of the UE.
+where the input parameters correspond to the PCI of the neighbour cell and the RRC ID of the UE.
 
 This will initiate the N2 handover on the source gNB.
 
 ## Neighbour list and measurement configuration
 
-Make sure the configuration file contains a neighbour list and measurement configuration, e.g. [neighbour-config-rfsim.conf](../../ci-scripts/conf_files/neighbour-config.conf). This configuration can also be present in a different file and included in the gNB configuration file with `@include "neighbour-config-rfsim.conf"`.
+Make sure the configuration file contains a neighbour list and measurement configuration, e.g. [neighbour-config-rfsim.conf](../../ci-scripts/conf_files/neighbour-config.conf).
+This configuration can also be present in a different file and included in the gNB configuration file with `@include "neighbour-config-rfsim.conf"`.
 
 For each gNB there is a `neighbour_cell_configuration` linked to its serving cell ID.
 
-The measurement configuration is based on A2 and A3 measurement events in 5G NR. These events are used by the UE to report radio conditions to the gNB. The A2 Measurement Event indicates that the serving cell’s signal quality has degraded below a defined threshold and the UE shall initiate measurement of neighboring cells. The A3 Measurement Event indicates that a neighboring cell’s signal quality is better than that of the serving cell by a certain offset and the UE shall trigger handover to a stronger neighboring cell
-
-This is an example with comments on how to use the configuration file:
-
-```
-############################################################
-#  gNB-to-gNB neighbour list + measurement configuration   #
-#  for the 2-cell rfsim setup (gNB_ID 0xe00 & 0xb00)       #
-############################################################
-
-neighbour_list = (
-  ##########################################################
-  #  Entry USED BY gNB_ID = 0xe00  (nr_cellid = 12345678L) #
-  ##########################################################
-  {
-    nr_cellid = 12345678L;                      #  Serving cell of gNB 0xe00
-    neighbour_cell_configuration = (
-      {
-        gNB_ID              = 0xb00;
-        nr_cellid           = 720898;           #  Cell served by gNB 0xb00
-        physical_cellId     = 1;
-        absoluteFrequencySSB= 621312;
-        subcarrierSpacing   = 1;                # 30 kHz
-        band                = 78;
-        plmn                = { mcc = 208; mnc = 99; mnc_length = 2 };
-        tracking_area_code  = 1;
-      }
-    );
-  },
-
-  ##########################################################
-  #  Entry USED BY gNB_ID = 0xb00  (nr_cellid = 720898)    #
-  ##########################################################
-  {
-    nr_cellid = 720898;                           #  Serving cell of gNB 0xb00
-    neighbour_cell_configuration = (
-      {
-        gNB_ID              = 0xe00;
-        nr_cellid           = 12345678L;          #  Cell served by gNB 0xe00
-        physical_cellId     = 0;
-        absoluteFrequencySSB= 641280;
-        subcarrierSpacing   = 1;                  # 30 kHz
-        band                = 78;
-        plmn                = { mcc = 208; mnc = 99; mnc_length = 2 };
-        tracking_area_code  = 1;
-      }
-    );
-  }
-);
-
-############################################################
-#  Common NR measurement-event configuration               #
-############################################################
-
-nr_measurement_configuration = {
-  Periodical = {
-    enable                     = 1;
-    includeBeamMeasurements    = 1;
-    maxNrofRS_IndexesToReport  = 4;
-  };
-
-  A2 = {
-    enable        = 1;
-    threshold     = 60;
-    timeToTrigger = 1;
-  };
-
-  A3 = (
-    {
-      cell_id        = 720898;     # neighbour of gNB 0xe00
-      offset         = 10;
-      hysteresis     = 0;
-      timeToTrigger  = 1;
-    },
-    {
-      cell_id        = 12345678;   # neighbour of gNB 0xb00
-      offset         = 5;
-      hysteresis     = 1;
-      timeToTrigger  = 2;
-    }
-  );
-};
-```
+See the example above for `neighbour-config-ho.conf`. The same configuration is for both F1 and N2 handover.

@@ -30,13 +30,8 @@
 static void recv_notif_v1(const struct nc_notif *notif, ru_notif_t *answer)
 {
   const char *node_name = notif->tree->child->attr->name;
-  const char *value = notif->tree->child->attr->value_str;
   if (strcmp(node_name, "sync-state")) {
-    if (strcmp(value, "LOCKED") == 0) {
-      answer->ptp_state = true;
-    } else {
-      answer->ptp_state = false;
-    }
+    answer->ptp_state = str_to_enum_ptp(notif->tree->child->attr->value_str);
   }
 
   // carriers state - to be filled
@@ -52,6 +47,8 @@ static void notif_clb_v1(struct nc_session *session, const struct nc_notif *noti
   MP_LOG_I("\nReceived notification at (%s)\n%s\n", notif->datetime, subs_reply);
 
   recv_notif_v1(notif, answer);
+
+  free(subs_reply);
 }
 #elif MPLANE_V2
 static void log_v2_pm_info(const char *ru_ip_add, struct lyd_node_inner *stats)
@@ -85,33 +82,36 @@ static void log_v2_pm_info(const char *ru_ip_add, struct lyd_node_inner *stats)
 		  meas_list[7], count_list[7]);
 }
 
+static void get_hardware_states(struct lyd_node_inner *op, ru_notif_t *answer)
+{
+  struct lyd_node *child = NULL;
+  LY_LIST_FOR(op->child, child) {
+    if (strcmp(child->schema->name, "admin-state") == 0) {
+      answer->hardware.admin_state = str_to_enum_admin(lyd_get_value(child));
+    } else if (strcmp(child->schema->name, "availability-state") == 0) {
+      answer->hardware.avail_state = str_to_enum_avail(lyd_get_value(child));
+    }
+  }
+}
+
 static void recv_notif_v2(struct lyd_node_inner *op, ru_notif_t *answer)
 {
   const char *notif = op->schema->name;
 
   if (strcmp(notif, "synchronization-state-change") == 0) {
-    const char *value = lyd_get_value(op->child);
-    if (strcmp(value, "LOCKED") == 0) {
-      answer->ptp_state = true;
-    } else { // "FREERUN" or "HOLDOVER"
-      answer->ptp_state = false;
-    }
+    answer->ptp_state = str_to_enum_ptp(lyd_get_value(op->child));
   } else if (strcmp(notif, "rx-array-carriers-state-change") == 0) {
-    const char *value = lyd_get_value(lyd_child(op->child)->next);
-    if (strcmp(value, "READY") == 0) {
-      answer->rx_carrier_state = true;
-    } else { // "DISABLED" or "BUSY"
-      answer->rx_carrier_state = false;
-    }
+    answer->rx_carrier_state = str_to_enum_carrier(lyd_get_value(lyd_child(op->child)->next));
   } else if (strcmp(notif, "tx-array-carriers-state-change") == 0) {
-    const char *value = lyd_get_value(lyd_child(op->child)->next);
-    if (strcmp(value, "READY") == 0) {
-      answer->tx_carrier_state = true;
-    } else { // "DISABLED" or "BUSY"
-      answer->tx_carrier_state = false;
-    }
+    answer->tx_carrier_state = str_to_enum_carrier(lyd_get_value(lyd_child(op->child)->next));
   } else if (strcmp(notif, "netconf-config-change") == 0) {
     answer->config_change = true;
+  } else if (strcmp(notif, "hardware-state-oper-enabled") == 0) {
+    answer->hardware.oper_state = ENABLED_OPER;
+    get_hardware_states(op, answer);
+  } else if (strcmp(notif, "hardware-state-oper-disabled") == 0) {
+    answer->hardware.oper_state = DISABLED_OPER;
+    get_hardware_states(op, answer);
   }
 }
 
@@ -126,11 +126,14 @@ static void notif_clb_v2(struct nc_session *session, const struct lyd_node *envp
   struct lyd_node_inner *op_inner = (struct lyd_node_inner *)op;
   if (strcmp(op_inner->schema->name, "measurement-result-stats") == 0) {
     log_v2_pm_info(ru_ip_add, op_inner);
+    free(subs_reply);
     return;
   }
   MP_LOG_I("Received notification from RU \"%s\" at (%s)\n%s\n", ru_ip_add, ((struct lyd_node_opaq *)lyd_child(envp))->value, subs_reply);
 
   recv_notif_v2(op_inner, answer);
+
+  free(subs_reply);
 }
 #endif
 

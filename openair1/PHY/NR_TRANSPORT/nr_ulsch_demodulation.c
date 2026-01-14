@@ -159,42 +159,6 @@ static void nr_ulsch_extract_rbs(c16_t* const rxdataF,
   }
 }
 
-static void nr_ulsch_scale_channel(int size_est,
-                                   int ul_ch_estimates_ext[][size_est],
-                                   NR_DL_FRAME_PARMS *frame_parms,
-                                   uint8_t symbol,
-                                   uint8_t is_dmrs_symbol,
-                                   uint32_t len,
-                                   uint8_t nrOfLayers,
-                                   unsigned short nb_rb,
-                                   int shift_ch_ext)
-{
-  // Determine scaling amplitude based the symbol
-  int b = 3;
-  short ch_amp = 1024 * 8;
-  if (shift_ch_ext > 3) {
-    b = 0;
-    ch_amp >>= (shift_ch_ext - 3);
-    if (ch_amp == 0) {
-      ch_amp = 1;
-    }
-  } else {
-    b -= shift_ch_ext;
-  }
-  simde__m128i ch_amp128 = simde_mm_set1_epi16(ch_amp); // Q3.13
-  LOG_D(PHY, "Scaling PUSCH Chest in OFDM symbol %d by %d, pilots %d nb_rb %d NCP %d symbol %d\n", symbol, ch_amp, is_dmrs_symbol, nb_rb, frame_parms->Ncp, symbol);
-
-  for (int aatx = 0; aatx < nrOfLayers; aatx++) {
-    for (int aarx = 0; aarx < frame_parms->nb_antennas_rx; aarx++) {
-      simde__m128i *ul_ch128 = (simde__m128i *)&ul_ch_estimates_ext[aatx * frame_parms->nb_antennas_rx + aarx][symbol * len];
-      for (int i = 0; i < len >> 2; i++) {
-        ul_ch128[i] = simde_mm_mulhi_epi16(ul_ch128[i], ch_amp128);
-        ul_ch128[i] = simde_mm_slli_epi16(ul_ch128[i], b);
-      }
-    }
-  }
-}
-
 static int get_nb_re_pusch (NR_DL_FRAME_PARMS *frame_parms, nfapi_nr_pusch_pdu_t *rel15_ul,int symbol) 
 {
   uint8_t dmrs_symbol_flag = (rel15_ul->ul_dmrs_symb_pos >> symbol) & 0x01;
@@ -1224,12 +1188,7 @@ int nr_rx_pusch_tp(PHY_VARS_gNB *gNB,
                                     pusch_ch_est_dmrs_pos_slot_mem);
         nvar += nvar_tmp;
       }
-      // measure the SNR from the channel estimation
-      nr_gnb_measurements(gNB, 
-                          &gNB->ulsch[ulsch_id],
-                          pusch_vars,
-                          symbol,
-                          rel15_ul->nrOfLayers);
+
       allocCast2D(n0_subband_power,
                   unsigned int,
                   gNB->measurements.n0_subband_power,
@@ -1248,7 +1207,7 @@ int nr_rx_pusch_tp(PHY_VARS_gNB *gNB,
         int end_sc = (start_sc + rel15_ul->rb_size * NR_NB_SC_PER_RB - 1) % frame_parms->ofdm_symbol_size;
 
         for (int s = rel15_ul->start_symbol_index; s < (rel15_ul->start_symbol_index + rel15_ul->nr_of_symbols); s++) {
-          int offset0 = ((slot & 3) * frame_parms->symbols_per_slot + s) * frame_parms->ofdm_symbol_size;
+          int offset0 = ((slot % RU_RX_SLOT_DEPTH) * frame_parms->symbols_per_slot + s) * frame_parms->ofdm_symbol_size;
           int offset = offset0 + (frame_parms->first_carrier_offset + start_sc) % frame_parms->ofdm_symbol_size;
           c16_t *ul_ch = &gNB->common_vars.rxdataF[beam_nb][aarx][offset];
           if (end_sc < start_sc) {
@@ -1375,15 +1334,13 @@ int nr_rx_pusch_tp(PHY_VARS_gNB *gNB,
   //----------------------------------------------------------
   //--------------------- Channel Scaling --------------------
   //----------------------------------------------------------
-  nr_ulsch_scale_channel(size_est,
-                         ul_ch_estimates_ext,
-                         frame_parms,
-                         meas_symbol,
-                         (rel15_ul->ul_dmrs_symb_pos >> meas_symbol) & 0x01,
-                         nb_re_pusch,
-                         rel15_ul->nrOfLayers,
-                         rel15_ul->rb_size,
-                         shift_ch_ext);
+  nr_scale_channel(size_est,
+                   ul_ch_estimates_ext,
+                   meas_symbol,
+                   nb_re_pusch,
+                   rel15_ul->nrOfLayers,
+                   frame_parms->nb_antennas_rx,
+                   shift_ch_ext);
 
   int avg[frame_parms->nb_antennas_rx*rel15_ul->nrOfLayers];
   nr_channel_level(meas_symbol,

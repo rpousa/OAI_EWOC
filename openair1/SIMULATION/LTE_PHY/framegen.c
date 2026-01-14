@@ -378,7 +378,7 @@ void lte_param_init(  unsigned char transmission_mode,
   mac_xface->get_dci_sdu = get_dci;
   mac_xface->get_dlsch_sdu = get_DLSCH_pdu;
 
-  randominit(0);
+  randominit();
   set_taus_seed(0);
 
   lte_frame_parms = &(PHY_vars_eNB_g[0]->lte_frame_parms);

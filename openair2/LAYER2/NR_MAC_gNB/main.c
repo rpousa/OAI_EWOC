@@ -87,7 +87,6 @@ void *nrmac_stats_thread(void *arg) {
     char *p = output;
     NR_SCHED_LOCK(&gNB->sched_lock);
     p += dump_mac_stats(gNB, p, end - p, false);
-    NR_SCHED_UNLOCK(&gNB->sched_lock);
     p += snprintf(p, end - p, "\n");
     p += print_meas_log(&gNB->gNB_scheduler, "gNB_scheduler", NULL, NULL, p, end - p);
     p += print_meas_log(&gNB->rx_ulsch_sdu, "rx_ulsch_sdu", NULL, NULL, p, end - p);
@@ -97,10 +96,17 @@ void *nrmac_stats_thread(void *arg) {
     p += print_meas_log(&gNB->rlc_data_req, "rlc_data_req", NULL, NULL, p, end - p);
     p += print_meas_log(&gNB->nr_srs_ri_computation_timer, "UL-RI computation time", NULL, NULL, p, end - p);
     p += print_meas_log(&gNB->nr_srs_tpmi_computation_timer, "UL-TPMI computation time", NULL, NULL, p, end - p);
-    fwrite(output, p - output, 1, file);
-    fflush(file);
+    NR_SCHED_UNLOCK(&gNB->sched_lock);
+    size_t len = p - output;
+    if (fwrite(output, len, 1, file) != 1 || fflush(file) != 0) {
+      LOG_E(NR_MAC, "error while writing nrMAC_stats.log: %d, %s\n", errno, strerror(errno));
+      break;
+    }
     sleep(1);
-    fseek(file,0,SEEK_SET);
+    if (ftruncate(fileno(file), 0) != 0 || fseek(file, 0, SEEK_SET) != 0) {
+      LOG_E(NR_MAC, "error while writing nrMAC_stats.log: %d, %s\n", errno, strerror(errno));
+      break;
+    }
   }
   fclose(file);
   return NULL;
@@ -112,6 +118,19 @@ void clear_mac_stats(gNB_MAC_INST *gNB) {
   }
 }
 
+static char *st_append(char *start, const char *end, const char *format, ...)
+{
+  size_t space = end - start;
+  va_list args;
+  va_start(args, format);
+  size_t written = vsnprintf(start, space, format, args);
+  va_end(args);
+  if (written <= space)
+    return start + written;
+  else
+    return (char *)end;
+}
+
 size_t dump_mac_stats(gNB_MAC_INST *gNB, char *output, size_t strlen, bool reset_rsrp)
 {
   const char *begin = output;
@@ -121,46 +140,45 @@ size_t dump_mac_stats(gNB_MAC_INST *gNB, char *output, size_t strlen, bool reset
    * scheduler to be locked*/
   NR_SCHED_ENSURE_LOCKED(&gNB->sched_lock);
 
-  NR_SCHED_LOCK(&gNB->UE_info.mutex);
   UE_iterator(gNB->UE_info.connected_ue_list, UE) {
     NR_UE_sched_ctrl_t *sched_ctrl = &UE->UE_sched_ctrl;
     NR_mac_stats_t *stats = &UE->mac_stats;
     const int avg_rsrp = stats->num_rsrp_meas > 0 ? stats->cumul_rsrp / stats->num_rsrp_meas : 0;
     const int avg_sinrx10 = stats->num_sinr_meas > 0 ? stats->cumul_sinrx10 / stats->num_sinr_meas : 0;
 
-    output += snprintf(output, end - output, "UE RNTI %04x CU-UE-ID ", UE->rnti);
+    output = st_append(output, end, "UE RNTI %04x CU-UE-ID ", UE->rnti);
     if (du_exists_f1_ue_data(UE->rnti)) {
       f1_ue_data_t ued = du_get_f1_ue_data(UE->rnti);
-      output += snprintf(output, end - output, "%d", ued.secondary_ue);
+      output = st_append(output, end, "%d", ued.secondary_ue);
     } else {
-      output += snprintf(output, end - output, "(none)");
+      output = st_append(output, end, "(none)");
     }
 
     bool in_sync = !sched_ctrl->ul_failure;
-    output += snprintf(output,
-                       end - output,
+    output = st_append(output,
+                       end,
                        " %s PH %d dB PCMAX %d dBm",
                        in_sync ? "in-sync" : "out-of-sync",
                        sched_ctrl->ph,
                        sched_ctrl->pcmax);
 
     if (stats->num_rsrp_meas)
-      output += snprintf(output, end - output, ", average RSRP %d (%d meas)", avg_rsrp, stats->num_rsrp_meas);
+      output = st_append(output, end, ", average RSRP %d (%d meas)", avg_rsrp, stats->num_rsrp_meas);
 
     if (stats->num_sinr_meas) {
-      output += snprintf(output,
-                         end - output,
+      output = st_append(output,
+                         end,
                          ", average SINR %d.%d (%d meas)",
                          avg_sinrx10 / 10,
                          avg_sinrx10 % 10,
                          stats->num_sinr_meas);
     }
 
-    output += snprintf(output, end - output, "\n");
+    output = st_append(output, end, "\n");
 
     if(sched_ctrl->CSI_report.cri_ri_li_pmi_cqi_report.print_report)
-      output += snprintf(output,
-                         end - output,
+      output = st_append(output,
+                         end,
                          "UE %04x: CQI %d, RI %d, PMI (%d,%d)\n",
                          UE->rnti,
                          sched_ctrl->CSI_report.cri_ri_li_pmi_cqi_report.wb_cqi_1tb,
@@ -169,18 +187,18 @@ size_t dump_mac_stats(gNB_MAC_INST *gNB, char *output, size_t strlen, bool reset
                          sched_ctrl->CSI_report.cri_ri_li_pmi_cqi_report.pmi_x2);
 
     if (stats->srs_stats[0] != '\0') {
-      output += snprintf(output, end - output, "UE %04x: %s\n", UE->rnti, stats->srs_stats);
+      output = st_append(output, end, "UE %04x: %s\n", UE->rnti, stats->srs_stats);
     }
 
-    output += snprintf(output,
-                       end - output,
+    output = st_append(output,
+                       end,
                        "UE %04x: dlsch_rounds ", UE->rnti);
-    output += snprintf(output, end - output, "%"PRIu64, stats->dl.rounds[0]);
+    output = st_append(output, end, "%"PRIu64, stats->dl.rounds[0]);
     for (int i = 1; i < gNB->dl_bler.harq_round_max; i++)
-      output += snprintf(output, end - output, "/%"PRIu64, stats->dl.rounds[i]);
+      output = st_append(output, end, "/%"PRIu64, stats->dl.rounds[i]);
 
-    output += snprintf(output,
-                       end - output,
+    output = st_append(output,
+                       end,
                        ", dlsch_errors %"PRIu64", pucch0_DTX %d, BLER %.5f MCS (%d) %d CCE fail %d\n",
                        stats->dl.errors,
                        stats->pucch0_DTX,
@@ -194,15 +212,15 @@ size_t dump_mac_stats(gNB_MAC_INST *gNB, char *output, size_t strlen, bool reset
       stats->num_sinr_meas = 0;
       stats->cumul_sinrx10 = 0;
     }
-    output += snprintf(output,
-                       end - output,
+    output = st_append(output,
+                       end,
                        "UE %04x: ulsch_rounds ", UE->rnti);
-    output += snprintf(output, end - output, "%"PRIu64, stats->ul.rounds[0]);
+    output = st_append(output, end, "%"PRIu64, stats->ul.rounds[0]);
     for (int i = 1; i < gNB->ul_bler.harq_round_max; i++)
-      output += snprintf(output, end - output, "/%"PRIu64, stats->ul.rounds[i]);
+      output = st_append(output, end, "/%"PRIu64, stats->ul.rounds[i]);
 
-    output += snprintf(output,
-                       end - output,
+    output = st_append(output,
+                       end,
                        ", ulsch_errors %"PRIu64", ulsch_DTX %d, BLER %.5f MCS (%d) %d (Qm %d deltaMCS %d dB) NPRB %d  SNR %d.%d dB CCE fail %d\n",
                        stats->ul.errors,
                        stats->ulsch_DTX,
@@ -215,15 +233,15 @@ size_t dump_mac_stats(gNB_MAC_INST *gNB, char *output, size_t strlen, bool reset
                        sched_ctrl->pusch_snrx10 / 10,
                        sched_ctrl->pusch_snrx10 % 10,
                        sched_ctrl->ul_cce_fail);
-    output += snprintf(output,
-                       end - output,
+   output = st_append(output,
+                       end,
                        "UE %04x: MAC:    TX %14"PRIu64" RX %14"PRIu64" bytes\n",
                        UE->rnti, stats->dl.total_bytes, stats->ul.total_bytes);
 
     for (int i = 0; i < seq_arr_size(&sched_ctrl->lc_config); i++) {
       const nr_lc_config_t *c = seq_arr_at(&sched_ctrl->lc_config, i);
-      output += snprintf(output,
-                         end - output,
+      output = st_append(output,
+                         end,
                          "UE %04x: LCID %d: TX %14"PRIu64" RX %14"PRIu64" bytes\n",
                          UE->rnti,
                          c->lcid,
@@ -231,7 +249,7 @@ size_t dump_mac_stats(gNB_MAC_INST *gNB, char *output, size_t strlen, bool reset
                          stats->ul.lc_bytes[c->lcid]);
     }
   }
-  NR_SCHED_UNLOCK(&gNB->UE_info.mutex);
+  DevAssert(output <= end);
   return output - begin;
 }
 
@@ -284,7 +302,8 @@ void mac_top_init_gNB(ngran_node_t node_type,
 
       RC.nrmac[i]->tag = (NR_TAG_t*)malloc(sizeof(NR_TAG_t));
       memset((void*)RC.nrmac[i]->tag,0,sizeof(NR_TAG_t));
-        
+      for(int n = 0; n < MAX_NUM_OF_SSB; n++)
+        RC.nrmac[i]->sib1_pdsch[n].time_domain_allocation = -1;
       RC.nrmac[i]->common_channels[0].ServingCellConfigCommon = scc;
       RC.nrmac[i]->radio_config = *config;
       RC.nrmac[i]->rlc_config = *default_rlc_config;
@@ -296,9 +315,10 @@ void mac_top_init_gNB(ngran_node_t node_type,
       RC.nrmac[i]->cset0_bwp_start = 0;
       RC.nrmac[i]->cset0_bwp_size = 0;
 
+      RC.nrmac[i]->print_ue_stats = true;
+
       pthread_mutex_init(&RC.nrmac[i]->sched_lock, NULL);
 
-      pthread_mutex_init(&RC.nrmac[i]->UE_info.mutex, NULL);
       uid_linear_allocator_init(&RC.nrmac[i]->UE_info.uid_allocator);
 
       if (get_softmodem_params()->phy_test) {
