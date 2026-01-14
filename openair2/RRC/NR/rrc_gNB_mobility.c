@@ -626,9 +626,6 @@ void nr_HO_N2_trigger_telnet(gNB_RRC_INST *rrc, uint32_t neighbour_pci, uint32_t
   }
 
   nr_rrc_trigger_n2_ho(rrc, UE, scell_du->nr_pci, neighbour);
-<<<<<<< HEAD
-}
-=======
 }
 
 // This function detects if there are at least two different ssbFrequency values, and if so, returns meas_timing_config;
@@ -658,4 +655,3 @@ byte_array_t *get_meas_timing_config(const NR_MeasurementTimingConfiguration_t *
 
   return meas_timing_config;
 }
->>>>>>> refs/remotes/origin/develop
