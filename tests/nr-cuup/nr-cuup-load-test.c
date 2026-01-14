@@ -28,6 +28,7 @@
 #include "openair3/SCTP/sctp_eNB_task.h"
 #include "openair2/E1AP/e1ap.h"
 #include "openair3/ocp-gtpu/gtp_itf.h"
+#include "openair2/E1AP/lib/e1ap_interface_management.h"
 
 configmodule_interface_t *uniqCfg;
 
@@ -90,6 +91,7 @@ static void setup_cuup(sctp_assoc_t *assoc_id, e1ap_nssai_t *nssai)
   DevAssert(req->plmn[0].slice != NULL);
   *nssai = *req->plmn[0].slice;
   DevAssert(assoc_id != 0);
+  free_e1ap_cuup_setup_request(req);
   itti_free(TASK_GNB_APP, itti_req);
 
   // acknowledge the E1 setup request with a response
@@ -165,7 +167,6 @@ static struct ue_stat {
 static bool recv_ng(protocol_ctxt_t *ctxt,
                     const ue_id_t ue_id,
                     const srb_flag_t flag,
-                    const rb_id_t rb,
                     const mui_t mui,
                     const confirm_t confirm,
                     const sdu_size_t size,
@@ -664,6 +665,9 @@ int main(int argc, char *argv[])
       if (!print_stats("UL", ue, thrdul->total_data, thrdul->total_time, statul))
         success = false;
   }
+
+  free(ng_ip);
+  free(f1_ip);
 
   if (success)
     LOG_A(GNB_APP, "test succeeded\n");

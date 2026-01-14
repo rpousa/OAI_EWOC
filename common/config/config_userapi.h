@@ -49,17 +49,17 @@ extern configmodule_interface_t *uniqCfg;
 #define CONFIG_SETRTFLAG(P)   if (config_get_if()) { config_get_if()->rtflags |= P; }
 #define CONFIG_CLEARRTFLAG(P) if (config_get_if()) { config_get_if()->rtflags &= (~P); }
 #define CONFIG_ISPARAMFLAGSET(P,F) ( !!(P.paramflags & F))
-int config_paramidx_fromname(paramdef_t *params, int numparams, char *name);
+int config_paramidx_fromname(paramdef_t *params, int numparams, const char *name);
 
 /* utility functions, to be used by configuration module and/or configuration libraries */
-void config_printhelp(paramdef_t *, int numparams, char *prefix);
-int config_process_cmdline(configmodule_interface_t *cfg, paramdef_t *params, int numparams, char *prefix);
-int config_assign_ipv4addr(configmodule_interface_t *cfg, paramdef_t *cfgoptions, char *ipv4addr);
+void config_printhelp(paramdef_t *, int numparams, const char *prefix);
+int config_process_cmdline(configmodule_interface_t *cfg, paramdef_t *params, int numparams, const char *prefix);
+int config_assign_ipv4addr(configmodule_interface_t *cfg, paramdef_t *cfgoptions, const char *ipv4addr);
 
 /* apis to get/check parameters, to be used by oai modules, at configuration time */
 #define CONFIG_CHECKALLSECTIONS "ALLSECTIONS"
 int config_check_unknown_cmdlineopt(configmodule_interface_t *cfg, char *prefix);
-int config_get(configmodule_interface_t *cfg, paramdef_t *params, int numparams, char *prefix);
+int config_get(configmodule_interface_t *cfg, paramdef_t *params, int numparams, const char *prefix);
 int config_getlist(configmodule_interface_t *cfg, paramlist_def_t *ParamList, paramdef_t *params, int numparams, char *prefix);
 
 /* apis to set some of the paramdef_t fields before using the get/getlist api's */

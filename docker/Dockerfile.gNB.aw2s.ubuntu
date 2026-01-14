@@ -95,6 +95,7 @@ RUN /bin/bash -c "ln -s /usr/local/lib/libaw2sori_transpro.so /usr/local/lib/lib
 
 WORKDIR /opt/oai-gnb-aw2s
 
+COPY --from=gnb-base /usr/local/bin/yq /usr/local/bin/yq
 COPY --from=gnb-base /tini /tini
 ENTRYPOINT ["/tini", "-v", "--", "/opt/oai-gnb-aw2s/bin/entrypoint.sh"]
 CMD ["/opt/oai-gnb-aw2s/bin/nr-softmodem"]

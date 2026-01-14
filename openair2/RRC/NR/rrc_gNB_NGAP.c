@@ -110,6 +110,24 @@ static const uint16_t NGAP_INTEGRITY_NIA3_MASK = 0x2000;
 
 static void set_UE_security_algos(const gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE, const ngap_security_capabilities_t *cap);
 
+/** @brief Validates PLMN against allowed PLMN list and returns pointer to matching PLMN
+ * @param rrc RRC instance
+ * @param plmn PLMN to validate
+ * @return pointer to matching PLMN in configuration, or NULL if not found */
+static const plmn_id_t *get_serving_plmn(gNB_RRC_INST *rrc, const plmn_id_t *plmn)
+{
+  // Find matching PLMN in configuration
+  for (int idx = 0; idx < rrc->configuration.num_plmn; idx++) {
+    const plmn_id_t *allowed = &rrc->configuration.plmn[idx];
+    if (allowed->mcc == plmn->mcc && allowed->mnc == plmn->mnc && allowed->mnc_digit_length == plmn->mnc_digit_length) {
+      LOG_D(NR_RRC, "PLMN (MCC:%d, MNC:%*d) matched with allowed PLMN[%d]\n", plmn->mcc, plmn->mnc_digit_length, plmn->mnc, idx);
+      return allowed;
+    }
+  }
+  LOG_W(NR_RRC, "PLMN (MCC:%d, MNC:%*d) not found in allowed PLMN list\n", plmn->mcc, plmn->mnc_digit_length, plmn->mnc);
+  return NULL;
+}
+
 /*!
  *\brief save security key.
  *\param UE              UE context.
@@ -122,7 +140,9 @@ static void set_UE_security_key(gNB_RRC_UE_t *UE, uint8_t *security_key_pP)
   /* Saves the security key */
   memcpy(UE->kgnb, security_key_pP, SECURITY_KEY_LENGTH);
   memset(UE->nh, 0, SECURITY_KEY_LENGTH);
-  UE->nh_ncc = -1;
+  /* 3GPP TS 33.501 §6.9.2.1.1: On Initial Context Setup, AMF does not send NH;
+   * gNB shall initialize NCC to 0. */
+  UE->nh_ncc = 0;
 
   char ascii_buffer[65];
   for (i = 0; i < 32; i++) {
@@ -165,9 +185,7 @@ static nr_guami_t get_guami(const uint32_t amf_Id, const plmn_id_t plmn)
   guami.amf_region_id = (amf_Id >> 16) & 0xff;
   guami.amf_set_id = (amf_Id >> 6) & 0x3ff;
   guami.amf_pointer = amf_Id & 0x3f;
-  guami.mcc = plmn.mcc;
-  guami.mnc = plmn.mnc;
-  guami.mnc_len = plmn.mnc_digit_length;
+  guami.plmn = plmn;
   return guami;
 }
 
@@ -223,17 +241,22 @@ void rrc_gNB_send_NGAP_NAS_FIRST_REQ(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE, NR_RRC
   req->nas_pdu = create_byte_array(rrcSetupComplete->dedicatedNAS_Message.size, rrcSetupComplete->dedicatedNAS_Message.buf);
 
   /* Selected PLMN Identity (Optional)
-   * selectedPLMN-Identity in RRCSetupComplete: Index of the PLMN selected by the UE from the plmn-IdentityInfoList (SIB1)
-   * Selected PLMN Identity in INITIAL UE MESSAGE: Indicates the selected PLMN id for the non-3GPP access.*/
-  if (rrcSetupComplete->selectedPLMN_Identity > rrc->configuration.num_plmn) {
+   * selectedPLMN-Identity in RRCSetupComplete: Index of the PLMN selected by the UE from the plmn-IdentityInfoList (SIB1) */
+  int idx = rrcSetupComplete->selectedPLMN_Identity - 1; // Convert 1-based PLMN Identity IE to 0-based index
+  if (idx < 0 || idx >= rrc->configuration.num_plmn) {
     LOG_E(NGAP,
-          "Failed to send Initial UE Message: selected PLMN (%ld) identity is out of bounds (%d)\n",
-          rrcSetupComplete->selectedPLMN_Identity,
+          "Failed to send Initial UE Message: selected PLMN index (%d) is out of bounds [0..%d)\n",
+          idx,
           rrc->configuration.num_plmn);
     return;
   }
-  int selected_plmn_identity = rrcSetupComplete->selectedPLMN_Identity - 1; // Convert 1-based PLMN Identity IE to 0-based index
-  req->plmn = rrc->configuration.plmn[selected_plmn_identity]; // Select from the stored list
+  req->plmn = rrc->configuration.plmn[idx]; // Select from the stored list
+  /* UE is connected to only one PLMN at a time: store this as the serving PLMN */
+  UE->serving_plmn = req->plmn;
+
+  // Cell ID (NR CGI)
+  req->nr_cell_id = UE->nr_cellid;
+  // PLMN (NR CGI and TAI)
   plmn_id_t *p = &req->plmn;
   LOG_I(NGAP, "Selected PLMN in the NG Initial UE Message: MCC=%03d MNC=%0*d\n", p->mcc, p->mnc_digit_length, p->mnc);
 
@@ -721,6 +744,10 @@ void rrc_gNB_send_NGAP_UPLINK_NAS(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE, const NR_
   NGAP_UPLINK_NAS(msg_p).gNB_ue_ngap_id = UE->rrc_ue_id;
   NGAP_UPLINK_NAS(msg_p).nas_pdu.len = nas->size;
   NGAP_UPLINK_NAS(msg_p).nas_pdu.buf = buf;
+  /* Fill PLMN and location info: use serving PLMN of the UE */
+  NGAP_UPLINK_NAS(msg_p).plmn = UE->serving_plmn;
+  NGAP_UPLINK_NAS(msg_p).nr_cell_id = rrc->nr_cellid;
+  NGAP_UPLINK_NAS(msg_p).tac = rrc->configuration.tac;
   itti_send_msg_to_task(TASK_NGAP, rrc->module_id, msg_p);
 }
 
@@ -760,29 +787,6 @@ void rrc_gNB_send_NGAP_PDUSESSION_SETUP_RESP(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE
   }
 
   return;
-}
-
-/* \brief checks if any transaction is ongoing for any xid of this UE */
-static bool transaction_ongoing(const gNB_RRC_UE_t *UE)
-{
-  for (int xid = 0; xid < NR_RRC_TRANSACTION_IDENTIFIER_NUMBER; ++xid) {
-    if (UE->xids[xid] != RRC_ACTION_NONE)
-      return true;
-  }
-  return false;
-}
-
-/* \brief delays the ongoing transaction (in msg_p) by setting a timer to wait
- * 10ms; upon expiry, delivers to RRC, which sends the message to itself */
-static void delay_transaction(MessageDef *msg_p, int wait_us)
-{
-  MessageDef *new = itti_alloc_new_message(TASK_RRC_GNB, 0, NGAP_PDUSESSION_SETUP_REQ);
-  ngap_pdusession_setup_req_t *n = &NGAP_PDUSESSION_SETUP_REQ(new);
-  *n = NGAP_PDUSESSION_SETUP_REQ(msg_p);
-
-  int instance = msg_p->ittiMsgHeader.originInstance;
-  long timer_id;
-  timer_setup(0, wait_us, TASK_RRC_GNB, instance, TIMER_ONE_SHOT, new, &timer_id);
 }
 
 /**
@@ -856,25 +860,6 @@ void rrc_gNB_process_NGAP_PDUSESSION_SETUP_REQ(MessageDef *msg_p, instance_t ins
 
   UE->amf_ue_ngap_id = msg->amf_ue_ngap_id;
 
-  /* This is a hack. We observed that with some UEs, PDU session requests might
-   * come in quick succession, faster than the RRC reconfiguration for the PDU
-   * session requests can be carried out (UE is doing reconfig, and second PDU
-   * session request arrives). We don't have currently the means to "queue up"
-   * these transactions, which would probably involve some rework of the RRC.
-   * To still allow these requests to come in and succeed, we below check and delay transactions
-   * for 10ms. However, to not accidentally end up in infinite loops, the
-   * maximum number is capped on a per-UE basis as indicated in variable
-   * max_delays_pdu_session. */
-  if (!UE->ongoing_pdusession_setup_request)
-    UE->max_delays_pdu_session = 100;
-
-  if (UE->max_delays_pdu_session > 0 && (transaction_ongoing(UE) || UE->ongoing_pdusession_setup_request)) {
-    int wait_us = 10000;
-    LOG_I(RRC, "UE %d: delay PDU session setup by %d us, pending %d retries\n", UE->rrc_ue_id, wait_us, UE->max_delays_pdu_session);
-    delay_transaction(msg_p, wait_us);
-    UE->max_delays_pdu_session--;
-    return;
-  }
 
   pdusession_t to_setup[NGAP_MAX_PDU_SESSION] = {0};
   for (int i = 0; i < msg->nb_pdusessions_tosetup; ++i)
@@ -889,7 +874,8 @@ void rrc_gNB_process_NGAP_PDUSESSION_SETUP_REQ(MessageDef *msg_p, instance_t ins
     send_ngap_pdu_session_setup_resp_fail(instance, msg, cause);
     rrc_forward_ue_nas_message(rrc, UE);
   } else {
-    UE->ongoing_pdusession_setup_request = true;
+    // Set ongoing_transaction flag to true
+    init_delayed_action(&UE->delayed_action);
   }
 }
 
@@ -1063,7 +1049,8 @@ int rrc_gNB_send_NGAP_PDUSESSION_MODIFY_RESP(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE
   return 0;
 }
 
-//------------------------------------------------------------------------------
+/** @brief Send UE Context Release Request (NG-RAN node initiated)
+ * Direction: NG-RAN node -> AMF (8.3.2.2 3GPP TS 38.413) */
 void rrc_gNB_send_NGAP_UE_CONTEXT_RELEASE_REQ(const module_id_t gnb_mod_idP,
                                               const rrc_gNB_ue_context_t *const ue_context_pP,
                                               const ngap_cause_t causeP)
@@ -1082,38 +1069,10 @@ void rrc_gNB_send_NGAP_UE_CONTEXT_RELEASE_REQ(const module_id_t gnb_mod_idP,
     // PDU Session Resource List (optional)
     FOR_EACH_SEQ_ARR(rrc_pdu_session_param_t *, session, &UE->pduSessions) {
       DevAssert(req->nb_of_pdusessions < NGAP_MAX_PDU_SESSION);
-      req->pdusessions[req->nb_of_pdusessions].pdusession_id = session->param.pdusession_id;
+      req->pdusession_ids[req->nb_of_pdusessions] = session->param.pdusession_id;
       req->nb_of_pdusessions++;
     }
     itti_send_msg_to_task(TASK_NGAP, GNB_MODULE_ID_TO_INSTANCE(gnb_mod_idP), msg);
-  }
-}
-/*------------------------------------------------------------------------------*/
-int rrc_gNB_process_NGAP_UE_CONTEXT_RELEASE_REQ(MessageDef *msg_p, instance_t instance)
-{
-  uint32_t gNB_ue_ngap_id;
-  gNB_ue_ngap_id = NGAP_UE_CONTEXT_RELEASE_REQ(msg_p).gNB_ue_ngap_id;
-  rrc_gNB_ue_context_t *ue_context_p = rrc_gNB_get_ue_context(RC.nrrrc[instance], gNB_ue_ngap_id);
-
-  if (ue_context_p == NULL) {
-    /* Can not associate this message to an UE index, send a failure to ngAP and discard it! */
-    MessageDef *msg_fail_p;
-    LOG_W(RRC, "[gNB %ld] In NGAP_UE_CONTEXT_RELEASE_REQ: unknown UE from gNB_ue_ngap_id (%u)\n",
-          instance,
-          gNB_ue_ngap_id);
-    msg_fail_p = itti_alloc_new_message(TASK_RRC_GNB, 0, NGAP_UE_CONTEXT_RELEASE_RESP); /* TODO change message ID. */
-    NGAP_UE_CONTEXT_RELEASE_RESP(msg_fail_p).gNB_ue_ngap_id = gNB_ue_ngap_id;
-    // TODO add failure cause when defined!
-    itti_send_msg_to_task(TASK_NGAP, instance, msg_fail_p);
-    return (-1);
-  } else {
-
-    /* Send the response */
-    MessageDef *msg_resp_p;
-    msg_resp_p = itti_alloc_new_message(TASK_RRC_GNB, 0, NGAP_UE_CONTEXT_RELEASE_RESP);
-    NGAP_UE_CONTEXT_RELEASE_RESP(msg_resp_p).gNB_ue_ngap_id = gNB_ue_ngap_id;
-    itti_send_msg_to_task(TASK_NGAP, instance, msg_resp_p);
-    return (0);
   }
 }
 
@@ -1154,6 +1113,20 @@ int rrc_gNB_process_Handover_Request(gNB_RRC_INST *rrc, instance_t instance, nga
     rrc_gNB_send_NGAP_HANDOVER_FAILURE(rrc, &fail);
     return -1;
   }
+
+  // Validate PLMN from GUAMI against allowed PLMN list
+  const plmn_id_t *serving_plmn = get_serving_plmn(rrc, &msg->guami.plmn);
+  if (!serving_plmn) {
+    LOG_E(NR_RRC, "PLMN from GUAMI not supported - rejecting handover\n");
+    ngap_handover_failure_t fail = {
+        .amf_ue_ngap_id = msg->amf_ue_ngap_id,
+        .cause.type = NGAP_CAUSE_RADIO_NETWORK,
+        .cause.value = NGAP_CAUSE_RADIO_NETWORK_HO_TARGET_NOT_ALLOWED,
+    };
+    rrc_gNB_send_NGAP_HANDOVER_FAILURE(rrc, &fail);
+    return -1;
+  }
+
   uint16_t pci = du->setup_req->cell[0].info.nr_pci;
   LOG_I(NR_RRC, "Received Handover Request (on NR Cell ID=%lu, PCI=%u) \n", msg->nr_cell_id, pci);
 
@@ -1169,6 +1142,9 @@ int rrc_gNB_process_Handover_Request(gNB_RRC_INST *rrc, instance_t instance, nga
   // Store IDs in UE context
   UE->amf_ue_ngap_id = msg->amf_ue_ngap_id;
   UE->ue_guami = msg->guami;
+  // Store the serving PLMN
+  UE->serving_plmn = *serving_plmn;
+
   UE->ho_context->target->ue_ho_prep_info = copy_byte_array(msg->ue_ho_prep_info);
   // store the received UE Security Capabilities in the UE context
   FREE_AND_ZERO_BYTE_ARRAY(UE->ue_cap_buffer);
@@ -1189,7 +1165,11 @@ int rrc_gNB_process_Handover_Request(gNB_RRC_INST *rrc, instance_t instance, nga
   // Activate SRBs
   activate_srb(UE, SRB1);
   activate_srb(UE, SRB2);
-  nr_rrc_pdcp_config_security(UE, false);
+  // During N2 handover, the UE continues using the old security context from the source gNB
+  // until it receives and processes the RRC Reconfiguration with masterKeyUpdate. The first
+  // PDUs sent after CFRA are still ciphered with the old keys. The target gNB must enable
+  // ciphering during handover setup to correctly decipher and verify integrity of these PDUs.
+  nr_rrc_pdcp_config_security(UE, true);
 
   // Process all PDU Session Resource Setup items from handover request
   DevAssert(msg->nb_of_pdusessions <= NGAP_MAX_PDU_SESSION);
@@ -1518,68 +1498,75 @@ void rrc_gNB_send_NGAP_PDUSESSION_RELEASE_RESPONSE(gNB_RRC_INST *rrc, gNB_RRC_UE
         DevAssert(resp->nb_of_pdusessions_released < NGAP_MAX_PDU_SESSION);
         resp->pdusession_release[resp->nb_of_pdusessions_released++].pdusession_id = pdusession->pdusession_id;
       }
-      session->status = PDU_SESSION_STATUS_RELEASED;
     }
+  }
+
+  for (int i = 0; i < resp->nb_of_pdusessions_released; ++i) {
+    rm_pduSession(&UE->pduSessions, &UE->drbs, resp->pdusession_release[i].pdusession_id);
   }
 
   LOG_I(NR_RRC, "NGAP PDUSESSION RELEASE RESPONSE: rrc_ue_id %u release_pdu_sessions %d\n", resp->gNB_ue_ngap_id, resp->nb_of_pdusessions_released);
   itti_send_msg_to_task (TASK_NGAP, rrc->module_id, msg_p);
 }
 
-//------------------------------------------------------------------------------
-int rrc_gNB_process_NGAP_PDUSESSION_RELEASE_COMMAND(MessageDef *msg_p, instance_t instance)
-//------------------------------------------------------------------------------
+/** @brief Process NG PDU Session Resource Release command (8.2.2 of 3GPP TS 38.413)
+ * upon reception the NG-RAN node shall execute the release of the requested PDU sessions.
+ * For each PDU session to be released the NG-RAN node shall release the corresponding
+ * resources over Uu and over NG, if any. */
+int rrc_gNB_process_NGAP_PDUSESSION_RELEASE_COMMAND(ngap_pdusession_release_command_t *cmd, gNB_RRC_INST *rrc)
 {
-  uint32_t gNB_ue_ngap_id;
-  ngap_pdusession_release_command_t *cmd = &NGAP_PDUSESSION_RELEASE_COMMAND(msg_p);
-  gNB_ue_ngap_id = cmd->gNB_ue_ngap_id;
-  gNB_RRC_INST *rrc = RC.nrrrc[instance];
+  uint32_t gNB_ue_ngap_id = cmd->gNB_ue_ngap_id;
   rrc_gNB_ue_context_t *ue_context_p = rrc_gNB_get_ue_context(rrc, gNB_ue_ngap_id);
 
   if (!ue_context_p) {
-    LOG_E(NR_RRC, "[gNB %ld] not found ue context gNB_ue_ngap_id %u \n", instance, gNB_ue_ngap_id);
+    LOG_E(NR_RRC, "[gNB %d] UE context not found for gNB_ue_ngap_id %u \n", rrc->module_id, gNB_ue_ngap_id);
     return -1;
   }
 
-  LOG_I(NR_RRC, "[gNB %ld] gNB_ue_ngap_id %u \n", instance, gNB_ue_ngap_id);
   gNB_RRC_UE_t *UE = &ue_context_p->ue_context;
-  LOG_I(
-      NR_RRC, "PDU Session Release Command: AMF_UE_NGAP_ID %lu  rrc_ue_id %u release_pdusessions %d \n", cmd->amf_ue_ngap_id, gNB_ue_ngap_id, cmd->nb_pdusessions_torelease);
-  bool found = false;
-  uint8_t xid = rrc_gNB_get_next_transaction_identifier(rrc->module_id);
-  UE->xids[xid] = RRC_PDUSESSION_RELEASE;
+  LOG_I(NR_RRC, "NG PDU Session Release command: AMF_UE_NGAP_ID=%lu, rrc_ue_id=%u, nb_pdusessions_torelease=%d \n",
+        cmd->amf_ue_ngap_id,
+        gNB_ue_ngap_id,
+        cmd->nb_pdusessions_torelease);
+  e1ap_bearer_mod_req_t req = {0};
   for (int pdusession = 0; pdusession < cmd->nb_pdusessions_torelease; pdusession++) {
-    rrc_pdu_session_param_t *pduSession = find_pduSession(&UE->pduSessions, cmd->pdusession_release_params[pdusession].pdusession_id);
+    rrc_pdu_session_param_t *pduSession = find_pduSession(&UE->pduSessions, cmd->pdusession_ids[pdusession]);
     if (!pduSession) {
-      LOG_E(NR_RRC, "Failed to release non-existing PDU Session %d\n", cmd->pdusession_release_params[pdusession].pdusession_id);
+      LOG_E(NR_RRC, "Failed to release non-existing PDU Session %d\n", cmd->pdusession_ids[pdusession]);
       continue;
     }
-    if (pduSession->status == PDU_SESSION_STATUS_FAILED) {
-      pduSession->xid = xid;
+    if (pduSession->status == PDU_SESSION_STATUS_TORELEASE) {
+      LOG_W(NR_RRC, "PDU Session %d already set to be released\n", pduSession->param.pdusession_id);
       continue;
     }
-    if (pduSession->status == PDU_SESSION_STATUS_ESTABLISHED) {
-      found = true;
-      LOG_I(NR_RRC, "RELEASE pdusession %d \n", pduSession->param.pdusession_id);
-      pduSession->status = PDU_SESSION_STATUS_TORELEASE;
-      pduSession->xid = xid;
-    }
+    // Set PDU session to release, regardless of the status
+    LOG_I(NR_RRC, "Set PDU Session %d to release\n", pduSession->param.pdusession_id);
+    pdu_session_to_remove_t *release = &req.pduSessionRem[req.numPDUSessionsRem++];
+    release->sessionId = pduSession->param.pdusession_id;
+    release->cause.type = E1AP_CAUSE_RADIO_NETWORK;
+    release->cause.value = E1AP_RADIO_CAUSE_NORMAL_RELEASE;
+    pduSession->status = PDU_SESSION_STATUS_TORELEASE;
   }
 
-  if (found) {
-    // TODO RRCReconfiguration To UE
-    LOG_I(NR_RRC, "Send RRCReconfiguration To UE \n");
-    rrc_gNB_generate_dedicatedRRCReconfiguration_release(rrc, UE, xid, cmd->nas_pdu.len, cmd->nas_pdu.buf);
+  if (req.numPDUSessionsRem == 0) {
+    LOG_E(NR_RRC, "Received NG PDU Session Release Command but no PDU Sessions to release\n");
+    return -1;
+  } else if (!ue_associated_to_cuup(rrc, UE)) {
+    LOG_E(NR_RRC, "UE %d is not associated to CU-UP\n", UE->rrc_ue_id);
+    // TODO handle, e.g., only trigger F1 release
+    return 0;
   } else {
-    // gtp tunnel delete
-    LOG_I(NR_RRC, "gtp tunnel delete all tunnels for UE %04x\n", UE->rnti);
-    gtpv1u_gnb_delete_tunnel_req_t req = {0};
-    req.ue_id = UE->rnti;
-    gtpv1u_delete_ngu_tunnel(rrc->module_id, &req);
-    // NGAP_PDUSESSION_RELEASE_RESPONSE
-    rrc_gNB_send_NGAP_PDUSESSION_RELEASE_RESPONSE(rrc, UE, xid);
-    LOG_I(NR_RRC, "Send PDU Session Release Response \n");
+    /* If present, store NAS-PDU in the UE context for later inclusion in RRCReconfiguration */
+    if (cmd->nas_pdu.len > 0) {
+      UE->nas_pdu = copy_byte_array(cmd->nas_pdu);
+    }
+    LOG_I(NR_RRC, "Send F1 Bearer Context Modification Request with PDU Session release \n");
+    req.gNB_cu_cp_ue_id = UE->rrc_ue_id;
+    req.gNB_cu_up_ue_id = UE->rrc_ue_id;
+    sctp_assoc_t assoc_id = get_existing_cuup_for_ue(rrc, UE);
+    rrc->cucp_cuup.bearer_context_mod(assoc_id, &req);
   }
+  init_delayed_action(&UE->delayed_action);
   return 0;
 }
 
@@ -1662,7 +1649,7 @@ void rrc_gNB_send_NGAP_HANDOVER_REQUIRED(gNB_RRC_INST *rrc,
   msg.source2target->ue_history_info.cause->type = NGAP_CAUSE_RADIO_NETWORK;
   msg.source2target->ue_history_info.cause->value = NGAP_CAUSE_RADIO_NETWORK_HANDOVER_DESIRABLE_FOR_RADIO_REASON;
   msg.source2target->ue_history_info.type = NGAP_CellSize_small;
-  msg.source2target->ue_history_info.time_in_cell = 500; // dummy number for now
+  msg.source2target->ue_history_info.time_in_cell = min(time(NULL) - UE->last_seen, 4095);
   msg.source2target->ue_history_info.id = target_cell;
 
   /* Fill both PDU Session Resource List IE (M) in Handover Required

@@ -79,6 +79,16 @@ int oai_nfapi_ul_config_req(nfapi_ul_config_request_t *ul_config_req)
   return (0);
 }
 
+void stop_nr_nfapi_vnf()
+{
+  abort();
+}
+
+void stop_nr_nfapi_pnf()
+{
+  abort();
+}
+
 void fill_scc_sim(NR_ServingCellConfigCommon_t *scc, uint64_t *ssb_bitmap, int N_RB_DL, int N_RB_UL, int mu_dl, int mu_ul);
 void fix_scc(NR_ServingCellConfigCommon_t *scc, uint64_t ssbmap);
 void prepare_scc(NR_ServingCellConfigCommon_t *scc);

@@ -387,6 +387,18 @@ int nfapi_pnf_stop_resp(nfapi_pnf_config_t* config, nfapi_stop_response_t* resp)
 	return pnf_pack_and_send_p5_message(_this, &(resp->header), sizeof(nfapi_stop_response_t));
 }
 
+int nfapi_nr_stop_indication(nfapi_pnf_config_t* config, nfapi_nr_stop_indication_scf_t* resp)
+{
+  if (config == NULL || resp == NULL) {
+    NFAPI_TRACE(NFAPI_TRACE_ERROR, "%s: NULL parameters\n", __FUNCTION__);
+    return -1;
+  }
+
+  pnf_t* _this = (pnf_t*)(config);
+  AssertFatal(config->send_p5_msg, "Function pointer must be configured|");
+  return config->send_p5_msg(_this, &(resp->header), sizeof(nfapi_nr_stop_indication_scf_t));
+}
+
 int nfapi_pnf_measurement_resp(nfapi_pnf_config_t* config, nfapi_measurement_response_t* resp)
 {
 	if (config == NULL || resp == NULL)

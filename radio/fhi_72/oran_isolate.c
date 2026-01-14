@@ -31,6 +31,7 @@
 #include "common/utils/LOG/log.h"
 #include "common/utils/LOG/vcd_signal_dumper.h"
 #include "openair1/PHY/defs_gNB.h"
+#include "openair1/PHY/NR_TRANSPORT/nr_transport_proto.h"
 #include "oaioran.h"
 #include "oran-config.h"
 
@@ -85,6 +86,7 @@ int trx_oran_stop(openair0_device *device)
 #ifdef OAI_MPLANE
   printf("[MPLANE] Stopping M-plane.\n");
   disconnect_mplane(s->mplane_priv);
+  free(s->mplane_priv);
 #endif
   return (0);
 }
@@ -212,10 +214,15 @@ int trx_oran_ctlrecv(openair0_device *device, void *msg, ssize_t msg_len)
 
 void oran_fh_if4p5_south_in(RU_t *ru, int *frame, int *slot)
 {
-  ru_info_t ru_info;
-  ru_info.nb_rx = ru->nb_rx * ru->num_beams_period;
-  ru_info.rxdataF = ru->common.rxdataF;
-  ru_info.prach_buf = ru->prach_rxsigF[0]; // index: [prach_oca][ant_id]
+  prach_item_t *prach_id = find_nr_prach(&ru->gNB_list[0]->prach_list, *frame, *slot, SEARCH_EXIST);
+  ru_info_t ru_info = {
+      .nb_rx = ru->nb_rx * ru->num_beams_period,
+      .nb_tx = ru->nb_tx * ru->num_beams_period,
+      .rxdataF = ru->common.rxdataF,
+      .beam_id = ru->common.beam_id,
+      .num_beams_period = ru->num_beams_period,
+      .prach_buf = prach_id ? prach_id->rxsigF : NULL,
+  };
 
   RU_proc_t *proc = &ru->proc;
   int f, sl;
@@ -266,9 +273,14 @@ void oran_fh_if4p5_south_in(RU_t *ru, int *frame, int *slot)
 void oran_fh_if4p5_south_out(RU_t *ru, int frame, int slot, uint64_t timestamp)
 {
   start_meas(&ru->tx_fhaul);
-  ru_info_t ru_info;
-  ru_info.nb_tx = ru->nb_tx * ru->num_beams_period;
-  ru_info.txdataF_BF = ru->common.txdataF_BF;
+  ru_info_t ru_info = {
+      .nb_rx = ru->nb_rx * ru->num_beams_period,
+      .nb_tx = ru->nb_tx * ru->num_beams_period,
+      .txdataF_BF = ru->common.txdataF_BF,
+      .beam_id = ru->common.beam_id,
+      .num_beams_period = ru->num_beams_period,
+  };
+
   // printf("south_out:\tframe=%d\tslot=%d\ttimestamp=%ld\n",frame,slot,timestamp);
 
   int ret = xran_fh_tx_send_slot(&ru_info, frame, slot, timestamp);
@@ -301,41 +313,42 @@ __attribute__((__visibility__("default"))) int transport_init(openair0_device *d
 
   bool success = false;
 #ifdef OAI_MPLANE
-  ru_session_list_t ru_session_list = {0};
-  success = init_mplane(&ru_session_list);
+  ru_session_list_t *ru_session_list = calloc(1, sizeof(*ru_session_list));
+  assert(ru_session_list != NULL && "Memory exhausted");
+  success = init_mplane(ru_session_list);
   AssertFatal(success, "[MPLANE] Cannot initialize M-plane.\n");
 
-  bool ru_configured[ru_session_list.num_rus];
-  for (size_t i = 0; i < ru_session_list.num_rus; i++) {
-    ru_session_t *ru_session = &ru_session_list.ru_session[i];
+  bool ru_configured[ru_session_list->num_rus];
+  for (size_t i = 0; i < ru_session_list->num_rus; i++) {
+    ru_session_t *ru_session = &ru_session_list->ru_session[i];
     ru_configured[i] = connect_mplane(ru_session);
     if (!ru_configured[i]) {
       continue;
     }
-    ru_configured[i] = manage_ru(ru_session, openair0_cfg, ru_session_list.num_rus);
+    ru_configured[i] = manage_ru(ru_session, openair0_cfg, ru_session_list->num_rus);
   }
 
   bool all_ok = true;
-  bool ru_ready[ru_session_list.num_rus];
-  for (size_t i = 0; i < ru_session_list.num_rus; i++) {
+  bool ru_ready[ru_session_list->num_rus];
+  for (size_t i = 0; i < ru_session_list->num_rus; i++) {
     if (!ru_configured[i]) {
-      MP_LOG_I("RU with IP %s couldn't be configured.\n", ru_session_list.ru_session[i].ru_ip_add);
+      MP_LOG_I("RU with IP %s couldn't be configured.\n", ru_session_list->ru_session[i].ru_ip_add);
       all_ok = false;
     }
     ru_ready[i] = false;
   }
 
   if (!all_ok) {
-    disconnect_mplane((void *)&ru_session_list);
+    disconnect_mplane(ru_session_list);
     AssertFatal(false, "[MPLANE] Stopping M-plane.\n");
   }
 
   while (true) {
     sleep(1);
     bool all_rus_ready = true;
-    for (int i = 0; i < ru_session_list.num_rus; i++) {
-      ru_session_t *ru_session = &ru_session_list.ru_session[i];
-      if (!ru_ready[i] && ru_session->ru_notif.config_change && ru_session->ru_notif.rx_carrier_state && ru_session->ru_notif.tx_carrier_state) {
+    for (int i = 0; i < ru_session_list->num_rus; i++) {
+      ru_session_t *ru_session = &ru_session_list->ru_session[i];
+      if (!ru_ready[i] && ru_session->ru_notif.config_change && !ru_session->ru_notif.rx_carrier_state && !ru_session->ru_notif.tx_carrier_state) {
         MP_LOG_I("RU \"%s\" is now ready.\n", ru_session->ru_ip_add);
         ru_ready[i] = true;
         if (!ru_session->pm_stats.start_up_timing) {
@@ -353,9 +366,9 @@ __attribute__((__visibility__("default"))) int transport_init(openair0_device *d
     }
   }
 
-  eth->mplane_priv = (void *)&ru_session_list;
+  eth->mplane_priv = ru_session_list;
 
-  success = get_xran_config((void *)&ru_session_list, openair0_cfg, &fh_init, fh_config);
+  success = get_xran_config(ru_session_list, openair0_cfg, &fh_init, fh_config);
   AssertFatal(success, "[MPLANE] Cannot configure xran with M-plane info.\n");
 #else
   success = get_xran_config(NULL, openair0_cfg, &fh_init, fh_config);

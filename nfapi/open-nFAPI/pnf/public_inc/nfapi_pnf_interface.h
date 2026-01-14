@@ -497,6 +497,14 @@ int nfapi_nr_pnf_start_resp(nfapi_pnf_config_t* config, nfapi_nr_start_response_
  */
 int nfapi_pnf_stop_resp(nfapi_pnf_config_t* config, nfapi_stop_response_t* resp);
 
+/*! Send the STOP.indication
+ * \param config A pointer to a pnf configuration
+ * \param resp A pointer to the message structure
+ * \return 0 for success, -1 for failure
+ *
+ */
+int nfapi_nr_stop_indication(nfapi_pnf_config_t* config, nfapi_nr_stop_indication_scf_t* resp);
+
 /*! Send the MEASUREMENT.response
  * \param config A pointer to a pnf configuraiton
  * \param resp A pointer to the message structure
@@ -856,7 +864,7 @@ int nfapi_pnf_p7_start(nfapi_pnf_p7_config_t* config);
  */
 int nfapi_pnf_p7_stop(nfapi_pnf_p7_config_t* config);
 
-/*! NR Slot indication
+/*! NR get stuff
  * message copied from nfapi_pnf_p7_subframe_ind
  * \param config A pointer to a PNF P7 config
  * \param phy_id The phy_id for the phy instance
@@ -868,8 +876,14 @@ int nfapi_pnf_p7_stop(nfapi_pnf_p7_config_t* config);
  *
  * If messages are not in the subframe buffer, they dummy subframe messages will be sent
  */
-int nfapi_pnf_p7_slot_ind(nfapi_pnf_p7_config_t* config, uint16_t phy_id, uint16_t sfn, uint16_t slot);
-
+int nfapi_pnf_p7_get_msgs(nfapi_pnf_p7_config_t* config,
+                          uint16_t phy_id,
+                          uint16_t sfn,
+                          uint16_t slot,
+                          nfapi_nr_dl_tti_request_t* ret_dl_tti,
+                          nfapi_nr_ul_tti_request_t* ret_ul_tti,
+                          nfapi_nr_ul_dci_request_t* ret_ul_dci,
+                          nfapi_nr_tx_data_request_t* ret_tx_data);
 
 /*! Subframe indication
  * \param config A pointer to a PNF P7 config

@@ -84,12 +84,20 @@ pipeline {
             sh "docker login -u ${DH_Username} -p ${DH_Password} > /dev/null 2>&1"
             sh "docker login -u oaicicd -p oaicicd ${OAI_Registry} > /dev/null 2>&1"
             listOfImages.eachWithIndex { item, iindex ->
-              sh "docker pull --quiet ${OAI_Registry}/${item}:develop-${WEEK_SHA}"
-              sh "docker image tag ${OAI_Registry}/${item}:develop-${WEEK_SHA} ${DH_Account}/${item}:develop"
-              sh "docker image tag ${OAI_Registry}/${item}:develop-${WEEK_SHA} ${DH_Account}/${item}:${WEEK_TAG}"
-              sh "docker push --quiet ${DH_Account}/${item}:${WEEK_TAG}"
-              sh "docker push --quiet ${DH_Account}/${item}:develop"
-              sh "docker rmi ${DH_Account}/${item}:${WEEK_TAG} ${DH_Account}/${item}:develop ${OAI_Registry}/${item}:develop-${WEEK_SHA}"
+              if (["oai-gnb", "oai-nr-ue", "oai-nr-cuup"].contains(item)) {
+                // For images built on AMD64 and ARMv8 Jetson
+                echo "Pushing image '${item}' for both AMD64 and ARM64 architectures with tags: ${WEEK_TAG} and develop"
+                sh "docker rmi ${DH_Account}/${item}:${WEEK_TAG} ${DH_Account}/${item}:develop || true"
+                sh "docker buildx imagetools create --tag ${DH_Account}/${item}:${WEEK_TAG} ${OAI_Registry}/${item}:armv8_develop-${WEEK_SHA} ${OAI_Registry}/${item}:develop-${WEEK_SHA}"
+                sh "docker buildx imagetools create --tag ${DH_Account}/${item}:develop ${OAI_Registry}/${item}:armv8_develop-${WEEK_SHA} ${OAI_Registry}/${item}:develop-${WEEK_SHA}"
+              } else {
+                sh "docker pull --quiet ${OAI_Registry}/${item}:develop-${WEEK_SHA}"
+                sh "docker image tag ${OAI_Registry}/${item}:develop-${WEEK_SHA} ${DH_Account}/${item}:develop"
+                sh "docker image tag ${OAI_Registry}/${item}:develop-${WEEK_SHA} ${DH_Account}/${item}:${WEEK_TAG}"
+                sh "docker push --quiet ${DH_Account}/${item}:develop"
+                sh "docker push --quiet ${DH_Account}/${item}:${WEEK_TAG}"
+              }
+              sh "docker rmi ${DH_Account}/${item}:${WEEK_TAG} ${DH_Account}/${item}:develop ${OAI_Registry}/${item}:develop-${WEEK_SHA} || true"
             }
             // Proxy is not following the same pattern.
             sh "docker image tag proxy:develop ${DH_Account}/proxy:develop"

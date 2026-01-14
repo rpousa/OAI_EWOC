@@ -29,9 +29,9 @@ The following features are valid for the gNB and the 5G-NR UE.
 *  Static FDD
 *  Normal CP
 *  Subcarrier spacings: 15 and 30kHz (FR1), 120kHz (FR2)
-*  Bandwidths: 10, 20, 40, 60, 80, 100MHz
+*  Bandwidths: 5-100MHz (FR1), 100 and 200MHz (FR2)
 *  Intermediate downlink and uplink frequencies to interface with IF equipment
-*  Procedures for 2-layer DL and UL MIMO
+*  Procedures for 4-layer DL and 2-layer UL SU-MIMO
 *  Slot format: 14 OFDM symbols in UL or DL
 *  Highly efficient 3GPP compliant LDPC encoder and decoder (BG1 and BG2 supported)
 *  Highly efficient 3GPP compliant polar encoder and decoder
@@ -47,7 +47,7 @@ These modes of operation are supported:
 * "noS1" mode (DL and UL, gNB, nrUE):
   - Connection setup stops after RA; RRC configuration is exchanged through
     files
-  - Creates TUN interface to PDCP to inject and receive user-place traffic
+  - Creates TUN interface to SDAP to inject and receive user-place traffic
   - No connection to the core network
 * Standalone (SA) mode (gNB, nrUE):
   - UE can register with the 5G Core Network through the gNB, establish a PDU
@@ -73,7 +73,7 @@ These modes of operation are supported:
    - Single and multiple DMRS symbols
    - PTRS support
    - Support for up to 4 TX antennas
-   - Support for up to 2 layers
+   - Support for up to 4 layers
    - Support for 256 QAM
 *  NR-CSIRS Generation of sequence at PHY
 *  NR-PUSCH (including Segmentation, LDPC encoding, rate matching, scrambling, modulation, RB mapping, etc).
@@ -104,7 +104,9 @@ These modes of operation are supported:
 ## gNB MAC
 
 - MAC -> PHY configuration using NR FAPI P5 interface
-- MAC <-> PHY data interface using FAPI P7 interface for BCH PDU, DCI PDU, PDSCH PDU
+- MAC <-> PHY data interface using FAPI P7 interface for DL_TTI.request,
+  UL_TTI.request, UL_DCI.request, TX_data.request, RX_Data.indication,
+  CRC.indication, UCI.indication, SRS.indication
 - Generation of and scheduler procedures for MIB/SIB1
 - Scheduler procedures for RA
     - 4-Step RA
@@ -123,13 +125,14 @@ These modes of operation are supported:
 - MAC downlink scheduler
   - phy-test scheduler (fixed allocation and usable also without UE)
   - regular scheduler with dynamic proportionally-fair allocation
-  - MCS adaptation from HARQ BLER
+  - MCS adaptation from HARQ BLER or SSB-SINR report
 - MAC header generation (including timing advance)
-- ACK / NACK handling and HARQ procedures for downlink
+- ACK/NACK handling and HARQ procedures for downlink
 - MAC uplink scheduler
   - phy-test scheduler (fixed allocation)
   - regular scheduler with dynamic proportionally-fair allocation
   - HARQ procedures for uplink
+  - MCS adaption from HARQ BLER or PUSCH SINR
 - Scheduler procedures for SRS reception
   - Periodic SRS reception
   - Channel rank computation up to 2x2 scenario
@@ -144,7 +147,15 @@ These modes of operation are supported:
       neighbors include cells operating on different frequencies
     - DUs must be synchronized with each other for the measurements to be properly performed
 - Initial support for RedCap
-- Scheduling of SIBs (2, 19)
+  - RedCap SIB1 v17 IEs supported
+  - Coexistence of RedCap and Normal UEs
+  - Handling of RedCap capability for small PDCP/RLC SN size
+- Scheduling of other SIBs (2, 19)
+- NTN
+  - Support downlinkHARQ-FeedbackDisabled-r17
+  - Support for 32 PDSCH and PUSCH HARQ processes per UE
+  - Consider ntn-Config-r17.cellSpecificKoffset-r17 in scheduling
+  - Function-based interface for ntn-Config-r17 updates (used by NTN-LEO RFsimulator)
 
 ## gNB RLC
 
@@ -180,7 +191,7 @@ These modes of operation are supported:
 - NR RRC (38.331) Rel 17 messages using new [asn1c](https://github.com/mouse07410/asn1c)
 - LTE RRC (36.331) also updated to Rel 15
 - Generation of system information (SIB2)
-- RRC can configure PDCP, RLC, MAC
+- RRC can configure PDCP and SDAP (through E1), and RLC and MAC (through F1)
 - Interface with GTP-U (tunnel creation/handling for S1-U (NSA), N3 (SA), F1 interfaces)
 - Integration of RRC messages and procedures supporting UE 5G SA connection
   - RRCSetupRequest/RRCSetup/RRCSetupComplete
@@ -190,8 +201,17 @@ These modes of operation are supported:
   - Support for MasterCellGroup configuration (from DU)
   - Interface with NGAP for the interactions with the AMF
   - Interface with F1AP for CU/DU split deployment option
-  - Periodic RRC measurements of serving cell (no A/B events)
-- Initial support for RedCap
+  - Interface with E1AP for CU-CP/CU-CP split deployment option
+  - Periodic RRC measurements of serving/neighbour cells and A2/A3 event
+    handling
+- RRC Mobility Management Procedures:
+  - Inter-DU Handover (F1-based handover within same CU)
+  - Inter-gNB Handover (N2-based handover between different gNBs)
+  - Handover Preparation Information generation and processing
+  - Handover Command generation and processing
+  - PDCP Status transfer procedures
+  - Support for handover decision triggers (A3 events, manual triggers)
+- Initial support for RedCap (see MAC)
 
 ## gNB X2AP
 
@@ -209,6 +229,16 @@ These modes of operation are supported:
   - NGAP UE context release request/complete
   - NGAP UE radio capability info indication
   - NGAP PDU session resource setup request/response
+  - NGAP Mobility Management Procedures:
+    * NGAP Handover Required
+    * NGAP Handover Request
+    * NGAP Handover Request Acknowledge
+    * NGAP Handover Command
+    * NGAP Handover Notify
+    * NGAP Handover Cancel
+    * NGAP Handover Cancel Acknowledge
+    * NGAP Uplink RAN Status Transfer
+    * NGAP Downlink RAN Status Transfer
 - Interface with RRC
 
 ## gNB F1AP
@@ -226,7 +256,10 @@ These modes of operation are supported:
     * F1 UE Context modification required
     * F1 UE Context release req/cmd/complete
   - F1 gNB CU configuration update
+  - F1 gNB DU configuration update
   - F1 Reset (handled at DU only, full reset only)
+  - F1 Mobility Management Procedures:
+    * F1 Intra-CU Handover (Inter-DU mobility)
 - Interface with RRC
 - Interface with GTP-u (tunnel creation/handling for F1-U interface)
 - One CU(-CP) can handle multiple DUs
@@ -245,7 +278,8 @@ These modes of operation are supported:
   - Bearer Context Modification (gNB-CU-CP initiated)
       - E1 Bearer Context Modification Request
       - E1 Bearer Context Modification Response
-- Interface with RRC and PDCP
+  - E1 Reset
+- Interface with RRC and PDCP/SDAP
 - One CU-CP can handle multiple CU-UPs
 
 ## gNB GTP-U
@@ -268,7 +302,8 @@ These modes of operation are supported:
    - non-blind synchronization (information required: carrier frequency, bandwidth, numerology)
    - option to search SSB inside the bandwidth available
 *  Time tracking based on PBCH DMRS
-*  Frequency offset estimation based on PSS and SSS
+*  Initial Frequency offset estimation based on PSS and SSS
+*  Continuous Frequency offset estimation and compensation based on PBCH DMRS
 *  15kHz and 30kHz SCS for FR1 and 120 kHz SCS for FR2
 *  Reception of NR-PSS/NR-SSS
 *  NR-PBCH supports multiple SSBs and flexible periodicity
@@ -279,6 +314,7 @@ These modes of operation are supported:
    - DCI formats: 00, 10, 01 and 11
 *  Reception of NR-PDSCH (including Segmentation, LDPC decoding, rate de-matching, de-scrambling, de-modulation, RB de-mapping, etc).
    - PDSCH mapping type A and B
+   - Downlink resource allocation type 0 and 1
    - DMRS configuration type 1 and 2
    - Single and multiple DMRS symbols
    - PTRS support
@@ -298,6 +334,7 @@ These modes of operation are supported:
    - Support for 256 QAM
    - Support for up to 2 TX antenna
    - Support for up to 2 layers
+   - Support for UCI on PUSCH
 *  NR-PUCCH
    - Format 0 (2 bits for ACK/NACK and SR)
    - Format 2 (mainly for CSI feedback)
@@ -313,6 +350,13 @@ These modes of operation are supported:
    - Support for multiple gNB reception with gNBs synced via GPSDO
 * NR-PRACH
    - Formats 0,1,2,3, A1-A3, B1-B3
+* NTN
+   - TA adjustemt based on ntn-Config-r17 information
+   - Different TA adjustemt algorithms between SIB19 receptions:
+      - Autonomous TA adjustemt based on DL time tracking
+      - Standard compliant epoch time based TA adjustment including orbital propagation
+   - DL Doppler compensation based on ntn-Config-r17 information
+   - UL Doppler pre-compensation based on ntn-Config-r17 information and residual DL FO estimation
 *  Highly efficient 3GPP compliant LDPC encoder and decoder (BG1 and BG2 are supported)
 *  Highly efficient 3GPP compliant polar encoder and decoder
 *  Encoder and decoder for short block
@@ -330,6 +374,8 @@ These modes of operation are supported:
 * Minimum system information (MSI)
    - MIB processing
    - Scheduling of system information block 1 (SIB1) reception
+* Other system information
+   - Scheduling of other system information blocks reception
 * Random access procedure (needs improvement, there is still not a clear separation between MAC and PHY)
    - Mapping SSBs to multiple ROs
    - Scheduling of PRACH
@@ -366,6 +412,10 @@ These modes of operation are supported:
    - Periodic and aperiodic SRS transmission
 * Bandwidth part (BWP) operation
    - Operation in configured dedicated BWP through RRCSetup or RRCReconfiguration
+* NTN
+   - Support downlinkHARQ-FeedbackDisabled-r17
+   - Support for 32 PDSCH and PUSCH HARQ processes
+   - Consider ntn-Config-r17.cellSpecificKoffset-r17 in scheduling
 
 
 ## UE RLC
@@ -398,25 +448,41 @@ These modes of operation are supported:
 
 * Integration of RRC messages and procedures supporting UE 5G SA connection according to 38.331 Rel.16
    - RRCSetupRequest/RRCSetup/RRCSetupComplete
+   - RRCReject
+   - RRCRelease/ RRC going to IDLE
    - RRC Uplink/Downlink Information transfer carrying NAS messages transparently
    - RRC Reconfiguration/Reconfiguration complete
+   - RRCSetup fallback (after reestablishment)
    - RRCReestablishmentRequest/RRC Reestablishment/Reestablishment complete
    - Support for master cell group configuration
    - Reception of UECapabilityEnquiry, encoding and transmission of UECapability
+* NTN according to 38.331 Rel.17
+   - Reception of ntn-Config-r17 from SIB19 or reconfigurationWithSync
+   - Handling of ntn-UlSyncValidityDuration-r17 in SIB19
 * Interface with PDCP: configuration, DCCH and CCCH message handling
 * Interface with RLC and MAC for configuration
 
-## UE NAS
+## UE 5G NAS
 
-* Transfer of NAS messages between the AMF and the UE supporting the UE registration with the core network and the PDU session  establishment according to 24.501 Rel.16
+* Transfer of NAS messages between the AMF and the UE supporting the UE registration with the core network and the PDU session establishment according to 24.501 Rel.16
+* 5GMM (5G Mobility Management) messages:
+  - Service Request/Accept/Reject (enc/dec library only)
   - Identity Request/Response
   - Authentication Request/Response
   - Security Mode Command/Complete
   - Registration Request/Accept/Complete
+  - Deregistration Request (UE originating)
+  - Uplink NAS Transport
+* 5GSM (5G Session Management) messages:
   - PDU Session Establishment Request/Accept
-  - NAS configuration and basic interfacing with RRC
+* Security Features:
+  - NAS message integrity protection and ciphering
+  - Security context establishment and management
+* Integration:
+  - NAS configuration and interfacing with RRC
+  - Integration with SDAP for user plane data transfer
 
-
+For detailed implementation status, encoding/decoding support, and unit test coverage, see [5G NAS Implementation Documentation](5Gnas.md).
 
 # OpenAirInterface 4G LTE eNB Feature Set #
 

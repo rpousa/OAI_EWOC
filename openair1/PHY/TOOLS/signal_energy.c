@@ -27,8 +27,6 @@
 // length : length of vector in complex samples
 
 #define shift 4
-//#define shift_DC 0
-//#define SHRT_MIN -32768
 
 //-----------------------------------------------------------------
 // Average Power calculation with DC removing

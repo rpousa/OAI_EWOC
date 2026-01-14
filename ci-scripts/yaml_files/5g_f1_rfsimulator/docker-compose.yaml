@@ -92,7 +92,7 @@ services:
             retries: 5
 
     oai-cu:
-        image: ${REGISTRY:-oaisoftwarealliance}/${GNB_IMG:-oai-gnb}:${TAG:-develop}
+        image: ${REGISTRY-oaisoftwarealliance/}${GNB_IMG:-oai-gnb}:${TAG:-develop}
         container_name: rfsim5g-oai-cu
         cap_drop:
             - ALL
@@ -121,7 +121,7 @@ services:
             retries: 5
 
     oai-du-pci0:
-        image: ${REGISTRY:-oaisoftwarealliance}/${GNB_IMG:-oai-gnb}:${TAG:-develop}
+        image: ${REGISTRY-oaisoftwarealliance/}${GNB_IMG:-oai-gnb}:${TAG:-develop}
         container_name: rfsim5g-oai-du-pci0
         cap_drop:
             - ALL
@@ -152,7 +152,7 @@ services:
             retries: 5
 
     oai-du-pci1:
-        image: ${REGISTRY:-oaisoftwarealliance}/${GNB_IMG:-oai-gnb}:${TAG:-develop}
+        image: ${REGISTRY-oaisoftwarealliance/}${GNB_IMG:-oai-gnb}:${TAG:-develop}
         container_name: rfsim5g-oai-du-pci1
         cap_drop:
             - ALL
@@ -187,7 +187,7 @@ services:
             retries: 5
 
     oai-nr-ue:
-        image: ${REGISTRY:-oaisoftwarealliance}/${NRUE_IMG:-oai-nr-ue}:${TAG:-develop}
+        image: ${REGISTRY-oaisoftwarealliance/}${NRUE_IMG:-oai-nr-ue}:${TAG:-develop}
         container_name: rfsim5g-oai-nr-ue
         cap_drop:
             - ALL

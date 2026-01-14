@@ -125,7 +125,7 @@ int main(int argc, char *argv[])
   cpu_meas_enabled = 1;
   reset_meas(&timeEncoder);
   reset_meas(&timeDecoder);
-  randominit(0);
+  randominit();
   crcTableInit();
 
   if (polarMessageType == 0) { // PBCH

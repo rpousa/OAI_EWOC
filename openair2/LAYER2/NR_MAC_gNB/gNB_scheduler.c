@@ -59,13 +59,7 @@ uint8_t nr_get_rv(int rel_round)
   return nr_rv_round_map[rel_round];
 }
 
-void clear_nr_nfapi_information(gNB_MAC_INST *gNB,
-                                int CC_idP,
-                                frame_t frameP,
-                                slot_t slotP,
-                                nfapi_nr_dl_tti_request_t *DL_req,
-                                nfapi_nr_tx_data_request_t *TX_req,
-                                nfapi_nr_ul_dci_request_t *UL_dci_req)
+void clear_nr_nfapi_information(gNB_MAC_INST *gNB, int CC_idP, frame_t frameP, slot_t slotP)
 {
   /* called below and in simulators, so we assume a lock but don't require it */
   const int num_slots = gNB->frame_structure.numb_slots_frame;
@@ -75,15 +69,7 @@ void clear_nr_nfapi_information(gNB_MAC_INST *gNB,
 
   gNB->pdu_index[CC_idP] = 0;
 
-  DL_req[CC_idP].SFN = frameP;
-  DL_req[CC_idP].Slot = slotP;
-  DL_req[CC_idP].dl_tti_request_body.nPDUs             = 0;
-  DL_req[CC_idP].dl_tti_request_body.nGroup = 0;
   memset(pdcch, 0, sizeof(*pdcch) * MAX_NUM_CORESET);
-
-  UL_dci_req[CC_idP].SFN = frameP;
-  UL_dci_req[CC_idP].Slot = slotP;
-  UL_dci_req[CC_idP].numPdus = 0;
 
   /* advance last round's future UL_tti_req to be ahead of current frame/slot */
   const int size = gNB->UL_tti_req_ahead_size;
@@ -100,8 +86,6 @@ void clear_nr_nfapi_information(gNB_MAC_INST *gNB,
   future_ul_tti_req->n_ulsch = 0;
   future_ul_tti_req->n_ulcch = 0;
   future_ul_tti_req->n_group = 0;
-
-  TX_req[CC_idP].Number_of_PDUs = 0;
 }
 
 static void clear_beam_information(NR_beam_info_t *beam_info, int frame, int slot, int slots_per_frame)
@@ -191,14 +175,27 @@ void gNB_dlsch_ulsch_scheduler(module_id_t module_idP, frame_t frame, slot_t slo
       uint16_t *vrb_map_UL = cc[CC_id].vrb_map_UL[i];
       memcpy(&vrb_map_UL[prev_slot % size * MAX_BWP_SIZE], &gNB->ulprbbl, sizeof(uint16_t) * MAX_BWP_SIZE);
     }
-    clear_nr_nfapi_information(gNB, CC_id, frame, slot, &sched_info->DL_req, &sched_info->TX_req, &sched_info->UL_dci_req);
+    clear_nr_nfapi_information(gNB, CC_id, frame, slot);
   }
 
   bool wait_prach_completed = gNB->num_scheduled_prach_rx >= NUM_PRACH_RX_FOR_NOISE_ESTIMATE;
-  if ((wait_prach_completed || get_softmodem_params()->phy_test) && (slot == 0) && (frame & 127) == 0) {
+  if (gNB->print_ue_stats && (wait_prach_completed || get_softmodem_params()->phy_test) && (slot == 0) && (frame & 127) == 0) {
     char stats_output[32656] = {0};
     dump_mac_stats(gNB, stats_output, sizeof(stats_output), true);
     LOG_I(NR_MAC, "Frame.Slot %d.%d\n%s\n", frame, slot, stats_output);
+
+    // TODO: this should be replaced with a size() operation on connected_ue_list
+    int num_ue = 0;
+    UE_iterator(gNB->UE_info.connected_ue_list, it) {
+      (void) it; // not used
+      num_ue++;
+    }
+    if (gNB->print_ue_stats && num_ue > gNB->stats_max_ue) {
+      gNB->print_ue_stats = false;
+      LOG_W(NR_MAC,
+            "periodical UE stats deactivated after reaching %d UEs, please check nrMAC_stats.log, or increase MACRLCs.[0].stats_max_ue\n",
+            gNB->stats_max_ue);
+    }
   }
 
   nr_measgap_scheduling(gNB, frame, slot);

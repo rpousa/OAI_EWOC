@@ -53,7 +53,7 @@ void set_tdd_config_nr(nfapi_nr_config_request_scf_t *cfg, frame_structure_t *fs
  *  @param nr_slot  : slot number
     @returns int : downlink, uplink or mixed slot type*/
 
-int nr_slot_select(nfapi_nr_config_request_scf_t *cfg, int nr_frame, int nr_slot);
+int nr_slot_select(const nfapi_nr_config_request_scf_t *cfg, int nr_frame, int nr_slot);
 
 void do_tdd_config_sim(PHY_VARS_gNB *gNB, int mu);
 

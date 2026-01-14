@@ -37,9 +37,7 @@ typedef struct nssai_s {
 
 // Globally Unique AMF Identifier
 typedef struct nr_guami_s {
-  uint16_t mcc;
-  uint16_t mnc;
-  uint8_t mnc_len;
+  plmn_id_t plmn;
   uint8_t amf_region_id;
   uint16_t amf_set_id;
   uint8_t amf_pointer;

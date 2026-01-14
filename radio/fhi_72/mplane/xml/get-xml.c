@@ -23,8 +23,9 @@
 
 #include <libxml/parser.h>
 #include <string.h>
+#include <stdlib.h>
 
-static char *find_ru_xml_node(xmlNode *node, const char *filter)
+static xmlChar *find_ru_xml_node(xmlNode *node, const char *filter)
 {
   for (xmlNode *cur_node = node; cur_node; cur_node = cur_node->next) {
     if (cur_node->type != XML_ELEMENT_NODE)
@@ -39,9 +40,9 @@ static char *find_ru_xml_node(xmlNode *node, const char *filter)
           break;
         }
       }
-      return (char *)xmlNodeGetContent(target_node);
+      return xmlNodeGetContent(target_node);
     }
-    char *answer = find_ru_xml_node(cur_node->children, filter);
+    xmlChar *answer = find_ru_xml_node(cur_node->children, filter);
     if (answer != NULL) {
       return answer;
     }
@@ -56,7 +57,13 @@ char *get_ru_xml_node(const char *buffer, const char *filter)
   xmlDoc *doc = xmlReadMemory(buffer, len, NULL, NULL, 0);
   xmlNode *root_element = xmlDocGetRootElement(doc);
 
-  return find_ru_xml_node(root_element->children, filter);
+  xmlChar *content = find_ru_xml_node(root_element->children, filter);
+
+  char *value = strdup((char *)content);
+  xmlFree(content);
+  xmlFreeDoc(doc);
+
+  return value;
 }
 
 static void find_ru_xml_list(xmlNode *node, const char *filter, char ***match_list, size_t *count)
@@ -74,11 +81,12 @@ static void find_ru_xml_list(xmlNode *node, const char *filter, char ***match_li
           break;
         }
       }
-      const char *content = (const char *)xmlNodeGetContent(name_node ? name_node : cur_node);
+      xmlChar *content = xmlNodeGetContent(name_node ? name_node : cur_node);
       if (content) {
         *match_list = realloc(*match_list, (*count + 1) * sizeof(char *));
-        (*match_list)[*count] = strdup(content);
+        (*match_list)[*count] = strdup((char *)content);
         (*count)++;
+	xmlFree(content);
       }
     }
     find_ru_xml_list(cur_node->children, filter, match_list, count);
@@ -93,4 +101,6 @@ void get_ru_xml_list(const char *buffer, const char *filter, char ***match_list,
   xmlNode *root_element = xmlDocGetRootElement(doc);
 
   find_ru_xml_list(root_element->children, filter, match_list, count);
+
+  xmlFreeDoc(doc);
 }

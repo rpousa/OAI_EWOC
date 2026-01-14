@@ -84,7 +84,7 @@ services:
             retries: 5
 
     oai-cucp-0:
-        image: ${REGISTRY:-oaisoftwarealliance}/${GNB_IMG:-oai-gnb}:${TAG:-develop}
+        image: ${REGISTRY-oaisoftwarealliance/}${GNB_IMG:-oai-gnb}:${TAG:-develop}
         container_name: rfsim5g-oai-cucp-0
         cap_drop:
             - ALL
@@ -111,7 +111,7 @@ services:
             retries: 5
 
     oai-cuup-0:
-        image: ${REGISTRY:-oaisoftwarealliance}/${NRCUUP_IMG:-oai-nr-cuup}:${TAG:-develop}
+        image: ${REGISTRY-oaisoftwarealliance/}${NRCUUP_IMG:-oai-nr-cuup}:${TAG:-develop}
         container_name: rfsim5g-oai-cuup-0
         cap_drop:
             - ALL
@@ -139,7 +139,7 @@ services:
 
 
     oai-du-0:
-        image: ${REGISTRY:-oaisoftwarealliance}/${GNB_IMG:-oai-gnb}:${TAG:-develop}
+        image: ${REGISTRY-oaisoftwarealliance/}${GNB_IMG:-oai-gnb}:${TAG:-develop}
         container_name: rfsim5g-oai-du-0
         cap_drop:
             - ALL
@@ -150,7 +150,6 @@ services:
                                     --telnetsrv --telnetsrv.listenaddr 192.168.71.171
                                     --telnetsrv.shrmod ci
                                     --rfsimulator.serveraddr 192.168.71.190
-                                    --gNBs.[0].servingCellConfigCommon.[0].ra_ResponseWindow 5
             ASAN_OPTIONS: detect_leaks=0:detect_odr_violation=0
         depends_on:
             - oai-cucp-0
@@ -169,7 +168,7 @@ services:
             retries: 5
 
     oai-nr-ue:
-        image: ${REGISTRY:-oaisoftwarealliance}/${NRUE_IMG:-oai-nr-ue}:${TAG:-develop}
+        image: ${REGISTRY-oaisoftwarealliance/}${NRUE_IMG:-oai-nr-ue}:${TAG:-develop}
         container_name: rfsim5g-oai-nr-ue
         cap_drop:
             - ALL
@@ -195,7 +194,7 @@ services:
             retries: 5
 
     oai-cucp-1:
-        image: ${REGISTRY:-oaisoftwarealliance}/${GNB_IMG:-oai-gnb}:${TAG:-develop}
+        image: ${REGISTRY-oaisoftwarealliance/}${GNB_IMG:-oai-gnb}:${TAG:-develop}
         container_name: rfsim5g-oai-cucp-1
         cap_drop:
             - ALL
@@ -227,7 +226,7 @@ services:
             retries: 5
 
     oai-cuup-1:
-        image: ${REGISTRY:-oaisoftwarealliance}/${NRCUUP_IMG:-oai-nr-cuup}:${TAG:-develop}
+        image: ${REGISTRY-oaisoftwarealliance/}${NRCUUP_IMG:-oai-nr-cuup}:${TAG:-develop}
         container_name: rfsim5g-oai-cuup-1
         cap_drop:
             - ALL
@@ -254,7 +253,7 @@ services:
             retries: 5
 
     oai-du-1:
-        image: ${REGISTRY:-oaisoftwarealliance}/${GNB_IMG:-oai-gnb}:${TAG:-develop}
+        image: ${REGISTRY-oaisoftwarealliance/}${GNB_IMG:-oai-gnb}:${TAG:-develop}
         container_name: rfsim5g-oai-du-1
         cap_drop:
             - ALL

@@ -62,7 +62,7 @@ add_dependencies(telnetsrv telnetsrv_ci)
 
 message(STATUS "Add CI specific telnet functions for nrUE in telnetsrv_ciUE.so")
 add_library(telnetsrv_ciUE MODULE telnetsrv_ciUE.c)
-target_link_libraries(telnetsrv_ciUE PRIVATE asn1_nr_rrc_hdrs asn1_lte_rrc_hdrs UTIL)
+target_link_libraries(telnetsrv_ciUE PRIVATE asn1_nr_rrc_hdrs asn1_lte_rrc_hdrs UTIL NR_L2_UE nr_nas)
 add_dependencies(telnetsrv telnetsrv_ciUE)
 
 message(STATUS "Add bearer specific telnet functions in libtelnetsrv_bearer.so")

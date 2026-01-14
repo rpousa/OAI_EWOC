@@ -151,7 +151,6 @@ double cpuf;
 bool sdap_data_req(protocol_ctxt_t *ctxt_p,
                    const ue_id_t ue_id,
                    const srb_flag_t srb_flag,
-                   const rb_id_t rb_id,
                    const mui_t mui,
                    const confirm_t confirm,
                    const sdu_size_t sdu_buffer_size,
@@ -195,13 +194,7 @@ void handle_nr_srs_measurements(const module_id_t module_id,
 void set_default_frame_parms(LTE_DL_FRAME_PARMS *frame_parms[MAX_NUM_CCs]);
 
 /* TODO these declarations are to be removed */
-void nr_schedule_dl_tti_req(void) {};
-void nr_schedule_ul_dci_req() {};
-void nr_schedule_tx_req() {};
-void nr_schedule_ul_tti_req() {};
 void nr_slot_select() {};
-void NR_UL_indication(NR_UL_IND_t *UL_INFO) {};
-void gNB_dlsch_ulsch_scheduler() {};
 
 /*------------------------------------------------------------------------*/
 
@@ -412,7 +405,6 @@ int main ( int argc, char **argv )
 #if T_TRACER
   T_Config_Init();
 #endif
-  //randominit (0);
   set_taus_seed (0);
   printf("configuring for RAU/RRU\n");
 
@@ -497,12 +489,10 @@ int main ( int argc, char **argv )
       L1_rxtx_proc_t *L1proc= &RC.eNB[x][CC_id]->proc.L1_proc;
       L1_rxtx_proc_t *L1proctx= &RC.eNB[x][CC_id]->proc.L1_proc_tx;
       L1proc->threadPool = (tpool_t *)malloc(sizeof(tpool_t));
-      L1proc->respDecode=(notifiedFIFO_t*) malloc(sizeof(notifiedFIFO_t));
       if ( strlen(get_softmodem_params()->threadPoolConfig) > 0 )
        initTpool(get_softmodem_params()->threadPoolConfig, L1proc->threadPool, true);
       else
         initTpool("n", L1proc->threadPool, true);
-      initNotifiedFIFO(L1proc->respDecode);
       L1proctx->threadPool = L1proc->threadPool;
   }
 

@@ -478,48 +478,50 @@ static int trx_usrp_write(openair0_device *device,
       nsamps2 = (nsamps+7)>>3;
       simde__m256i buff_tx[cc < 2 ? 2 : cc][nsamps2];
 
-      // bring RX data into 12 LSBs for softmodem RX
+      // bring TX data into 16 MSBs, assuming it is on the 12 LSB  after OAI computation
+      const int shift = 4;
       for (int i = 0; i < cc; i++) {
         for (int j = 0; j < nsamps2; j++) {
           if ((((uintptr_t)buff[i]) & 0x1F) == 0) {
-            buff_tx[i][j] = simde_mm256_slli_epi16(((simde__m256i *)buff[i])[j], 4);
+            buff_tx[i][j] = simde_mm256_slli_epi16(((simde__m256i *)buff[i])[j], shift);
           } else {
             simde__m256i tmp = simde_mm256_loadu_si256(((simde__m256i *)buff[i]) + j);
-            buff_tx[i][j] = simde_mm256_slli_epi16(tmp, 4);
+            buff_tx[i][j] = simde_mm256_slli_epi16(tmp, shift);
           }
         }
-    }
+      }
 
-    s->tx_md.has_time_spec  = true;
-    s->tx_md.start_of_burst = (s->tx_count==0) ? true : first_packet_state;
-    s->tx_md.end_of_burst   = last_packet_state;
-    s->tx_md.time_spec      = uhd::time_spec_t::from_ticks(timestamp, s->sample_rate);
-    s->tx_count++;
+      s->tx_md.has_time_spec = true;
+      s->tx_md.start_of_burst = (s->tx_count == 0) ? true : first_packet_state;
+      s->tx_md.end_of_burst = last_packet_state;
+      s->tx_md.time_spec = uhd::time_spec_t::from_ticks(timestamp, s->sample_rate);
+      s->tx_count++;
 
-VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME(VCD_SIGNAL_DUMPER_FUNCTIONS_BEAM_SWITCHING_GPIO,1);
-    // bit 13 enables gpio 
-    if ((flags_gpio & TX_GPIO_CHANGE) != 0) {
-      // push GPIO bits 
-      s->usrp->set_command_time(s->tx_md.time_spec);
-      s->usrp->set_gpio_attr(s->gpio_bank, "OUT", flags_gpio, MAN_MASK);
-      s->usrp->clear_command_time();
-    }
-VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME(VCD_SIGNAL_DUMPER_FUNCTIONS_BEAM_SWITCHING_GPIO,0);
+      VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME(VCD_SIGNAL_DUMPER_FUNCTIONS_BEAM_SWITCHING_GPIO, 1);
+      // bit 13 enables gpio
+      if ((flags_gpio & TX_GPIO_CHANGE) != 0) {
+        // push GPIO bits
+        s->usrp->set_command_time(s->tx_md.time_spec);
+        s->usrp->set_gpio_attr(s->gpio_bank, "OUT", flags_gpio, MAN_MASK);
+        s->usrp->clear_command_time();
+      }
+      VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME(VCD_SIGNAL_DUMPER_FUNCTIONS_BEAM_SWITCHING_GPIO, 0);
 
-    if (cc>1) {
-      std::vector<void *> buff_ptrs;
+      if (cc > 1) {
+        std::vector<void *> buff_ptrs;
 
-      for (int i=0; i<cc; i++)
-        buff_ptrs.push_back(&(((int16_t *)buff_tx[i])[0]));
+        for (int i = 0; i < cc; i++)
+          buff_ptrs.push_back(&(((int16_t *)buff_tx[i])[0]));
 
-      ret = (int)s->tx_stream->send(buff_ptrs, nsamps, s->tx_md);
-    }
-    else {
-      ret = (int)s->tx_stream->send(&(((int16_t *)buff_tx[0])[0]), nsamps, s->tx_md);
-    }
+        ret = (int)s->tx_stream->send(buff_ptrs, nsamps, s->tx_md);
+      } else {
+        ret = (int)s->tx_stream->send(&(((int16_t *)buff_tx[0])[0]), nsamps, s->tx_md);
+      }
 
-    if (ret != nsamps) LOG_E(HW,"[xmit] tx samples %d != %d\n",ret,nsamps);
-    return ret;
+      if (ret != nsamps) {
+        LOG_E(HW, "[xmit] tx samples %d != %d\n", ret, nsamps);
+      }
+      return ret;
     } else {
       pthread_mutex_lock(&write_thread->mutex_write);
 
@@ -604,17 +606,17 @@ void *trx_usrp_write_thread(void * arg){
 
         nsamps2 = (nsamps+7)>>3;
         simde__m256i buff_tx[cc < 2 ? 2 : cc][nsamps2];
-
-        // bring RX data into 12 LSBs for softmodem RX
+        // bring TX data into 16 MSBs, assuming it is on the 12 LSB  after OAI computation
+        const int shift = 4;
         for (int i = 0; i < cc; i++) {
           for (int j = 0; j < nsamps2; j++) {
             if ((((uintptr_t) buff[i])&0x1F)==0) {
-              buff_tx[i][j] = simde_mm256_slli_epi16(((simde__m256i *)buff[i])[j], 4);
+              buff_tx[i][j] = simde_mm256_slli_epi16(((simde__m256i *)buff[i])[j], shift);
             }
             else
             {
               simde__m256i tmp = simde_mm256_loadu_si256(((simde__m256i *)buff[i]) + j);
-              buff_tx[i][j] = simde_mm256_slli_epi16(tmp,4);
+              buff_tx[i][j] = simde_mm256_slli_epi16(tmp, shift);
             }
           }
         }
@@ -751,11 +753,13 @@ static int trx_usrp_read(openair0_device *device, openair0_timestamp *ptimestamp
   // bring RX data into 12 LSBs for softmodem RX
   for (int i=0; i<cc; i++) {
     for (int j = 0; j < nsamps2; j++) {
-      // FK: in some cases the buffer might not be 32 byte aligned, so we cannot use avx2
-
+      // bring RX data into 12 LSBs for softmodem RX,
+      // this keeps the significant bits of B210 and may loose better ADC results,
+      // but it makes free bits in MSB for signal processing on int16
       if ((((uintptr_t) buff[i])&0x1F)==0) {
         ((simde__m256i *)buff[i])[j] = simde_mm256_srai_epi16(buff_tmp[i][j], rxshift);
       } else {
+        // FK: in some cases the buffer might not be 32 byte aligned, so we cannot use avx2
         simde__m256i tmp = simde_mm256_srai_epi16(buff_tmp[i][j], rxshift);
         simde_mm256_storeu_si256(((simde__m256i *)buff[i]) + j, tmp);
       }
@@ -1161,79 +1165,6 @@ extern "C" {
 
     s->usrp = uhd::usrp::multi_usrp::make(args);
 
-    if (args.find("clock_source")==std::string::npos) {
-	if (openair0_cfg[0].clock_source == internal) {
-	  s->usrp->set_clock_source("internal");
-	  LOG_I(HW,"Setting clock source to internal\n");
-	}
-	else if (openair0_cfg[0].clock_source == external ) {
-	  s->usrp->set_clock_source("external");
-	  LOG_I(HW,"Setting clock source to external\n");
-	}
-	else if (openair0_cfg[0].clock_source==gpsdo) {
-	  s->usrp->set_clock_source("gpsdo");
-	  LOG_I(HW,"Setting clock source to gpsdo\n");
-	}
-	else {
-	  LOG_W(HW,"Clock source set neither in usrp_args nor on command line, using default!\n");
-	}
-    }
-    else {
-	if (openair0_cfg[0].clock_source != unset) {
-	  LOG_W(HW,"Clock source set in both usrp_args and in clock_source, ingnoring the latter!\n");
-	}
-  }
-
-    if (args.find("time_source")==std::string::npos) {
-	if (openair0_cfg[0].time_source == internal) {
-	  s->usrp->set_time_source("internal");
-	  LOG_I(HW,"Setting time source to internal\n");
-	}
-	else if (openair0_cfg[0].time_source == external ) {
-	  s->usrp->set_time_source("external");
-	  LOG_I(HW,"Setting time source to external\n");
-	}
-	else if (openair0_cfg[0].time_source==gpsdo) {
-	  s->usrp->set_time_source("gpsdo");
-	  LOG_I(HW,"Setting time source to gpsdo\n");
-	}
-	else {
-	  LOG_W(HW,"Time source set neither in usrp_args nor on command line, using default!\n");
-	}
-    }
-    else {
-      if (openair0_cfg[0].time_source != unset) {
-        LOG_W(HW, "Time source set in both usrp_args and in openair0_cfg[0].time_source, ignoring the latter!\n");
-      }
-  }
-
-
-  if (s->usrp->get_clock_source(0) == "gpsdo") {
-    s->use_gps = 1;
-
-    if (sync_to_gps(device)==EXIT_SUCCESS) {
-      LOG_I(HW,"USRP synced with GPS!\n");
-    } else {
-      LOG_I(HW,"USRP fails to sync with GPS. Exiting.\n");
-      exit(EXIT_FAILURE);
-    }
-  } else {
-    if (s->usrp->get_time_source(0) == "external") {
-      usrp_sync_pps(s);
-    } else {
-      s->usrp->set_time_next_pps(uhd::time_spec_t(0.0));
-    }
-
-    if (s->usrp->get_clock_source(0) == "external") {
-      if (check_ref_locked(s,0)) {
-	LOG_I(HW,"USRP locked to external reference!\n");
-      } else {
-	LOG_I(HW,"Failed to lock to external reference. Exiting.\n");
-	exit(EXIT_FAILURE);
-      }
-    }
-  }
-
   if (device->type==USRP_X300_DEV) {
     openair0_cfg[0].rx_gain_calib_table = calib_table_x310;
     std::cerr << "-- Using calibration table: calib_table_x310" << std::endl;
@@ -1411,12 +1342,6 @@ extern "C" {
     }
   }
 
-  /* device specific */
-  //openair0_cfg[0].txlaunch_wait = 1;//manage when TX processing is triggered
-  //openair0_cfg[0].txlaunch_wait_slotcount = 1; //manage when TX processing is triggered
-  openair0_cfg[0].iq_txshift = 4;//shift
-  openair0_cfg[0].iq_rxrescale = 15;//rescale iqs
-
   if(openair0_cfg[0].tx_subdev!=NULL){
     LOG_I(HW, "openair0_cfg[0].tx_subdev == %s\n", openair0_cfg[0].tx_subdev);
     tx_subdev = openair0_cfg[0].tx_subdev;
@@ -1470,8 +1395,70 @@ extern "C" {
     }
   }
 
-  //s->usrp->set_clock_source("external");
-  //s->usrp->set_time_source("external");
+  if (args.find("clock_source") == std::string::npos) {
+    if (openair0_cfg[0].clock_source == internal) {
+      s->usrp->set_clock_source("internal");
+      LOG_I(HW, "Setting clock source to internal\n");
+    } else if (openair0_cfg[0].clock_source == external) {
+      s->usrp->set_clock_source("external");
+      LOG_I(HW, "Setting clock source to external\n");
+    } else if (openair0_cfg[0].clock_source == gpsdo) {
+      s->usrp->set_clock_source("gpsdo");
+      LOG_I(HW, "Setting clock source to gpsdo\n");
+    } else {
+      LOG_W(HW, "Clock source set neither in usrp_args nor on command line, using default!\n");
+    }
+  } else {
+    if (openair0_cfg[0].clock_source != unset) {
+      LOG_W(HW, "Clock source set in both usrp_args and in clock_source, ingnoring the latter!\n");
+    }
+  }
+
+  if (args.find("time_source") == std::string::npos) {
+    if (openair0_cfg[0].time_source == internal) {
+      s->usrp->set_time_source("internal");
+      LOG_I(HW, "Setting time source to internal\n");
+    } else if (openair0_cfg[0].time_source == external) {
+      s->usrp->set_time_source("external");
+      LOG_I(HW, "Setting time source to external\n");
+    } else if (openair0_cfg[0].time_source == gpsdo) {
+      s->usrp->set_time_source("gpsdo");
+      LOG_I(HW, "Setting time source to gpsdo\n");
+    } else {
+      LOG_W(HW, "Time source set neither in usrp_args nor on command line, using default!\n");
+    }
+  } else {
+    if (openair0_cfg[0].time_source != unset) {
+      LOG_W(HW, "Time source set in both usrp_args and in openair0_cfg[0].time_source, ignoring the latter!\n");
+    }
+  }
+
+  if (s->usrp->get_clock_source(0) == "gpsdo") {
+    s->use_gps = 1;
+
+    if (sync_to_gps(device) == EXIT_SUCCESS) {
+      LOG_I(HW, "USRP synced with GPS!\n");
+    } else {
+      LOG_I(HW, "USRP fails to sync with GPS. Exiting.\n");
+      exit(EXIT_FAILURE);
+    }
+  } else {
+    if (s->usrp->get_time_source(0) == "external") {
+      usrp_sync_pps(s);
+    } else {
+      s->usrp->set_time_next_pps(uhd::time_spec_t(0.0));
+    }
+
+    if (s->usrp->get_clock_source(0) == "external") {
+      if (check_ref_locked(s, 0)) {
+        LOG_I(HW, "USRP locked to external reference!\n");
+      } else {
+        LOG_I(HW, "Failed to lock to external reference. Exiting.\n");
+        exit(EXIT_FAILURE);
+      }
+    }
+  }
+
   // display USRP settings
   LOG_I(HW,"Actual master clock: %fMHz...\n",s->usrp->get_master_clock_rate()/1e6);
   LOG_I(HW,"Actual clock source %s...\n",s->usrp->get_clock_source(0).c_str());

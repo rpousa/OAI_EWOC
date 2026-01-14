@@ -152,6 +152,17 @@ void reverse_bits_u8(uint8_t const* in, size_t sz, uint8_t* out)
 #endif
 }
 
+/** @brief 3GPP TS 38.133 Table 10.1.6.1-1 mapping from dBm to RSRP index */
+uint8_t get_rsrp_index(int rsrp_dBm)
+{
+  int index = rsrp_dBm + 157;
+  if (rsrp_dBm > -44)
+    index = 113;
+  if (rsrp_dBm < -140)
+    index = 16;
+  return (uint8_t)index;
+}
+
 // Reverse bits implementation based on http://graphics.stanford.edu/~seander/bithacks.html
 uint64_t reverse_bits(uint64_t in, int n_bits)
 {
@@ -448,12 +459,50 @@ bool compare_relative_ul_channel_bw(int nr_band, int scs, int channel_bandwidth,
   return rel_bw > limit;
 }
 
-uint16_t get_band(uint64_t downlink_frequency, int32_t delta_duplex)
+static bool check_delta_duplex(int index, uint64_t dlfreq_khz, uint64_t ulfreq_khz, int64_t dlbw, int64_t ulbw)
+{
+  int uldl_min_offset = nr_bandtable[index].dl_min - nr_bandtable[index].ul_min;
+  int txrx_offset = dlfreq_khz - ulfreq_khz;
+  LOG_I(NR_PHY, "dlfreq:%ld ulfreq:%ld deltaduplex:%d khz, uldl_min_offset:%d khz\n",
+                              dlfreq_khz, ulfreq_khz, txrx_offset, uldl_min_offset);
+  if (txrx_offset == uldl_min_offset)
+    return true;
+
+  int band = nr_bandtable[index].band;
+
+  // Refer to section 5.4.4 in spec 38.101-5
+  if (band == 256 && txrx_offset >= 165000 && txrx_offset <= 215000)
+    return true;
+  if (band == 255 && txrx_offset >= -130500 && txrx_offset <= -72500)
+    return true;
+  if (band == 254 && txrx_offset >= 862000 && txrx_offset <= 885000)
+    return true;
+
+  // Refer to section 5.4.4 in spec 38.101-1 for these bands 24, 91-94, 109
+  if (band == 24 && (txrx_offset == -101500 || txrx_offset == -120500))
+    return true;
+  //Delta duplex is also a range for these bands n91-n94, n109.
+  if ((band >= 91 && band <= 94) || band == 109) {
+    dlbw = ((dlbw / 1000) + 1)  * 1000;
+    ulbw = ((ulbw / 1000) + 1) * 1000;
+    int lower_limit = nr_bandtable[index].dl_min - nr_bandtable[index].ul_max + ((dlbw + ulbw) >> 1);
+    int upper_limit = nr_bandtable[index].dl_max - nr_bandtable[index].ul_min - ((dlbw + ulbw) >> 1);
+    LOG_I(NR_PHY, "Band %d dlbw:%ld Khz, ulbw: %ld Khz RXTX lower limit:%d khz, upper limit:%d khz\n",
+                                            band, dlbw, ulbw, lower_limit, upper_limit);
+
+    if (txrx_offset >= lower_limit && txrx_offset <= upper_limit)
+      return true;
+  }
+
+  return false;
+}
+
+uint16_t get_band(uint64_t downlink_frequency, int32_t delta_duplex, int64_t dlbw, int64_t ulbw)
 {
   const int64_t dl_freq_khz = downlink_frequency / 1000;
   const int32_t  delta_duplex_khz = delta_duplex / 1000;
+  const int64_t ul_freq_khz = dl_freq_khz + delta_duplex_khz;
 
-  uint64_t center_freq_diff_khz = UINT64_MAX; // 2^64
   uint16_t current_band = 0;
 
   for (int ind = 0; ind < sizeofArray(nr_bandtable); ind++) {
@@ -461,17 +510,13 @@ uint16_t get_band(uint64_t downlink_frequency, int32_t delta_duplex)
     if (dl_freq_khz < nr_bandtable[ind].dl_min || dl_freq_khz > nr_bandtable[ind].dl_max)
       continue;
 
-    int32_t current_offset_khz = nr_bandtable[ind].ul_min - nr_bandtable[ind].dl_min;
-
-    if (current_offset_khz != delta_duplex_khz)
+    if (ul_freq_khz < nr_bandtable[ind].ul_min || ul_freq_khz > nr_bandtable[ind].ul_max)
       continue;
 
-    int64_t center_frequency_khz = (nr_bandtable[ind].dl_max + nr_bandtable[ind].dl_min) / 2;
+    if (!check_delta_duplex(ind, dl_freq_khz, ul_freq_khz, dlbw, ulbw))
+      continue;
 
-    if (labs(dl_freq_khz - center_frequency_khz) < center_freq_diff_khz){
-      current_band = nr_bandtable[ind].band;
-      center_freq_diff_khz = labs(dl_freq_khz - center_frequency_khz);
-    }
+    current_band = nr_bandtable[ind].band;
   }
 
   printf("DL frequency %"PRIu64": band %d, UL frequency %"PRIu64"\n",
@@ -530,8 +575,8 @@ int cce_to_reg_interleaving(const int R, int k, int n_shift, const int C, int L,
   return f;
 }
 
-void get_coreset_rballoc(uint8_t *FreqDomainResource,int *n_rb,int *rb_offset) {
-
+void get_coreset_rballoc(const uint8_t *FreqDomainResource, int *n_rb, int *rb_offset)
+{
   uint8_t count=0, start=0, start_set=0;
 
   uint64_t bitmap = (((uint64_t)FreqDomainResource[0])<<37)|
@@ -554,7 +599,7 @@ void get_coreset_rballoc(uint8_t *FreqDomainResource,int *n_rb,int *rb_offset) {
 }
 
 // According to 38.211 7.3.2.2
-int get_coreset_num_cces(uint8_t *FreqDomainResource, int duration)
+int get_coreset_num_cces(const uint8_t *FreqDomainResource, int duration)
 {
   int num_rbs;
   int rb_offset;

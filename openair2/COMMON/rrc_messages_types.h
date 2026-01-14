@@ -103,7 +103,6 @@
 #define RLC_SDU_INDICATION(mSGpTR)      (mSGpTR)->ittiMsg.rlc_sdu_indication
 #define NRDuDlReq(mSGpTR)      (mSGpTR)->ittiMsg.nr_du_dl_req
 
-#define NAS_OAI_TUN_NSA(mSGpTR)         (mSGpTR)->ittiMsg.nas_oai_tun_nsa
 #define NAS_PDU_SESSION_REQ(mSGpTR) (mSGpTR)->ittiMsg.nas_pdu_session_req
 
 #define NR_RRC_RLC_MAXRTX(mSGpTR) (mSGpTR)->ittiMsg.nr_rlc_maxrtx_indication
@@ -439,6 +438,7 @@ typedef struct rrc_subframe_process_s {
 } RrcSubframeProcess;
 
 typedef struct nrrrc_frame_process_s {
+  int hfn;
   int frame;
   int gnb_id;
 } NRRrcFrameProcess;
@@ -476,10 +476,11 @@ typedef struct {
 typedef struct {
   NR_CellGroupConfig_t *cellGroupConfig;
   NR_UE_NR_Capability_t *UE_NR_Capability;
+  int hfn;
+  int frame;
 } nr_mac_rrc_config_cg_t;
 typedef struct {
   NR_BCCH_BCH_Message_t *bcch;
-  int get_sib;
   bool access_barred;
 } nr_mac_rrc_config_mib_t;
 typedef struct {
@@ -488,8 +489,14 @@ typedef struct {
 } nr_mac_rrc_config_sib1_t;
 typedef struct {
   NR_SIB19_r17_t *sib19;
+  int hfn;
+  int frame;
   bool can_start_ra;
 } nr_mac_rrc_config_other_sib_t;
+typedef struct {
+  int get_sib;
+} nr_mac_rrc_sched_sib_t;
+
 
 enum payload_type {
   NR_MAC_RRC_CONFIG_RESET,
@@ -497,6 +504,7 @@ enum payload_type {
   NR_MAC_RRC_CONFIG_MIB,
   NR_MAC_RRC_CONFIG_SIB1,
   NR_MAC_RRC_CONFIG_OTHER_SIB,
+  NR_MAC_RRC_SCHED_SIB,
   NR_MAC_RRC_RESUME_RB
 };
 
@@ -507,6 +515,7 @@ typedef struct {
     nr_mac_rrc_config_cg_t config_cg;
     nr_mac_rrc_config_mib_t config_mib;
     nr_mac_rrc_config_sib1_t config_sib1;
+    nr_mac_rrc_sched_sib_t sched_sib;
     nr_mac_rrc_config_other_sib_t config_other_sib;
     nr_mac_rrc_resume_rb_t resume_rb;
   } payload;

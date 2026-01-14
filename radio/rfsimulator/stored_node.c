@@ -177,6 +177,7 @@ int main(int argc, char *argv[]) {
       timestamp+=blockSize;
       header.option_value=0;
       header.option_flag=0;
+      header.beam_map = 1;
     } else {
       AssertFatal(read(fd,&header,sizeof(header)), "");
     }

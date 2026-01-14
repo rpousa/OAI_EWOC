@@ -1,6 +1,6 @@
 services:
     oai-vnf:
-        image: ${REGISTRY:-oaisoftwarealliance}/${GNB_IMG:-oai-gnb}:${TAG:-develop}
+        image: ${REGISTRY-oaisoftwarealliance/}${GNB_IMG:-oai-gnb}:${TAG:-develop}
         network_mode: "host"
         container_name: oai-vnf
         cap_drop:
@@ -20,7 +20,7 @@ services:
             timeout: 5s
             retries: 5
     oai-pnf:
-        image: ${REGISTRY:-oaisoftwarealliance}/${GNB_IMG:-oai-gnb}:${TAG:-develop}
+        image: ${REGISTRY-oaisoftwarealliance/}${GNB_IMG:-oai-gnb}:${TAG:-develop}
         network_mode: "host"
         container_name: oai-pnf
         cap_drop:

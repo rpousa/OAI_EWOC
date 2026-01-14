@@ -20,6 +20,7 @@
  */
 
 #include "position_interface.h"
+#include "executables/nr-uesoftmodem.h"
 
 static void read_position_coordinates(char *sectionName, position_t *position)
 {

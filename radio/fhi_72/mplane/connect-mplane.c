@@ -59,24 +59,7 @@ bool connect_mplane(ru_session_t *ru_session)
 void disconnect_mplane(void *rus_disconnect)
 {
   ru_session_list_t *ru_session_list = (ru_session_list_t *)rus_disconnect;
-
-  for (size_t i = 0; i <ru_session_list->num_rus; i++) {
-    ru_session_t *ru_session = &ru_session_list->ru_session[i];
-    if (ru_session->session == NULL)
-      continue;
-    MP_LOG_I("Sending PM de-activation request for RU \"%s\".\n", ru_session->ru_ip_add);
-    bool success = pm_conf(ru_session, "false");
-    if (success)
-      MP_LOG_I("Successfully de-activated PM for RU \"%s\".\n", ru_session->ru_ip_add);
-    MP_LOG_I("Disconnecting from RU \"%s\".\n", ru_session->ru_ip_add);
-    nc_session_free(ru_session->session, NULL);
-    ru_session->session = NULL;
-#ifdef MPLANE_V1
-    ly_ctx_destroy((struct ly_ctx *)ru_session->ctx, NULL);
-#elif defined MPLANE_V2
-    ly_ctx_destroy((struct ly_ctx *)ru_session->ctx);
-#endif
-  }
+  free_ru_session_list(ru_session_list);
 
   nc_client_destroy();
 }

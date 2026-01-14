@@ -20,10 +20,144 @@
  */
 
 #include "ru-mplane-api.h"
+#include "init-mplane.h"
 #include "xml/get-xml.h"
 #include "common/utils/assertions.h"
 
 #include <string.h>
+
+#include <libyang/libyang.h>
+#include <nc_client.h>
+
+static void free_pm_stats(pm_stats_t *src)
+{
+  // free Rx window measurements
+  for (size_t i = 0; i < src->rx_num; i++) {
+    free(src->rx_window_meas[i]);
+  }
+  free(src->rx_window_meas);
+
+  // free Tx measurements
+  for (size_t i = 0; i < src->tx_num; i++) {
+    free(src->tx_meas[i]);
+  }
+  free(src->tx_meas);
+}
+
+static void free_uplane_info(uplane_info_t *src)
+{
+  for (size_t i = 0; i < src->num; i++) {
+    free(src->name[i]);
+  }
+  free(src->name);
+}
+
+static void free_ru_mplane_config(ru_mplane_config_t *src)
+{
+  // free DU MAC address(es) and VLAN tag(s)
+  for (size_t i = 0; i < src->num_cu_planes; i++) {
+    free(src->du_mac_addr[i]);
+  }
+  free(src->du_mac_addr);
+  free(src->vlan_tag);
+
+  // free interface name
+  free(src->interface_name);
+
+  // free endpoints and carriers
+  free_uplane_info(&src->tx_endpoints);
+  free_uplane_info(&src->rx_endpoints);
+  free_uplane_info(&src->tx_carriers);
+  free_uplane_info(&src->rx_carriers);
+}
+
+static void free_ru_session(ru_session_t *src)
+{
+  // username
+  free(src->username);
+
+  // if no RU connected to, free only the initialized RU IP address
+  if (src->session == NULL) {
+    free(src->ru_ip_add);
+    return;
+  }
+
+  // disconnect from the RU
+  MP_LOG_I("Sending PM de-activation request for RU \"%s\".\n", src->ru_ip_add);
+  bool success = pm_conf(src, "false");
+  if (success)
+    MP_LOG_I("Successfully de-activated PM for RU \"%s\".\n", src->ru_ip_add);
+  MP_LOG_I("Disconnecting from RU \"%s\".\n", src->ru_ip_add);
+
+  // free RU IP address
+  free(src->ru_ip_add);
+  // free RU M-plane config
+  free_ru_mplane_config(&src->ru_mplane_config);
+  // free NETCONF session
+  nc_session_free(src->session, NULL);
+  src->session = NULL;
+  // free libyang context
+#ifdef MPLANE_V1
+  ly_ctx_destroy((struct ly_ctx *)src->ctx, NULL);
+#elif defined MPLANE_V2
+  ly_ctx_destroy((struct ly_ctx *)src->ctx);
+#endif
+  // free only the RU MAC addressin xran M-plane info
+  free(src->xran_mplane.ru_mac_addr);
+  // nothing to free in ru_notif
+  // free PM stats
+  free_pm_stats(&src->pm_stats);
+}
+
+void free_ru_session_list(ru_session_list_t *src)
+{
+  // DU key pair
+  for (size_t i = 0; i < 2; i++) {
+    free(src->du_key_pair[i]);
+  }
+  free(src->du_key_pair);
+
+  // RU session
+  for (size_t i = 0; i < src->num_rus; i++) {
+    free_ru_session(&src->ru_session[i]);
+  }
+  free(src->ru_session);
+}
+
+oper_state_e str_to_enum_oper(const char* value) {
+#define X(name, str) if (value != NULL && strcmp(value, str) == 0) return name;
+    OPER_STATE
+#undef X
+    return OPER_COUNT;
+};
+
+admin_state_e str_to_enum_admin(const char* value) {
+#define X(name, str) if (value != NULL && strcmp(value, str) == 0) return name;
+    ADMIN_STATE
+#undef X
+    return ADMIN_COUNT;
+};
+
+avail_state_e str_to_enum_avail(const char* value) {
+#define X(name, str) if (value != NULL && strcmp(value, str) == 0) return name;
+    AVAIL_STATE
+#undef X
+    return AVAIL_COUNT;
+};
+
+ptp_state_e str_to_enum_ptp(const char* value) {
+#define X(name, str) if (value != NULL && strcmp(value, str) == 0) return name;
+    PTP_STATE
+#undef X
+    return PTP_COUNT;
+};
+
+carrier_state_e str_to_enum_carrier(const char* value) {
+#define X(name, str) if (value != NULL && strcmp(value, str) == 0) return name;
+    CARRIER_STATE
+#undef X
+    return CARRIER_COUNT;
+};
 
 static void free_match_list(char **match_list, size_t count)
 {
@@ -63,13 +197,15 @@ static void fix_benetel_setting(xran_mplane_t *xran_mplane, const uint32_t inter
 bool get_config_for_xran(const char *buffer, const int max_num_ant, xran_mplane_t *xran_mplane)
 {
   /* some O-RU vendors are not fully compliant as per M-plane specifications */
-  const char *ru_vendor = get_ru_xml_node(buffer, "mfg-name");
+  char *ru_vendor = get_ru_xml_node(buffer, "mfg-name");
 
   // RU MAC
   xran_mplane->ru_mac_addr = get_ru_xml_node(buffer, "mac-address"); // TODO: support for VVDN, as it defines multiple MAC addresses
 
   // MTU
-  const uint32_t interface_mtu = (uint32_t)atoi(get_ru_xml_node(buffer, "l2-mtu"));
+  char *int_mtu_str = get_ru_xml_node(buffer, "l2-mtu");
+  const uint32_t interface_mtu = (uint32_t)atoi(int_mtu_str);
+  free(int_mtu_str);
 
   // IQ bitwidth
   char **match_list = NULL;
@@ -107,14 +243,17 @@ bool get_config_for_xran(const char *buffer, const int max_num_ant, xran_mplane_
   free_match_list(match_list, count);
 
   // Managed delay support
-  const char *managed_delay = get_ru_xml_node(buffer, "managed-delay-support");
+  char *managed_delay = get_ru_xml_node(buffer, "managed-delay-support");
   xran_mplane->managed_delay = (strcasecmp(managed_delay, "NON_MANAGED") == 0) ? false : true;
+  free(managed_delay);
 
   // Store the max gain
-  xran_mplane->max_tx_gain = (double)atof(get_ru_xml_node(buffer, "max-gain"));
+  char *max_tx_gain_str = get_ru_xml_node(buffer, "max-gain");
+  xran_mplane->max_tx_gain = (double)atof(max_tx_gain_str);
+  free(max_tx_gain_str);
 
   // Model name
-  const char *model_name = get_ru_xml_node(buffer, "model-name");
+  char *model_name = get_ru_xml_node(buffer, "model-name");
 
   if (strcasecmp(ru_vendor, "BENETEL") == 0 /* || strcmp(ru_vendor, "VVDN-LPRU") == 0 || strcmp(ru_vendor, "Metanoia") == 0 */) {
     fix_benetel_setting(xran_mplane, interface_mtu, first_iq_width, max_num_ant, model_name);
@@ -149,6 +288,9 @@ bool get_config_for_xran(const char *buffer, const int max_num_ant, xran_mplane_
       xran_mplane->ccid,
       xran_mplane->ru_port,
       xran_mplane->max_tx_gain);
+
+  free(ru_vendor);
+  free(model_name);
 
   return true;
 }
@@ -185,7 +327,7 @@ bool get_uplane_info(const char *buffer, ru_mplane_config_t *ru_mplane_config)
 
 bool get_pm_object_list(const char *buffer, pm_stats_t *pm_stats)
 {
-  const char *ru_vendor = get_ru_xml_node(buffer, "mfg-name");
+  char *ru_vendor = get_ru_xml_node(buffer, "mfg-name");
   if (strcasecmp(ru_vendor, "BENETEL") == 0) {
     pm_stats->start_up_timing = false;
   } else {
@@ -199,6 +341,8 @@ bool get_pm_object_list(const char *buffer, pm_stats_t *pm_stats)
   get_ru_xml_list(buffer, "tx-stats-objects", &pm_stats->tx_meas, &pm_stats->tx_num);
 
   MP_LOG_I("Successfully retreived all performance measurement names.\n");
+
+  free(ru_vendor);
 
   return true;
 }

@@ -72,7 +72,7 @@ void lte_param_init(unsigned char N_tx, unsigned char N_rx,unsigned char transmi
   PHY_vars_UE = malloc(sizeof(PHY_VARS_UE));
   mac_xface = malloc(sizeof(MAC_xface));
 
-  randominit(0);
+  randominit();
   set_taus_seed(0);
 
   lte_frame_parms = &(PHY_vars_eNB->lte_frame_parms);
@@ -367,7 +367,7 @@ int main(int argc, char *argv[])
   int num_pdcch_symbols = 1;
   int subframe = 6;
 
-  randominit(0);
+  randominit();
   logInit();
   lte_param_init(1,1,1,0,0,3);
 

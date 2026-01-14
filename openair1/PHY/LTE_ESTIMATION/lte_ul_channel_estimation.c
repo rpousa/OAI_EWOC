@@ -526,11 +526,7 @@ int32_t lte_srs_channel_estimation(LTE_DL_FRAME_PARMS *frame_parms,
 
   //if ((1<<(sub_frame_number%T_SFC))&transmission_offset_tdd[Ssrs]) {
 
-  if (generate_srs(frame_parms,
-                   soundingrs_ul_config_dedicated,
-                   &srs_vars->srs[eNB_id],
-                   0x7FFF,
-                   subframe)==-1) {
+  if (generate_srs(frame_parms, soundingrs_ul_config_dedicated, &srs_vars->srs[eNB_id], INT16_MAX, subframe) == -1) {
     LOG_E(PHY,"lte_srs_channel_estimation: Error in generate_srs\n");
     return(-1);
   }

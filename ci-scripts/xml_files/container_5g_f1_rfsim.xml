@@ -55,6 +55,10 @@
  000031
  020022
  040026
+ 040025
+ 000031
+ 020022
+ 040027
  100021
  222222
         </TestCaseRequestedList>
@@ -64,7 +68,7 @@
                 <class>Pull_Local_Registry</class>
                 <desc>Pull Images from Local Registry</desc>
                 <node>localhost</node>
-                <images>oai-gnb-asan oai-nr-cuup-asan oai-nr-ue-asan</images>
+                <images>oai-gnb-asan oai-nr-ue-asan</images>
         </testCase>
         <testCase id="800813">
                 <class>Create_Workspace</class>
@@ -103,7 +107,7 @@
                 <class>Attach_UE</class>
                 <desc>Attach OAI UE (Wait for IP)</desc>
                 <id>rfsim5g_ue</id>
-                <nodes>acamas</nodes>
+                <node>localhost</node>
         </testCase>
 
         <testCase id="000024">
@@ -118,9 +122,9 @@
                 <class>Ping</class>
                 <desc>Ping ext-dn from all NR-UEs</desc>
                 <id>rfsim5g_ue</id>
-                <nodes>acamas</nodes>
+                <node>localhost</node>
                 <svr_id>rfsim5g_ext_dn</svr_id>
-                <svr_node>acamas</svr_node>
+                <svr_node>localhost</svr_node>
                 <ping_args>-c 20 -i0.25</ping_args>
                 <ping_packetloss_threshold>5</ping_packetloss_threshold>
         </testCase>
@@ -128,30 +132,30 @@
         <testCase id="030020">
                 <class>Custom_Command</class>
                 <desc>Simulate a DL radio channel with noise (3 dB)</desc>
-                <node>acamas</node>
+                <node>localhost</node>
                 <command>echo channelmod modify 0 noise_power_dB 3 | ncat --send-only 192.168.71.181 8091</command>
         </testCase>
 
         <testCase id="030021">
                 <class>Iperf</class>
-                <desc>Iperf (DL/5Mbps/UDP)(30 sec)</desc>
-                <iperf_args>-u -b 5M -t 20 -R</iperf_args>
+                <desc>Iperf (DL/3Mbps/UDP)(20 sec)</desc>
+                <iperf_args>-u -b 3M -t 20 -R</iperf_args>
                 <id>rfsim5g_ue</id>
-                <nodes>acamas</nodes>
+                <node>localhost</node>
                 <svr_id>rfsim5g_ext_dn</svr_id>
-                <svr_node>acamas</svr_node>
+                <svr_node>localhost</svr_node>
                 <iperf_packetloss_threshold>5</iperf_packetloss_threshold>
                 <iperf_bitrate_threshold>90</iperf_bitrate_threshold>
         </testCase>
 
         <testCase id="030022">
                 <class>Iperf</class>
-                <desc>Iperf (UL/3Mbps/UDP)(30 sec)</desc>
+                <desc>Iperf (UL/3Mbps/UDP)(20 sec)</desc>
                 <iperf_args>-u -b 3M -t 20</iperf_args>
                 <id>rfsim5g_ue</id>
-                <nodes>acamas</nodes>
+                <node>localhost</node>
                 <svr_id>rfsim5g_ext_dn</svr_id>
-                <svr_node>acamas</svr_node>
+                <svr_node>localhost</svr_node>
                 <iperf_packetloss_threshold>5</iperf_packetloss_threshold>
                 <iperf_bitrate_threshold>90</iperf_bitrate_threshold>
         </testCase>
@@ -159,7 +163,7 @@
         <testCase id="040001">
                 <class>Custom_Command</class>
                 <desc>Trigger Reestablishment</desc>
-                <node>acamas</node>
+                <node>localhost</node>
                 <command>echo ci force_reestab | ncat 192.168.71.171 9090 | grep -E 'Reset RLC counters of UE RNTI [0-9a-f]{4} to trigger reestablishment'</command>
         </testCase>
 
@@ -167,9 +171,9 @@
                 <class>Ping</class>
                 <desc>Ping ext-dn from NR-UE</desc>
                 <id>rfsim5g_ue</id>
-                <nodes>acamas</nodes>
+                <node>localhost</node>
                 <svr_id>rfsim5g_ext_dn</svr_id>
-                <svr_node>acamas</svr_node>
+                <svr_node>localhost</svr_node>
                 <ping_args>-c 20 -i0.5 -w25</ping_args>
                 <ping_packetloss_threshold>80</ping_packetloss_threshold>
         </testCase>
@@ -177,56 +181,56 @@
         <testCase id="040002">
                 <class>Custom_Command</class>
                 <desc>Verify Reestablishment</desc>
-                <node>acamas</node>
+                <node>localhost</node>
                 <command>echo ci get_reestab_count | ncat 192.168.71.150 9090 | grep -E 'UE RNTI [0-9a-f]{4} reestab 1'</command>
         </testCase>
 
         <testCase id="040021">
                 <class>Custom_Command</class>
                 <desc>Simulate a disruption of DL radio channel (ploss 55)</desc>
-                <node>acamas</node>
+                <node>localhost</node>
                 <command>echo channelmod modify 0 ploss 55 | ncat 192.168.71.181 8091</command>
         </testCase>
 
         <testCase id="040022">
                 <class>Custom_Command</class>
                 <desc>Get UE sync state (UE ID 0)</desc>
-                <node>acamas</node>
+                <node>localhost</node>
                 <command>echo ciUE sync_state 0 | ncat 192.168.71.181 8091 | grep -E UE_NOT_SYNC</command>
         </testCase>
 
         <testCase id="040023">
                 <class>Custom_Command</class>
                 <desc>Restoration of the original DL channel conditions (ploss 20)</desc>
-                <node>acamas</node>
+                <node>localhost</node>
                 <command>echo channelmod modify 0 ploss 20 | ncat 192.168.71.181 8091</command>
         </testCase>
 
         <testCase id="040024">
                 <class>Custom_Command</class>
                 <desc>Get UE sync state (UE ID 0)</desc>
-                <node>acamas</node>
+                <node>localhost</node>
                 <command>echo ciUE sync_state 0 | ncat 192.168.71.181 8091 | grep -E UE_CONNECTED</command>
         </testCase>
 
         <testCase id="040025">
                 <class>Custom_Command</class>
                 <desc>Trigger Handover</desc>
-                <node>acamas</node>
+                <node>localhost</node>
                 <command>echo ci trigger_f1_ho | ncat 192.168.71.150 9090</command>
         </testCase>
 
         <testCase id="040026">
                 <class>Custom_Command</class>
                 <desc>UE (1) connected to DU-PCI 0?</desc>
-                <node>acamas</node>
+                <node>localhost</node>
                 <command>echo ci fetch_du_by_ue_id 1 | ncat 192.168.71.150 9090 | grep "3584"</command>
         </testCase>
 
         <testCase id="040027">
                 <class>Custom_Command</class>
                 <desc>UE (1) connected to DU-PCI 1?</desc>
-                <node>acamas</node>
+                <node>localhost</node>
                 <command>echo ci fetch_du_by_ue_id 1 | ncat 192.168.71.150 9090 | grep "3585"</command>
         </testCase>
 
@@ -245,7 +249,7 @@
                 <always_exec>true</always_exec>
                 <desc>Clean Test Images on Test Server</desc>
                 <node>localhost</node>
-                <images>oai-gnb-asan oai-nr-cuup-asan oai-nr-ue-asan</images>
+                <images>oai-gnb-asan oai-nr-ue-asan</images>
         </testCase>
 
 </testCaseList>

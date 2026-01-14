@@ -135,7 +135,7 @@ Here are some useful command line options for the NR UE:
 |--------------------------|---------------------------------------------------------------------------------------------------------------|
 | `--ue-scan-carrier`      | Scan for cells in current bandwidth. This option can be used if the SSB position of the gNB is unknown. If multiple cells are detected, the UE will try to connect to the first cell. By default, this option is disabled and the UE attempts to only decode SSB given by `--ssb`. |
 | `--ue-fo-compensation`   | Enables the initial frequency offset compensation at the UE. Useful when running over the air and/or without an external clock/time source. |
-| `--cont-fo-comp`         | Enables the continuous frequency offset (FO) estimation and compensation.  Parameter value `1` specifies that the main FO contribution comes from the local oscillator's (LO) accuracy.  Parameter value `2` specifies that the main FO contribution comes from Doppler shift. |
+| `--cont-fo-comp`         | Enables the continuous frequency offset (FO) estimation and compensation.  Parameter value `1` specifies that the main FO contribution comes from the local oscillator's (LO) accuracy.  Parameter value `2` specifies that the main FO contribution comes from Doppler shift. Parameter value `3` specifies that no measured residual DL FO is considered for UL FO pre-compensation. |
 | `--initial-fo`           | Sets the known initial frequency offset. Useful especially with large Doppler frequency, e.g. LEO satellite.  |
 | `--freq-sync-P`          | Sets the coefficient for the Proportional part of the PI-controller for the continuous frequency offset compensation. Default value 0.01. |
 | `--freq-sync-I`          | Sets the coefficient for the Integrating part of the PI-controller for the continuous frequency offset compensation. Default value 0.001. |
@@ -296,7 +296,6 @@ This allows to reuse HARQ processes immediately, but it breaks compatibility wit
 To enable this feature, the `disable_harq` flag has to be added to the gNB conf file in the section `gNBs.[0]`
 ```
 ...
-    sib1_tda     = 5;
     min_rxtxtime = 6;
     disable_harq = 1; // <--
 
@@ -356,7 +355,9 @@ sudo ./ran_build/build/nr-uesoftmodem -O ../targets/PROJECTS/GENERIC-NR-5GC/CONF
 
 For LEO satellite scenarios, the parameter `--ntn-initial-time-drift` must be provided via command line, as the UE needs this value to compensate for the time drift during initial sync, before SIB19 was received.
 This parameter provides the drift rate of the complete DL timing (incl. feeder link and service link) in µs/s.
-Also, to perform an autonomous TA update based on the DL drift, the boolean parameter `--autonomous-ta` should be added in case of a LEO satellite scenario.
+
+To perform an autonomous TA update based on the DL drift, the boolean parameter `--autonomous-ta` can be added.
+If that parameter is omitted, the TA is continuously computed based on the SIB19 information.
 
 For LEO satellite scenario we assume the LO to be very accurate and the main FO contribution comes from Doppler shift.
 Therefore, we use the command line parameter `--cont-fo-comp 2` to continuously compensate the DL Doppler and pre-compensate the UL Doppler.
@@ -367,7 +368,7 @@ For other information on optional NR UE command line options, please refer [here
 So an example NR UE command for FDD, 5MHz BW, 15 kHz SCS, transparent LEO satellite 5G NR NTN is this:
 ```
 cd cmake_targets
-sudo ./ran_build/build/nr-uesoftmodem -O ../targets/PROJECTS/GENERIC-NR-5GC/CONF/ue.conf --band 254 -C 2488400000 --CO -873500000 -r 25 --numerology 0 --ssb 60 --rfsim --rfsimulator.prop_delay 20 --rfsimulator.options chanmod --time-sync-I 0.1 --ntn-initial-time-drift -46 --autonomous-ta --initial-fo 57340 --cont-fo-comp 2
+sudo ./ran_build/build/nr-uesoftmodem -O ../targets/PROJECTS/GENERIC-NR-5GC/CONF/ue.conf --band 254 -C 2488400000 --CO -873500000 -r 25 --numerology 0 --ssb 60 --rfsim --rfsimulator.prop_delay 20 --rfsimulator.options chanmod --time-sync-I 0.1 --ntn-initial-time-drift -46 --initial-fo 57340 --cont-fo-comp 2
 ```
 
 # Specific OAI modes
@@ -468,19 +469,30 @@ The hardcoded DRBs will be treated like GBR Flows. Due to code limitations at th
 
 ## IF setup with OAI
 
-OAI is also compatible with Intermediate Frequency (IF) equipment. This allows to use RF front-end that with arbitrary frequencies bands that do not comply with the standardised 3GPP NR bands. 
+OAI is also compatible with Intermediate Frequency (IF) equipment, allowing the
+use of RF front-ends operating on arbitrary frequency bands that do not conform
+to the standardized 3GPP NR bands.
 
-To configure the IF frequencies it is necessary to use two command-line options at UE side:
-- `if_freq`, downlink frequency in Hz
-- `if_freq_off`, uplink frequency offset in Hz
+### OAIUE configuration
+To configure IF frequencies on the UE side, provide the following command-line
+options:
+- `if_freq`: DL frequency in Hz
+- `if_freq_off`: UL frequency offset in Hz
 
-Accordingly, the following parameters must be configured in the RUs section of the gNB configuration file:
-- `if_freq`
-- `if_offset`
+### gNB configuration
+On the gNB side, the corresponding parameters must be set in the RUs section of
+the configuration file:
+- `if_freq`: DL frequency in Hz
+- `if_offset`: UL frequency offset in Hz
+
+> Note: When using a libconfig-based configuration file for the gNB, ensure that
+> `if_freq` numeric value is suffixed with "L" so it is correctly parsed as
+> 64-bit integer.
 
 ### Run OAI with custom DL/UL arbitrary frequencies
 
-The following example uses DL frequency 2169.080 MHz and UL frequency offset -400 MHz, with a configuration file for band 66 (FDD) at gNB side.
+The following example uses DL frequency 2169.080 MHz and UL frequency offset
+-400 MHz, with a configuration file for band 66 (FDD) at gNB side.
 
 On two separate machines with USRPs, run:
 

@@ -232,7 +232,7 @@ int main(int argc, char **argv)
   //LOG_M("txsig1.m","txs1", txdata[1],FRAME_LENGTH_COMPLEX_SAMPLES,1,1);
 
   // multipath channel
-  randominit(0);
+  randominit();
 
   for (i=0; i<FRAME_LENGTH_COMPLEX_SAMPLES; i++) {
     for (aa=0; aa<lte_frame_parms->nb_antennas_tx; aa++) {

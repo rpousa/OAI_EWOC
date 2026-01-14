@@ -213,7 +213,7 @@ int config_check_unknown_cmdlineopt(configmodule_interface_t *cfg, char *prefix)
   return unknowndetected;
 } /* config_check_unknown_cmdlineopt */
 
-int config_process_cmdline(configmodule_interface_t *cfg, paramdef_t *cfgoptions, int numoptions, char *prefix)
+int config_process_cmdline(configmodule_interface_t *cfg, paramdef_t *cfgoptions, int numoptions, const char *prefix)
 {
   int c = cfg->argc;
   int i,j;

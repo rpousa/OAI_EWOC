@@ -411,7 +411,7 @@ TEST(yaml_config, test_read_ipv4) {
   config_yaml_get(cfg, &p, 1, prefix);
   printf("%x\n", addr);
 
-  p.defstrval = strdup("10.0.0.1");
+  p.defstrval = "10.0.0.1";
   strncpy(p.optname, "ipv4_3", sizeof(p.optname) - 1);
   config_yaml_get(cfg, &p, 1, prefix);
   printf("%x\n", addr);
@@ -419,7 +419,6 @@ TEST(yaml_config, test_read_ipv4) {
   config_yaml_end(cfg);
   free(cfg->cfgP[0]);
   end_configmodule(cfg);
-  free(p.defstrval);
 }
 
 TEST(yaml_config, yaml_read_str_as_int) {

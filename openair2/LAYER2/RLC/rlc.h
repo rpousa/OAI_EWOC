@@ -262,22 +262,6 @@ void rlc_data_ind(const protocol_ctxt_t *const,
                   const sdu_size_t,
                   uint8_t *const);
 
-/*! \fn void rlc_data_conf     (const protocol_ctxt_t* const ctxtP, const srb_flag_t srb_flagP, const  rb_id_t rb_idP, const mui_t muiP, const rlc_tx_status_t statusP)
-* \brief    Interface with higher layers, confirm to upper layer the transmission status for a SDU stamped with a MUI, scheduled for transmission.
-* \param[in]  ctxtP            Running context.
-* \param[in]  srb_flagP        Flag to indicate SRB (1) or DRB (0)
-* \param[in]  rb_idP           Radio bearer identifier.
-* \param[in]  muiP             Message Unit identifier.
-* \param[in]  statusP          Status of the transmission (RLC_SDU_CONFIRM_YES, RLC_SDU_CONFIRM_NO).
-*/
-void rlc_data_conf(
-  const protocol_ctxt_t *const,
-  const  srb_flag_t,
-  const  rb_id_t,
-  const mui_t,
-  const rlc_tx_status_t );
-
-
 /*! \fn rlc_op_status_t rlc_stat_req     (
                         const protocol_ctxt_t* const ctxtP,
                         const  srb_flag_t    srb_flagP,

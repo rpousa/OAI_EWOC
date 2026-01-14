@@ -29,9 +29,10 @@
 #include <pnf_p7.h>
 #include <sys/time.h>
 
+#include "wls_lib.h"
 #include "pnf.h"
 #include "nr_nfapi_p7.h"
-#include "nr_fapi_p5.h"
+#include "nfapi/open-nFAPI/fapi/inc/nr_fapi_p7_utils.h"
 
 // A copy of the PNF P7 config is needed for the message processing thread, in other transport mechanisms where P7 is handled in a
 // different thread, the config is passed to it upon the thread creation
@@ -63,6 +64,28 @@ void *wls_fapi_pnf_nr_start_thread(void *ptr)
   cfg = (nfapi_pnf_config_t *)ptr;
   wls_fapi_nr_pnf_start();
   return (void *)0;
+}
+
+void wls_pnf_close(pthread_t p5_thread)
+{
+  _this->terminate = 1;
+  WLS_WakeUp(wls_mac_get_ctx()->hWls);
+  pthread_join(p5_thread, NULL);
+  if (WLS_Close(wls_mac_get_ctx()->hWls) != 0) {
+    NFAPI_TRACE(NFAPI_TRACE_INFO, "[PNF] WLS_CLose call failed...\n");
+  } else {
+    NFAPI_TRACE(NFAPI_TRACE_INFO, "[PNF] WLS_CLose called successfully...\n");
+  }
+  rte_eal_cleanup();
+}
+
+void wls_fapi_nr_pnf_stop()
+{
+  AssertFatal(cfg->nr_stop_req, "STOP.request Handler should be set!");
+  nfapi_nr_stop_request_scf_t req = {0};
+  req.header.phy_id = 0;
+  req.header.message_id = NFAPI_NR_PHY_MSG_TYPE_STOP_REQUEST;
+  cfg->nr_stop_req(cfg, 0, &req);
 }
 
 int wls_fapi_nr_pnf_start()
@@ -194,6 +217,9 @@ bool wls_pnf_nr_send_p7_message(pnf_p7_t *pnf_p7, nfapi_nr_p7_message_header_t *
   NFAPI_TRACE(NFAPI_TRACE_DEBUG, "num_avail_blocks is %d\n", num_avail_blocks);
   while (num_avail_blocks < 2) {
     num_avail_blocks = WLS_NumBlocks(pWls->hWls);
+    if (_this->terminate) {
+      return false;
+    }
     NFAPI_TRACE(NFAPI_TRACE_DEBUG, "num_avail_blocks is %d\n", num_avail_blocks);
   }
   /* get PA blocks for header and msg */
@@ -254,7 +280,7 @@ void phy_mac_recv()
   bool to_return = false;
   while (_this->terminate == 0) {
     int numMsgToGet = WLS_Wait(pWls->hWls);
-    if (numMsgToGet == 0) {
+    if (numMsgToGet == 0 || _this->terminate) {
       continue;
     }
     uint64_t PAs[numMsgToGet];
@@ -278,6 +304,11 @@ void phy_mac_recv()
           }
         }
       }
+    }
+    // A STOP.indication might have been processed, which set's terminate to 1
+    // don't return pages in that case
+    if (_this->terminate) {
+      break;
     }
     if (to_return) {
       // We only return the pages to be enqueued in case we're using the OAI VNF,

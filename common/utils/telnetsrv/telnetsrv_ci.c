@@ -38,7 +38,9 @@
 #include "openair2/LAYER2/nr_rlc/nr_rlc_ue_manager.h"
 #include "openair2/LAYER2/nr_rlc/nr_rlc_entity_am.h"
 #include "openair2/LAYER2/NR_MAC_gNB/mac_proto.h"
+#include "openair2/LAYER2/NR_MAC_gNB/mac_config.h"
 #include "openair2/RRC/NR/rrc_gNB_mobility.h"
+#include "openair3/NGAP/ngap_gNB_ue_context.h"
 
 #define TELNETSERVERCODE
 #include "telnetsrv.h"
@@ -292,6 +294,8 @@ static int get_current_bwp(char *buf, int debug, telnet_printfunc_t prnt)
   if (rnti < 0)
     ERROR_MSG_RET("could not identify UE (no UE, no such RNTI, or multiple UEs)\n");
   NR_UE_info_t *UE = find_nr_UE(&RC.nrmac[0]->UE_info, rnti);
+  if (!UE)
+    ERROR_MSG_RET("could not find UE with RNTI %04x\n", rnti);
   int dl_bwp = UE->current_DL_BWP.bwp_id;
   const char *dl_bwp_text = dl_bwp > 0 ? "dedicated" : "initial";
   int ul_bwp = UE->current_UL_BWP.bwp_id;
@@ -299,6 +303,104 @@ static int get_current_bwp(char *buf, int debug, telnet_printfunc_t prnt)
 
   prnt("UE %04x DL BWP ID %d (%s) UL BWP ID %d (%s)\n", UE->rnti, dl_bwp, dl_bwp_text, ul_bwp, ul_bwp_text);
   return 0;
+}
+
+/** @brief Trigger NGAP PDU Session Release for one or more PDU sessions associated with a UE ID/
+ *  Syntax: trigger_pdu_session_release [ue_id=gNB_ue_ngap_id(int,opt)],pdusession_id(int)[,pdusession_id(int)...]
+ *  - If the gNB_ue_ngap_id is omitted, it is fetched from the only UE present in the RRC layer
+ *  - At least one valid PDU session ID must be provided
+ * @param[in] buf   Comma-separated input string: [ue_id=gNB_ue_ngap_id(int,opt)],PDU1[,PDU2,...]
+ * @param[in] debug Not used.
+ * @param[in] prnt  Callback for telnet output printing.
+ * @return 0 on success; negative value on error. */
+static int trigger_ngap_pdu_session_release(char *buf, int debug, telnet_printfunc_t prnt)
+{
+  if (buf == NULL) {
+    ERROR_MSG_RET("Missing input. Usage: trigger_pdu_session_release [ue_id=gNB_ue_ngap_id(int,opt)],pdusession_id(int)[,pdusession_id(int)...]\n");
+  }
+
+  char *tokens[NGAP_MAX_PDU_SESSION + 1];
+  int count = 0;
+
+  for (char *tok = strtok(buf, ","); tok != NULL && count < (int)sizeofArray(tokens); tok = strtok(NULL, ",")) {
+    tokens[count++] = tok;
+  }
+
+  if (count < 1) {
+    ERROR_MSG_RET("Invalid input. Usage: trigger_pdu_session_release [ue_id=gNB_ue_ngap_id(int,opt)],pdusession_id(int)[,pdusession_id(int)...]\n");
+  }
+
+  int gNB_ue_ngap_id = -1;
+  int pdu_start_index = 0;
+
+  if (strncmp(tokens[0], "ue_id=", 6) == 0) {
+    gNB_ue_ngap_id = atoi(tokens[0] + 6);
+    pdu_start_index = 1;
+  } else {
+    // No UE ID: infer it
+    if (!RC.nrrrc)
+      ERROR_MSG_RET("No RRC present\n");
+    rrc_gNB_ue_context_t *ue = get_single_rrc_ue();
+    if (!ue)
+      ERROR_MSG_RET("No single UE in RRC present\n");
+    gNB_ue_ngap_id = ue->ue_context.rrc_ue_id;
+  }
+
+  if (pdu_start_index >= count) {
+    ERROR_MSG_RET("No pdusession_id(int) provided\n");
+  }
+
+  ngap_gNB_ue_context_t *ngap = ngap_get_ue_context(gNB_ue_ngap_id);
+  if (!ngap) {
+    ERROR_MSG_RET("No NGAP UE context for gNB_ue_ngap_id %d\n", gNB_ue_ngap_id);
+  }
+
+  MessageDef *message_p = itti_alloc_new_message(TASK_NGAP, 0, NGAP_PDUSESSION_RELEASE_COMMAND);
+  ngap_pdusession_release_command_t *msg = &NGAP_PDUSESSION_RELEASE_COMMAND(message_p);
+  memset(msg, 0, sizeof(*msg));
+
+  msg->amf_ue_ngap_id = ngap->amf_ue_ngap_id;
+  msg->gNB_ue_ngap_id = ngap->gNB_ue_ngap_id;
+
+  int nb_sessions = 0;
+  for (int i = pdu_start_index; i < count; ++i) {
+    int sid = atoi(tokens[i]);
+    if (sid < 1 || sid > 255) {
+      ERROR_MSG_RET("Invalid pdusession_id(int): %s (must be between 1 and 255)\n", tokens[i]);
+    }
+    msg->pdusession_ids[nb_sessions++] = sid;
+  }
+
+  msg->nb_pdusessions_torelease = nb_sessions;
+
+  if (prnt) {
+    prnt("Triggering NGAP PDU Session Release for gNB_ue_ngap_id=%d: releasing pdusession_id=%d", gNB_ue_ngap_id);
+    for (int i = 0; i < nb_sessions; ++i) {
+      prnt(" %d,", msg->pdusession_ids[i]);
+    }
+    prnt("\n");
+  }
+
+  itti_send_msg_to_task(TASK_RRC_GNB, 0, message_p);
+  return 0;
+}
+
+static int trigger_bwp_switch(char *buf, int debug, telnet_printfunc_t prnt)
+{
+  char *sbwpId = strtok(buf, " ");
+  int bwpId = atoi(sbwpId);
+  char *srnti = strtok(NULL, " ");
+  prnt("bwpId %d rnti %s\n", bwpId, srnti);
+  int rnti = fetch_rnti(srnti, prnt);
+  if (rnti < 0)
+    ERROR_MSG_RET("could not identify UE (no UE, no such RNTI, or multiple UEs)\n");
+  if (!nr_trigger_bwp_switch(rnti, bwpId)) {
+    prnt("failed trigger BWP switch for UE %04x BWP ID %d\n", rnti, bwpId);
+    return -1;
+  } else {
+    prnt("triggered BWP switch to BWP ID %d for UE %04x\n", bwpId, rnti);
+    return 0;
+  }
 }
 
 static telnetshell_cmddef_t cicmds[] = {
@@ -310,7 +412,9 @@ static telnetshell_cmddef_t cicmds[] = {
     {"trigger_f1_ho", "[rrc_ue_id(int,opt)] [du_id(int,opt)]", rrc_gNB_trigger_f1_ho},
     {"fetch_du_by_ue_id", "[rrc_ue_id(int,opt)]", fetch_du_by_ue_id},
     {"get_current_bwp", "[rnti(hex,opt)]", get_current_bwp},
+    {"trigger_bwp_switch", "newBWPId [rnti(hex,opt)]", trigger_bwp_switch},
     {"trigger_n2_ho", "[neighbour_pci(uint32_t),ueId(uint32_t)]", rrc_gNB_trigger_n2_ho},
+    {"pdu_session_release", "[gNB_ue_ngap_id(int,opt)]", trigger_ngap_pdu_session_release},
     {"", "", NULL},
 };
 

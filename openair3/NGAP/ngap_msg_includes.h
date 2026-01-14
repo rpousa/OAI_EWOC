@@ -58,6 +58,8 @@
 #include "NGAP_PDUSessionResourceSetupResponseTransfer.h"
 #include "NGAP_PDUSessionResourceSetupUnsuccessfulTransfer.h"
 #include "NGAP_PDUSessionResourceToReleaseItemRelCmd.h"
+#include "NGAP_PDUSessionResourceReleaseCommandTransfer.h"
+#include "NGAP_PDUSessionResourceReleaseResponseTransfer.h"
 #include "NGAP_PLMNSupportItem.h"
 #include "NGAP_ProtocolIE-Field.h"
 #include "NGAP_QosFlowAddOrModifyResponseItem.h"

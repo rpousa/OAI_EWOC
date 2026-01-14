@@ -236,6 +236,9 @@ In the `MACRLCs` section of the gNB/DU configuration file:
    case RSSI reaches the threshold and prevents ADC railing. Unit depends on
    RSSI reporting config.
 * `pucch_RSSI_Threshold`: Same as above but for PUCCH
+* `stats_max_ue` (default 8): maximum number of UEs to show in periodical
+  stats; beyond this number, periodical statistics will be disabled (it can
+  still be seen in `nrMAC_stats.log`. Use `0` to disable periodical stats.
 
 In the `gNBs` section of the gNB/DU configuration file: some of the parameters
 affect RRC configuration (CellGroupConfig) of a UE, and are therefore listed
@@ -252,12 +255,10 @@ configuration](../RRC/rrc-usage.md) as well for SIB configuration.
 * `pusch_AntennaPorts` (default 1): number of antenna ports in PUSCH
 * `maxMIMO_layers` (default -1=unlimited): maximum number of MIMO layers to use
   in downlink
-* `sib1_tda` (default 1): time domain allocation (TDA) indices to use for SIB1
-  (38.214 section 5.1.2.1.1)
 * `do_CSIRS` (default 0): flag whether to use channel-state information
   reference signal (CSI-RS)
 * `do_SRS` (default 0): flag whether to use sounding reference signal (SRS)
-* `do_SINR` (default 0): flag whether to enable CSI reporting of SSB-SINR (introduced in rel16)
+* `CSI_report_type` (default `ssb_rsrp`): parameter to enable different CSI reporting (options: `ssb_rsrp`, `ssb_sinr` and `cri_rsrp`)
   Default setting of CSI reporting quantity is SSB-RSRP.
 * `min_rxtxtime` (default 2): minimum feedback time for UE to respond to
   transmissions (k1 and k2 in 3GPP spec)
@@ -281,14 +282,17 @@ configuration](../RRC/rrc-usage.md) as well for SIB configuration.
 - `du_sibs` (default `[]`): list of SIBs to transmit in the cell. Currently,
   SIB19 (for NTN) is supported.
 
-| DL MIMO                      |`do_CSIRS`|`do_SINR`| CSI report Quantity                               |
-| ---------------------------- | -------- | ------- | --------------------------------------------------|
-| OFF (pdsch_AntennaPorts = 1) |   0      |  0      | SSB-RSRP                                          |
-| OFF (pdsch_AntennaPorts = 1) |   0      |  1      | SSB-SINR                                          |
-| OFF (pdsch_AntennaPorts = 1) |   1      |  0      | CSI-Reference signal  RSRP                        |
-| OFF (pdsch_AntennaPorts = 1) |   1      |  1      | CSI-Reference signal  SINR (not supported yet)    |
-| ON (pdsch_AntennaPorts > 1)  |   1      |  0      | cri-RI-PMI-CQI                                    |
+| DL MIMO                        |`do_CSIRS`|`CSI_report_type`| CSI report Quantity                               |
+| ------------------------------ | -------- | --------------- | --------------------------------------------------|
+| any                            |   any    |  `ssb_rsrp`     | SSB-RSRP                                          |
+| any                            |   0      |  `cri_rsrp`     | SSB-RSRP (no CSI-RS configured)                   |
+| any                            |   1      |  `cri_rsrp`     | CRI-RSRP                                          |
+| any                            |   any    |  `ssb_sinr`     | SSB-SINR                                          |
+| ON (`pdsch_AntennaPorts` > 1)  |   1      |  any            | cri-RI-PMI-CQI                                    |
 
+
+Note that activating `cri-RI-PMI-CQI` will result in that report to be produced
+in addition to either `SSB-SINR`, `SSB-RSRP` or `CRI-RSRP`.
 DL-MIMO is configured using following parameters:
 `pdsch_AntennaPorts_XP` , `pdsch_AntennaPorts_N1` , `pdsch_AntennaPorts_N2`, `maxMIMO_layers`
 (see also [`RUNMODEM.md`](../RUNMODEM.md))
@@ -414,3 +418,29 @@ Note that you should increase the aggregation level candidates as described in
 [the corresponding section above](#pdcch-aggregation-level). This is because the
 scheduler has to schedule multiple DCIs in a single DL slots for multiple UL
 slots. As a suggestion, you could try `uess_agg_levels = [4, 2, 2, 0, 0]`.
+
+## Multiple Dedicated BWPs
+
+A maximum of 4 dedicated BWPs can be configured for a UE per standard, but only
+1 BWP can be active in UL and DL direction at a given time.  In the code we
+only configure a single BWP for the UE at a given time and we would switch by
+reconfiguring this BWP. All this procedure is transparent for users and LOGs
+mark BWP switching according to the configuration file enumeration.  It is
+possible to configure multiple dedicated BWPs and 1st active BWP via
+configuration file.
+
+### Setup of the Configuration files ##
+
+In the configuration file you have the option to select the 1st active BWP, the
+BWP location and SCS of each BWP in the following way (example with 2
+additional BWPs):
+
+```
+    first_active_bwp = 1;
+    bwp_list = ({ scs = 1; bwpStart = 0; bwpSize = 106;},
+                { scs = 1; bwpStart = 0; bwpSize = 24;});
+```
+
+This example configures 3 additional BWPs, with IDs from 1 to 3. A similar
+example can be found in configuration file
+`ci-scripts/conf_files/gnb-du.sa.band78.106prb.usrpb200.conf` tested in CI.

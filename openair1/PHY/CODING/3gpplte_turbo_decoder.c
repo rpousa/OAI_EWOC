@@ -123,9 +123,6 @@ typedef char Binary;
 typedef short llr_t; // internal decoder data is 16-bit fixed
 typedef short channel_t;
 
-#define LLR_MAX 32767
-#define LLR_MIN -32768
-#define LLRTOT 16
 #define MAX 32767//16383
 #define FRAME_LENGTH_MAX 6144
 #define STATES 8

@@ -44,8 +44,10 @@ void nr_fill_sl_indication(nr_sidelink_indication_t *sl_ind,
   sl_ind->gNB_index = proc->gNB_id;
   sl_ind->module_id = ue->Mod_id;
   sl_ind->cc_id = ue->CC_id;
+  sl_ind->hfn_rx = proc->hfn_rx;
   sl_ind->frame_rx = proc->frame_rx;
   sl_ind->slot_rx = proc->nr_slot_rx;
+  sl_ind->hfn_tx = proc->hfn_tx;
   sl_ind->frame_tx = proc->frame_tx;
   sl_ind->slot_tx = proc->nr_slot_tx;
   sl_ind->phy_data = phy_data;

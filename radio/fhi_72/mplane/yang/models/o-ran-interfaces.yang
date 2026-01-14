@@ -32,16 +32,20 @@ module o-ran-interfaces {
     prefix "ianahw";
   }
 
+  import o-ran-wg4-features {
+    prefix "feat";
+  }
+
   organization "O-RAN Alliance";
 
   contact
     "www.o-ran.org";
 
   description
-    "This module defines the YANG definitions for managng the O-RAN
+    "This module defines the YANG definitions for managing the O-RAN
      interfaces.
 
-    Copyright 2020 the O-RAN Alliance.
+    Copyright 2024 the O-RAN Alliance.
 
     THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS 'AS IS'
     AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
@@ -66,6 +70,52 @@ module o-ran-interfaces {
     * Neither the Members of the O-RAN Alliance nor the names of its
     contributors may be used to endorse or promote products derived from
     this software without specific prior written permission.";
+
+  revision "2024-08-12" {
+    description
+      "version 16.0.0
+
+      1) added new MACsec bypass policy.";
+
+    reference "ORAN-WG4.M.0-v16.00";
+  }
+
+  revision "2024-04-15" {
+    description
+      "version 15.0.0
+
+      1) added new config false only leaf for maximum payload size.
+      2) new configuration for TCP MSS.";
+
+    reference "ORAN-WG4.M.0-v15.00";
+  }
+
+  revision "2021-12-01" {
+    description
+      "version 5.2.0
+
+      1) typographical corrections in descriptions.";
+
+    reference "ORAN-WG4.M.0-v05.00";
+  }
+
+  revision "2021-03-22" {
+    description
+      "version 5.1.0
+
+      1) typographical corrections in descriptions.";
+
+    reference "ORAN-WG4.M.0-v05.00";
+  }
+
+  revision "2020-12-10" {
+    description
+      "version 5.0.0
+
+      1) new functionality to describe over subscribed resources";
+
+    reference "ORAN-WG4.M.0-v05.00";
+  }
 
   revision "2020-04-17" {
     description
@@ -108,7 +158,6 @@ module o-ran-interfaces {
        based transport for the CU plane.";
   }
 
-
   typedef pcp {
     type uint8 {
       range "0..7";
@@ -121,6 +170,21 @@ module o-ran-interfaces {
       different classes of traffic.";
     reference
      "IEEE 802.1Q-2014: Virtual Bridged Local Area Networks";
+  }
+
+  typedef mss {
+    type uint16;
+    description
+      "Type definition for TCP Maximum Segment Size.";
+  }
+
+  typedef ethertype-string {
+   type string {
+     pattern '([0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}))';
+   }
+   description
+    "A 2 octect hexadecimal string with octets represented as hex digits
+     separated by colons.";
   }
 
   grouping cos-marking {
@@ -220,6 +284,146 @@ module o-ran-interfaces {
     }
   }
 
+  grouping tcp-config {
+    description "grouping for per-interface tcp configuration";
+
+    container tcp {
+      presence "tcp configuration";
+      description "per interface TCP configuration";
+
+      leaf mss-adjust {
+        type mss;
+        description
+          "Maximum Segment Size (MSS) used in the MSS Option sent
+          in the TCP initial handshake over this interface and
+          which specifies an upper bound for the TCP MSS of packets
+          that can be received on this interface.
+
+          NOTE, this can be used to reduce the packet size for NETCONF/TLS
+          or NETCONF/SSH to reduce head-of-line blocking due to M-Plane
+          packets sent over the fronthaul downlink interface";
+      }
+    }
+  }
+
+  grouping macsec-bypass-grouping {
+    description "grouping for MACsec bypass policy";
+
+    container macsec-bypass-policy {
+      if-feature feat:MACSEC-BYPASS-POLICY;
+      description
+        "This is a top level container for MACsec policies.
+         These policies can only be enforced on the base
+         Ethernet interface.
+
+         MAC, EtherType and vlan-id based policies are defined to
+         be applied to the base-interface.
+
+         VLAN based policies can additionally be implicitly
+         enforced by configuring the SecY on a VLAN interface and
+         do not use this container.";
+
+      list policy {
+        key "name";
+        description
+          "Each policy list entry has a matching criteria. Any frame
+          matching the criteris will be forwarded via the uncontrolled port.";
+        leaf name {
+          type string;
+            description
+              "The name of the MACsec policy.";
+        }
+        choice policy-type {
+
+          case mac {
+            leaf-list destination-mac-address {
+              type yang:mac-address;
+              description
+                "Destination IEEE 802 Media Access Control (MAC)
+                address of frames egressing via interface.";
+            }
+          }
+          case ethertype {
+            leaf-list ethertype {
+              type ethertype-string;
+              description
+                "list of ethertypes in frames egressing the interface.";
+            }
+          }
+          case vlan-id {
+            leaf-list vlan-id {
+              type uint16 {
+                range "1..4094";
+              }
+              description
+                "list of vlan-ids in frames egressing the interface.";
+            }
+          }
+          description
+            "choice of policy types";
+        }
+      }
+    }
+  }
+
+  grouping macsec-bypass-capabilities {
+    description "grouping for MACsec bypass capabilities";
+
+    container macsec-bypass-capabilities {
+      if-feature feat:MACSEC-BYPASS-POLICY;
+      config false;
+      description
+        "This is a container for MACsec bypass capabilities.";
+
+      leaf per-interface-policy-list-max-elements {
+        type uint16;
+        default 100;
+        description
+          "the maximum number of list of elements
+          for each instance of the list
+          /if:interfaces/if:interface/o-ran-int:/macsec-bypass-policy/o-ran-int/policy.";
+      }
+      leaf cummulative-policy-list-max-elements {
+        type uint16;
+        default 100;
+        description
+          "the maximum cummulative number of list entries for
+          all instances of the list
+          /if:interfaces/if:interface/o-ran-int:/macsec-bypass-policy/o-ran-int/policy";
+      }
+      leaf-list supported-policy {
+        type enumeration {
+          enum MAC {
+            description
+              "O-RU supports MAC address based by-pass policies
+              for frames egressing a base-interface.";
+          }
+          enum ETHERTYPE {
+            description
+              "O-RU supports ethertype based by-pass policies
+              for frames egressing a base-interface.";
+          }
+          enum VLAN {
+            description
+              "O-RU supports vlan-id based by-pass policies
+              for frames egressing a base-interface.";
+          }
+        }
+        description
+          "The type of mac bypass policies supported by the O-RU
+          on frames egressing a base-interface.
+
+          An O-RU supporting the MACSEC-BYPASS-POLICY shall include
+          at least one of the defined policies in this list.";
+      }
+    }
+  }
+
+  rpc reset-interface-counters {
+    description
+      "Management plane triggered restart of the interface counters.";
+  }
+
 // Cross Working Group Augmentations Follow
 
 // Cross Working Group augmentations for basic Ethernet leafs
@@ -245,6 +449,27 @@ module o-ran-interfaces {
         4-8 byte overhead of any known (i.e. explicitly matched by
         a child sub-interface) 801.1Q VLAN tags.";
     }
+
+    leaf maximum-ethernet-payload-size {
+      type uint16 {
+        range "1500 .. 9000";
+      }
+      units bytes;
+      config false;
+      description
+        "The maximum size of the Ethernet payload that an O-RU can transmit
+        or receive on the interface (excluding any frame header,
+        maximum frame payload size, frame checksum
+        sequence and any 802.1Q tag).
+
+        TAKE NOTE - THE FORMULA IN THIS DESCRIPTION DIFFERS FROM THE
+        FORMULA IN THE DESCRIPTION OF THE l2-mtu LEAF.
+
+        THIS LEAF CORRESPONDS TO THE DATA/PAYLOAD **ONLY** AND DOES **NOT**
+        INCLUDE ANY OTHER FRAME OVERHEAD LIKE SOURCE/DESTINATION ADDRESSES,
+        LENGTH, 802.1Q TAGS OR FCS.";
+    }
+
     leaf vlan-tagging {
       type boolean;
       default true;
@@ -261,7 +486,44 @@ module o-ran-interfaces {
         equipment.";
     }
     uses cos-marking;
+
+// interface-grouping insert - begin;
+
+    leaf-list interface-groups-id {
+      type leafref {
+        path "/if:interfaces/o-ran-int:interface-grouping/o-ran-int:interfaces-groups/o-ran-int:interface-group-id";
+      }
+      config false;
+      description
+        "an optional leaf used when the sustained rate able to be supported by an interface
+        is less than nominal bit rate indicated by o-ran-transceiver.yang
+
+        Identifies interface grouping particular physical hardware MAC address belongs to.";
+    }
+
+// interface-grouping insert - end;
   }
+
+// augmentation for MACsec bypass policies
+  augment "/if:interfaces/if:interface" {
+    when "if:type = 'ianaift:ethernetCsmacd'" {
+      description "Applies to Ethernet interfaces";
+    }
+    if-feature feat:MACSEC-BYPASS-POLICY;
+    description
+      "Augment the interface model with bypass parameters for
+      base Ethernet interface";
+
+    uses macsec-bypass-grouping;
+  }
+
+  augment "/if:interfaces" {
+    if-feature feat:MACSEC-BYPASS-POLICY;
+    description "augmentation for MACsec bypass capabilitites";
+
+    uses macsec-bypass-capabilities;
+  }
+
 
 // Cross Working Group augmentation for l2vlan interfaces for VLAN definition
 
@@ -276,7 +538,7 @@ module o-ran-interfaces {
           "The base interface must have VLAN tagging enabled.";
       }
       description
-        "The base interface for the VLAN sub-interafce.";
+        "The base interface for the VLAN sub-interface.";
     }
     leaf vlan-id {
       type uint16 {
@@ -287,7 +549,7 @@ module o-ran-interfaces {
     }
   }
 
-// Cross Working Group augmention for both ethernetCsmacd and l2vlan interfaces
+// Cross Working Group augmentation for both ethernetCsmacd and l2vlan interfaces
 
   augment "/if:interfaces/if:interface" {
     when "(if:type = 'ianaift:ethernetCsmacd') or
@@ -306,7 +568,7 @@ module o-ran-interfaces {
     }
   }
 
-// Cross Working Group augmention to ietf-ip covering DSCP for M-Plane
+// Cross Working Group augmentation to ietf-ip covering DSCP for M-Plane
 
 augment "/if:interfaces/if:interface/ip:ipv4" {
   description "augments for IPv4 based M-Plane transport";
@@ -325,28 +587,44 @@ augment "/if:interfaces/if:interface/ip:ipv6" {
   }
 }
 
+// Cross Working Group augmentation to ietf-ip covering TCP MSS for M-Plane
+
+augment "/if:interfaces/if:interface/ip:ipv4" {
+  if-feature feat:PER-INT-TCP-MSS;
+  description "augments for IPv4 based CUS transport";
+  uses tcp-config;
+}
+augment "/if:interfaces/if:interface/ip:ipv6" {
+  if-feature feat:PER-INT-TCP-MSS;
+  description "augments for IPv6 based CUS transport";
+  uses tcp-config;
+}
+
+
 // WG4 Specific Augmentations Follow
 
 // WG4 Augmentation for basic Ethernet leafs
 
   augment "/if:interfaces/if:interface" {
-    if-feature ALIASMAC-BASED-CU-PLANE;
     when "if:type = 'ianaift:ethernetCsmacd'" {
       description
         "Applies to WG4 Ethernet interfaces for alias MAC based CU-Plane";
     }
+    if-feature ALIASMAC-BASED-CU-PLANE;
     description
       "Augment the interface model with parameters for
       base Ethernet interface";
 
     leaf-list alias-macs {
       type yang:mac-address;
+
       description
         "Augments interfaces with range of alias MAC addresses.";
     }
+
   }
 
-// WG4 Augmention for both ethernetCsmacd and l2vlan interfaces
+// WG4 Augmentation for both ethernetCsmacd and l2vlan interfaces
 
   augment "/if:interfaces/if:interface" {
     when "(if:type = 'ianaift:ethernetCsmacd') or
@@ -358,9 +636,11 @@ augment "/if:interfaces/if:interface/ip:ipv6" {
       both ethernetCsmacd and l2vlan interfaces.";
     leaf mac-address {
       type yang:mac-address;
+
       description
         "The MAC address of the interface.";
     }
+
     container port-reference {
       description
         "a port reference used by other O-RAN modules";
@@ -391,7 +671,7 @@ augment "/if:interfaces/if:interface/ip:ipv6" {
     }
   }
 
-// WG4 specific augmention to ietf-ip covering DSCP for CUS Plane
+// WG4 specific augmentation to ietf-ip covering DSCP for CUS Plane
 
   augment "/if:interfaces/if:interface/ip:ipv4" {
     if-feature UDPIP-BASED-CU-PLANE;
@@ -406,9 +686,51 @@ augment "/if:interfaces/if:interface/ip:ipv6" {
 
 // Other Working Group Specific Augmentations Follow Here
 
+// interface-grouping insert - begin;
 
-  rpc reset-interface-counters {
-    description
-      "Management plane triggered restart of the interface counters.";
+  augment "/if:interfaces" {
+    description "augments interfaces for groupings of physical hardware addresses that can be used to group Ethernet ports";
+
+    container interface-grouping {
+
+      presence
+        "indicates maximum sustained throughput of an O-RU is less than the combined bandwidth of all physical ports";
+
+      config false;
+
+      description
+        "A container used by an O-RU where the maximum sustained throughput
+        of an O-RU is less than the combined bandwidth of all physical ports";
+
+      list interfaces-groups {
+        key interface-group-id;
+        description "List of interface groups.";
+
+        leaf interface-group-id {
+          type uint8;
+          description "interface group identifier.";
+        }
+
+        leaf max-sustainable-ingress-bandwidth {
+          type uint32;
+          units Mbps;
+          description
+            "Maximum sustainable ingress bandwidth the interface group can handle. The sustainable bandwidth is calculated
+            over one radio frame.
+
+            The peak ingress bandwidth may exceed the sustainable bandwidth for periods shorter than a radio frame period.";
+        }
+
+        leaf max-sustainable-egress-bandwidth {
+          type uint32;
+          units Mbps;
+          description
+            "Maximum sustainable egress bandwidth the interface group can handle. The sustainable bandwidth is calculated
+            over one radio frame.";
+        }
+      }
+    }
   }
+// interface-grouping insert - end;
+
 }

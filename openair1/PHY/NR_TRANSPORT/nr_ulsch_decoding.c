@@ -35,7 +35,6 @@
 #include "PHY/NR_TRANSPORT/nr_ulsch.h"
 #include "PHY/NR_TRANSPORT/nr_dlsch.h"
 #include "SCHED_NR/sched_nr.h"
-#include "SCHED_NR/fapi_nr_l1.h"
 #include "defs.h"
 #include "common/utils/LOG/vcd_signal_dumper.h"
 #include "common/utils/LOG/log.h"

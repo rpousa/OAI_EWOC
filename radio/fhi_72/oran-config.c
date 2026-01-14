@@ -918,11 +918,11 @@ static bool set_fh_config(void *mplane_api, int ru_idx, int num_rus, enum xran_c
   fh_config->dpdk_port = ru_idx; // DPDK port number used for FH
   fh_config->sector_id = 0; // Band sector ID for FH; not used in xran
   fh_config->nCC = 1; // number of Component carriers supported on FH; M-plane info
-  fh_config->neAxc = RTE_MAX(oai0->num_distributed_ru * oai0->tx_num_channels / num_rus, oai0->num_distributed_ru * oai0->rx_num_channels / num_rus); // number of eAxc supported on one CC = max(PDSCH, PUSCH)
+  fh_config->neAxc = RTE_MAX(oai0->tx_num_channels / num_rus, oai0->rx_num_channels / num_rus); // number of eAxc supported on one CC = max(PDSCH, PUSCH)
   fh_config->neAxcUl = 0; // number of eAxc supported on one CC for UL direction = PUSCH; used only if XRAN_CATEGORY_B
   fh_config->nAntElmTRx = 0; // number of antenna elements for TX and RX = SRS; used only if XRAN_CATEGORY_B
-  fh_config->nDLFftSize = 0; // DL FFT size; not used in xran
-  fh_config->nULFftSize = 0; // UL FFT size; not used in xran
+  fh_config->nDLFftSize = oai0->split7.fftSize; // DL FFT size; not used in xran
+  fh_config->nULFftSize = oai0->split7.fftSize; // UL FFT size; not used in xran
   fh_config->nDLRBs = oai0->num_rb_dl; // DL PRB; used in oaioran.c/oran-init.c; not used in xran, neither in E nor in F release
   fh_config->nULRBs = oai0->num_rb_dl; // UL PRB; used in oaioran.c/oran-init.c; in xran E release not used so the patch fixes it, but in xran F release this value is properly used
   fh_config->nDLAbsFrePointA = 0; // Abs Freq Point A of the Carrier Center Frequency for in KHz Value; not used in xran
@@ -966,7 +966,7 @@ static bool set_fh_config(void *mplane_api, int ru_idx, int num_rus, enum xran_c
   // fh_config->srs_conf = {0};
   if (!set_fh_frame_config(oai0, &fh_config->frame_conf))
     return false;
-  if (!set_fh_ru_config(mplane_api, rup, oai0->split7.fftSize, nru, xran_cat, &fh_config->ru_conf))
+  if (!set_fh_ru_config(mplane_api, rup, oai0->split7.prach_fftSize, nru, xran_cat, &fh_config->ru_conf))
     return false;
 
   fh_config->bbdev_enc = NULL; // call back to poll BBDev encoder

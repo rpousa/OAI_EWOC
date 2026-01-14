@@ -82,7 +82,7 @@ of the FAPI 10.04 version of the SRS PDU, and RX_Beamforming PDU.
 | Applicative Threads    | Allocated CPUs |
 |------------------------|----------------|
 | PTP & PHC2SYS Services | 41             |
-| OAI `nr-softmodem`     | 13-14          |
+| OAI `nr-softmodem`     | 13-16          |
 
 ## PTP configuration
 
@@ -232,10 +232,10 @@ After preparing the L1 software, the container needs to be committed to create a
 In this file the RU MAC address needs to be specified before commiting the image.
 
 ```bash
-~$ docker commit nv-cubb cubb-build:25-2
+~$ docker commit nv-cubb cubb-build:25-2.1
 ~$ docker image ls
 ..
-cubb-build                                    25-2                                           824156e0334c   2 weeks ago    23.9GB
+cubb-build                                    25-2.1                                           824156e0334c   2 weeks ago    23.9GB
 -..
 ```
 

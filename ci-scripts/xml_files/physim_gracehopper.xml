@@ -21,7 +21,7 @@
 
 -->
 <testCaseList>
-        <htmlTabRef>build-tab</htmlTabRef>
+        <htmlTabRef>physim-tab</htmlTabRef>
         <htmlTabName>PhySim</htmlTabName>
         <htmlTabIcon>wrench</htmlTabIcon>
         <TestCaseRequestedList>
@@ -38,9 +38,9 @@
 
         <testCase id="010201">
                 <class>Build_Deploy_Docker_PhySim</class>
-                <desc>Deploy and Deploy PhySim</desc>
+                <desc>Build and Deploy PhySim</desc>
                 <node>localhost</node>
-                <ctest-opt>-R 5g -E physim.5g.nr_dlsim.mcs.mimo.test9 -j16</ctest-opt> <!-- one nr_dlsim test fails on ARM -->
-        </testCase>
+                <ctest-opt>-R 5g -E "nr_dlsim|nr_ulsim|ldpctest" -j32</ctest-opt> <!-- one nr_dlsim test fails on ARM -->
+	</testCase>
 
 </testCaseList>

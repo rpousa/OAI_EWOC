@@ -78,6 +78,7 @@
 #include "E1AP_DRB-To-Modify-Item-NG-RAN.h"
 #include "E1AP_PDU-Session-Resource-To-Setup-Mod-Item.h"
 #include "E1AP_DRB-To-Setup-Mod-Item-NG-RAN.h"
+#include "E1AP_PDU-Session-Resource-To-Remove-Item.h"
 // E1 Bearer Context Modification Response
 #include "E1AP_PDU-Session-Resource-Modified-Item.h"
 #include "E1AP_DRB-Modified-List-NG-RAN.h"

@@ -1,5 +1,5 @@
 diff --git a/fhi_lib/app/src/common.h b/fhi_lib/app/src/common.h
-index ac5f471..5efcce3 100644
+index ac5f471..b0f7ed1 100644
 --- a/fhi_lib/app/src/common.h
 +++ b/fhi_lib/app/src/common.h
 @@ -28,7 +28,7 @@
@@ -7,7 +7,7 @@ index ac5f471..5efcce3 100644
  #include <rte_mbuf.h>
  
 -#define VERSIONX                "oran_f_release_v1.0"
-+#define VERSIONX                "oran_f_release_v1.4"
++#define VERSIONX                "oran_f_release_v1.5"
  
  #define APP_O_DU  0
  #define APP_O_RU  1
@@ -919,7 +919,7 @@ index 4acade1..c939edc 100644
          for(i = 0; i < xran_ports_num; i++){
              g_xran_dev_ctx[i] = pCtx;
 diff --git a/fhi_lib/lib/src/xran_main.c b/fhi_lib/lib/src/xran_main.c
-index 7c472d7..216c7f5 100644
+index 7c472d7..9da3621 100644
 --- a/fhi_lib/lib/src/xran_main.c
 +++ b/fhi_lib/lib/src/xran_main.c
 @@ -35,7 +35,11 @@
@@ -969,7 +969,29 @@ index 7c472d7..216c7f5 100644
      print_dbg("PRACH eAxC_offset %d\n",  pPrachCPConfig->eAxC_offset);
  
      /* Save some configs for app */
-@@ -1570,6 +1593,7 @@ int32_t handle_ecpri_ethertype(struct rte_mbuf* pkt_q[], uint16_t xport_id, stru
+@@ -1169,6 +1192,10 @@ xran_prepare_cp_ul_slot(uint16_t xran_port_id, uint32_t nSlotIdx,  uint32_t nCcS
+                             uint8_t seqid = xran_get_cp_seqid(pHandle, XRAN_DIR_UL, cc_id, port_id);
+ 
+                             beam_id = xran_get_beamid(pHandle, XRAN_DIR_UL, cc_id, port_id, slot_id);
++                            pBufList = &(p_xran_dev_ctx->sFrontHaulRxPrbMapBbuIoBufCtrl[buf_id][cc_id][ant_id].sBufferList);
++                            struct xran_prb_map *prbMap = pBufList->pBuffers->pData;
++                            struct xran_prb_elm *pPrbElm = &prbMap->prbMap[0]; //mjoang
++                            beam_id = pPrbElm->nBeamIndex;
+                             ret = generate_cpmsg_prach(pHandle, &params, sect_geninfo, mbuf, p_xran_dev_ctx,
+                                         frame_id, subframe_id, slot_id, tti,
+                                         beam_id, cc_id, port_id, occasionid, seqid);
+@@ -1338,6 +1365,10 @@ tx_cp_ul_cb(struct rte_timer *tim, void *arg)
+                             uint8_t seqid = xran_get_cp_seqid(pHandle, XRAN_DIR_UL, cc_id, port_id);
+ 
+                             beam_id = xran_get_beamid(pHandle, XRAN_DIR_UL, cc_id, port_id, slot_id);
++                            pBufList = &(p_xran_dev_ctx->sFrontHaulRxPrbMapBbuIoBufCtrl[buf_id][cc_id][ant_id].sBufferList);
++                            struct xran_prb_map *prbMap = pBufList->pBuffers->pData;
++                            struct xran_prb_elm *pPrbElm = &prbMap->prbMap[0]; //mjoang
++                            beam_id = pPrbElm->nBeamIndex;
+                         ret = generate_cpmsg_prach(pHandle, &params, sect_geninfo, mbuf, p_xran_dev_ctx,
+                                         frame_id, subframe_id, slot_id, tti,
+                                         beam_id, cc_id, port_id, occasionid, seqid);
+@@ -1570,6 +1601,7 @@ int32_t handle_ecpri_ethertype(struct rte_mbuf* pkt_q[], uint16_t xport_id, stru
          {
          case ECPRI_IQ_DATA:
                  pkt_data[num_data++] = pkt;
@@ -977,7 +999,7 @@ index 7c472d7..216c7f5 100644
              break;
          // For RU emulation
          case ECPRI_RT_CONTROL_DATA:
-@@ -1587,7 +1611,7 @@ int32_t handle_ecpri_ethertype(struct rte_mbuf* pkt_q[], uint16_t xport_id, stru
+@@ -1587,7 +1619,7 @@ int32_t handle_ecpri_ethertype(struct rte_mbuf* pkt_q[], uint16_t xport_id, stru
                  break;
              default:
                  if (p_dev_ctx->fh_init.io_cfg.id == O_DU) {
@@ -986,7 +1008,7 @@ index 7c472d7..216c7f5 100644
          }
                  break;
      }
-@@ -1876,7 +1900,7 @@ xran_sector_get_instances (uint32_t xran_port, void * pDevHandle, uint16_t nNumI
+@@ -1876,7 +1908,7 @@ xran_sector_get_instances (uint32_t xran_port, void * pDevHandle, uint16_t nNumI
      for (i = 0; i < nNumInstances; i++) {
  
          /* Allocate Memory for CC handles */
@@ -995,7 +1017,7 @@ index 7c472d7..216c7f5 100644
  
          if(pCcHandle == NULL)
              return XRAN_STATUS_RESOURCE;
-@@ -2347,8 +2371,7 @@ ring_processing_func_per_port(void* args)
+@@ -2347,8 +2379,7 @@ ring_processing_func_per_port(void* args)
      for (i = 0; i < ctx->io_cfg.num_vfs && i < XRAN_VF_MAX; i = i+1) {
          if (ctx->vf2xran_port[i] == port_id) {
              for(qi = 0; qi < ctx->rxq_per_port[port_id]; qi++){
@@ -1005,7 +1027,7 @@ index 7c472d7..216c7f5 100644
              }
          }
      }
-@@ -2414,9 +2437,6 @@ xran_spawn_workers(void)
+@@ -2414,9 +2445,6 @@ xran_spawn_workers(void)
          nWorkerCore = nWorkerCore << 1;
      }
  
@@ -1015,7 +1037,7 @@ index 7c472d7..216c7f5 100644
      printf("O-XU      %d\n", eth_ctx->io_cfg.id);
      printf("HW        %d\n", icx_cpu);
      printf("Num cores %d\n", total_num_cores);
-@@ -2453,7 +2473,7 @@ xran_spawn_workers(void)
+@@ -2453,7 +2481,7 @@ xran_spawn_workers(void)
                  eth_ctx->time_wrk_cfg.arg   = NULL;
                  eth_ctx->time_wrk_cfg.state = 1;
  
@@ -1024,7 +1046,7 @@ index 7c472d7..216c7f5 100644
                  if(pThCtx == NULL){
                      print_err("pThCtx allocation error\n");
                      return XRAN_STATUS_FAIL;
-@@ -2475,7 +2495,7 @@ xran_spawn_workers(void)
+@@ -2475,7 +2503,7 @@ xran_spawn_workers(void)
  
                  /* workers */
                  /** 0 **/
@@ -1033,7 +1055,7 @@ index 7c472d7..216c7f5 100644
                  if(pThCtx == NULL){
                      print_err("pThCtx allocation error\n");
                      return XRAN_STATUS_FAIL;
-@@ -2502,7 +2522,7 @@ xran_spawn_workers(void)
+@@ -2502,7 +2530,7 @@ xran_spawn_workers(void)
                  }
  
                  /** 1 - CP GEN **/
@@ -1042,7 +1064,7 @@ index 7c472d7..216c7f5 100644
                  if(pThCtx == NULL){
                      print_err("pThCtx allocation error\n");
                      return XRAN_STATUS_FAIL;
-@@ -2536,7 +2556,7 @@ xran_spawn_workers(void)
+@@ -2536,7 +2564,7 @@ xran_spawn_workers(void)
                  else
                  p_dev->tx_sym_gen_func = xran_process_tx_sym_cp_on_opt;
  
@@ -1051,7 +1073,7 @@ index 7c472d7..216c7f5 100644
                  if(pThCtx == NULL){
                      print_err("pThCtx allocation error\n");
                      return XRAN_STATUS_FAIL;
-@@ -2559,7 +2579,7 @@ xran_spawn_workers(void)
+@@ -2559,7 +2587,7 @@ xran_spawn_workers(void)
  
                      /* workers */
                      /** 0 **/
@@ -1060,7 +1082,7 @@ index 7c472d7..216c7f5 100644
                      if(pThCtx == NULL){
                          print_err("pThCtx allocation error\n");
                          return XRAN_STATUS_FAIL;
-@@ -2586,7 +2606,7 @@ xran_spawn_workers(void)
+@@ -2586,7 +2614,7 @@ xran_spawn_workers(void)
                      }
  
                      /** 1 - CP GEN **/
@@ -1069,7 +1091,7 @@ index 7c472d7..216c7f5 100644
                      if(pThCtx == NULL){
                          print_err("pThCtx allocation error\n");
                          return XRAN_STATUS_FAIL;
-@@ -2613,7 +2633,7 @@ xran_spawn_workers(void)
+@@ -2613,7 +2641,7 @@ xran_spawn_workers(void)
  
                      /* workers */
                      /** 0 **/
@@ -1078,7 +1100,7 @@ index 7c472d7..216c7f5 100644
                      if(pThCtx == NULL){
                          print_err("pThCtx allocation error\n");
                          return XRAN_STATUS_FAIL;
-@@ -2628,7 +2648,7 @@ xran_spawn_workers(void)
+@@ -2628,7 +2656,7 @@ xran_spawn_workers(void)
                      eth_ctx->pkt_wrk_cfg[pThCtx->worker_id].arg   = pThCtx;
  
                      /** 1 - CP GEN **/
@@ -1087,7 +1109,7 @@ index 7c472d7..216c7f5 100644
                      if(pThCtx == NULL){
                          print_err("pThCtx allocation error\n");
                          return XRAN_STATUS_FAIL;
-@@ -2643,7 +2663,7 @@ xran_spawn_workers(void)
+@@ -2643,7 +2671,7 @@ xran_spawn_workers(void)
                      eth_ctx->pkt_wrk_cfg[pThCtx->worker_id].arg   = pThCtx;
  
                      /** 2 UP GEN **/
@@ -1096,7 +1118,7 @@ index 7c472d7..216c7f5 100644
                      if(pThCtx == NULL){
                          print_err("pThCtx allocation error\n");
                          return XRAN_STATUS_FAIL;
-@@ -2682,7 +2702,7 @@ xran_spawn_workers(void)
+@@ -2682,7 +2710,7 @@ xran_spawn_workers(void)
  
                      /* workers */
                      /** 0 **/
@@ -1105,7 +1127,7 @@ index 7c472d7..216c7f5 100644
                      if(pThCtx == NULL){
                          print_err("pThCtx allocation error\n");
                          return XRAN_STATUS_FAIL;
-@@ -2697,7 +2717,7 @@ xran_spawn_workers(void)
+@@ -2697,7 +2725,7 @@ xran_spawn_workers(void)
                      eth_ctx->pkt_wrk_cfg[pThCtx->worker_id].arg   = pThCtx;
  
                      /** 1 - CP GEN **/
@@ -1114,7 +1136,7 @@ index 7c472d7..216c7f5 100644
                      if(pThCtx == NULL){
                          print_err("pThCtx allocation error\n");
                          return XRAN_STATUS_FAIL;
-@@ -2712,7 +2732,7 @@ xran_spawn_workers(void)
+@@ -2712,7 +2740,7 @@ xran_spawn_workers(void)
                      eth_ctx->pkt_wrk_cfg[pThCtx->worker_id].arg   = pThCtx;
  
                      /** 2 UP GEN **/
@@ -1123,7 +1145,7 @@ index 7c472d7..216c7f5 100644
                      if(pThCtx == NULL){
                          print_err("pThCtx allocation error\n");
                          return XRAN_STATUS_FAIL;
-@@ -2727,7 +2747,7 @@ xran_spawn_workers(void)
+@@ -2727,7 +2755,7 @@ xran_spawn_workers(void)
                      eth_ctx->pkt_wrk_cfg[pThCtx->worker_id].arg   = pThCtx;
  
                      /** 3 UP GEN **/
@@ -1132,7 +1154,7 @@ index 7c472d7..216c7f5 100644
                      if(pThCtx == NULL){
                          print_err("pThCtx allocation error\n");
                          return XRAN_STATUS_FAIL;
-@@ -2766,7 +2786,7 @@ xran_spawn_workers(void)
+@@ -2766,7 +2794,7 @@ xran_spawn_workers(void)
  
                      /* workers */
                      /** 0 **/
@@ -1141,7 +1163,7 @@ index 7c472d7..216c7f5 100644
                      if(pThCtx == NULL){
                          print_err("pThCtx allocation error\n");
                          return XRAN_STATUS_FAIL;
-@@ -2781,7 +2801,7 @@ xran_spawn_workers(void)
+@@ -2781,7 +2809,7 @@ xran_spawn_workers(void)
                      eth_ctx->pkt_wrk_cfg[pThCtx->worker_id].arg   = pThCtx;
  
                      /** 1 Eth Tx **/
@@ -1150,7 +1172,7 @@ index 7c472d7..216c7f5 100644
  
                      if(pThCtx == NULL){
                          print_err("pThCtx allocation error\n");
-@@ -2797,7 +2817,7 @@ xran_spawn_workers(void)
+@@ -2797,7 +2825,7 @@ xran_spawn_workers(void)
                      eth_ctx->pkt_wrk_cfg[pThCtx->worker_id].arg   = pThCtx;
  
                      /** 2 - CP GEN **/
@@ -1159,7 +1181,7 @@ index 7c472d7..216c7f5 100644
                      if(pThCtx == NULL){
                          print_err("pThCtx allocation error\n");
                          return XRAN_STATUS_FAIL;
-@@ -2812,7 +2832,7 @@ xran_spawn_workers(void)
+@@ -2812,7 +2840,7 @@ xran_spawn_workers(void)
                      eth_ctx->pkt_wrk_cfg[pThCtx->worker_id].arg   = pThCtx;
  
                      /** 3 UP GEN **/
@@ -1168,7 +1190,7 @@ index 7c472d7..216c7f5 100644
                      if(pThCtx == NULL){
                          print_err("pThCtx allocation error\n");
                          return XRAN_STATUS_FAIL;
-@@ -2827,7 +2847,7 @@ xran_spawn_workers(void)
+@@ -2827,7 +2855,7 @@ xran_spawn_workers(void)
                      eth_ctx->pkt_wrk_cfg[pThCtx->worker_id].arg   = pThCtx;
  
                      /** 4 UP GEN **/
@@ -1177,7 +1199,7 @@ index 7c472d7..216c7f5 100644
                      if(pThCtx == NULL){
                          print_err("pThCtx allocation error\n");
                          return XRAN_STATUS_FAIL;
-@@ -2861,7 +2881,7 @@ xran_spawn_workers(void)
+@@ -2861,7 +2889,7 @@ xran_spawn_workers(void)
  
                      /* workers */
                      /** 0  Eth RX */
@@ -1186,7 +1208,7 @@ index 7c472d7..216c7f5 100644
                      if(pThCtx == NULL){
                          print_err("pThCtx allocation error\n");
                          return XRAN_STATUS_FAIL;
-@@ -2876,7 +2896,7 @@ xran_spawn_workers(void)
+@@ -2876,7 +2904,7 @@ xran_spawn_workers(void)
                      eth_ctx->pkt_wrk_cfg[pThCtx->worker_id].arg   = pThCtx;
  
                      /** 1  FH RX and BBDEV */
@@ -1195,7 +1217,7 @@ index 7c472d7..216c7f5 100644
                      if(pThCtx == NULL){
                          print_err("pThCtx allocation error\n");
                          return XRAN_STATUS_FAIL;
-@@ -2891,7 +2911,7 @@ xran_spawn_workers(void)
+@@ -2891,7 +2919,7 @@ xran_spawn_workers(void)
                      eth_ctx->pkt_wrk_cfg[pThCtx->worker_id].arg   = pThCtx;
  
                      /** 2  FH RX and BBDEV */
@@ -1204,7 +1226,7 @@ index 7c472d7..216c7f5 100644
                      if(pThCtx == NULL){
                          print_err("pThCtx allocation error\n");
                          return XRAN_STATUS_FAIL;
-@@ -2906,7 +2926,7 @@ xran_spawn_workers(void)
+@@ -2906,7 +2934,7 @@ xran_spawn_workers(void)
                      eth_ctx->pkt_wrk_cfg[pThCtx->worker_id].arg   = pThCtx;
  
                      /** 3  FH RX and BBDEV */
@@ -1213,7 +1235,7 @@ index 7c472d7..216c7f5 100644
                      if(pThCtx == NULL){
                          print_err("pThCtx allocation error\n");
                          return XRAN_STATUS_FAIL;
-@@ -2921,7 +2941,7 @@ xran_spawn_workers(void)
+@@ -2921,7 +2949,7 @@ xran_spawn_workers(void)
                      eth_ctx->pkt_wrk_cfg[pThCtx->worker_id].arg   = pThCtx;
  
                      /**  FH TX and BBDEV */
@@ -1222,7 +1244,7 @@ index 7c472d7..216c7f5 100644
                      if(pThCtx == NULL){
                          print_err("pThCtx allocation error\n");
                          return XRAN_STATUS_FAIL;
-@@ -2969,7 +2989,7 @@ xran_spawn_workers(void)
+@@ -2969,7 +2997,7 @@ xran_spawn_workers(void)
  
              /* p_dev->tx_sym_gen_func = xran_process_tx_sym_cp_on_opt; */
  
@@ -1231,7 +1253,7 @@ index 7c472d7..216c7f5 100644
              if(pThCtx == NULL){
                  print_err("pThCtx allocation error\n");
                  return XRAN_STATUS_FAIL;
-@@ -3004,7 +3024,7 @@ xran_spawn_workers(void)
+@@ -3004,7 +3032,7 @@ xran_spawn_workers(void)
  
                      /* workers */
                      /** 0 **/
@@ -1240,7 +1262,7 @@ index 7c472d7..216c7f5 100644
                      if(pThCtx == NULL){
                          print_err("pThCtx allocation error\n");
                          return XRAN_STATUS_FAIL;
-@@ -3031,7 +3051,7 @@ xran_spawn_workers(void)
+@@ -3031,7 +3059,7 @@ xran_spawn_workers(void)
                      }
  
                      /** 1 - CP GEN **/
@@ -1249,7 +1271,7 @@ index 7c472d7..216c7f5 100644
                      if(pThCtx == NULL){
                          print_err("pThCtx allocation error\n");
                          return XRAN_STATUS_FAIL;
-@@ -3062,7 +3082,7 @@ xran_spawn_workers(void)
+@@ -3062,7 +3090,7 @@ xran_spawn_workers(void)
  
                  /* workers */
                  /** 0 **/
@@ -1258,7 +1280,7 @@ index 7c472d7..216c7f5 100644
                  if(pThCtx == NULL){
                      print_err("pThCtx allocation error\n");
                      return XRAN_STATUS_FAIL;
-@@ -3089,7 +3109,7 @@ xran_spawn_workers(void)
+@@ -3089,7 +3117,7 @@ xran_spawn_workers(void)
                  }
  
                  /** 1 - CP GEN **/
@@ -1267,7 +1289,7 @@ index 7c472d7..216c7f5 100644
                  if(pThCtx == NULL){
                      print_err("pThCtx allocation error\n");
                      return XRAN_STATUS_FAIL;
-@@ -3115,7 +3135,7 @@ xran_spawn_workers(void)
+@@ -3115,7 +3143,7 @@ xran_spawn_workers(void)
  
                      /* workers */
                      /** 0 **/
@@ -1276,7 +1298,7 @@ index 7c472d7..216c7f5 100644
                      if(pThCtx == NULL){
                          print_err("pThCtx allocation error\n");
                          return XRAN_STATUS_FAIL;
-@@ -3130,7 +3150,7 @@ xran_spawn_workers(void)
+@@ -3130,7 +3158,7 @@ xran_spawn_workers(void)
                      eth_ctx->pkt_wrk_cfg[pThCtx->worker_id].arg   = pThCtx;
  
                      /** 1 - CP GEN **/
@@ -1285,7 +1307,7 @@ index 7c472d7..216c7f5 100644
                      if(pThCtx == NULL){
                          print_err("pThCtx allocation error\n");
                          return XRAN_STATUS_FAIL;
-@@ -3145,7 +3165,7 @@ xran_spawn_workers(void)
+@@ -3145,7 +3173,7 @@ xran_spawn_workers(void)
                      eth_ctx->pkt_wrk_cfg[pThCtx->worker_id].arg   = pThCtx;
  
                      /** 2 UP GEN **/
@@ -1294,7 +1316,7 @@ index 7c472d7..216c7f5 100644
                      if(pThCtx == NULL){
                          print_err("pThCtx allocation error\n");
                          return XRAN_STATUS_FAIL;
-@@ -3184,7 +3204,7 @@ xran_spawn_workers(void)
+@@ -3184,7 +3212,7 @@ xran_spawn_workers(void)
  
                      /* workers */
                      /** 0  FH RX and BBDEV */
@@ -1303,7 +1325,7 @@ index 7c472d7..216c7f5 100644
                      if(pThCtx == NULL){
                          print_err("pThCtx allocation error\n");
                          return XRAN_STATUS_FAIL;
-@@ -3199,7 +3219,7 @@ xran_spawn_workers(void)
+@@ -3199,7 +3227,7 @@ xran_spawn_workers(void)
                      eth_ctx->pkt_wrk_cfg[pThCtx->worker_id].arg   = pThCtx;
  
                      /** 1 - CP GEN **/
@@ -1312,7 +1334,7 @@ index 7c472d7..216c7f5 100644
                      if(pThCtx == NULL){
                          print_err("pThCtx allocation error\n");
                          return XRAN_STATUS_FAIL;
-@@ -3214,7 +3234,7 @@ xran_spawn_workers(void)
+@@ -3214,7 +3242,7 @@ xran_spawn_workers(void)
                      eth_ctx->pkt_wrk_cfg[pThCtx->worker_id].arg   = pThCtx;
  
                      /** 2 UP GEN **/
@@ -1321,7 +1343,7 @@ index 7c472d7..216c7f5 100644
                      if(pThCtx == NULL){
                          print_err("pThCtx allocation error\n");
                          return XRAN_STATUS_FAIL;
-@@ -3229,7 +3249,7 @@ xran_spawn_workers(void)
+@@ -3229,7 +3257,7 @@ xran_spawn_workers(void)
                      eth_ctx->pkt_wrk_cfg[pThCtx->worker_id].arg   = pThCtx;
  
                      /** 3 UP GEN **/
@@ -1330,7 +1352,7 @@ index 7c472d7..216c7f5 100644
                      if(pThCtx == NULL){
                          print_err("pThCtx allocation error\n");
                          return XRAN_STATUS_FAIL;
-@@ -3266,7 +3286,7 @@ xran_spawn_workers(void)
+@@ -3266,7 +3294,7 @@ xran_spawn_workers(void)
  
                      /* workers */
                      /** 0 **/
@@ -1339,7 +1361,7 @@ index 7c472d7..216c7f5 100644
                      if(pThCtx == NULL){
                          print_err("pThCtx allocation error\n");
                          return XRAN_STATUS_FAIL;
-@@ -3281,7 +3301,7 @@ xran_spawn_workers(void)
+@@ -3281,7 +3309,7 @@ xran_spawn_workers(void)
                      eth_ctx->pkt_wrk_cfg[pThCtx->worker_id].arg   = pThCtx;
  
                      /** 1 - CP GEN **/
@@ -1348,7 +1370,7 @@ index 7c472d7..216c7f5 100644
                      if(pThCtx == NULL){
                          print_err("pThCtx allocation error\n");
                          return XRAN_STATUS_FAIL;
-@@ -3296,7 +3316,7 @@ xran_spawn_workers(void)
+@@ -3296,7 +3324,7 @@ xran_spawn_workers(void)
                      eth_ctx->pkt_wrk_cfg[pThCtx->worker_id].arg   = pThCtx;
  
                      /** 2 UP GEN **/
@@ -1357,7 +1379,7 @@ index 7c472d7..216c7f5 100644
                      if(pThCtx == NULL){
                          print_err("pThCtx allocation error\n");
                          return XRAN_STATUS_FAIL;
-@@ -3311,7 +3331,7 @@ xran_spawn_workers(void)
+@@ -3311,7 +3339,7 @@ xran_spawn_workers(void)
                      eth_ctx->pkt_wrk_cfg[pThCtx->worker_id].arg   = pThCtx;
  
                      /** 3 UP GEN **/
@@ -1366,7 +1388,7 @@ index 7c472d7..216c7f5 100644
                      if(pThCtx == NULL){
                          print_err("pThCtx allocation error\n");
                          return XRAN_STATUS_FAIL;
-@@ -3326,7 +3346,7 @@ xran_spawn_workers(void)
+@@ -3326,7 +3354,7 @@ xran_spawn_workers(void)
                      eth_ctx->pkt_wrk_cfg[pThCtx->worker_id].arg   = pThCtx;
  
                      /** 4 UP GEN **/
@@ -1375,7 +1397,7 @@ index 7c472d7..216c7f5 100644
                      if(pThCtx == NULL){
                          print_err("pThCtx allocation error\n");
                          return XRAN_STATUS_FAIL;
-@@ -3348,7 +3368,7 @@ xran_spawn_workers(void)
+@@ -3348,7 +3376,7 @@ xran_spawn_workers(void)
  
                      /* workers */
                      /** 0  Eth RX */
@@ -1384,7 +1406,7 @@ index 7c472d7..216c7f5 100644
                      if(pThCtx == NULL){
                          print_err("pThCtx allocation error\n");
                          return XRAN_STATUS_FAIL;
-@@ -3363,7 +3383,7 @@ xran_spawn_workers(void)
+@@ -3363,7 +3391,7 @@ xran_spawn_workers(void)
                      eth_ctx->pkt_wrk_cfg[pThCtx->worker_id].arg   = pThCtx;
  
                      /** 1  FH RX and BBDEV */
@@ -1393,7 +1415,7 @@ index 7c472d7..216c7f5 100644
                      if(pThCtx == NULL){
                          print_err("pThCtx allocation error\n");
                          return XRAN_STATUS_FAIL;
-@@ -3378,7 +3398,7 @@ xran_spawn_workers(void)
+@@ -3378,7 +3406,7 @@ xran_spawn_workers(void)
                      eth_ctx->pkt_wrk_cfg[pThCtx->worker_id].arg   = pThCtx;
  
                      /** 2  FH RX and BBDEV */
@@ -1402,7 +1424,7 @@ index 7c472d7..216c7f5 100644
                      if(pThCtx == NULL){
                          print_err("pThCtx allocation error\n");
                          return XRAN_STATUS_FAIL;
-@@ -3393,7 +3413,7 @@ xran_spawn_workers(void)
+@@ -3393,7 +3421,7 @@ xran_spawn_workers(void)
                      eth_ctx->pkt_wrk_cfg[pThCtx->worker_id].arg   = pThCtx;
  
                      /** 3  FH RX and BBDEV */
@@ -1411,7 +1433,7 @@ index 7c472d7..216c7f5 100644
                      if(pThCtx == NULL){
                          print_err("pThCtx allocation error\n");
                          return XRAN_STATUS_FAIL;
-@@ -3408,7 +3428,7 @@ xran_spawn_workers(void)
+@@ -3408,7 +3436,7 @@ xran_spawn_workers(void)
                      eth_ctx->pkt_wrk_cfg[pThCtx->worker_id].arg   = pThCtx;
  
                      /**  FH TX and BBDEV */
@@ -1420,7 +1442,7 @@ index 7c472d7..216c7f5 100644
                      if(pThCtx == NULL){
                          print_err("pThCtx allocation error\n");
                          return XRAN_STATUS_FAIL;
-@@ -3435,7 +3455,7 @@ xran_spawn_workers(void)
+@@ -3435,7 +3463,7 @@ xran_spawn_workers(void)
  
                  /* workers */
                  /** 0  Eth RX */
@@ -1429,7 +1451,7 @@ index 7c472d7..216c7f5 100644
                  if(pThCtx == NULL){
                      print_err("pThCtx allocation error\n");
                      return XRAN_STATUS_FAIL;
-@@ -3450,7 +3470,7 @@ xran_spawn_workers(void)
+@@ -3450,7 +3478,7 @@ xran_spawn_workers(void)
                  eth_ctx->pkt_wrk_cfg[pThCtx->worker_id].arg   = pThCtx;
  
                  /** 1  FH RX and BBDEV */
@@ -1438,7 +1460,7 @@ index 7c472d7..216c7f5 100644
                  if(pThCtx == NULL){
                      print_err("pThCtx allocation error\n");
                      return XRAN_STATUS_FAIL;
-@@ -3465,7 +3485,7 @@ xran_spawn_workers(void)
+@@ -3465,7 +3493,7 @@ xran_spawn_workers(void)
                  eth_ctx->pkt_wrk_cfg[pThCtx->worker_id].arg   = pThCtx;
  
                  /** 2  FH RX and BBDEV */
@@ -1447,7 +1469,7 @@ index 7c472d7..216c7f5 100644
                  if(pThCtx == NULL){
                      print_err("pThCtx allocation error\n");
                      return XRAN_STATUS_FAIL;
-@@ -3480,7 +3500,7 @@ xran_spawn_workers(void)
+@@ -3480,7 +3508,7 @@ xran_spawn_workers(void)
                  eth_ctx->pkt_wrk_cfg[pThCtx->worker_id].arg   = pThCtx;
  
                  /** 3  FH RX and BBDEV */
@@ -1456,7 +1478,7 @@ index 7c472d7..216c7f5 100644
                  if(pThCtx == NULL){
                      print_err("pThCtx allocation error\n");
                      return XRAN_STATUS_FAIL;
-@@ -3495,7 +3515,7 @@ xran_spawn_workers(void)
+@@ -3495,7 +3523,7 @@ xran_spawn_workers(void)
                      eth_ctx->pkt_wrk_cfg[pThCtx->worker_id].arg   = pThCtx;
  
                  /** 4  FH RX and BBDEV */
@@ -1465,7 +1487,7 @@ index 7c472d7..216c7f5 100644
                  if(pThCtx == NULL){
                      print_err("pThCtx allocation error\n");
                      return XRAN_STATUS_FAIL;
-@@ -3510,7 +3530,7 @@ xran_spawn_workers(void)
+@@ -3510,7 +3538,7 @@ xran_spawn_workers(void)
                  eth_ctx->pkt_wrk_cfg[pThCtx->worker_id].arg   = pThCtx;
  
                  /**  FH TX and BBDEV */
@@ -1474,7 +1496,7 @@ index 7c472d7..216c7f5 100644
                  if(pThCtx == NULL){
                      print_err("pThCtx allocation error\n");
                      return XRAN_STATUS_FAIL;
-@@ -3537,7 +3557,7 @@ xran_spawn_workers(void)
+@@ -3537,7 +3565,7 @@ xran_spawn_workers(void)
  
                  /* workers */
                  /** 0 **/
@@ -1483,7 +1505,7 @@ index 7c472d7..216c7f5 100644
                  if(pThCtx == NULL){
                      print_err("pThCtx allocation error\n");
                      return XRAN_STATUS_FAIL;
-@@ -3562,7 +3582,7 @@ xran_spawn_workers(void)
+@@ -3562,7 +3590,7 @@ xran_spawn_workers(void)
                  }
  
                  /** 1 - CP GEN **/
@@ -1492,7 +1514,7 @@ index 7c472d7..216c7f5 100644
                  if(pThCtx == NULL){
                      print_err("pThCtx allocation error\n");
                      return XRAN_STATUS_FAIL;
-@@ -3577,7 +3597,7 @@ xran_spawn_workers(void)
+@@ -3577,7 +3605,7 @@ xran_spawn_workers(void)
                  eth_ctx->pkt_wrk_cfg[pThCtx->worker_id].arg   = pThCtx;
  
                  /** 2 UP GEN **/
@@ -1501,7 +1523,7 @@ index 7c472d7..216c7f5 100644
                  if(pThCtx == NULL){
                      print_err("pThCtx allocation error\n");
                      return XRAN_STATUS_FAIL;
-@@ -3602,7 +3622,7 @@ xran_spawn_workers(void)
+@@ -3602,7 +3630,7 @@ xran_spawn_workers(void)
                  }
  
                  /** 3 UP GEN **/
@@ -1510,7 +1532,7 @@ index 7c472d7..216c7f5 100644
                  if(pThCtx == NULL){
                      print_err("pThCtx allocation error\n");
                      return XRAN_STATUS_FAIL;
-@@ -3627,7 +3647,7 @@ xran_spawn_workers(void)
+@@ -3627,7 +3655,7 @@ xran_spawn_workers(void)
                  }
  
                  /** 4 UP GEN **/
@@ -1519,7 +1541,7 @@ index 7c472d7..216c7f5 100644
                  if(pThCtx == NULL){
                      print_err("pThCtx allocation error\n");
                      return XRAN_STATUS_FAIL;
-@@ -3642,7 +3662,7 @@ xran_spawn_workers(void)
+@@ -3642,7 +3670,7 @@ xran_spawn_workers(void)
                  eth_ctx->pkt_wrk_cfg[pThCtx->worker_id].arg   = pThCtx;
  
                  /** 5 UP GEN **/
@@ -1528,7 +1550,7 @@ index 7c472d7..216c7f5 100644
                  if(pThCtx == NULL){
                      print_err("pThCtx allocation error\n");
                      return XRAN_STATUS_FAIL;
-@@ -4034,6 +4054,24 @@ xran_get_slot_idx (uint32_t PortId, uint32_t *nFrameIdx, uint32_t *nSubframeIdx,
+@@ -4034,6 +4062,24 @@ xran_get_slot_idx (uint32_t PortId, uint32_t *nFrameIdx, uint32_t *nSubframeIdx,
      return tti;
  }
  

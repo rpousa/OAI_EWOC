@@ -672,144 +672,135 @@ void send_dummy_subframe(pnf_p7_t* pnf_p7, uint16_t sfn_sf)
 	}
 }
 
+int nr_pnf_p7_get_msgs(pnf_p7_t* pnf_p7,
+                       uint16_t phy_id,
+                       uint16_t sfn,
+                       uint16_t slot,
+                       nfapi_nr_dl_tti_request_t* ret_dl_tti,
+                       nfapi_nr_ul_tti_request_t* ret_ul_tti,
+                       nfapi_nr_ul_dci_request_t* ret_ul_dci,
+                       nfapi_nr_tx_data_request_t* ret_tx_data)
+{
+  if (pthread_mutex_lock(&(pnf_p7->mutex)) != 0) {
+    NFAPI_TRACE(NFAPI_TRACE_INFO, "failed to lock mutex\n");
+    return -1;
+  }
 
-int pnf_p7_slot_ind(pnf_p7_t* pnf_p7, uint16_t phy_id, uint16_t sfn, uint16_t slot)
-{	
-	//This function is aligned with rx sfn/slot
+  // save the curren time, sfn and slot
+  // TODO useful?
+  pnf_p7->slot_start_time_hr = pnf_get_current_time_hr();
 
-	// We could either send an event to the p7 thread have have it run the
-	// subframe or we could handle it here and lock access to the subframe
-	// buffers. If we do it on the p7 thread then we run the risk of blocking
-	// on the udp send. 
-	
-	// todo : consider a more efficent lock mechasium
-	//uint16_t NUM_SLOTS = 20;//10* 2^mu
-	
-	if(pthread_mutex_lock(&(pnf_p7->mutex)) != 0)
-	{
-		NFAPI_TRACE(NFAPI_TRACE_INFO, "failed to lock mutex\n");
-		return -1;
-	}
+  // We align the pnf_p7 sfn/slot with tx sfn/slot, and vnf is synced with pnf_p7 sfn/slot. This is so that the scheduler runs
+  // slot_ahead from rx thread.
+  pnf_p7->sfn = sfn;
+  pnf_p7->slot = slot;
 
-	// save the curren time, sfn and slot
-	pnf_p7->slot_start_time_hr = pnf_get_current_time_hr();
+  uint32_t tx_slot_dec = NFAPI_SFNSLOT2DEC(pnf_p7->mu, sfn, slot);
+  uint8_t buffer_index_tx = tx_slot_dec % NFAPI_SLOTNUM(pnf_p7->mu);
 
-	//We align the pnf_p7 sfn/slot with tx sfn/slot, and vnf is synced with pnf_p7 sfn/slot. This is so that the scheduler runs slot_ahead from rx thread.
+  // If the subframe_buffer has been configured
+  if (pnf_p7->_public.slot_buffer_size != 0) // for now value is same as sf_buffer_size
+  {
+    // apply the shift to the incoming sfn_sf
+    if (pnf_p7->slot_shift != 0) // see in vnf_build_send_dl_node_sync
+    {
+      uint16_t shifted_slot = slot + pnf_p7->slot_shift;
 
-	pnf_p7->sfn = sfn;
-	pnf_p7->slot = slot;
+      // adjust for wrap-around
+      if (shifted_slot < 0)
+        shifted_slot += NFAPI_MAX_SFNSLOTDEC(pnf_p7->mu);
+      else if (shifted_slot > NFAPI_MAX_SFNSLOTDEC(pnf_p7->mu))
+        shifted_slot -= NFAPI_MAX_SFNSLOTDEC(pnf_p7->mu);
 
-	uint32_t tx_slot_dec = NFAPI_SFNSLOT2DEC(pnf_p7->mu, sfn,slot);
-	uint8_t buffer_index_tx = tx_slot_dec % NFAPI_SLOTNUM(pnf_p7->mu);
+      //NFAPI_TRACE(NFAPI_TRACE_INFO, "Applying shift %d to sfn/slot (%d -> %d)\n", pnf_p7->sfn_slot_shift,
+      //NFAPI_SFNSF2DEC(sfn_slot), shifted_sfn_slot);
+      slot = shifted_slot;
 
-	// If the subframe_buffer has been configured
-	if(pnf_p7->_public.slot_buffer_size!= 0) // for now value is same as sf_buffer_size
-	{
+      //
+      // why does the shift not apply to pnf_p7->sfn_sf???
+      //
 
-		// apply the shift to the incoming sfn_sf
-		if(pnf_p7->slot_shift != 0) // see in vnf_build_send_dl_node_sync
-		{
-			uint16_t shifted_slot = slot + pnf_p7->slot_shift; 
+      pnf_p7->slot_shift = 0;
+    }
 
-			// adjust for wrap-around
-			if(shifted_slot < 0)
-				shifted_slot += NFAPI_MAX_SFNSLOTDEC(pnf_p7->mu);
-			else if(shifted_slot > NFAPI_MAX_SFNSLOTDEC(pnf_p7->mu))
-				shifted_slot -= NFAPI_MAX_SFNSLOTDEC(pnf_p7->mu);
+    nfapi_pnf_p7_slot_buffer_t* tx_slot_buffer = &(pnf_p7->slot_buffer[buffer_index_tx]);
 
-	//		NFAPI_TRACE(NFAPI_TRACE_INFO, "Applying shift %d to sfn/slot (%d -> %d)\n", pnf_p7->sfn_slot_shift, NFAPI_SFNSF2DEC(sfn_slot), shifted_sfn_slot);
-			slot = shifted_slot;
-
-			//
-			// why does the shift not apply to pnf_p7->sfn_sf???
-			//
-
-			pnf_p7->slot_shift = 0;
-		}
-
-		nfapi_pnf_p7_slot_buffer_t* tx_slot_buffer = &(pnf_p7->slot_buffer[buffer_index_tx]);
-
+    ret_dl_tti->SFN = sfn;
+    ret_dl_tti->Slot = slot;
+    ret_dl_tti->dl_tti_request_body.nPDUs = 0;
     nfapi_nr_dl_tti_request_t* dl_tti_req = &tx_slot_buffer->dl_tti_req;
-    nfapi_nr_tx_data_request_t* tx_data_req = &tx_slot_buffer->tx_data_req;
-    if (dl_tti_req->dl_tti_request_body.nPDUs > 0 && dl_tti_req->SFN == sfn && dl_tti_req->Slot == slot) {
-      DevAssert(pnf_p7->_public.dl_tti_req_fn != NULL);
-      DevAssert(pnf_p7->_public.tx_data_req_fn != NULL);
-      if (tx_data_req->Number_of_PDUs > 0 && tx_data_req->SFN == sfn && tx_data_req->Slot == slot) {
-        (pnf_p7->_public.dl_tti_req_fn)(NULL, &(pnf_p7->_public), dl_tti_req);
-        (pnf_p7->_public.tx_data_req_fn)(&(pnf_p7->_public), tx_data_req);
-      } else {
-        NFAPI_TRACE(NFAPI_TRACE_ERROR, "%4d.%2d no corresponding tx_data.request for dl_tti.request, dropping\n", sfn, slot);
-      }
+    if (dl_tti_req->SFN == sfn && dl_tti_req->Slot == slot) {
+      copy_dl_tti_request(dl_tti_req, ret_dl_tti);
       tx_slot_buffer->dl_tti_req.SFN = -1;
       tx_slot_buffer->dl_tti_req.Slot = -1;
-      tx_slot_buffer->tx_data_req.SFN = -1;
-      tx_slot_buffer->tx_data_req.Slot = -1;
     }
-    if (tx_data_req->Number_of_PDUs > 0 && tx_data_req->SFN == sfn && tx_data_req->Slot == slot) {
-      // there is a tx_data.request in this slot, but no corresponding
-      // dl_tti.request (when they need to come pairwise)
-      NFAPI_TRACE(NFAPI_TRACE_ERROR, "%4d.%2d no corresponding dl_tti.request for tx_data.request, dropping\n", sfn, slot);
+
+    ret_tx_data->SFN = sfn;
+    ret_tx_data->Slot = slot;
+    ret_tx_data->Number_of_PDUs = 0;
+    nfapi_nr_tx_data_request_t* txd = &tx_slot_buffer->tx_data_req;
+    if (txd->SFN == sfn && txd->Slot == slot) {
+      copy_tx_data_request(txd, ret_tx_data);
       tx_slot_buffer->tx_data_req.SFN = -1;
       tx_slot_buffer->tx_data_req.Slot = -1;
     }
 
-		if(tx_slot_buffer->ul_tti_req.n_pdus > 0 && tx_slot_buffer->ul_tti_req.SFN == sfn && tx_slot_buffer->ul_tti_req.Slot == slot)
-		{
-			DevAssert(pnf_p7->_public.ul_tti_req_fn != NULL);
-			(pnf_p7->_public.ul_tti_req_fn)(NULL, &(pnf_p7->_public), &tx_slot_buffer->ul_tti_req);
+    ret_ul_tti->SFN = sfn;
+    ret_ul_tti->Slot = slot;
+    ret_ul_tti->n_pdus = 0;
+    if (tx_slot_buffer->ul_tti_req.SFN == sfn && tx_slot_buffer->ul_tti_req.Slot == slot) {
+      copy_ul_tti_request(&tx_slot_buffer->ul_tti_req, ret_ul_tti);
       tx_slot_buffer->ul_tti_req.SFN = -1;
       tx_slot_buffer->ul_tti_req.Slot = -1;
-		}
+    }
 
-		if(tx_slot_buffer->ul_dci_req.numPdus > 0 && tx_slot_buffer->ul_dci_req.SFN == sfn && tx_slot_buffer->ul_dci_req.Slot == slot)
-		{
-			DevAssert(pnf_p7->_public.ul_dci_req_fn != NULL);
-      (pnf_p7->_public.ul_dci_req_fn)(NULL, &(pnf_p7->_public), &tx_slot_buffer->ul_dci_req);
+    ret_ul_dci->SFN = sfn;
+    ret_ul_dci->Slot = slot;
+    ret_ul_dci->numPdus = 0;
+    if (tx_slot_buffer->ul_dci_req.SFN == sfn && tx_slot_buffer->ul_dci_req.Slot == slot) {
+      copy_ul_dci_request(&tx_slot_buffer->ul_dci_req, ret_ul_dci);
       tx_slot_buffer->ul_dci_req.SFN = -1;
       tx_slot_buffer->ul_dci_req.Slot = -1;
-		}
+    }
 
-		//send the periodic timing info if configured
-		if(pnf_p7->_public.timing_info_mode_periodic && (pnf_p7->timing_info_period_counter++) == pnf_p7->_public.timing_info_period)
-		{
-			pnf_nr_pack_and_send_timing_info(pnf_p7);
+    // send the periodic timing info if configured
+    if (pnf_p7->_public.timing_info_mode_periodic && (pnf_p7->timing_info_period_counter++) == pnf_p7->_public.timing_info_period) {
+      pnf_nr_pack_and_send_timing_info(pnf_p7);
 
-			pnf_p7->timing_info_period_counter = 0;
-		}
-		else if(pnf_p7->_public.timing_info_mode_aperiodic && pnf_p7->timing_info_aperiodic_send)
-		{
-			pnf_nr_pack_and_send_timing_info(pnf_p7);
+      pnf_p7->timing_info_period_counter = 0;
+    } else if (pnf_p7->_public.timing_info_mode_aperiodic && pnf_p7->timing_info_aperiodic_send) {
+      pnf_nr_pack_and_send_timing_info(pnf_p7);
 
-			pnf_p7->timing_info_aperiodic_send = 0;
-		}
-		else
-		{
-			pnf_p7->timing_info_ms_counter++;
-		}
-
-	}
+      pnf_p7->timing_info_aperiodic_send = 0;
+    } else {
+      pnf_p7->timing_info_ms_counter++;
+    }
+  }
 
   if (sfn % 128 == 0 && slot == 0) {
     pnf_p7_nr_stats_t* s = &pnf_p7->nr_stats;
     int ontime = s->dl_tti.ontime + s->ul_tti.ontime + s->ul_dci.ontime + s->tx_data.ontime;
     int late = s->dl_tti.late + s->ul_tti.late + s->ul_dci.late + s->tx_data.late;
 
-    float dl_thr = (float) s->dl.bytes * 8 / 1000 / 1000 / 1.28f; // every 128 frames = 1.28 s
-    float ul_thr = (float) s->ul.bytes * 8 / 1000 / 1000 / 1.28f;
-    NFAPI_TRACE(NFAPI_TRACE_INFO, "[P7:%d] msgs ontime %d thr DL %.2f UL %.2f msg late %d (vtime)\n", pnf_p7->_public.phy_id, ontime, dl_thr, ul_thr, late);
+    float dl_thr = (float)s->dl.bytes * 8 / 1000 / 1000 / 1.28f; // every 128 frames = 1.28 s
+    float ul_thr = (float)s->ul.bytes * 8 / 1000 / 1000 / 1.28f;
+    NFAPI_TRACE(NFAPI_TRACE_INFO,
+                "[P7:%d] msgs ontime %d thr DL %.2f UL %.2f msg late %d (vtime)\n",
+                pnf_p7->_public.phy_id,
+                ontime,
+                dl_thr,
+                ul_thr,
+                late);
     memset(s, 0, sizeof(*s));
   }
 
-  if(pthread_mutex_unlock(&(pnf_p7->mutex)) != 0)
-	{
-		NFAPI_TRACE(NFAPI_TRACE_INFO, "failed to unlock mutex\n");
-		return -1;
-	}
+  if (pthread_mutex_unlock(&(pnf_p7->mutex)) != 0) {
+    NFAPI_TRACE(NFAPI_TRACE_INFO, "failed to unlock mutex\n");
+    return -1;
+  }
 
-	return 0;
+  return 0;
 }
-
-
 
 int pnf_p7_subframe_ind(pnf_p7_t* pnf_p7, uint16_t phy_id, uint16_t sfn_sf)
 {

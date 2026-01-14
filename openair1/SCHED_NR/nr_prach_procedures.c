@@ -33,7 +33,6 @@
 #include "PHY/defs_gNB.h"
 #include "PHY/NR_TRANSPORT/nr_transport_proto.h"
 #include "nfapi_nr_interface_scf.h"
-#include "fapi_nr_l1.h"
 #include "nfapi_pnf.h"
 #include "common/utils/LOG/log.h"
 #include "common/utils/LOG/vcd_signal_dumper.h"
@@ -49,99 +48,86 @@ int get_nr_prach_duration(uint8_t prach_format)
 
 void L1_nr_prach_procedures(PHY_VARS_gNB *gNB, int frame, int slot, nfapi_nr_rach_indication_t *rach_ind)
 {
-  uint16_t max_preamble[4]={0},max_preamble_energy[4]={0},max_preamble_delay[4]={0};
-
-  RU_t *ru;
-  int aa=0;
-  int ru_aa;
-
- 
   VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME(VCD_SIGNAL_DUMPER_FUNCTIONS_PHY_ENB_PRACH_RX,1);
   rach_ind->sfn = frame;
   rach_ind->slot = slot;
   rach_ind->number_of_pdus = 0;
 
-  ru=gNB->RU_list[0];
+  prach_item_t *prach_id = find_nr_prach(&gNB->prach_list, frame, slot, SEARCH_EXIST);
+  if (!prach_id) {
+    return;
+  }
 
-  int prach_id = find_nr_prach(gNB, frame, slot, SEARCH_EXIST);
-  if (prach_id >= 0) {
-    LOG_D(NR_PHY,"%d.%d Got prach entry id %d\n",frame,slot,prach_id);
-    nfapi_nr_prach_pdu_t *prach_pdu = &gNB->prach_vars.list[prach_id].pdu;
-    const int prach_start_slot = gNB->prach_vars.list[prach_id].slot;
-    uint8_t prachStartSymbol;
-    int N_dur = get_nr_prach_duration(prach_pdu->prach_format);
+  nfapi_nr_prach_pdu_t *prach_pdu = &prach_id->pdu;
+  LOG_D(NR_PHY_RACH, "%d.%d, prachstart slot %d prach entry occas %d\n", frame, slot, prach_id->slot, prach_pdu->num_prach_ocas);
+  const int prach_start_slot = prach_id->slot;
+  int N_dur = get_nr_prach_duration(prach_pdu->prach_format);
 
-    for(int prach_oc = 0; prach_oc < prach_pdu->num_prach_ocas; prach_oc++) {
-      for (ru_aa=0,aa=0;ru_aa<ru->nb_rx;ru_aa++,aa++) {
-        gNB->prach_vars.rxsigF[aa] = ru->prach_rxsigF[prach_oc][ru_aa];
-      }
+  for (int prach_oc = 0; prach_oc < prach_pdu->num_prach_ocas; prach_oc++) {
+    uint prachStartSymbol = prach_pdu->prach_start_symbol + prach_oc * N_dur;
+    // comment FK: the standard 38.211 section 5.3.2 has one extra term +14*N_RA_slot. This is because there prachStartSymbol is
+    // given wrt to start of the 15kHz slot or 60kHz slot. Here we work slot based, so this function is anyway only called in slots
+    // where there is PRACH. Its up to the MAC to schedule another PRACH PDU in the case there are there N_RA_slot \in {0,1}.
+    rx_prach_out_t res = rx_nr_prach(prach_id, prach_oc);
+    LOG_D(NR_PHY,
+          "[RAPROC] Frame %d, slot %d, occasion %d (prachStartSymbol %d) : Most likely preamble %d, energy %d.%d dB delay %d "
+          "(prach_energy counter %d)\n",
+          frame,
+          slot,
+          prach_oc,
+          prachStartSymbol,
+          res.max_preamble,
+          res.max_preamble_energy / 10,
+          res.max_preamble_energy % 10,
+          res.max_preamble_delay,
+          gNB->prach_energy_counter);
 
-      prachStartSymbol = prach_pdu->prach_start_symbol + prach_oc * N_dur;
-      //comment FK: the standard 38.211 section 5.3.2 has one extra term +14*N_RA_slot. This is because there prachStartSymbol is given wrt to start of the 15kHz slot or 60kHz slot. Here we work slot based, so this function is anyway only called in slots where there is PRACH. Its up to the MAC to schedule another PRACH PDU in the case there are there N_RA_slot \in {0,1}. 
+    if ((gNB->prach_energy_counter == NUM_PRACH_RX_FOR_NOISE_ESTIMATE)
+        && (res.max_preamble_energy > gNB->measurements.prach_I0 + gNB->prach_thres)
+        && (rach_ind->number_of_pdus < MAX_NUM_NR_RX_RACH_PDUS)) {
+      LOG_A(NR_PHY,
+            "[RAPROC] %d.%d Initiating RA procedure with preamble %d, energy %d.%d dB (I0 %d, thres %d), delay %d start symbol "
+            "%u freq index %u\n",
+            frame,
+            prach_start_slot,
+            res.max_preamble,
+            res.max_preamble_energy / 10,
+            res.max_preamble_energy % 10,
+            gNB->measurements.prach_I0,
+            gNB->prach_thres,
+            res.max_preamble_delay,
+            prachStartSymbol,
+            prach_pdu->num_ra);
 
-      rx_nr_prach(gNB,
-		  prach_pdu,
-		  prach_oc,
-		  frame,
-		  slot,
-		  &max_preamble[0],
-		  &max_preamble_energy[0],
-		  &max_preamble_delay[0]);
-      LOG_D(NR_PHY,"Freeing PRACH entry %d\n",prach_id);
-      free_nr_prach_entry(gNB,prach_id);
-      LOG_D(NR_PHY,"[RAPROC] Frame %d, slot %d, occasion %d (prachStartSymbol %d) : Most likely preamble %d, energy %d.%d dB delay %d (prach_energy counter %d)\n",
-	    frame,slot,prach_oc,prachStartSymbol,
-	    max_preamble[0],
-	    max_preamble_energy[0]/10,
-            max_preamble_energy[0]%10,
-	    max_preamble_delay[0],
-	    gNB->prach_energy_counter);
+      T(T_ENB_PHY_INITIATE_RA_PROCEDURE,
+        T_INT(gNB->Mod_id),
+        T_INT(frame),
+        T_INT(slot),
+        T_INT(res.max_preamble),
+        T_INT(res.max_preamble_energy),
+        T_INT(res.max_preamble_delay));
 
-      if ((gNB->prach_energy_counter == NUM_PRACH_RX_FOR_NOISE_ESTIMATE)
-          && (max_preamble_energy[0] > gNB->measurements.prach_I0 + gNB->prach_thres)
-          && (rach_ind->number_of_pdus < MAX_NUM_NR_RX_RACH_PDUS)) {
-        LOG_A(NR_PHY,
-              "[RAPROC] %d.%d Initiating RA procedure with preamble %d, energy %d.%d dB (I0 %d, thres %d), delay %d start symbol "
-              "%u freq index %u\n",
-              frame,
-              prach_start_slot,
-              max_preamble[0],
-              max_preamble_energy[0] / 10,
-              max_preamble_energy[0] % 10,
-              gNB->measurements.prach_I0,
-              gNB->prach_thres,
-              max_preamble_delay[0],
-              prachStartSymbol,
-              prach_pdu->num_ra);
-
-        T(T_ENB_PHY_INITIATE_RA_PROCEDURE,
-          T_INT(gNB->Mod_id),
-          T_INT(frame),
-          T_INT(slot),
-          T_INT(max_preamble[0]),
-          T_INT(max_preamble_energy[0]),
-          T_INT(max_preamble_delay[0]));
-
-        nfapi_nr_prach_indication_pdu_t *ind = rach_ind->pdu_list + rach_ind->number_of_pdus;
-        ind->phy_cell_id = gNB->gNB_config.cell_config.phy_cell_id.value;
-        ind->symbol_index = prachStartSymbol;
-        ind->slot_index = slot;
-        ind->freq_index = prach_pdu->num_ra;
-        ind->avg_rssi = (max_preamble_energy[0] < 631) ? (128 + (max_preamble_energy[0] / 5)) : 254;
-        ind->avg_snr = 0xff; // invalid for now
-
-        ind->num_preamble = 1;
-        ind->preamble_list[0].preamble_index = max_preamble[0];
-        ind->preamble_list[0].timing_advance = max_preamble_delay[0];
-        ind->preamble_list[0].preamble_pwr = 0xffffffff;
-        rach_ind->number_of_pdus++;
-      }
-      gNB->measurements.prach_I0 = ((gNB->measurements.prach_I0*900)>>10) + ((max_preamble_energy[0]*124)>>10); 
-      if (frame==0) LOG_I(PHY,"prach_I0 = %d.%d dB\n",gNB->measurements.prach_I0/10,gNB->measurements.prach_I0%10);
-      if (gNB->prach_energy_counter < NUM_PRACH_RX_FOR_NOISE_ESTIMATE)
-        gNB->prach_energy_counter++;
-    } //if prach_id>0
-    rach_ind->slot = prach_start_slot;
-  } // for NUMBER_OF_NR_PRACH_OCCASION_MAX
+      nfapi_nr_prach_indication_pdu_t *ind = rach_ind->pdu_list + rach_ind->number_of_pdus;
+      *ind = (nfapi_nr_prach_indication_pdu_t){
+          .phy_cell_id = gNB->gNB_config.cell_config.phy_cell_id.value,
+          .symbol_index = prachStartSymbol,
+          .slot_index = slot,
+          .freq_index = prach_pdu->num_ra,
+          .avg_rssi = (res.max_preamble_energy < 631) ? (128 + (res.max_preamble_energy / 5)) : 254,
+          .avg_snr = 0xff, // invalid for now
+          .num_preamble = 1,
+          .preamble_list = {
+              {.preamble_index = res.max_preamble, .timing_advance = res.max_preamble_delay, .preamble_pwr = 0xffffffff}}};
+      rach_ind->number_of_pdus++;
+    }
+    gNB->measurements.prach_I0 = ((gNB->measurements.prach_I0 * 900) >> 10) + ((res.max_preamble_energy * 124) >> 10);
+    if (frame == 0)
+      LOG_I(PHY, "prach_I0 = %d.%d dB\n", gNB->measurements.prach_I0 / 10, gNB->measurements.prach_I0 % 10);
+    if (gNB->prach_energy_counter < NUM_PRACH_RX_FOR_NOISE_ESTIMATE)
+      gNB->prach_energy_counter++;
+  } // if prach_id>0
+  rach_ind->slot = prach_start_slot;
+  LOG_D(NR_PHY_RACH, "Freeing PRACH entry\n");
+  free_nr_prach_entry(&gNB->prach_list, prach_id);
   VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME(VCD_SIGNAL_DUMPER_FUNCTIONS_PHY_ENB_PRACH_RX,0);
 }

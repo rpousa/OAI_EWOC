@@ -267,6 +267,24 @@ pipeline {
         }
       }
     }
+    stage ("DockerHub-Push") {
+      when { expression {doBuild && "PUSH".equals(env.gitlabActionType)} }
+      steps {
+        script {
+          catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+            triggerSlaveJob ('RAN-DockerHub-Push', 'DockerHub-Push')
+          }
+        }
+      }
+      post {
+        failure {
+          script {
+            echo "Push to Docker-Hub KO"
+            failingStages += '\n * RAN-DockerHub-Push'
+          }
+        }
+      }
+    }
     stage ("Image Test Processes") {
       when { expression {doBuild} }
       parallel {
@@ -358,6 +376,29 @@ pipeline {
               script {
                 currentBuild.result = 'FAILURE'
                 failingStages += rfSim4GStatus
+              }
+            }
+          }
+        }
+        stage ("VRT-Sim-Test-5G") {
+          when { expression {do5Gtest || do5GUeTest} }
+          steps {
+            script {
+              triggerSlaveJob ('RAN-VRT-Sim-Test-5G', 'VRT-Sim-Test-5G')
+            }
+          }
+          post {
+            always {
+              script {
+                // Using a unique variable name for each test stage to avoid overwriting on a global variable
+                // due to parallel-time concurrency
+                vrtSim5GStatus = finalizeSlaveJob('RAN-VRT-Sim-Test-5G')
+              }
+            }
+            failure {
+              script {
+                currentBuild.result = 'FAILURE'
+                failingStages += vrtSim5GStatus
               }
             }
           }
@@ -752,23 +793,6 @@ pipeline {
                 failingStages += saOAIUEStatus
               }
             }
-          }
-        }
-      }
-    }
-    stage ("DockerHub-Push") {
-      when { expression {doBuild && "PUSH".equals(env.gitlabActionType)} }
-      steps {
-        script {
-          triggerSlaveJob ('RAN-DockerHub-Push', 'DockerHub-Push')
-        }
-      }
-      post {
-        failure {
-          script {
-            echo "Push to Docker-Hub KO"
-            currentBuild.result = 'FAILURE'
-            failingStages += '\n * RAN-DockerHub-Push'
           }
         }
       }

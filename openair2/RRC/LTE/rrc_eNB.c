@@ -6354,7 +6354,7 @@ rrc_eNB_decode_dcch(
           /*NN: revise the condition */
           /*FK: left the condition as is for the case MME is used (S1 mode) but setting  dedicated_DRB = 1 otherwise (noS1 mode) so that no second RRCReconfiguration message activationg more DRB is sent as this causes problems with the nasmesh driver.*/
 
-          if (!IS_SOFTMODEM_NOS1 || get_softmodem_params()->emulate_l1) {
+          if (!IS_SOFTMODEM_NOS1) {
             if (ue_context_p->ue_context.StatusRrc == RRC_RECONFIGURED) {
               dedicated_DRB = 1;
               LOG_I(RRC,

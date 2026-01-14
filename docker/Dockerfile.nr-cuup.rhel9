@@ -35,6 +35,9 @@ RUN cp /oai-ran/docker/scripts/gnb_entrypoint.sh /oai-ran/docker/scripts/entrypo
 FROM registry.access.redhat.com/ubi9/ubi:latest AS oai-nr-cuup
 ENV TZ=Europe/Paris
 
+# Install EPEL 
+RUN dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm
+
 RUN yum repolist --disablerepo=* && \
     yum update -y && \
     yum install -y \
@@ -42,7 +45,8 @@ RUN yum repolist --disablerepo=* && \
         lksctp-tools \
         tzdata \
         net-tools \
-        iputils && \
+        iputils \
+        yaml-cpp-devel && \
     echo "/usr/local/lib" > /etc/ld.so.conf.d/local-lib.conf && \
     echo "/usr/local/lib64" >> /etc/ld.so.conf.d/local-lib.conf
 
@@ -55,6 +59,7 @@ COPY --from=gnb-build \
 COPY --from=gnb-build \
     /oai-ran/cmake_targets/ran_build/build/libparams_libconfig.so \
     /oai-ran/cmake_targets/ran_build/build/libtelnetsrv.so \
+    /oai-ran/cmake_targets/ran_build/build/libparams_yaml.so \
     /usr/local/lib/
 
 COPY --from=gnb-base \
@@ -73,6 +78,7 @@ WORKDIR /opt/oai-gnb/etc
 
 WORKDIR /opt/oai-gnb
 
+COPY --from=gnb-base /usr/local/bin/yq /usr/local/bin/yq
 COPY --from=gnb-base /tini /tini
 ENTRYPOINT ["/tini", "-v", "--", "/opt/oai-gnb/bin/entrypoint.sh"]
 CMD ["/opt/oai-gnb/bin/nr-cuup", "-O", "/opt/oai-gnb/etc/gnb.conf"]

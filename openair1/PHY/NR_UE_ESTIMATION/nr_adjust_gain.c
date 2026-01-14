@@ -21,7 +21,6 @@
 
 #include "PHY/types.h"
 #include "PHY/defs_nr_UE.h"
-#include "PHY/phy_extern_nr_ue.h"
 
 void
 phy_adjust_gain_nr (PHY_VARS_NR_UE *ue, uint32_t rx_power_fil_dB, uint8_t eNB_id)

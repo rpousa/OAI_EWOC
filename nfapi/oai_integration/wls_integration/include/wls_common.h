@@ -25,7 +25,6 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdbool.h>
-#include "wls_lib.h"
 #include "nfapi/open-nFAPI/fapi/inc/nr_fapi_p5_utils.h"
 #include "nfapi/open-nFAPI/fapi/inc/nr_fapi_p7_utils.h"
 

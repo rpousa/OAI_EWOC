@@ -1,5 +1,117 @@
 # RELEASE NOTES: #
 
+## [v2.4.0](https://gitlab.eurecom.fr/oai/openairinterface5g/-/tags/v2.4.0) -> December 2025. ##
+
+General new features and improvements (both RAN and UE):
+- Rework LDPC BBdev/AAL interface and support both AMD T2/Intel vRAN Boost
+  (VRB) 1 accelerators
+- Add a taps client for vrtsim real-time simulator (check: vrtsim release?)
+- Add new RFemulator virtual radio driver to emulate radio (including noise
+  generation) for gNB/UE standalone operation
+- RLC AM reception improvements for high-throughput scenarios (!3512)
+- Small NTN fixes (!3659, !3666, !3581, !3652)
+- Improvements to imScope
+
+Stability and bug fixes:
+- RFsimulator: fix concurrency problems during multi-client connection
+- USRP driver: support synchronization of USRP B200
+- MAC scheduler improvements
+- General L1 improvements for efficiency and stability
+- Correct PRS bug and test in CI
+- Upgrade Ubuntu container images to Ubuntu 24.04
+- All build system targets compile (`make/ninja all`)
+- Minor cleanup, harmonization, and performance improvements all over the stack
+- Simplify CI code
+
+RAN changes (gNB/CU/CU-CP/CU-UP/DU/DU-high/DU-low):
+- Support of N2 handover
+- Support of "UL-heavy" TDD patterns, e.g., DSUUU
+- Open Fronthaul M-plane: CM improvements, PM implementation, and additional
+  v16.01 support
+- Improve interoperability with Nvidia Aerial L1 to support 2 layer UL
+- Add O-RAN OSC WLS library as FAPI transport and enable L1/L2 shared memory
+  split
+- Implement FAPI Stop exchange
+- Improve interoperability with srsRAN_Project DU
+- Add new synchronized real-time data recording application (!3462)
+- Support for measurement gaps and general handover fixes
+- Support of RRC PDU session release procedure
+- Add CU-UP load tester
+- Correct BWP scheduling and support multiple BWPs per UE
+
+nrUE changes:
+- Support one additional PDU session (see !3486)
+- L3 measurements for A2 measurement reports
+- Support for type0 PDSCH frequency allocation
+- UE symbol based PDCCH receiver
+
+Regression or removals:
+- No known regressions
+- Unused L2 simulator code has been removed
+- Unused Benetel radio driver code (not FHI 7.2!) has been removed
+
+Configuration file changes:
+- `gNBs.[0].servingCellConfigCommon.[0].ra_ResponseWindow` is automatically
+  computed and can be removed
+- `gNBs.[0].bwp_list` has been added (moved from entries in
+  `gNBs.[0].servingCellConfigDedicated`)
+- `gNBs.[0].phaseTrackingRS` has been added (moved from entries in
+  `gNBs.[0].servingCellConfigDedicated`)
+- `gNBs.[0].local_s_portc` and `gNBs.[0].remote_s_portc` have no effect and
+  should be removed
+- `gNBs.[0].CSI_report_type` has been added
+- `MACRLCs.[0].ulsch_max_frame_inactivity` is automatically computed and can be
+  removed
+- `MACRLCs.[0].local_n_portc` and `MACRLCs.[0].remote_n_portc` have no effect and
+  should be removed
+- `MACRLCs.[0].stats_max_ue` has been added
+
+## [v2.3.0](https://gitlab.eurecom.fr/oai/openairinterface5g/-/tags/v2.3.0) -> July 2025. ##
+
+General new features and improvements (both RAN and UE):
+- Preliminary support for RedCap UEs
+- Support for NTN LEO scenarios including SIB19 and channel emulation (see
+  doc/RUNMODEM.md)
+- VRTSIM: new shared memory realtime radio (see develop/radio/vrtsim/README.md)
+- Support for TDD pattern 2
+- Support for long PRACH
+- Support for SIB2
+- Add unit tests using ctest (see doc/UnitTests.md)
+
+Stability and bug fixes:
+- Improve various procedures (e.g., RRC reestablishment, RRC Reject, ...)
+- Add improvements for ImScope
+- Bugfixes in the entire stack (e.g., #803, #805, #810, #812, #818, #852, #878,
+  #884, #890, #895, #901, #907, #932, #939 ...)
+- Documentation updates
+- And many other small fixes, like memory leaks, crashes, ...
+
+RAN changes (gNB/CU/CU-CP/CU-UP/DU/DU-high/DU-low):
+- Stability and performance improvements when running with 4-layer DL MIMO
+- Stability and performance improvements when running with 2-layer UL MIMO
+- Interoperability testing with Metanoia Jura and Foxconn RUs
+- Support of O-RAN 7.2 M-plane (Start-up procedure including configuration
+  management, see also doc/ORAN_FHI7.2_Tutorial.md)
+- Upgrade OSC FHI (xran) from E to F release
+- Refactoring of LDPC interface and performance improvements
+- Support for nFAPI in all scenarios for FR1 (see doc/nfapi.md)
+- Support at least 32 UEs concurrently
+- Improve robustness when running in split modes (F1, E1)
+- Add basic support for beam management in FR2
+- Add support for O1 on DU (see also https://gitlab.eurecom.fr/oai/o1-adapter)
+- E2 agent: Support for multiple E2SM-RC report service styles
+
+nrUE changes:
+- Refactoring of threading towards better code and performance
+- Add or rework various procedures (e.g., RA with C-RNTI, Going to Idle, RA, ...)
+- Refactor and extend NAS implementation (e.g., Service Request, Registration
+  Request, Service Acept, Service Reject, ...)
+- Support for continuous frequency offset compensation
+- Reduce minimum RX-to-TX time to 3
+
+Regression:
+- Multiple BWPs do not work reliably on gNB; use tag 2025.w17
+
 ## [v2.2.0](https://gitlab.eurecom.fr/oai/openairinterface5g/-/tags/v2.2.0) -> November 2024. ##
 
 General 5G improvements (both gNB and UE):

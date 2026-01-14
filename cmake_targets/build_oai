@@ -92,7 +92,7 @@ Options:
    USRP, BLADERF, LMSSDR, IRIS, SIMU, AW2SORI, AERIAL, None (Default)
    Adds this RF board support (in external packages installation and in compilation)
 -t | --transport
-   Selects the transport protocol type, options: None, Ethernet, benetel4g, benetel5g, oran_fhlib_5g, oran_fhlib_5g_mplane, WLS
+   Selects the transport protocol type, options: None, Ethernet, oran_fhlib_5g, oran_fhlib_5g_mplane, WLS
 -P | --phy_simulators
    Makes the unitary tests Layer 1 simulators
 -V | --vcd
@@ -276,10 +276,6 @@ function main() {
             case "$2" in
               "Ethernet")
                 TARGET_LIST="$TARGET_LIST oai_eth_transpro"
-                CMAKE_CMD="$CMAKE_CMD -DOAI_${2^^}=ON" # ^^ makes uppercase
-                ;;
-              "benetel4g" | "benetel5g" | "oran_fhlib_4g")
-                TARGET_LIST="$TARGET_LIST $2"
                 CMAKE_CMD="$CMAKE_CMD -DOAI_${2^^}=ON" # ^^ makes uppercase
                 ;;
               "oran_fhlib_5g")

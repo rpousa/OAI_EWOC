@@ -43,10 +43,6 @@ import constants as CONST
 
 def ArgsParse(argvs,CiTestObj,RAN,HTML,CONTAINERS,HELP,SCA,CLUSTER):
 
-
-    py_param_file_present = False
-    py_params={}
-
     force_local = False
     while len(argvs) > 1:
         myArgv = argvs.pop(1)	# 0th is this file's name
@@ -172,4 +168,4 @@ def ArgsParse(argvs,CiTestObj,RAN,HTML,CONTAINERS,HELP,SCA,CLUSTER):
             HELP.GenericHelp(CONST.Version)
             sys.exit('Invalid Parameter: ' + myArgv)
 
-    return py_param_file_present, py_params, mode, force_local
+    return mode, force_local

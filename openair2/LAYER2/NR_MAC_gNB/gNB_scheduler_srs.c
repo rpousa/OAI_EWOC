@@ -473,7 +473,8 @@ static void nr_configure_srs(gNB_MAC_INST *nrmac,
     srs_pdu->beamforming.num_prgs = m_SRS[srs_pdu->config_index];
     srs_pdu->beamforming.prg_size = srs_pdu->srs_parameters_v4.srs_bandwidth_size;
   }
-  srs_pdu->beamforming.prgs_list[0].dig_bf_interface_list[0].beam_idx = UE->UE_beam_index;
+  const uint16_t fapi_beam = convert_to_fapi_beam(UE->UE_beam_index, nrmac->beam_info.beam_mode);
+  srs_pdu->beamforming.prgs_list[0].dig_bf_interface_list[0].beam_idx = fapi_beam;
   NR_beam_alloc_t beam = beam_allocation_procedure(&nrmac->beam_info, frame, slot, UE->UE_beam_index, slots_per_frame);
   AssertFatal(beam.idx >= 0, "Cannot allocate SRS in any available beam\n");
   uint16_t *vrb_map_UL = &nrmac->common_channels[CC_id].vrb_map_UL[beam.idx][buffer_index * MAX_BWP_SIZE];

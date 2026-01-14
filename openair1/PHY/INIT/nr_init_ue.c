@@ -20,7 +20,6 @@
  */
 
 #include "nr_phy_init.h"
-#include "PHY/phy_extern_nr_ue.h"
 #include "openair1/PHY/defs_RU.h"
 #include "openair1/PHY/impl_defs_nr.h"
 #include "common/utils/LOG/vcd_signal_dumper.h"
@@ -157,6 +156,9 @@ void init_nr_prs_ue_vars(PHY_VARS_NR_UE *ue)
       for (int j=0; j<fp->nb_antennas_rx; j++) {
         prs_vars[idx]->prs_resource[k].prs_meas[j] = malloc16_clear(sizeof(prs_meas_t));
         AssertFatal((prs_vars[idx]->prs_resource[k].prs_meas[j]!=NULL), "%s: PRS measurements malloc failed for gNB_id %d, rx_ant %d\n", __FUNCTION__, idx, j);
+        prs_meas_t *m = prs_vars[idx]->prs_resource[k].prs_meas[j];
+        m->next_dl_toa = m->dl_toa;
+        pthread_mutex_init(&m->dl_toa_mtx, NULL);
       }
     }
   }
@@ -335,8 +337,6 @@ void term_nr_ue_signal(PHY_VARS_NR_UE *ue, int nb_connected_gNB)
     free_and_zero(ue->prs_vars[idx]);
   }
 
-  free_and_zero(ue->ntn_config_message);
-  
   sl_ue_free(ue);
 }
 

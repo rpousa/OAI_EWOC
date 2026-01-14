@@ -80,9 +80,9 @@
                 <class>Iperf2_Unidir</class>
                 <desc>Iperf2 UDP DL</desc>
                 <id>rfsim4g_ue_fembms</id>
-                <nodes>acamas</nodes>
+                <node>localhost</node>
                 <svr_id>rfsim4g_enb_fembms</svr_id>
-                <svr_node>acamas</svr_node>
+                <svr_node>localhost</svr_node>
                 <iperf_args>-u -t 30 -b 2M</iperf_args>
                 <iperf_packetloss_threshold>25</iperf_packetloss_threshold>
                 <iperf_bitrate_threshold>80</iperf_bitrate_threshold>

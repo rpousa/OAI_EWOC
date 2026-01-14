@@ -139,7 +139,7 @@ static int compute_n_b(frame_t frame_number,
 *                See TS 38.211 - Section 6.4.1.4 Sounding reference signal
 *
 ***************************************************************************/
-bool generate_srs_nr(NR_DL_FRAME_PARMS *frame_parms,
+bool generate_srs_nr(const NR_DL_FRAME_PARMS *frame_parms,
                      c16_t **txdataF,
                      uint16_t symbol_offset,
                      int bwp_start,
@@ -293,7 +293,7 @@ bool generate_srs_nr(NR_DL_FRAME_PARMS *frame_parms,
       }
       uint8_t k_l_offset = 0; // If the SRS is configured by the IE SRS-PosResource-r16, the quantity k_l_offset is
                               // given by TS 38.211 - Table 6.4.1.4.3-2, otherwise k_l_offset = 0.
-      uint8_t k_0_overbar_p = (nr_srs_info->n_shift * NR_NB_SC_PER_RB + (K_TC_p + k_l_offset)) % K_TC;
+      uint8_t k_0_overbar_p = nr_srs_info->n_shift * NR_NB_SC_PER_RB + (K_TC_p + k_l_offset) % K_TC;
       uint8_t k_0_p = k_0_overbar_p + K_TC * M_sc_b_SRS * sum_n_b;
       nr_srs_info->k_0_p[p_index][l_line] = k_0_p;
 
@@ -304,7 +304,7 @@ bool generate_srs_nr(NR_DL_FRAME_PARMS *frame_parms,
 #endif
 
       uint16_t subcarrier = subcarrier_offset + k_0_p;
-      if (subcarrier>frame_parms->ofdm_symbol_size)
+      if (subcarrier >= frame_parms->ofdm_symbol_size)
         subcarrier -= frame_parms->ofdm_symbol_size;
       uint16_t l_line_offset = l_line * frame_parms->ofdm_symbol_size;
       // For each port, and for each OFDM symbol, here it is computed and mapped an SRS sequence with M_sc_b_SRS symbols
@@ -333,9 +333,8 @@ bool generate_srs_nr(NR_DL_FRAME_PARMS *frame_parms,
 
         // Subcarrier increment
         subcarrier += K_TC;
-        if (subcarrier >= frame_parms->ofdm_symbol_size) {
-          subcarrier=subcarrier-frame_parms->ofdm_symbol_size;
-        }
+        if (subcarrier >= frame_parms->ofdm_symbol_size)
+          subcarrier -= frame_parms->ofdm_symbol_size;
 
       } // for (int k = 0; k < M_sc_b_SRS; k++)
     } // for (int l_line = 0; l_line < N_symb_SRS; l_line++)

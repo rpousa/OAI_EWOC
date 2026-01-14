@@ -56,6 +56,8 @@ typedef struct nr_ho_source_cu {
   ho_cancel_t ho_cancel;
   /// status transfer
   ho_status_transfer_t ho_status_transfer;
+  /// old (source) downlink tunnel
+  gtpu_tunnel_t old_du_tunnel_config;
 } nr_ho_source_cu_t;
 
 /* acknowledgement of handover request. buf+len is the RRC Reconfiguration */
@@ -105,5 +107,7 @@ void nr_rrc_trigger_n2_ho(gNB_RRC_INST *rrc,
 void rrc_gNB_trigger_reconfiguration_for_handover(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue, uint8_t *rrc_reconf, int rrc_reconf_len);
 
 void nr_rrc_trigger_n2_ho_target(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue);
+
+byte_array_t *get_meas_timing_config(const NR_MeasurementTimingConfiguration_t *mtc, const NR_MeasConfig_t *measConfig);
 
 #endif /* RRC_GNB_MOBILITY_H_ */

@@ -141,7 +141,7 @@ int main(int argc, char **argv)
   }
 
   // logInit();
-  randominit(0);
+  randominit();
 
   int c;
   while ((c = getopt(argc, argv, "--:O:df:hpVg:i:j:n:l:m:r:s:S:y:z:M:N:F:R:P:L:X:")) != -1) {
@@ -439,10 +439,7 @@ int main(int argc, char **argv)
   nr_init_dl_harq_processes(UE->dl_harq_processes, 8, nb_rb);
 
 	unsigned char harq_pid = 0; //dlsch->harq_ids[subframe];
-  processingData_L1tx_t msgDataTx;
-  init_DLSCH_struct(gNB, &msgDataTx);
-  NR_gNB_DLSCH_t *dlsch = &msgDataTx.dlsch[0][0];
-  nfapi_nr_dl_tti_pdsch_pdu_rel15_t *rel15 = &dlsch->harq_process.pdsch_pdu.pdsch_pdu_rel15;
+  NR_gNB_DLSCH_t *dlsch = &gNB->dlsch[0];
 	//time_stats_t *rm_stats, *te_stats, *i_stats;
 	unsigned int TBS = 8424;
 	uint8_t nb_re_dmrs = 6;  // No data in dmrs symbol
@@ -459,19 +456,24 @@ int main(int argc, char **argv)
 	TBS = nr_compute_tbs(mod_order,rate, nb_rb, nb_symb_sch, nb_re_dmrs*length_dmrs, 0, 0, Nl);
 	printf("available bits %u TBS %u mod_order %d\n", available_bits, TBS, mod_order);
 	//dlsch->harq_ids[subframe]= 0;
-	rel15->rbSize         = nb_rb;
-	rel15->NrOfSymbols    = nb_symb_sch;
-	rel15->qamModOrder[0] = mod_order;
-	rel15->nrOfLayers     = Nl;
-	rel15->TBSize[0]      = TBS>>3;
-  rel15->targetCodeRate[0] = rate;
-  rel15->NrOfCodewords = 1;
-  rel15->dmrsConfigType = NFAPI_NR_DMRS_TYPE1;
-	rel15->dlDmrsSymbPos = 4;
-	rel15->mcsIndex[0] = Imcs;
-  rel15->numDmrsCdmGrpsNoData = 1;
-  rel15->maintenance_parms_v3.tbSizeLbrmBytes = Tbslbrm;
-  rel15->maintenance_parms_v3.ldpcBaseGraph = get_BG(TBS, rate);
+  nfapi_nr_dl_tti_pdsch_pdu pdsch_pdu = {
+      .pdsch_pdu_rel15 = {
+        .rbSize = nb_rb,
+        .NrOfSymbols = nb_symb_sch,
+        .qamModOrder[0] = mod_order,
+        .nrOfLayers = Nl,
+        .TBSize[0] = TBS >> 3,
+        .targetCodeRate[0] = rate,
+        .NrOfCodewords = 1,
+        .dmrsConfigType = NFAPI_NR_DMRS_TYPE1,
+        .dlDmrsSymbPos = 4,
+        .mcsIndex[0] = Imcs,
+        .numDmrsCdmGrpsNoData = 1,
+        .maintenance_parms_v3.tbSizeLbrmBytes = Tbslbrm,
+        .maintenance_parms_v3.ldpcBaseGraph = get_BG(TBS, rate),
+      },
+  };
+  dlsch->pdsch_pdu = &pdsch_pdu;
 	double modulated_input[16 * 68 * 384]; // [hna] 16 segments, 68*Zc
 	short channel_output_fixed[16 * 68 * 384];
 	//unsigned char *estimated_output;
@@ -498,7 +500,7 @@ int main(int argc, char **argv)
 	printf("harq process ue mcs = %d Qm = %d, symb %d\n", dlsch0_ue->dlsch_config.mcs, dlsch0_ue->dlsch_config.qamModOrder, nb_symb_sch);
 
   uint8_t test_input[TBS / 8 + 4]; // + 3 for CRC + 1 additional byte, see nr_dlsch_encoding()
-  dlsch->harq_process.pdu = test_input;
+  dlsch->pdu = test_input;
 	//unsigned char test_input[TBS / 8]  __attribute__ ((aligned(16)));
 	for (i = 0; i < TBS / 8; i++)
 		test_input[i] = (unsigned char) rand();
@@ -512,11 +514,10 @@ int main(int argc, char **argv)
 
 	//printf("crc32: [0]->0x%08x\n",crc24c(test_input, 32));
 	// generate signal
-        unsigned char output[rel15->rbSize * NR_SYMBOLS_PER_SLOT * NR_NB_SC_PER_RB * NR_MAX_NB_LAYERS] __attribute__((aligned(64)));
+        unsigned char output[nb_rb * NR_SYMBOLS_PER_SLOT * NR_NB_SC_PER_RB * NR_MAX_NB_LAYERS] __attribute__((aligned(64)));
         bzero(output, sizeof(output));
 	if (input_fd == NULL) {
-    msgDataTx.num_pdsch_slot = 1;
-	  nr_dlsch_encoding(gNB, &msgDataTx, frame, slot, frame_parms, output, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+	  nr_dlsch_encoding(gNB, 1, dlsch, frame, slot, frame_parms, output, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 	}
 
 	for (SNR = snr0; SNR < snr1 && !stop; SNR += snr_step) {
@@ -621,8 +622,6 @@ int main(int argc, char **argv)
 	}
 
   free_channel_desc_scm(gNB2UE);
-
-  reset_DLSCH_struct(gNB, &msgDataTx);
 
   int nb_slots_to_set = (1 << mu) * NR_NUMBER_OF_SUBFRAMES_PER_FRAME;
   for (int i = 0; i < nb_slots_to_set; ++i)

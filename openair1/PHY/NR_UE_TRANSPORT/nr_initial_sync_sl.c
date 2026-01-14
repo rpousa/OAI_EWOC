@@ -324,7 +324,7 @@ nr_initial_sync_t sl_nr_slss_search(PHY_VARS_NR_UE *UE, UE_nr_rxtx_proc_t *proc,
 
   int32_t sync_pos = -1; // sync_pos_frame = -1;
   int32_t metric_tdd_ncp = 0;
-  uint8_t phase_tdd_ncp;
+  uint8_t phase_tdd_ncp = 0;
   double im, re;
   int ret = -1;
   uint16_t rx_slss_id = 65535;

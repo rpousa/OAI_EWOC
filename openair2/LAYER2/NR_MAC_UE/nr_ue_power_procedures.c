@@ -58,13 +58,6 @@ static const int nb_symbols_excluding_dmrs[11][2][2]
 /*   14     */    {{     12    ,    12   }   ,  {     10     ,   10    }},
 };
 
-static int get_deltatf(uint16_t nb_of_prbs,
-                       uint8_t N_symb_PUCCH,
-                       uint8_t freq_hop_flag,
-                       uint8_t add_dmrs_flag,
-                       int N_sc_ctrl_RB,
-                       int O_UCI);
-
 // ∆MPR according to Table 6.2.2-3 38.101-1
 static float get_delta_mpr(uint16_t nr_band, frame_type_t frame_type, int scs, int channel_bandwidth, int n_prbs, int start_prb, int power_class)
 {
@@ -256,6 +249,28 @@ int get_sum_delta_pucch(NR_UE_MAC_INST_t *mac, int slot, frame_t frame)
   return delta_tpc_sum;
 }
 
+static int get_deltatf(uint16_t nb_of_prbs,
+                       uint8_t N_symb_PUCCH,
+                       uint8_t freq_hop_flag,
+                       uint8_t add_dmrs_flag,
+                       int N_sc_ctrl_RB,
+                       int O_UCI)
+{
+  int DELTA_TF;
+  int O_CRC = compute_pucch_crc_size(O_UCI);
+  int N_symb = N_symb_PUCCH < 4 ? N_symb_PUCCH : nb_symbols_excluding_dmrs[N_symb_PUCCH - 4][add_dmrs_flag][freq_hop_flag];
+  float N_RE = nb_of_prbs * N_sc_ctrl_RB * N_symb;
+  float K1 = 6;
+  if (O_UCI + O_CRC < 12)
+    DELTA_TF = 10 * log10((double)(((K1 * (O_UCI)) / N_RE)));
+  else {
+    float K2 = 2.4;
+    float BPRE = (O_UCI + O_CRC) / N_RE;
+    DELTA_TF = 10 * log10((double)(pow(2, (K2 * BPRE)) - 1));
+  }
+  return DELTA_TF;
+}
+
 // PUCCH Power control according to 38.213 section 7.2.1
 int16_t get_pucch_tx_power_ue(NR_UE_MAC_INST_t *mac,
                               int scs,
@@ -397,28 +412,6 @@ int16_t get_pucch_tx_power_ue(NR_UE_MAC_INST_t *mac,
         pucch_power, M_pucch_component, pathloss, delta_F_PUCCH, DELTA_TF, G_b_f_c);
 
   return pucch_power;
-}
-
-static int get_deltatf(uint16_t nb_of_prbs,
-                       uint8_t N_symb_PUCCH,
-                       uint8_t freq_hop_flag,
-                       uint8_t add_dmrs_flag,
-                       int N_sc_ctrl_RB,
-                       int O_UCI)
-{
-  int DELTA_TF;
-  int O_CRC = compute_pucch_crc_size(O_UCI);
-  int N_symb = N_symb_PUCCH < 4 ? N_symb_PUCCH : nb_symbols_excluding_dmrs[N_symb_PUCCH - 4][add_dmrs_flag][freq_hop_flag];
-  float N_RE = nb_of_prbs * N_sc_ctrl_RB * N_symb;
-  float K1 = 6;
-  if (O_UCI + O_CRC < 12)
-    DELTA_TF = 10 * log10((double)(((K1 * (O_UCI)) / N_RE)));
-  else {
-    float K2 = 2.4;
-    float BPRE = (O_UCI + O_CRC) / N_RE;
-    DELTA_TF = 10 * log10((double)(pow(2, (K2 * BPRE)) - 1));
-  }
-  return DELTA_TF;
 }
 
 // Returns the pathloss in dB for the active UL BWP on the selected carrier based on the DL RS associated with the PRACH transmission

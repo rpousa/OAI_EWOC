@@ -20,6 +20,15 @@
  */
 #include "socket_pnf.h"
 #include "nfapi.h"
+static nfapi_pnf_config_t *config;
+void socket_nfapi_nr_pnf_stop()
+{
+  AssertFatal(config->nr_stop_req, "STOP.request Handler should be set!");
+  nfapi_nr_stop_request_scf_t req = {0};
+  req.header.phy_id = 0;
+  req.header.message_id = NFAPI_NR_PHY_MSG_TYPE_PNF_STOP_REQUEST;
+  config->nr_stop_req(config, 0, &req);
+}
 
 bool pnf_nr_send_p5_message(pnf_t *pnf, nfapi_nr_p4_p5_message_header_t *msg, uint32_t msg_len)
 {
@@ -148,7 +157,7 @@ bool pnf_nr_send_p7_message(pnf_p7_t *pnf_p7, nfapi_nr_p7_message_header_t *head
 void *pnf_start_p5_thread(void *ptr)
 {
   NFAPI_TRACE(NFAPI_TRACE_INFO, "[PNF] IN PNF NFAPI start thread %s\n", __FUNCTION__);
-  nfapi_pnf_config_t *config = (nfapi_pnf_config_t *)ptr;
+  config = (nfapi_pnf_config_t *)ptr;
   struct sched_param sp;
   sp.sched_priority = 20;
   pthread_setschedparam(pthread_self(), SCHED_FIFO, &sp);

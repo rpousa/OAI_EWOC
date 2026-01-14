@@ -88,8 +88,6 @@ static inline const char *rnti_types(nr_rnti_type_t rr)
 #define NR_NUMBER_OF_SYMBOLS_PER_SLOT_EXTENDED_CP 12
 #define NR_MAX_NB_LAYERS 4 // 8
 
-#define BOUNDED_EVAL(a, b, c) (min(c, max(a, b)))
-
 // Since the IQ samples are represented by SQ15 R+I (see https://en.wikipedia.org/wiki/Q_(number_format)) we need to compensate when
 // calcualting signal energy. Instead of shifting each sample right by 15, we can normalize the result in dB scale once its
 // calcualted. Signal energy is calculated using RMS^2, where each sample is squared before taking the average of the sum, therefore
@@ -188,6 +186,9 @@ typedef struct meas_s {
   val_init_t csi_rsrp_dBm;
 } meas_t;
 
+/** @brief Returns NR RSRP index per 3GPP TS 38.133 Table 10.1.6.1-1 */
+uint8_t get_rsrp_index(int rsrp_dBm);
+
 /**
  * @brief To start a timer
  * @param timer Timer to be started
@@ -279,12 +280,12 @@ uint32_t to_nrarfcn(int nr_bandP, uint64_t dl_CarrierFreq, uint8_t scs_index, ui
 
 int cce_to_reg_interleaving(const int R, int k, int n_shift, const int C, int L, const int N_regs);
 int get_SLIV(uint8_t S, uint8_t L);
-void get_coreset_rballoc(uint8_t *FreqDomainResource,int *n_rb,int *rb_offset);
-int get_coreset_num_cces(uint8_t *FreqDomainResource, int duration);
+void get_coreset_rballoc(const uint8_t *FreqDomainResource, int *n_rb, int *rb_offset);
+int get_coreset_num_cces(const uint8_t *FreqDomainResource, int duration);
 int get_nr_table_idx(int nr_bandP, uint8_t scs_index);
 int32_t get_delta_duplex(int nr_bandP, uint8_t scs_index);
 frame_type_t get_frame_type(uint16_t nr_bandP, uint8_t scs_index);
-uint16_t get_band(uint64_t downlink_frequency, int32_t delta_duplex);
+uint16_t get_band(uint64_t downlink_frequency, int32_t delta_duplex, int64_t dlbw, int64_t ulbw);
 int NRRIV2BW(int locationAndBandwidth,int N_RB);
 int NRRIV2PRBOFFSET(int locationAndBandwidth,int N_RB);
 int PRBalloc_to_locationandbandwidth0(int NPRB,int RBstart,int BWPsize);

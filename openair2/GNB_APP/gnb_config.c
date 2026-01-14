@@ -699,7 +699,6 @@ void RCconfig_verify(configmodule_interface_t *cfg, ngran_node_t node_type)
     verify_gnb_param_notset(gnbp, GNB_PDSCH_ANTENNAPORTS_XP_IDX, GNB_CONFIG_STRING_PDSCHANTENNAPORTS_XP);
     verify_gnb_param_notset(gnbp, GNB_PUSCH_ANTENNAPORTS_IDX, GNB_CONFIG_STRING_PUSCHANTENNAPORTS);
     verify_gnb_param_notset(gnbp, GNB_MINRXTXTIME_IDX, GNB_CONFIG_STRING_MINRXTXTIME);
-    verify_gnb_param_notset(gnbp, GNB_SIB1_TDA_IDX, GNB_CONFIG_STRING_SIB1TDA);
     verify_gnb_param_notset(gnbp, GNB_DO_CSIRS_IDX, GNB_CONFIG_STRING_DOCSIRS);
     verify_gnb_param_notset(gnbp, GNB_DO_SRS_IDX, GNB_CONFIG_STRING_DOSRS);
     verify_gnb_param_notset(gnbp, GNB_FORCE256QAMOFF_IDX, GNB_CONFIG_STRING_FORCE256QAMOFF);
@@ -707,7 +706,7 @@ void RCconfig_verify(configmodule_interface_t *cfg, ngran_node_t node_type)
     verify_gnb_param_notset(gnbp, GNB_DISABLE_HARQ_IDX, GNB_CONFIG_STRING_DISABLE_HARQ);
     verify_gnb_param_notset(gnbp, GNB_NUM_DL_HARQ_IDX, GNB_CONFIG_STRING_NUM_DL_HARQPROCESSES);
     verify_gnb_param_notset(gnbp, GNB_NUM_UL_HARQ_IDX, GNB_CONFIG_STRING_NUM_UL_HARQPROCESSES);
-    verify_gnb_param_notset(gnbp, GNB_DO_SINR_IDX, GNB_CONFIG_STRING_DOSINR);
+    verify_gnb_param_notset(gnbp, GNB_CONFIG_REP_IDX, GNB_CONFIG_STRING_CONFIG_REP);
 
     // check for some general sections
     verify_section_notset(cfg, NULL, CONFIG_STRING_L1_LIST);
@@ -1127,7 +1126,7 @@ f1ap_gnb_du_system_info_t *get_sys_info(NR_BCCH_BCH_Message_t *mib, const NR_BCC
 
   sys_info->mib = calloc_or_fail(buf_len, sizeof(*sys_info->mib));
   DevAssert(mib != NULL);
-  sys_info->mib_length = encode_MIB_NR(mib, 0, sys_info->mib, buf_len);
+  sys_info->mib_length = encode_MIB_NR_setup(mib->message.choice.mib, 0, sys_info->mib, buf_len);
   DevAssert(sys_info->mib_length == buf_len);
 
   DevAssert(sib1 != NULL);
@@ -1356,7 +1355,19 @@ static void config_pdcp(configmodule_interface_t *cfg, nr_pdcp_configuration_t *
   pdcp_config->drb.discard_timer = config_get_processedint(cfg, &pdcp_params[CONFIG_NR_PDCP_DRB_DISCARD_TIMER_IDX]);
 }
 
-static void get_bwp_config(nr_mac_config_t *configuration)
+void nfapi_stop_l1()
+{
+  if (NFAPI_MODE && (NFAPI_MODE == NFAPI_MODE_AERIAL || NFAPI_MODE == NFAPI_MODE_VNF)) {
+    stop_nr_nfapi_vnf();
+  } else if (NFAPI_MODE && NFAPI_MODE == NFAPI_MODE_PNF) {
+    // PNF should just wait for the STOP.request to come from the L2
+    // If instead it was stopped first, in some cases it makes sense for it to terminate itself (WLS)
+    // Sends a STOP.indication to the VNF
+    stop_nr_nfapi_pnf();
+  }
+}
+
+static void get_bwp_config(nr_mac_config_t *configuration, const NR_ServingCellConfigCommon_t *scc)
 {
   char path[MAX_OPTNAME_SIZE * 2 + 8];
   snprintf(path, sizeof(path), "%s.[%i]", GNB_CONFIG_STRING_GNB_LIST, 0);
@@ -1365,10 +1376,13 @@ static void get_bwp_config(nr_mac_config_t *configuration)
   AssertFatal(configuration->num_additional_bwps >= 0 && configuration->num_additional_bwps <= 4,
               "Invalid number of additional BWPs %d\n",
               configuration->num_additional_bwps);
+  int bw = scc->downlinkConfigCommon->frequencyInfoDL->scs_SpecificCarrierList.list.array[0]->carrierBandwidth;
   for (int i = 0; i < configuration->num_additional_bwps; i++) {
     configuration->bwp_config[i].id = i + 1;
     int bwp_start = *BWPParamList.paramarray[i][GNB_BWP_START_IDX].iptr;
+    AssertFatal(bwp_start >= 0 && bwp_start < bw, "Invalid BWP start value %d\n", bwp_start);
     int bwp_size = *BWPParamList.paramarray[i][GNB_BWP_SIZE_IDX].iptr;
+    AssertFatal(bwp_start + bwp_size <= bw, "BWP start %d and BWP size %d exceeds full BW %d\n", bwp_start, bwp_size, bw);
     configuration->bwp_config[i].location_and_bw = PRBalloc_to_locationandbandwidth(bwp_size, bwp_start);
     configuration->bwp_config[i].scs = *BWPParamList.paramarray[i][GNB_BWP_SCS_IDX].iptr;
     LOG_I(GNB_APP,
@@ -1406,12 +1420,6 @@ void RCconfig_nr_macrlc(configmodule_interface_t *cfg)
         config.pdsch_AntennaPorts.XP,
         config.pusch_AntennaPorts);
 
-  // BWP
-  get_bwp_config(&config);
-  AssertFatal(config.num_additional_bwps <= 4, "Impossible to configure more than 4 additional BWPs\n");
-  config.first_active_bwp = *GNBParamList.paramarray[0][GNB_1ST_ACTIVE_BWP_IDX].iptr;
-  AssertFatal(config.first_active_bwp <= config.num_additional_bwps, "1st active BWP does not belog to the configured BWPs\n");
-
   // RU
   GET_PARAMS_LIST(RUParamList, RUParams, RUPARAMS_DESC, CONFIG_STRING_RU_LIST, NULL);
   int num_tx = 0;
@@ -1427,12 +1435,11 @@ void RCconfig_nr_macrlc(configmodule_interface_t *cfg)
   }
   config.minRXTXTIME = *GNBParamList.paramarray[0][GNB_MINRXTXTIME_IDX].iptr;
   LOG_I(GNB_APP, "minTXRXTIME %d\n", config.minRXTXTIME);
-  config.sib1_tda = *GNBParamList.paramarray[0][GNB_SIB1_TDA_IDX].iptr;
-  LOG_I(GNB_APP, "SIB1 TDA %d\n", config.sib1_tda);
   config.do_CSIRS = *GNBParamList.paramarray[0][GNB_DO_CSIRS_IDX].iptr;
   config.do_SRS = *GNBParamList.paramarray[0][GNB_DO_SRS_IDX].iptr;
   config.max_num_rsrp = *GNBParamList.paramarray[0][GNB_LIMIT_RSRP_REPORT_IDX].iptr;
-  config.do_SINR = *GNBParamList.paramarray[0][GNB_DO_SINR_IDX].iptr;
+  const char *report_type_s = *GNBParamList.paramarray[0][GNB_CONFIG_REP_IDX].strptr;
+  config.report_type = config_get_processedint(cfg, &GNBParamList.paramarray[0][GNB_CONFIG_REP_IDX]);
   config.force_256qam_off = *GNBParamList.paramarray[0][GNB_FORCE256QAMOFF_IDX].iptr;
   config.force_UL256qam_off = *GNBParamList.paramarray[0][GNB_FORCEUL256QAMOFF_IDX].iptr;
   config.use_deltaMCS = *GNBParamList.paramarray[0][GNB_USE_DELTA_MCS_IDX].iptr != 0;
@@ -1443,10 +1450,11 @@ void RCconfig_nr_macrlc(configmodule_interface_t *cfg)
   if (config.disable_harq)
     LOG_W(GNB_APP, "\"disable_harq\" is a REL17 feature and is incompatible with REL15 and REL16 UEs!\n");
   LOG_I(GNB_APP,
-        "CSI-RS %d, SRS %d, SINR:%d, 256 QAM %s, delta_MCS %s, maxMIMO_Layers %d, HARQ feedback %s, num DLHARQ:%d, num ULHARQ:%d\n",
+        "CSI-RS %d, SRS %d, report type %d (%s), 256 QAM %s, delta_MCS %s, maxMIMO_Layers %d, HARQ feedback %s, num DLHARQ:%d, num ULHARQ:%d\n",
         config.do_CSIRS,
         config.do_SRS,
-        config.do_SINR,
+        config.report_type,
+        report_type_s,
         config.force_256qam_off ? "force off" : "may be on",
         config.use_deltaMCS ? "on" : "off",
         config.maxMIMO_layers,
@@ -1510,7 +1518,11 @@ void RCconfig_nr_macrlc(configmodule_interface_t *cfg)
         config.num_agg_level_candidates[PDCCH_AGG_LEVEL16]);
 
   NR_ServingCellConfigCommon_t *scc = get_scc_config(cfg, config.minRXTXTIME, config.do_SRS);
-  //xer_fprint(stdout, &asn_DEF_NR_ServingCellConfigCommon, scc);
+  // BWP
+  get_bwp_config(&config, scc);
+  AssertFatal(config.num_additional_bwps <= 4, "Impossible to configure more than 4 additional BWPs\n");
+  config.first_active_bwp = *GNBParamList.paramarray[0][GNB_1ST_ACTIVE_BWP_IDX].iptr;
+  AssertFatal(config.first_active_bwp <= config.num_additional_bwps, "1st active BWP does not belog to the configured BWPs\n");
 
   if (MacRLC_ParamList.numelt > 0) {
     /* NR RLC config is needed by mac_top_init_gNB() */
@@ -1580,6 +1592,8 @@ void RCconfig_nr_macrlc(configmodule_interface_t *cfg)
         AssertFatal(1 == 0, "MACRLC %d: %s unknown southbound midhaul\n", j, *(MacRLC_ParamList.paramarray[j][MACRLC_TRANSPORT_S_PREFERENCE_IDX].strptr));
       }
       RC.nrmac[j]->ulsch_max_frame_inactivity = *(MacRLC_ParamList.paramarray[j][MACRLC_ULSCH_MAX_FRAME_INACTIVITY].uptr);
+      RC.nrmac[j]->stats_max_ue = *MacRLC_ParamList.paramarray[j][MACRLC_STATS_MAX_UE_IDX].iptr;
+      RC.nrmac[j]->print_ue_stats = RC.nrmac[j]->stats_max_ue > 0;
       NR_bler_options_t *dl_bler_options = &RC.nrmac[j]->dl_bler;
       dl_bler_options->upper = *(MacRLC_ParamList.paramarray[j][MACRLC_DL_BLER_TARGET_UPPER_IDX].dblptr);
       dl_bler_options->lower = *(MacRLC_ParamList.paramarray[j][MACRLC_DL_BLER_TARGET_LOWER_IDX].dblptr);
@@ -1613,10 +1627,11 @@ void RCconfig_nr_macrlc(configmodule_interface_t *cfg)
           AssertFatal(NFAPI_MODE == NFAPI_MONOLITHIC, "Analog beamforming only supported for monolithic scenario\n");
         NR_beam_info_t *beam_info = &RC.nrmac[j]->beam_info;
         int beams_per_period = *MacRLC_ParamList.paramarray[j][MACRLC_ANALOG_BEAMS_PERIOD_IDX].u8ptr;
-        beam_info->beam_allocation = malloc16(beams_per_period * sizeof(int *));
+        beam_info->beam_allocation = malloc16(beams_per_period * sizeof(beam_info->beam_allocation));
         beam_info->beam_duration = *MacRLC_ParamList.paramarray[j][MACRLC_ANALOG_BEAM_DURATION_IDX].u8ptr;
         beam_info->beams_per_period = beams_per_period;
         beam_info->beam_allocation_size = -1; // to be initialized once we have information on frame configuration
+        // TODO: Indicate this to MAC via FAPI TLV 0x0164.
         beam_info->beam_mode = ab == 1 ? PRECONFIGURED_BEAM_IDX : LOPHY_BEAM_IDX;
       } else {
         RC.nrmac[j]->beam_info.beam_mode = NO_BEAM_MODE;

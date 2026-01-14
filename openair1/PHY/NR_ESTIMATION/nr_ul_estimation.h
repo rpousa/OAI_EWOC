@@ -59,12 +59,6 @@ void dump_nr_I0_stats(FILE *fd,PHY_VARS_gNB *gNB);
 
 void gNB_I0_measurements(PHY_VARS_gNB *gNB, int slot, int first_symb, int num_symb, uint32_t rb_mask_ul[14][9]);
 
-void nr_gnb_measurements(PHY_VARS_gNB *gNB,
-                         NR_gNB_ULSCH_t *ulsch,
-                         NR_gNB_PUSCH *pusch_vars,
-                         unsigned char symbol,
-                         uint8_t nrOfLayers);
-
 int nr_est_timing_advance_srs(const NR_DL_FRAME_PARMS *frame_parms,
                               const c16_t srs_estimated_channel_time[][frame_parms->ofdm_symbol_size]);
 
@@ -84,11 +78,12 @@ int nr_srs_channel_estimation(
     const nr_srs_info_t *nr_srs_info,
     const c16_t **srs_generated_signal,
     c16_t srs_received_signal[][gNB->frame_parms.ofdm_symbol_size * (1 << srs_pdu->num_symbols)],
+    c16_t srs_received_noise[][gNB->frame_parms.ofdm_symbol_size * (1 << srs_pdu->num_symbols)],
     c16_t srs_estimated_channel_freq[][1 << srs_pdu->num_ant_ports]
                                     [gNB->frame_parms.ofdm_symbol_size * (1 << srs_pdu->num_symbols)],
     c16_t srs_estimated_channel_time[][1 << srs_pdu->num_ant_ports][gNB->frame_parms.ofdm_symbol_size],
     c16_t srs_estimated_channel_time_shifted[][1 << srs_pdu->num_ant_ports][gNB->frame_parms.ofdm_symbol_size],
-    int8_t *snr_per_rb,
+    int16_t *snr_per_rb,
     int8_t *snr);
 
 void nr_freq_equalization(NR_DL_FRAME_PARMS *frame_parms,

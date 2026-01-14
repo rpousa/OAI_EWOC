@@ -118,7 +118,7 @@ void *config_allocate_new(configmodule_interface_t *cfg, int sz, bool autoFree)
   return ptr;
 }
 
-int config_setdefault_int(configmodule_interface_t *cfg, paramdef_t *cfgoptions, char *prefix)
+int config_setdefault_int(configmodule_interface_t *cfg, paramdef_t *cfgoptions, const char *prefix)
 {
   int status = 0;
   config_check_valptr(cfg, cfgoptions, sizeof(*cfgoptions->iptr), 1);
@@ -132,7 +132,7 @@ int config_setdefault_int(configmodule_interface_t *cfg, paramdef_t *cfgoptions,
   return status;
 }
 
-int config_setdefault_int64(configmodule_interface_t *cfg, paramdef_t *cfgoptions, char *prefix)
+int config_setdefault_int64(configmodule_interface_t *cfg, paramdef_t *cfgoptions, const char *prefix)
 {
   int status = 0;
   config_check_valptr(cfg, cfgoptions, sizeof(*cfgoptions->i64ptr), 1);
@@ -150,7 +150,7 @@ int config_setdefault_int64(configmodule_interface_t *cfg, paramdef_t *cfgoption
   return status;
 }
 
-int config_setdefault_intlist(configmodule_interface_t *cfg, paramdef_t *cfgoptions, char *prefix)
+int config_setdefault_intlist(configmodule_interface_t *cfg, paramdef_t *cfgoptions, const char *prefix)
 {
   int status = 0;
 
@@ -167,7 +167,7 @@ int config_setdefault_intlist(configmodule_interface_t *cfg, paramdef_t *cfgopti
   return status;
 }
 
-int config_setdefault_string(configmodule_interface_t *cfg, paramdef_t *cfgoptions, char *prefix)
+int config_setdefault_string(configmodule_interface_t *cfg, paramdef_t *cfgoptions, const char *prefix)
 {
   int status = 0;
 
@@ -190,7 +190,7 @@ int config_setdefault_string(configmodule_interface_t *cfg, paramdef_t *cfgoptio
   return status;
 }
 
-int config_setdefault_stringlist(configmodule_interface_t *cfg, paramdef_t *cfgoptions, char *prefix)
+int config_setdefault_stringlist(configmodule_interface_t *cfg, paramdef_t *cfgoptions, const char *prefix)
 {
   int status = 0;
 
@@ -210,7 +210,7 @@ int config_setdefault_stringlist(configmodule_interface_t *cfg, paramdef_t *cfgo
   return status;
 }
 
-int config_setdefault_double(configmodule_interface_t *cfg, paramdef_t *cfgoptions, char *prefix)
+int config_setdefault_double(configmodule_interface_t *cfg, paramdef_t *cfgoptions, const char *prefix)
 {
   int status = 0;
   config_check_valptr(cfg, cfgoptions, sizeof(*cfgoptions->dblptr), 1);
@@ -224,7 +224,7 @@ int config_setdefault_double(configmodule_interface_t *cfg, paramdef_t *cfgoptio
   return status;
 }
 
-int config_assign_ipv4addr(configmodule_interface_t *cfg, paramdef_t *cfgoptions, char *ipv4addr)
+int config_assign_ipv4addr(configmodule_interface_t *cfg, paramdef_t *cfgoptions, const char *ipv4addr)
 {
   config_check_valptr(cfg, cfgoptions, sizeof(*cfgoptions->uptr), 1);
   int rst=inet_pton(AF_INET, ipv4addr,cfgoptions->uptr );
@@ -246,7 +246,7 @@ int config_assign_ipv4addr(configmodule_interface_t *cfg, paramdef_t *cfgoptions
   return 0;
 }
 
-int config_setdefault_ipv4addr(configmodule_interface_t *cfg, paramdef_t *cfgoptions, char *prefix)
+int config_setdefault_ipv4addr(configmodule_interface_t *cfg, paramdef_t *cfgoptions, const char *prefix)
 {
   int status = 0;
 
@@ -322,7 +322,7 @@ void config_assign_int(configmodule_interface_t *cfg, paramdef_t *cfgoptions, ch
  * @param[in]  prefix    Optional prefix for the parameter name (can be NULL).
  * @return 1 if the default value was set, 0 if ignored, or -1 on error/unsupported type.
  */
-int config_common_getdefault(configmodule_interface_t *cfg, paramdef_t *cfgoption, char *prefix)
+int config_common_getdefault(configmodule_interface_t *cfg, paramdef_t *cfgoption, const char *prefix)
 {
   if( (cfgoption->paramflags & PARAMFLAG_DONOTREAD) != 0) {
     return 0;

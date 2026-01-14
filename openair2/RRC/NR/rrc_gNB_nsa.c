@@ -161,6 +161,28 @@ static NR_RadioBearerConfig_t *get_default_rbconfig(int eps_bearer_id,
   return rbconfig;
 }
 
+static void rrc_nsa_add_drb(const int ue_id,
+                            const NR_DRB_ToAddModList_t *addMod,
+                            const nr_pdcp_entity_security_keys_and_algos_t *sp)
+{
+  for (int i = 0; i < addMod->list.count; i++) {
+    NR_DRB_ToAddMod_t *drb = addMod->list.array[i];
+    DevAssert(drb->cnAssociation);
+    DevAssert(drb->cnAssociation->present != NR_DRB_ToAddMod__cnAssociation_PR_NOTHING);
+    DevAssert(drb->cnAssociation->present == NR_DRB_ToAddMod__cnAssociation_PR_eps_BearerIdentity);
+    // get SDAP config
+    sdap_config_t sdap = {0};
+    // EPC association
+    sdap.pdusession_id = drb->cnAssociation->choice.eps_BearerIdentity;
+    sdap.drb_id = drb->drb_Identity;
+    sdap.defaultDRB = true;
+    // add SDAP entity (terminated at gNB, since it's EPC)
+    nr_sdap_addmod_entity(GNB_FLAG_YES, ue_id, &sdap);
+    // add PDCP entity
+    nr_pdcp_add_drb(GNB_FLAG_YES, ue_id, drb->pdcp_Config, &sdap, sp);
+  }
+}
+
 /* generate prototypes for the tree management functions (RB_INSERT used in rrc_add_nsa_user) */
 RB_PROTOTYPE(rrc_nr_ue_tree_s, rrc_gNB_ue_context_s, entries,
              rrc_gNB_compare_ue_rnti_id);
@@ -304,10 +326,7 @@ void rrc_add_nsa_user(gNB_RRC_INST *rrc, x2ap_ENDC_sgnb_addition_req_t *m, sctp_
   }
 
   DevAssert(UE->rb_config != NULL);
-  nr_pdcp_add_drbs(GNB_FLAG_YES,
-                   UE->rrc_ue_id,
-                   UE->rb_config->drb_ToAddModList,
-                   &security_parameters);
+  rrc_nsa_add_drb(UE->rrc_ue_id, UE->rb_config->drb_ToAddModList, &security_parameters);
 
   /* assumption: only a single bearer, see above */
   NR_DRB_ToAddModList_t *rb_list = UE->rb_config->drb_ToAddModList;

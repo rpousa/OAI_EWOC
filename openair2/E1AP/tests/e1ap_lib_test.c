@@ -538,6 +538,14 @@ static void test_bearer_context_modification_request(void)
       .DRBnGRanList[0] = drb_to_setup,
   };
 
+  // PDU Session to Remove
+  pdu_session_to_remove_t pdu_session_to_remove = {
+      .sessionId = 2,
+      // Note: cause is optional extension IE, currently encoding/decoding only handles sessionId
+      .cause.type = 0,
+      .cause.value = 0,
+  };
+
   // Initialize the Bearer Context Modification Request
   e1ap_bearer_mod_req_t orig = {
       .gNB_cu_cp_ue_id = 0x1234,
@@ -548,6 +556,8 @@ static void test_bearer_context_modification_request(void)
       .pduSession[0] = pdusession_setup_item,
       .numPDUSessionsMod = 1,
       .pduSessionMod[0] = pdusession_mod_item,
+      .numPDUSessionsRem = 1,
+      .pduSessionRem[0] = pdu_session_to_remove,
   };
   *orig.bearerContextStatus = BEARER_SUSPEND;
   *orig.inactivityTimer = 1000;

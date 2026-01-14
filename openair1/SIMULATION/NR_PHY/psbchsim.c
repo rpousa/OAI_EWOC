@@ -325,15 +325,13 @@ int main(int argc, char **argv)
   // int frame_length_complex_samples_no_prefix;
   NR_DL_FRAME_PARMS *frame_parms;
 
-  int seed = 0;
-
   cpuf = get_cpu_freq_GHz();
 
   if ((uniqCfg = load_configmodule(argc, argv, CONFIG_ENABLECMDLINEONLY)) == 0) {
     exit_fun("[NR_PSBCHSIM] Error, configuration module init failed\n");
   }
 
-  randominit(0);
+  randominit();
 
   int c;
   while ((c = getopt(argc, argv, "--:O:c:hn:o:s:FIL:N:R:S:T:")) != -1) {
@@ -456,7 +454,7 @@ int main(int argc, char **argv)
     }
   }
 
-  randominit(seed);
+  randominit();
 
   logInit();
   set_glog(loglvl);
@@ -576,7 +574,7 @@ int main(int argc, char **argv)
          proc.frame_rx,
          proc.nr_slot_rx,
          sl_uerx->sl_config.sl_sync_source.rx_slss_id);
-  int slot_start = frame_parms->get_samples_slot_timestamp(slot, frame_parms, 0);
+  int slot_start = get_samples_slot_timestamp(frame_parms, slot);
   c16_t *tx[frame_parms->nb_antennas_rx];
   for (int i = 0; i < frame_parms->nb_antennas_rx; i++)
     tx[i] = UE_TX->common_vars.txData[i] + slot_start;

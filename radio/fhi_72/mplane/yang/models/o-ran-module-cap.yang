@@ -5,7 +5,10 @@ module o-ran-module-cap {
 
   import o-ran-compression-factors {
     prefix "cf";
-    revision-date 2020-08-10;
+  }
+
+  import o-ran-wg4-features {
+    prefix "or-feat";
   }
 
   organization "O-RAN Alliance";
@@ -17,7 +20,7 @@ module o-ran-module-cap {
     "This module defines the module capabilities for
     the O-RAN Radio Unit.
 
-    Copyright 2020 the O-RAN Alliance.
+    Copyright 2024 the O-RAN Alliance.
 
     THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS 'AS IS'
     AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
@@ -43,6 +46,116 @@ module o-ran-module-cap {
     contributors may be used to endorse or promote products derived from
     this software without specific prior written permission.";
 
+  revision "2024-04-15" {
+    description
+      "version 15.0.0
+
+      1) add support for multiple beamid tables.
+      2) remove import by revision date for o-ran-compression-factors.
+      3) Support for deep hibernate sleep mode.";
+
+    reference "ORAN-WG4.M.0-v15.00";
+  }
+
+  revision "2023-12-11" {
+    description
+      "version 14.0.0
+
+      1) Introduce bundle-offset-in-se11-supported";
+
+    reference "ORAN-WG4.M.0-v14.00";
+  }
+
+  revision "2023-08-14" {
+    description
+      "version 13.0.0
+
+      1) Introduce TRX-control and advanced sleep modes";
+
+    reference "ORAN-WG4.M.0-v13.00";
+  }
+
+  revision "2023-04-10" {
+    description
+      "version 12.0.0
+
+      1) Clarify the parameter number-of-spatial-streams
+      2) Introduce NB-IoT";
+
+    reference "ORAN-WG4.M.0-v12.00";
+  }
+
+  revision "2022-12-05" {
+    description
+      "version 11.0.0
+
+      1) Deprecation of power-related capabilities and addition of min-gain
+      2) se6 rb bit handling for rbgSize equal to zero";
+
+    reference "ORAN-WG4.M.0-v11.00";
+  }
+
+  revision "2022-08-15" {
+    description
+      "version 10.0.0
+
+      1) clarified description statements for component carrier
+      2) style guide corrections
+      3) introducing new feature for ACK NACK feedback
+      4) deprecation for params in band-capabilities";
+
+    reference "ORAN-WG4.M.0-v10.00";
+  }
+
+  revision "2022-04-18" {
+    description
+      "version 9.0.0
+
+      1) aded new parameter st6-4byte-alignment-required";
+
+    reference "ORAN-WG4.M.0-v09.00";
+  }
+
+  revision "2021-12-01" {
+    description
+      "version 8.0.0
+
+      1) Typographical corrections in descriptions.
+      2) deprecation of compression-method-grouping";
+
+    reference "ORAN-WG4.M.0-v08.00";
+  }
+
+  revision "2021-07-26" {
+    description
+      "version 7.0.0
+
+      1) Added support for external antenna delay handling ";
+
+    reference "ORAN-WG4.M.0-v07.00";
+  }
+
+  revision "2021-03-22" {
+    description
+      "version 5.1.0
+
+      1) typographical corrections in descriptions.
+      2) removed non-ASCII characters
+      3) clarified number-of-ru-ports_dl/ul description ";
+
+    reference "ORAN-WG4.M.0-v05.00";
+  }
+
+  revision "2020-12-10" {
+    description
+      "version 5.0.0
+
+      1) added support for optimising coupling-via-frequency-and-time-with-priorities
+      by adding enhancement to existing method through a new leaf node";
+
+    reference "ORAN-WG4.M.0-v05.00";
+  }
+
   revision "2020-08-10" {
     description
       "version 4.0.0
@@ -55,7 +168,7 @@ module o-ran-module-cap {
       to Section Description Priority to serve for CUS-Plane C";
 
     reference "ORAN-WG4.M.0-v04.00";
-  }  
+  }
 
   revision "2020-04-17" {
     description
@@ -68,8 +181,8 @@ module o-ran-module-cap {
       5) Enable PRACH preamble formats supported to be signalled by O-RU
       6) adding support for selective RE sending
       7) supporting new section extension for grouping multiple ports
-      8) signalling to enable O-RU to ndicate is requires unique ecpri sequence id
-        for eAxC_IDs serving for UL and DL for the same carrier component";
+      8) signalling to enable O-RU to indicate is requires unique ecpri sequence id
+        for eAxC_IDs serving for UL and DL for the same Component Carrier";
 
     reference "ORAN-WG4.M.0-v03.00";
   }
@@ -191,24 +304,26 @@ module o-ran-module-cap {
   }
 
   grouping compression-method-grouping {
+    status deprecated;
     description
-      "Grouping for compression method.";
+      "Grouping for compression method.
+       Note: This grouping is deprecated. Please use the one from o-ran-compression-factors module.";
 
     leaf compression-method {
       type enumeration {
         enum BLOCK_FLOATING_POINT {
           description
-            "Block floating point compression and decompression will be used";
+            "Block floating-point compression and decompression will be used";
         }
 
         enum BLOCK_SCALING {
           description
-            "Block scaling compression and decompresion will be used";
+            "Block scaling compression and decompression will be used";
         }
 
         enum U_LAW {
           description
-            "u-Law compression and decompresion method will be used";
+            "u-Law compression and decompression method will be used";
         }
 
         enum BEAMSPACE {
@@ -223,7 +338,7 @@ module o-ran-module-cap {
 
         enum BLOCK-FLOATING-POINT-SELECTIVE-RE-SENDING {
           description
-            "block floating point with selective re sending
+            "block floating-point with selective re sending
             compression and decompression will be used";
         }
         enum MODULATION-COMPRESSION-SELECTIVE-RE-SENDING {
@@ -233,7 +348,7 @@ module o-ran-module-cap {
         }
       }
       description
-        "Compresion method which can be supported by the O-RU.
+        "Compression method which can be supported by the O-RU.
         An O-RU may further refine the applicability of compression
         methods per endpoint using o-ran-uplane-conf.yang model";
     }
@@ -241,20 +356,20 @@ module o-ran-module-cap {
 
   grouping sub-band-max-min-ul-dl-frequency {
     description
-    "Grouping for defining max and min supported frequency - dl and ul.";
+    "Grouping for defining max and min supported frequency - DL and UL.";
 
     leaf max-supported-frequency-dl {
       type uint64;
       description
         "This value indicates Maximum supported downlink frequency in the
-        LAA subband. Value unit is Hz.";
+        LAA sub-band. Value unit is Hz.";
     }
 
     leaf min-supported-frequency-dl {
       type uint64;
       description
         "This value indicates Minimum supported downlink frequency in the
-        LAA subband. Value unit is Hz.";
+        LAA sub-band. Value unit is Hz.";
     }
   }
 
@@ -273,7 +388,7 @@ module o-ran-module-cap {
       type boolean;
 
       description
-        "Informs if O-RU supports realtime variable bit with";
+        "Informs if O-RU supports real-time variable bit with";
     }
 
     list compression-method-supported {
@@ -293,7 +408,7 @@ module o-ran-module-cap {
         "List of supported compression methods by O-RU
          Note: if O-RU supports different compression methods per endpoint
                then please refer to endpoints to have information what
-               exactly is supported on paticular endpoint";
+               exactly is supported on particular endpoint";
     }
 
     leaf variable-bit-width-per-channel-supported {
@@ -331,6 +446,29 @@ module o-ran-module-cap {
         Note - little endian support does not invalidate bigendian support.";
     }
 
+    leaf st6-4byte-alignment-required {
+      type boolean;
+      default false;
+
+      description
+        "An optional flag indicating whether O-RU requires 4-byte aligned Section Type 6 or not.
+        If 4-byte aligned Section Type 6 is required, O-RU shall set this flag to 'true'.
+        If the leaf is ommitted or set to 'false', the O-RU operates using 1-byte aligned Section Type 6.
+        An O-DU recovering a value of 'true' shall ensure that Section Type 6 shall be
+        sent with 4-byte aligned messages, as described in clause 'Elements for the C-Plane Protocol' of
+        the CUS-Plane specification.";
+    }
+
+    leaf se6-rb-bit-supported {
+      type boolean;
+      default false;
+
+      description
+        "If this leaf node has a value 'true', then O-DU may use the 'rb' bit, in which case
+        when the O-DU sets the 'rb' bit to one, it shall also set the value of 'rbgsize' to zero and the
+        O-RU shall interpret the value of 'rb' bit as applicable to this data section. Refer 'SE 6: Non-contiguous
+        PRB allocation in time and frequency domain' requirement #3 of the CUS-Plane specification.";
+    }
   }
 
   grouping scs-a-b {
@@ -351,7 +489,7 @@ module o-ran-module-cap {
   grouping ul-mixed-num-required-guard-rbs {
     description
       "Required number of guard resource blocks for the combination of
-      subcarrier spacing values for uplink";
+      sub-carrier spacing values for uplink";
     uses scs-a-b;
     leaf number-of-guard-rbs-ul{
       type uint8;
@@ -365,7 +503,7 @@ module o-ran-module-cap {
   grouping dl-mixed-num-required-guard-rbs {
     description
       "Required number of guard resource blocks for the combination of
-      subcarrier spacing values for uplink";
+      sub-carrier spacing values for uplink";
     uses scs-a-b;
     leaf number-of-guard-rbs-dl{
       type uint8;
@@ -374,6 +512,98 @@ module o-ran-module-cap {
          between the mixed numerologies, the RB using scs-a and the RB
          using scs-b. It's number is based on scs-a";
     }
+  }
+
+  grouping sleep-mode-capability-info {
+    description
+      "Grouping for sleep mode capabilities supported by the O-RU.";
+
+    list sleep-modes {
+      key "sleep-mode-type";
+      description
+        "List of sleep mode type supported.";
+
+      leaf sleep-mode-type {
+        type enumeration {
+          enum SLEEP_MODE_0 {
+            description "O-RU supports Sleep Mode 0.";
+          }
+          enum SLEEP_MODE_1 {
+            description "O-RU supports Sleep Mode 1.";
+          }
+          enum SLEEP_MODE_2 {
+            description "O-RU supports Sleep Mode 2.";
+          }
+          enum SLEEP_MODE_3 {
+            description "O-RU supports Sleep Mode 3.";
+          }
+        }
+        description
+          "Type of sleep mode supported.";
+      }
+
+      leaf wake-up-duration {
+        type uint32;
+        units microseconds;
+        description "Wake-up duration for a particular sleep mode.";
+      }
+
+      leaf wake-up-duration-guaranteed {
+        type boolean;
+        description
+          "Informs whether the O-RU guarantees the wakeup duration for a particular sleep mode.
+           For sleep-mode-type reported as 'SLEEP_MODE_0', the wake-up-duration-guaranteed shall be reported as 'true'";
+      }
+    }
+
+    leaf defined-duration-sleep-supported {
+      type boolean;
+      description
+        "Informs if the O-RU supports the defined-duration sleep functionality.";
+    }
+
+    leaf undefined-duration-sleep-supported {
+      type boolean;
+      description
+        "Informs if the O-RU supports the undefined-duration sleep functionality.";
+    }
+  }
+
+  grouping trx-control-capability-info {
+    description
+      "A grouping with parameters for TRX-CONTROL capabilities supported by the O-RU";
+
+    list supported-trx-control-masks {
+      key "index";
+      description
+        "List of supported TRX control masks.";
+
+      leaf index {
+        type uint8;
+        description
+          "Index to the list.";
+      }
+
+      leaf mask-name {
+        type string;
+        description
+          "Unique name for each supported TRX control mask.";
+      }
+
+      leaf antenna-mask {
+        type binary;
+        description
+          "Supported Antenna Mask.";
+      }
+    }
+    uses  sleep-mode-capability-info;
+  }
+
+  grouping asm-capability-info {
+    description
+      "A grouping with parameters for advanced sleep mode capabilities supported by the O-RU";
+
+    uses  sleep-mode-capability-info;
   }
 
   grouping ru-capabilities {
@@ -409,43 +639,78 @@ module o-ran-module-cap {
     leaf number-of-ru-ports-ul {
       type uint8;
       description
-        "Assuming all endpoints support time-managed traffic AND non-time-managed traffic (choice is as per configuration)
-         - the number of O-RU ports for uplink is the product of number of spatial streams (leaf number-of-spatial-streams) and number of numerologies O-RU supports.
-         For example, if the number of spatial streams is 4 then the number of O-RU ports is 8 when PUSCH and PRACH are processed in the different endpoints.
+        "Assuming all endpoints support time-managed traffic AND non-time-managed traffic AND static channel configuration (choice is as per configuration)
+         - the upper bound of the number of O-RU ports for uplink which is derived from number of UL spatial streams or layers
+         and associated numerology O-RU supports.
+         Numerology capability per spatial stream or layer is based on eaxc id description in CUS specification section entitled
+         'ecpriRtcid / ecpriPcid (real time control data / IQ data transfer message series identifier)'
+         For example, if O-RU supports for each of 'N' spatial streams or layers 'M' numerologies (as it applies to PUSCH and PRACH), number of ports is N * M.
          In case there are specific endpoints that support non-time-managed traffic only
-         - the number of O-RU ports calculated with above mentioned equation is extended by number of endpoints supporting only non-time-managed traffic.";
+         - the number of O-RU ports calculated is extended by number of endpoints supporting only non-time-managed traffic.
+         Additionally, if there are specific endpoints that support static channel configuration only(e.g. static PRACH)
+         - the number of O-RU ports calculated above is further extended by number of endpoints supporting static channel configuration only.";
     }
     leaf number-of-ru-ports-dl {
       type uint8;
       description
         "Assuming all endpoints support time-managed traffic AND non-time-managed traffic (choice is as per configuration)
-         - the number of O-RU ports for downlink is the product of number of spatial streams (leaf number-of-spatial-streams) and number of numerologies O-RU supports.
-         For example, if the number of spatial streams is 4 then the number of O-RU ports is 8 when SSB and non-SSB are processed in the different endpoints.
-         In case there are specific endpoints that support non-time-managed traffic only
-         - the number of O-RU ports calculated with above mentioned equation is extended by number of endpoints supporting only non-time-managed traffic.";
+         - the upper bound of the number of O-RU ports for downlink which is derived from number of DL spatial streams or layers
+         and associated numerology O-RU supports.
+         Numerology capability per spatial stream or layer is based on eaxc id description in CUS specification section entitled
+         'ecpriRtcid / ecpriPcid (real time control data / IQ data transfer message series identifier)'
+         For example, if O-RU supports for each of 'N' spatial streams or layers 'M' numerologies, number of ports is N * M.
+         In case there are specific endpoints that support non-time-managed traffic only.
+         - the number of O-RU ports calculated with above mentioned equation is extended by number of endpoints supporting only non-time-managed traffic";
     }
 
     leaf number-of-spatial-streams {
       type uint8;
       description
-        "This value indicates the number of spatial streams supported at O-RU for DL and UL.
-         For DL, it is same as the number of antenna ports specified in 3GPP TS38.214, Section 5.2 and 3GPP TS36.213, Section 5.2.";
+        "This value indicates the maximum accumulated number of spatial streams supported by O-RU for DL and UL.
+         For definition of spatial stream, please refer to CUS plane specification clause 3.1 for details.";
+    }
+
+    leaf number-of-spatial-streams-dl {
+      type uint8;
+      description
+        "The maximum number of DL spatial streams that O-RU supports.
+          For definition of spatial stream, please refer to CUS plane specification clause 3.1 for details.";
+    }
+
+    leaf number-of-spatial-streams-ul {
+      type uint8;
+      description
+        "The maximum number of UL spatial streams that O-RU supports.
+        For definition of spatial stream, please refer to CUS plane specification clause 3.1 for details..";
+    }
+
+    leaf max-num-bands {
+      type uint16;
+      description "maximum number of bands supported by the O-RU";
     }
 
     leaf max-power-per-pa-antenna {
       type decimal64{
         fraction-digits 4;
       }
+      status deprecated;
       description
-        "This value indicates Maximum Power per PA per antenna. Value unit is dBm.";
+        "This value indicates Maximum Power per PA per antenna. Value unit is dBm.
+
+        The parameter is deprecated. min-gain and max-gain define constraints related to
+        TX power budget, as defined in CUS-Plane, clause 8.1.3.3.";
     }
 
     leaf min-power-per-pa-antenna {
       type decimal64{
         fraction-digits 4;
       }
+      status deprecated;
       description
-        "This value indicates Minimum Power per PA per antenna. Value unit is dBm.";
+        "This value indicates Minimum Power per PA per antenna. Value unit is dBm.
+
+        The parameter is deprecated. min-gain and max-gain define constraints related to
+        TX power budget, as defined in CUS-Plane, clause 8.1.3.3.";
     }
 
     leaf fronthaul-split-option {
@@ -467,7 +732,7 @@ module o-ran-module-cap {
       key "scs-a scs-b";
       description
         "List of required number of guard resource blocks
-        for the combination of subcarrier spacing values for downlink";
+        for the combination of sub-carrier spacing values for downlink";
 
       uses ul-mixed-num-required-guard-rbs;
     }
@@ -475,7 +740,7 @@ module o-ran-module-cap {
       key "scs-a scs-b";
       description
         "List of required number of guard resource blocks
-        for the combination of subcarrier spacing values for uplink";
+        for the combination of sub-carrier spacing values for uplink";
 
       uses dl-mixed-num-required-guard-rbs;
     }
@@ -498,7 +763,7 @@ module o-ran-module-cap {
       leaf max-num-tx-eaxc-ids-per-group {
         type uint8;
         description
-          "Maximum number of member-tx-eaxc-id in single tx-eaxc-id-group supported by O-RU.";
+         "Maximum number of eAxC IDs per tx-eaxc-id-group supported by O-RU, where each group is a union of the 'member-tx-eaxc-id's and a 'representative-tx-eaxc-id'.";
       }
       leaf max-num-rx-eaxc-id-groups {
         type uint8;
@@ -508,7 +773,7 @@ module o-ran-module-cap {
       leaf max-num-rx-eaxc-ids-per-group {
         type uint8;
         description
-          "the maximum number of eAxC IDs per rx-eaxc-id-group.";
+          "Maximum number of eAxC IDs per rx-eaxc-id-group supported by O-RU, where each group is a union of the 'member-rx-eaxc-id's and a 'representative-rx-eaxc-id'.";
       }
     }
 
@@ -523,13 +788,13 @@ module o-ran-module-cap {
       type boolean;
       default false;
       description
-        "Parameter informs if O-RU expects unique ecpri sequence id for eAxC_IDs serving
-        for UL and DL for the same carrier component.
+        "Parameter informs if O-RU expects unique eCPRI sequence id for eAxC_IDs serving
+        for UL and DL for the same Component Carrier.
 
         Note: If this is set to TRUE, the O-DU can decide to either use different eAxC_IDs for UL and
         DL or can generate unique sequence ID per eAxC_ID.
 
-        TAKE NOTE: This leaf is backwards compatible from an O-RU persepctive BUT an O-RU that
+        TAKE NOTE: This leaf is backwards compatible from an O-RU perspective BUT an O-RU that
         sets this leaf to TRUE may result in incompatibilities when operating with an O-DU
         designed according to the O-RAN CUS-Plane Specification v02.00, e.g., if the O-DU is
         incapable of using different eAxC values between UL and DL";
@@ -551,6 +816,13 @@ module o-ran-module-cap {
           "Coupling via Frequency and time with priorities; see methods of coupling of C-plane and U-plane in CUS-Plane specification.
           Note: If coupling-via-frequency-and-time-with-priorities is 'true' then coupling-via-frequency-and-time shall also be 'true'.";
       }
+
+      leaf coupling-via-frequency-and-time-with-priorities-optimized {
+        type boolean;
+        description
+          "Coupling via Frequency and time with priorities optimised; see methods of coupling of C-plane and U-plane in CUS-Plane specification.
+          Note: If coupling-via-frequency-and-time-with-priorities-optimized is 'true' then coupling-via-frequency-and-time shall also be 'true'.";
+      }
     }
 
     leaf ud-comp-len-supported {
@@ -560,10 +832,109 @@ module o-ran-module-cap {
          Only in case this leaf is present and its value is TRUE, O-RU supports U-Plane messages
          containing udCompLen field in section header.";
     }
+
+    leaf ext-ant-delay-capability {
+      if-feature "or-feat:EXT-ANT-DELAY-CONTROL";
+      type enumeration {
+         enum PER-ARRAY-CARRIER {
+          description
+            "Informs that the O-RU supports the configuration of different t-da-offset on different tx-array-carriers,
+             and different t-au-offset on different rx-array-carriers";
+        }
+
+         enum PER-ARRAY {
+          description
+            "Informs that the O-RU supports the configuration of different t-da-offset on different tx-array-carriers
+             only when those tx-array-carriers belong to different tx-arrays,
+             and the O-RU supports the configuration of different t-au-offset on different rx-array-carriers
+             only when those rx-array-carriers belong to different rx-arrays";
+        }
+
+        enum PER-O-RU {
+          description
+            "Informs that the O-RU only supports the configuration of a common t-da-offset across all tx-array-carriers,
+             and a common t-au-offset across all rx-array-carriers";
+        }
+      }
+      description
+        "This property informs what kind of capability the O-RU supports to be configured with external antenna delay.";
+    }
+
+    leaf nack-supported {
+      type boolean;
+      description
+        "This value indicates if O-RU supports sending NACK feedback if a section extension for ACK/NACK request is received,
+        If O-RU reports supporting section extension for ACK/NACK request (section extension 22) and ACK/NACK feedback (section type 8), ACK feedback shall always be supported,
+        while NACK feedback is optionally supported according to 'nack-supported'";
+    }
+
+    leaf st8-scs-supported {
+      type boolean;
+      description
+        "Informs if O-RU supports the optional field scs in Section Type 8 messages.";
+    }
+
+    container energy-saving-capability-common-info {
+      if-feature "or-feat:TRX-CONTROL or or-feat:ADVANCED-SLEEP-MODE";
+      description
+        "A container with parameters for common energy saving capabilities supported by the O-RU";
+
+
+      leaf st8-ready-message-supported {
+        type boolean;
+        description
+          "Informs if the O-RU supports Section Type 8 Ready message.";
+      }
+
+      leaf sleep-duration-extension-supported {
+        type boolean;
+        description
+          "Informs if the O-RU supports extension of sleep duration.";
+      }
+
+      leaf emergency-wake-up-command-supported {
+        type boolean;
+        description
+          "Informs if the O-RU supports emergency wake-up M-Plane command.";
+      }
+    }
+
+    leaf bundle-offset-in-se11-supported {
+      type boolean;
+      default false;
+      description
+        "Informs if O-RU supports receiving non-zero values of bundleOffset in SE11.
+        For details, see CUS-Plane Specification, clause 7.7.11.10.";
+    }
+
+    leaf max-beamId-tables-supported {
+      if-feature "or-feat:MULTIPLE-BEAMID-TABLES-SUPPORTED";
+      type uint8;
+        description
+          "This parameter defines the maximum number of beamId tables supported by the O-RU.";
+    }
+
+    leaf min-hibernate-time-duration {
+      if-feature "or-feat:DEEP-HIBERNATE";
+      type uint32;
+      units minutes;
+      description
+        "Informs about the minimum hibernate-time duration that O-RU
+        supports deep-hibernate sleep";
+    }
+
+    leaf max-hibernate-time-duration {
+      if-feature "or-feat:DEEP-HIBERNATE";
+      type uint32;
+      units minutes;
+      mandatory true;
+      description
+        "Informs about the maximum hibernate-time duration that O-RU supports deep-hibernate sleep";
+    }
   }
 
   grouping sub-band-info {
-    description "container for collection of leafs for LAA subband 46";
+    description "container for collection of leafs for LAA sub-band 46";
     list sub-band-frequency-ranges {
       key sub-band;
       description "frequency information on a per sub-band basis";
@@ -584,7 +955,7 @@ module o-ran-module-cap {
       description
         "Maximum O-RU buffer size in Kilobytes (KB) per CC. This parameter is
          needed at the O-DU to know how much data can be sent in advance
-         and stored at the O-RU to address the LBT uncertainity.";
+         and stored at the O-RU to address the LBT uncertainty.";
     }
 
     leaf maximum-processing-time {
@@ -593,13 +964,68 @@ module o-ran-module-cap {
       description
         "Maximum O-RU Processing time in microseconds at the O-RU to handle the
          received/transmitted packets from/to the O-DU. This parameter is
-         needed at the O-DU to determine the time where it needs to send
+         needed at the O-DU to determine the time when it needs to send
          the data to the O-RU.";
     }
 
     leaf self-configure {
       type boolean;
       description "This value indicates that the O-RU can manage the contention window locally. ";
+    }
+  }
+
+  grouping supported-filter-pass-bandwidths {
+    description
+      "Grouping of filter pass bandwidth capabilities";
+
+    list supported-filter-pass-bandwidths {
+      key "id";
+      config false;
+
+      leaf id {
+        type uint32;
+        description
+          "Identification number for a supported filter pass bandwidth.";
+      }
+
+      leaf type {
+        type enumeration {
+          enum LTE {
+            description
+              "LTE technology.";
+          }
+          enum NR {
+            description
+              "NR technology.";
+          }
+          enum DSS_LTE_NR {
+            if-feature DSS_LTE_NR;
+            description
+              "DSS of LTE and NR technologies.";
+          }
+        }
+        description
+          "Supported carrier type for filter pass bandwidth value.";
+      }
+
+      leaf carrier-bandwidth {
+        type uint64;
+        units Hz;
+
+        description
+          "Bandwidth of a carrier for which filter pass bandwidth can be used.";
+      }
+
+      leaf filter-pass-bandwidth {
+        type uint64;
+        units Hz;
+
+        description
+          "Filter pass bandwidth of a carrier.";
+      }
+
+      description
+        "List of supported filter pass bandwidths by carriers.";
     }
   }
 
@@ -662,6 +1088,24 @@ module o-ran-module-cap {
       description
         "This list provides information regarding technologies supported in DL path";
     }
+
+    container supported-filter-pass-bandwidths-dl {
+      description
+        "Filter pass bandwidth capabilities for DL.";
+      uses supported-filter-pass-bandwidths;
+    }
+
+    leaf-list tx-array-beamId-table-indexes {
+      if-feature "or-feat:MULTIPLE-BEAMID-TABLES-SUPPORTED";
+      type uint8;
+      min-elements 1;
+      description
+        "When O-RU advertises support for multiple beamId tables, this list shall specify the beamId table indexes
+        associated with a given tx-array capabilities list entry. O-DU shall be restricted to choose
+        one or multiple entries for a given configured tx-array-carrier from this list.
+        Note: tx-array and rx-array may use the same beamId table indexes.";
+    }
+
   }
 
   grouping support-for-ul {
@@ -723,6 +1167,23 @@ module o-ran-module-cap {
       description
         "This list provides information regarding technologies supported in UL path";
     }
+
+    container supported-filter-pass-bandwidths-ul {
+      description
+        "Filter pass bandwidth capabilities for UL.";
+      uses supported-filter-pass-bandwidths;
+    }
+
+    leaf-list rx-array-beamId-table-indexes {
+      if-feature "or-feat:MULTIPLE-BEAMID-TABLES-SUPPORTED";
+      type uint8;
+      min-elements 1;
+      description
+        "When O-RU advertises support for multiple beamId tables, this list shall specify the beamId table indexes
+        associated with a given rx-array capabilities list entry. O-DU shall be restricted to choose
+        one or multiple entries for a given configured rx-array-carrier from this list.
+        Note: tx-array and rx-array may use the same beamId table indexes.";
+    }
   }
 
   grouping band-capabilities {
@@ -738,7 +1199,7 @@ module o-ran-module-cap {
     container sub-band-info {
       when "../band-number = '46'";
       if-feature "o-ran-module-cap:LAA";
-      description "container for collection of leafs for LAA subband 46";
+      description "container for collection of leafs for LAA sub-band 46";
       uses sub-band-info;
     }
 
@@ -747,12 +1208,15 @@ module o-ran-module-cap {
 
     leaf max-num-component-carriers {
       type uint8;
-      description "maximum number of component carriers supported by the O-RU";
+      description "maximum number of component carriers supported by the O-RU. This parameter is the
+      cumulative value of 'max-num-carriers-dl' and 'max-num-carriers-ul'";
     }
 
     leaf max-num-bands {
       type uint16;
-      description "maximum number of bands supported by the O-RU";
+      status deprecated;
+      description "maximum number of bands supported by the O-RU.
+      Parameter moved to ru-capabilities, hence deprecated";
     }
 
     leaf max-num-sectors {
@@ -764,34 +1228,48 @@ module o-ran-module-cap {
       type decimal64{
         fraction-digits 4;
       }
+      status deprecated;
       description
-        "This value indicates Maximum Power per band per antenna. Value unit is dBm.";
+        "This value indicates Maximum Power per band per antenna. Value unit is dBm.
+
+        The parameter is deprecated. min-gain and max-gain define constraints related to
+        TX power budget, as defined in CUS-Plane, clause 8.1.3.3.";
     }
 
     leaf min-power-per-antenna {
       type decimal64{
         fraction-digits 4;
       }
+      status deprecated;
       description
-        "This value indicates Minimum Power per band per antenna. Value unit is dBm.";
+        "This value indicates Minimum Power per band per antenna. Value unit is dBm.
+
+        The parameter is deprecated. min-gain and max-gain define constraints related to
+        TX power budget, as defined in CUS-Plane, clause 8.1.3.3.";
     }
 
     leaf codebook-configuration_ng {
         type uint8;
+        status deprecated;
         description
-          "This parameter informs the precoder codebook_ng that are used for precoding";
+          "This parameter informs the precoder codebook_ng that are used for precoding.
+          Parameter deprecated since antenna topology already specified in [tr]x-array";
       }
 
     leaf codebook-configuration_n1 {
         type uint8;
+        status deprecated;
         description
-          "This parameter informs the precoder codebook_n1 that are used for precoding";
+          "This parameter informs the precoder codebook_n1 that are used for precoding
+          Parameter deprecated since antenna topology already specified in [tr]x-array";
       }
 
     leaf codebook-configuration_n2 {
         type uint8;
+        status deprecated;
         description
-          "This parameter informs the precoder codebook_n2 that are used for precoding";
+          "This parameter informs the precoder codebook_n2 that are used for precoding
+          Parameter deprecated since antenna topology already specified in [tr]x-array";
     }
   }
 
@@ -836,5 +1314,5 @@ module o-ran-module-cap {
           "This value indicates that the O-RU can manage the contention window locally.";
       }
     }
-  }
+    }
 }

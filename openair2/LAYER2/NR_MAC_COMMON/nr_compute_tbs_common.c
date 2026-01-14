@@ -59,6 +59,11 @@ uint32_t nr_compute_tbs(uint16_t Qm,
         tb_scaling,
         Nl);
 
+  if (Qm == 0 || R == 0 || nb_rb == 0 || Nl == 0) {
+    LOG_E(NR_MAC, "Error in compute TBS with a NULL input, returning NULL TBS\n");
+    return 0;
+  }
+
   const int nb_subcarrier_per_rb = 12;
   const uint32_t nbp_re =  nb_subcarrier_per_rb * nb_symb_sch - nb_dmrs_prb - nb_rb_oh;
   const uint32_t nb_re = min(156, nbp_re) * nb_rb;

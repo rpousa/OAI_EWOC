@@ -236,6 +236,12 @@ bool fapi_nr_p7_message_unpack(void *pMessageBuf,
   return true;
 }
 
+#ifndef ENABLE_AERIAL
+#define PARSE_BEAMID(a) (a)
+#else
+#define PARSE_BEAMID(a) ((a) & 0x7fff)
+#endif
+
 static uint8_t pack_nr_tx_beamforming_pdu(const nfapi_nr_tx_precoding_and_beamforming_t *beamforming_pdu,
                                           uint8_t **ppWritePackedMsg,
                                           uint8_t *end)
@@ -249,7 +255,9 @@ static uint8_t pack_nr_tx_beamforming_pdu(const nfapi_nr_tx_precoding_and_beamfo
       return 0;
     }
     for (int digBFInterface = 0; digBFInterface < beamforming_pdu->dig_bf_interfaces; digBFInterface++) {
-      if (!push16(beamforming_pdu->prgs_list[prg].dig_bf_interface_list[digBFInterface].beam_idx, ppWritePackedMsg, end)) {
+      if (!push16(PARSE_BEAMID(beamforming_pdu->prgs_list[prg].dig_bf_interface_list[digBFInterface].beam_idx),
+                  ppWritePackedMsg,
+                  end)) {
         return 0;
       }
     }
@@ -715,7 +723,9 @@ static uint8_t pack_nr_rx_beamforming_pdu(const nfapi_nr_ul_beamforming_t *beamf
   }
   for (int prg = 0; prg < beamforming_pdu->num_prgs; prg++) {
     for (int digBFInterface = 0; digBFInterface < beamforming_pdu->dig_bf_interface; digBFInterface++) {
-      if (!push16(beamforming_pdu->prgs_list[prg].dig_bf_interface_list[digBFInterface].beam_idx, ppWritePackedMsg, end)) {
+      if (!push16(PARSE_BEAMID(beamforming_pdu->prgs_list[prg].dig_bf_interface_list[digBFInterface].beam_idx),
+                  ppWritePackedMsg,
+                  end)) {
         return 0;
       }
     }
@@ -1400,7 +1410,7 @@ static uint8_t pack_ul_dci_pdu_list_value(void *tlv, uint8_t **ppWritePackedMsg,
         return 0;
       }
       for (int digInt = 0; digInt < beamforming->dig_bf_interfaces; digInt++) {
-        if (!push16(beamforming->prgs_list[prg].dig_bf_interface_list[digInt].beam_idx, ppWritePackedMsg, end)) {
+        if (!push16(PARSE_BEAMID(beamforming->prgs_list[prg].dig_bf_interface_list[digInt].beam_idx), ppWritePackedMsg, end)) {
           return 0;
         }
       }

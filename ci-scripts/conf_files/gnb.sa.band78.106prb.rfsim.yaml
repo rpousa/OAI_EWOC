@@ -146,6 +146,7 @@ MACRLCs:
     tr_n_preference: local_RRC
     pusch_TargetSNRx10: 200
     pucch_TargetSNRx10: 200
+    stats_max_ue: 17
 
 L1s:
   - num_cc: 1

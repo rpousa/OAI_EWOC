@@ -1243,8 +1243,8 @@ In OAI gNB, we support:
 ```
 
 The reference specifications:
-* `O-RAN.WG4.MP.0-v05.00`
-* `O-RAN.WG4.MP-YANGs-v04.00`
+* `O-RAN.WG4.MP.0-R004-v16.01`
+* `O-RAN.WG4.MP-YANGs-R004-v16.01`
 
 ## M-plane prerequisites
 Before proceeding, please make sure you have a support for 7.2 interface, as described in [Prerequisites](#prerequisites).
@@ -1366,7 +1366,7 @@ sudo ldconfig
 If you would like to install these libraries in the custom path, please replace `/usr/local` default path to e.g. `/opt/mplane-v2`.
 
 ## Benetel O-RU
-Note: Only v1.2.2 RAN550 and RAN650 have been successfully tested.
+Note: RAN550/650 v1.2.2 and v1.4.1 have been successfully tested.
 
 ### One time steps
 Connect to the RU as user `root`, enable the mplane service, and reboot:
@@ -1400,6 +1400,8 @@ The reference DU configuration file for two Benetel RAN650:
 [gnb-du.sa.band77.273prb.fhi72.8x8-benetel650_650-mplane.conf](../targets/PROJECTS/GENERIC-NR-5GC/CONF/gnb-du.sa.band77.273prb.fhi72.8x8-benetel650_650-mplane.conf)
 
 In order to run gNB/DU with M-plane, we need to modify Tx gain `att_tx` in RU section, as well as the `fhi_72` section in the configuration file.
+
+**Important note: Benetel v1.4.1 requires only one VF if the same VLAN tag is used for both C-/U-planes. Otherwise, C-plane will not be properly configured. Benetel v1.2.2 will receive the C-plane packets no matter the DU MAC address value.**
 Example for one RU:
 ```bash
 fhi_72 = {
@@ -1573,14 +1575,14 @@ sequenceDiagram
 
 
 <details>
-<summary>4x4 MIMO and 100MHz BW with Benetel 550 RU example run</summary>
+<summary>4x4 MIMO and 100MHz BW with Benetel 550 RU v1.2.2 example run</summary>
 
 ```
 [HW]   [MPLANE] RPC request to RU "192.168.80.9" = <connect> with username "oranbenetel" and port ID "830".
 [HW]   [MPLANE] Successfuly connected to RU "192.168.80.9" with username "oranbenetel" and port ID "830".
 [HW]   [MPLANE] RPC request to RU "192.168.80.9" = <get> operational datastore.
 [HW]   [MPLANE] Successfully retrieved operational datastore from RU "192.168.80.9".
-[HW]   [MPLANE] RU is already PTP synchronized.
+[HW]   [MPLANE] RU is in "LOCKED" sync state.
 [HW]   [MPLANE] RPC request to RU "192.168.80.9" = <subscribe> with stream "NETCONF" and filter "(null)".
 [HW]   [MPLANE] RPC reply = OK.
 [HW]   [MPLANE] Successfully subscribed to all notifications from RU "192.168.80.9".
@@ -2223,6 +2225,861 @@ sequenceDiagram
 ```
 </details>
 
+<details>
+<summary>4x4 MIMO and 100MHz BW with Benetel 550 RU v1.4.1 example run</summary>
+
+```
+[HW]   [MPLANE] RPC request to RU "192.168.81.4" = <connect> with username "oranbenetel" and port ID "830".
+[HW]   [MPLANE] Successfuly connected to RU "192.168.81.4" with username "oranbenetel" and port ID "830".
+[HW]   [MPLANE] RPC request to RU "192.168.81.4" = <get> operational datastore.
+[HW]   [MPLANE] Successfully retrieved operational datastore from RU "192.168.81.4".
+[HW]   [MPLANE] RU is already PTP synchronized.
+[HW]   [MPLANE] RPC request to RU "192.168.81.4" = <subscribe> with stream "NETCONF" and filter "(null)".
+[HW]   [MPLANE] RPC reply = OK.
+[HW]   [MPLANE] Successfully subscribed to all notifications from RU "192.168.81.4".
+[HW]   [MPLANE] RPC request to RU "192.168.81.4" = "<supervision-watchdog-reset xmlns="urn:o-ran:supervision:1.0">
+<supervision-notification-interval>65535</supervision-notification-interval>
+<guard-timer-overhead>65535</guard-timer-overhead>
+</supervision-watchdog-reset>".
+[HW]   [MPLANE] Successfully updated supervision timer to (65535+65535)[s] for RU "192.168.81.4".
+[HW]   [MPLANE] Watchdog timer answer: 
+	<next-update-at xmlns="urn:o-ran:supervision:1.0">2025-08-29T06:49:32+02:00</next-update-at>
+
+[HW]   [MPLANE] Interface MTU 1500 unreliable/not correctly reported by Benetel O-RU, hardcoding to 9600.
+[HW]   [MPLANE] IQ bitwidth 16 unreliable/not correctly reported by Benetel O-RU, hardcoding to 9.
+[HW]   [MPLANE] Storing the following information to forward to xran:
+    RU MAC address 70:b3:d5:e1:5b:81
+    MTU 9600
+    IQ bitwidth 9
+    PRACH offset 4
+    DU port bitmask 61440
+    Band sector bitmask 3840
+    CC ID bitmask 240
+    RU port ID bitmask 15
+    DU port ID 0
+    Band sector ID 0
+    CC ID 0
+    RU port ID 0
+    max Tx gain 24.0
+[HW]   [MPLANE] Successfully retrieved all the U-plane info - interface name, TX/RX carrier names, and TX/RX endpoint names.
+[HW]   [MPLANE] Successfully retreived all performance measurement names.
+[HW]   [MPLANE] RPC request to RU "192.168.81.4" = <get-schema> for module "ietf-yang-metadata".
+[HW]   [MPLANE] RPC request to RU "192.168.81.4" = <get-schema> for module "yang".
+[HW]   [MPLANE] RPC request to RU "192.168.81.4" = <get-schema> for module "ietf-inet-types".
+[HW]   [MPLANE] RPC request to RU "192.168.81.4" = <get-schema> for module "ietf-yang-types".
+[HW]   [MPLANE] RPC request to RU "192.168.81.4" = <get-schema> for module "ietf-yang-schema-mount".
+[HW]   [MPLANE] RPC request to RU "192.168.81.4" = <get-schema> for module "ietf-yang-structure-ext".
+[HW]   [MPLANE] RPC request to RU "192.168.81.4" = <get-schema> for module "ietf-datastores".
+[HW]   [MPLANE] RPC request to RU "192.168.81.4" = <get-schema> for module "sysrepo".
+[HW]   [MPLANE] RPC request to RU "192.168.81.4" = <get-schema> for module "ietf-netconf-acm".
+[HW]   [MPLANE] RPC request to RU "192.168.81.4" = <get-schema> for module "ietf-factory-default".
+[HW]   [MPLANE] RPC request to RU "192.168.81.4" = <get-schema> for module "sysrepo-factory-default".
+[HW]   [MPLANE] RPC request to RU "192.168.81.4" = <get-schema> for module "ietf-yang-library".
+[HW]   [MPLANE] RPC request to RU "192.168.81.4" = <get-schema> for module "sysrepo-monitoring".
+[HW]   [MPLANE] RPC request to RU "192.168.81.4" = <get-schema> for module "sysrepo-plugind".
+[HW]   [MPLANE] RPC request to RU "192.168.81.4" = <get-schema> for module "ietf-netconf".
+[HW]   [MPLANE] RPC request to RU "192.168.81.4" = <get-schema> for module "ietf-netconf-with-defaults".
+[HW]   [MPLANE] RPC request to RU "192.168.81.4" = <get-schema> for module "ietf-netconf-notifications".
+[HW]   [MPLANE] RPC request to RU "192.168.81.4" = <get-schema> for module "ietf-origin".
+[HW]   [MPLANE] RPC request to RU "192.168.81.4" = <get-schema> for module "ietf-netconf-monitoring".
+[HW]   [MPLANE] RPC request to RU "192.168.81.4" = <get-schema> for module "ietf-netconf-nmda".
+[HW]   [MPLANE] RPC request to RU "192.168.81.4" = <get-schema> for module "nc-notifications".
+[HW]   [MPLANE] [LIBYANG] ERROR: Data model "notifications" not found in local searchdirs. (path: (null)).
+[HW]   [MPLANE] [LIBYANG] ERROR: Loading "notifications" module failed. (path: (null)).
+[HW]   [MPLANE] [LIBYANG] ERROR: Parsing module "nc-notifications" failed. (path: (null)).
+[HW]   [MPLANE] Unable to load module "nc-notifications" from RU "192.168.81.4".
+[HW]   [MPLANE] Unable to load all yang modules from operational datastore for RU "192.168.81.4". Using yang models present in "models" subfolder.
+[HW]   [MPLANE] Successfully loaded all yang modules for RU "192.168.81.4".
+[HW]   [MPLANE] RPC request to RU "192.168.81.4" = <edit-config>:
+<interfaces xmlns="urn:ietf:params:xml:ns:yang:ietf-interfaces">
+  <interface>
+    <name>INTERFACE_0</name>
+    <type xmlns:ianaift="urn:ietf:params:xml:ns:yang:iana-if-type">ianaift:l2vlan</type>
+    <enabled>true</enabled>
+    <mac-address xmlns="urn:o-ran:interfaces:1.0">70:b3:d5:e1:5b:81</mac-address>
+    <base-interface xmlns="urn:o-ran:interfaces:1.0">eth0</base-interface>
+    <vlan-id xmlns="urn:o-ran:interfaces:1.0">3</vlan-id>
+  </interface>
+</interfaces>
+<performance-measurement-objects xmlns="urn:o-ran:performance-management:1.0">
+  <rx-window-measurement-interval>10</rx-window-measurement-interval>
+  <tx-measurement-interval>10</tx-measurement-interval>
+  <notification-interval>10</notification-interval>
+  <rx-window-measurement-objects>
+    <measurement-object>RX_ON_TIME</measurement-object>
+    <active>false</active>
+    <object-unit>RU</object-unit>
+    <report-info>COUNT</report-info>
+  </rx-window-measurement-objects>
+  <rx-window-measurement-objects>
+    <measurement-object>RX_EARLY</measurement-object>
+    <active>false</active>
+    <object-unit>RU</object-unit>
+    <report-info>COUNT</report-info>
+  </rx-window-measurement-objects>
+  <rx-window-measurement-objects>
+    <measurement-object>RX_LATE</measurement-object>
+    <active>false</active>
+    <object-unit>RU</object-unit>
+    <report-info>COUNT</report-info>
+  </rx-window-measurement-objects>
+  <rx-window-measurement-objects>
+    <measurement-object>RX_TOTAL</measurement-object>
+    <active>false</active>
+    <object-unit>RU</object-unit>
+    <report-info>COUNT</report-info>
+  </rx-window-measurement-objects>
+  <rx-window-measurement-objects>
+    <measurement-object>RX_ON_TIME_C</measurement-object>
+    <active>false</active>
+    <object-unit>RU</object-unit>
+    <report-info>COUNT</report-info>
+  </rx-window-measurement-objects>
+  <rx-window-measurement-objects>
+    <measurement-object>RX_EARLY_C</measurement-object>
+    <active>false</active>
+    <object-unit>RU</object-unit>
+    <report-info>COUNT</report-info>
+  </rx-window-measurement-objects>
+  <rx-window-measurement-objects>
+    <measurement-object>RX_LATE_C</measurement-object>
+    <active>false</active>
+    <object-unit>RU</object-unit>
+    <report-info>COUNT</report-info>
+  </rx-window-measurement-objects>
+  <tx-measurement-objects>
+    <measurement-object>TX_TOTAL</measurement-object>
+    <active>false</active>
+    <object-unit>RU</object-unit>
+    <report-info>COUNT</report-info>
+  </tx-measurement-objects>
+</performance-measurement-objects>
+<processing-elements xmlns="urn:o-ran:processing-element:1.0">
+  <transport-session-type>ETH-INTERFACE</transport-session-type>
+  <ru-elements>
+    <name>PLANE_0</name>
+    <transport-flow>
+      <interface-name>INTERFACE_0</interface-name>
+      <eth-flow>
+        <ru-mac-address>70:b3:d5:e1:5b:81</ru-mac-address>
+        <vlan-id>3</vlan-id>
+        <o-du-mac-address>00:11:22:33:44:66</o-du-mac-address>
+      </eth-flow>
+    </transport-flow>
+  </ru-elements>
+</processing-elements>
+<user-plane-configuration xmlns="urn:o-ran:uplane-conf:1.0">
+  <low-level-tx-links>
+    <name>PdschLink0</name>
+    <processing-element>PLANE_0</processing-element>
+    <tx-array-carrier>TxArray0</tx-array-carrier>
+    <low-level-tx-endpoint>LowLevelTxEndpoint0</low-level-tx-endpoint>
+  </low-level-tx-links>
+  <low-level-tx-links>
+    <name>PdschLink1</name>
+    <processing-element>PLANE_0</processing-element>
+    <tx-array-carrier>TxArray1</tx-array-carrier>
+    <low-level-tx-endpoint>LowLevelTxEndpoint1</low-level-tx-endpoint>
+  </low-level-tx-links>
+  <low-level-tx-links>
+    <name>PdschLink2</name>
+    <processing-element>PLANE_0</processing-element>
+    <tx-array-carrier>TxArray2</tx-array-carrier>
+    <low-level-tx-endpoint>LowLevelTxEndpoint2</low-level-tx-endpoint>
+  </low-level-tx-links>
+  <low-level-tx-links>
+    <name>PdschLink3</name>
+    <processing-element>PLANE_0</processing-element>
+    <tx-array-carrier>TxArray3</tx-array-carrier>
+    <low-level-tx-endpoint>LowLevelTxEndpoint3</low-level-tx-endpoint>
+  </low-level-tx-links>
+  <low-level-rx-links>
+    <name>PuschLink0</name>
+    <processing-element>PLANE_0</processing-element>
+    <rx-array-carrier>RxArray0</rx-array-carrier>
+    <low-level-rx-endpoint>LowLevelRxEndpoint0</low-level-rx-endpoint>
+  </low-level-rx-links>
+  <low-level-rx-links>
+    <name>PrachLink0</name>
+    <processing-element>PLANE_0</processing-element>
+    <rx-array-carrier>RxArray0</rx-array-carrier>
+    <low-level-rx-endpoint>LowLevelRxPrachEndpoint0</low-level-rx-endpoint>
+  </low-level-rx-links>
+  <low-level-rx-links>
+    <name>PuschLink1</name>
+    <processing-element>PLANE_0</processing-element>
+    <rx-array-carrier>RxArray1</rx-array-carrier>
+    <low-level-rx-endpoint>LowLevelRxEndpoint1</low-level-rx-endpoint>
+  </low-level-rx-links>
+  <low-level-rx-links>
+    <name>PrachLink1</name>
+    <processing-element>PLANE_0</processing-element>
+    <rx-array-carrier>RxArray1</rx-array-carrier>
+    <low-level-rx-endpoint>LowLevelRxPrachEndpoint1</low-level-rx-endpoint>
+  </low-level-rx-links>
+  <low-level-rx-links>
+    <name>PuschLink2</name>
+    <processing-element>PLANE_0</processing-element>
+    <rx-array-carrier>RxArray2</rx-array-carrier>
+    <low-level-rx-endpoint>LowLevelRxEndpoint2</low-level-rx-endpoint>
+  </low-level-rx-links>
+  <low-level-rx-links>
+    <name>PrachLink2</name>
+    <processing-element>PLANE_0</processing-element>
+    <rx-array-carrier>RxArray2</rx-array-carrier>
+    <low-level-rx-endpoint>LowLevelRxPrachEndpoint2</low-level-rx-endpoint>
+  </low-level-rx-links>
+  <low-level-rx-links>
+    <name>PuschLink3</name>
+    <processing-element>PLANE_0</processing-element>
+    <rx-array-carrier>RxArray3</rx-array-carrier>
+    <low-level-rx-endpoint>LowLevelRxEndpoint3</low-level-rx-endpoint>
+  </low-level-rx-links>
+  <low-level-rx-links>
+    <name>PrachLink3</name>
+    <processing-element>PLANE_0</processing-element>
+    <rx-array-carrier>RxArray3</rx-array-carrier>
+    <low-level-rx-endpoint>LowLevelRxPrachEndpoint3</low-level-rx-endpoint>
+  </low-level-rx-links>
+  <low-level-tx-endpoints>
+    <name>LowLevelTxEndpoint0</name>
+    <compression>
+      <iq-bitwidth>9</iq-bitwidth>
+      <compression-type>STATIC</compression-type>
+    </compression>
+    <frame-structure>193</frame-structure>
+    <cp-type>NORMAL</cp-type>
+    <cp-length>352</cp-length>
+    <cp-length-other>288</cp-length-other>
+    <offset-to-absolute-frequency-center>0</offset-to-absolute-frequency-center>
+    <e-axcid>
+      <o-du-port-bitmask>61440</o-du-port-bitmask>
+      <band-sector-bitmask>3840</band-sector-bitmask>
+      <ccid-bitmask>240</ccid-bitmask>
+      <ru-port-bitmask>15</ru-port-bitmask>
+      <eaxc-id>0</eaxc-id>
+    </e-axcid>
+  </low-level-tx-endpoints>
+  <low-level-tx-endpoints>
+    <name>LowLevelTxEndpoint1</name>
+    <compression>
+      <iq-bitwidth>9</iq-bitwidth>
+      <compression-type>STATIC</compression-type>
+    </compression>
+    <frame-structure>193</frame-structure>
+    <cp-type>NORMAL</cp-type>
+    <cp-length>352</cp-length>
+    <cp-length-other>288</cp-length-other>
+    <offset-to-absolute-frequency-center>0</offset-to-absolute-frequency-center>
+    <e-axcid>
+      <o-du-port-bitmask>61440</o-du-port-bitmask>
+      <band-sector-bitmask>3840</band-sector-bitmask>
+      <ccid-bitmask>240</ccid-bitmask>
+      <ru-port-bitmask>15</ru-port-bitmask>
+      <eaxc-id>1</eaxc-id>
+    </e-axcid>
+  </low-level-tx-endpoints>
+  <low-level-tx-endpoints>
+    <name>LowLevelTxEndpoint2</name>
+    <compression>
+      <iq-bitwidth>9</iq-bitwidth>
+      <compression-type>STATIC</compression-type>
+    </compression>
+    <frame-structure>193</frame-structure>
+    <cp-type>NORMAL</cp-type>
+    <cp-length>352</cp-length>
+    <cp-length-other>288</cp-length-other>
+    <offset-to-absolute-frequency-center>0</offset-to-absolute-frequency-center>
+    <e-axcid>
+      <o-du-port-bitmask>61440</o-du-port-bitmask>
+      <band-sector-bitmask>3840</band-sector-bitmask>
+      <ccid-bitmask>240</ccid-bitmask>
+      <ru-port-bitmask>15</ru-port-bitmask>
+      <eaxc-id>2</eaxc-id>
+    </e-axcid>
+  </low-level-tx-endpoints>
+  <low-level-tx-endpoints>
+    <name>LowLevelTxEndpoint3</name>
+    <compression>
+      <iq-bitwidth>9</iq-bitwidth>
+      <compression-type>STATIC</compression-type>
+    </compression>
+    <frame-structure>193</frame-structure>
+    <cp-type>NORMAL</cp-type>
+    <cp-length>352</cp-length>
+    <cp-length-other>288</cp-length-other>
+    <offset-to-absolute-frequency-center>0</offset-to-absolute-frequency-center>
+    <e-axcid>
+      <o-du-port-bitmask>61440</o-du-port-bitmask>
+      <band-sector-bitmask>3840</band-sector-bitmask>
+      <ccid-bitmask>240</ccid-bitmask>
+      <ru-port-bitmask>15</ru-port-bitmask>
+      <eaxc-id>3</eaxc-id>
+    </e-axcid>
+  </low-level-tx-endpoints>
+  <low-level-rx-endpoints>
+    <name>LowLevelRxEndpoint0</name>
+    <compression>
+      <iq-bitwidth>9</iq-bitwidth>
+      <compression-type>STATIC</compression-type>
+    </compression>
+    <frame-structure>193</frame-structure>
+    <cp-type>NORMAL</cp-type>
+    <cp-length>352</cp-length>
+    <cp-length-other>288</cp-length-other>
+    <offset-to-absolute-frequency-center>0</offset-to-absolute-frequency-center>
+    <ul-fft-sampling-offsets>
+      <scs>KHZ_30</scs>
+      <ul-fft-sampling-offset>0</ul-fft-sampling-offset>
+    </ul-fft-sampling-offsets>
+    <e-axcid>
+      <o-du-port-bitmask>61440</o-du-port-bitmask>
+      <band-sector-bitmask>3840</band-sector-bitmask>
+      <ccid-bitmask>240</ccid-bitmask>
+      <ru-port-bitmask>15</ru-port-bitmask>
+      <eaxc-id>0</eaxc-id>
+    </e-axcid>
+    <non-time-managed-delay-enabled>true</non-time-managed-delay-enabled>
+  </low-level-rx-endpoints>
+  <low-level-rx-endpoints>
+    <name>LowLevelRxPrachEndpoint0</name>
+    <compression>
+      <iq-bitwidth>9</iq-bitwidth>
+      <compression-type>STATIC</compression-type>
+    </compression>
+    <frame-structure>193</frame-structure>
+    <cp-type>NORMAL</cp-type>
+    <cp-length>352</cp-length>
+    <cp-length-other>288</cp-length-other>
+    <offset-to-absolute-frequency-center>0</offset-to-absolute-frequency-center>
+    <ul-fft-sampling-offsets>
+      <scs>KHZ_30</scs>
+      <ul-fft-sampling-offset>0</ul-fft-sampling-offset>
+    </ul-fft-sampling-offsets>
+    <e-axcid>
+      <o-du-port-bitmask>61440</o-du-port-bitmask>
+      <band-sector-bitmask>3840</band-sector-bitmask>
+      <ccid-bitmask>240</ccid-bitmask>
+      <ru-port-bitmask>15</ru-port-bitmask>
+      <eaxc-id>4</eaxc-id>
+    </e-axcid>
+    <non-time-managed-delay-enabled>true</non-time-managed-delay-enabled>
+  </low-level-rx-endpoints>
+  <low-level-rx-endpoints>
+    <name>LowLevelRxEndpoint1</name>
+    <compression>
+      <iq-bitwidth>9</iq-bitwidth>
+      <compression-type>STATIC</compression-type>
+    </compression>
+    <frame-structure>193</frame-structure>
+    <cp-type>NORMAL</cp-type>
+    <cp-length>352</cp-length>
+    <cp-length-other>288</cp-length-other>
+    <offset-to-absolute-frequency-center>0</offset-to-absolute-frequency-center>
+    <ul-fft-sampling-offsets>
+      <scs>KHZ_30</scs>
+      <ul-fft-sampling-offset>0</ul-fft-sampling-offset>
+    </ul-fft-sampling-offsets>
+    <e-axcid>
+      <o-du-port-bitmask>61440</o-du-port-bitmask>
+      <band-sector-bitmask>3840</band-sector-bitmask>
+      <ccid-bitmask>240</ccid-bitmask>
+      <ru-port-bitmask>15</ru-port-bitmask>
+      <eaxc-id>1</eaxc-id>
+    </e-axcid>
+    <non-time-managed-delay-enabled>true</non-time-managed-delay-enabled>
+  </low-level-rx-endpoints>
+  <low-level-rx-endpoints>
+    <name>LowLevelRxPrachEndpoint1</name>
+    <compression>
+      <iq-bitwidth>9</iq-bitwidth>
+      <compression-type>STATIC</compression-type>
+    </compression>
+    <frame-structure>193</frame-structure>
+    <cp-type>NORMAL</cp-type>
+    <cp-length>352</cp-length>
+    <cp-length-other>288</cp-length-other>
+    <offset-to-absolute-frequency-center>0</offset-to-absolute-frequency-center>
+    <ul-fft-sampling-offsets>
+      <scs>KHZ_30</scs>
+      <ul-fft-sampling-offset>0</ul-fft-sampling-offset>
+    </ul-fft-sampling-offsets>
+    <e-axcid>
+      <o-du-port-bitmask>61440</o-du-port-bitmask>
+      <band-sector-bitmask>3840</band-sector-bitmask>
+      <ccid-bitmask>240</ccid-bitmask>
+      <ru-port-bitmask>15</ru-port-bitmask>
+      <eaxc-id>5</eaxc-id>
+    </e-axcid>
+    <non-time-managed-delay-enabled>true</non-time-managed-delay-enabled>
+  </low-level-rx-endpoints>
+  <low-level-rx-endpoints>
+    <name>LowLevelRxEndpoint2</name>
+    <compression>
+      <iq-bitwidth>9</iq-bitwidth>
+      <compression-type>STATIC</compression-type>
+    </compression>
+    <frame-structure>193</frame-structure>
+    <cp-type>NORMAL</cp-type>
+    <cp-length>352</cp-length>
+    <cp-length-other>288</cp-length-other>
+    <offset-to-absolute-frequency-center>0</offset-to-absolute-frequency-center>
+    <ul-fft-sampling-offsets>
+      <scs>KHZ_30</scs>
+      <ul-fft-sampling-offset>0</ul-fft-sampling-offset>
+    </ul-fft-sampling-offsets>
+    <e-axcid>
+      <o-du-port-bitmask>61440</o-du-port-bitmask>
+      <band-sector-bitmask>3840</band-sector-bitmask>
+      <ccid-bitmask>240</ccid-bitmask>
+      <ru-port-bitmask>15</ru-port-bitmask>
+      <eaxc-id>2</eaxc-id>
+    </e-axcid>
+    <non-time-managed-delay-enabled>true</non-time-managed-delay-enabled>
+  </low-level-rx-endpoints>
+  <low-level-rx-endpoints>
+    <name>LowLevelRxPrachEndpoint2</name>
+    <compression>
+      <iq-bitwidth>9</iq-bitwidth>
+      <compression-type>STATIC</compression-type>
+    </compression>
+    <frame-structure>193</frame-structure>
+    <cp-type>NORMAL</cp-type>
+    <cp-length>352</cp-length>
+    <cp-length-other>288</cp-length-other>
+    <offset-to-absolute-frequency-center>0</offset-to-absolute-frequency-center>
+    <ul-fft-sampling-offsets>
+      <scs>KHZ_30</scs>
+      <ul-fft-sampling-offset>0</ul-fft-sampling-offset>
+    </ul-fft-sampling-offsets>
+    <e-axcid>
+      <o-du-port-bitmask>61440</o-du-port-bitmask>
+      <band-sector-bitmask>3840</band-sector-bitmask>
+      <ccid-bitmask>240</ccid-bitmask>
+      <ru-port-bitmask>15</ru-port-bitmask>
+      <eaxc-id>6</eaxc-id>
+    </e-axcid>
+    <non-time-managed-delay-enabled>true</non-time-managed-delay-enabled>
+  </low-level-rx-endpoints>
+  <low-level-rx-endpoints>
+    <name>LowLevelRxEndpoint3</name>
+    <compression>
+      <iq-bitwidth>9</iq-bitwidth>
+      <compression-type>STATIC</compression-type>
+    </compression>
+    <frame-structure>193</frame-structure>
+    <cp-type>NORMAL</cp-type>
+    <cp-length>352</cp-length>
+    <cp-length-other>288</cp-length-other>
+    <offset-to-absolute-frequency-center>0</offset-to-absolute-frequency-center>
+    <ul-fft-sampling-offsets>
+      <scs>KHZ_30</scs>
+      <ul-fft-sampling-offset>0</ul-fft-sampling-offset>
+    </ul-fft-sampling-offsets>
+    <e-axcid>
+      <o-du-port-bitmask>61440</o-du-port-bitmask>
+      <band-sector-bitmask>3840</band-sector-bitmask>
+      <ccid-bitmask>240</ccid-bitmask>
+      <ru-port-bitmask>15</ru-port-bitmask>
+      <eaxc-id>3</eaxc-id>
+    </e-axcid>
+    <non-time-managed-delay-enabled>true</non-time-managed-delay-enabled>
+  </low-level-rx-endpoints>
+  <low-level-rx-endpoints>
+    <name>LowLevelRxPrachEndpoint3</name>
+    <compression>
+      <iq-bitwidth>9</iq-bitwidth>
+      <compression-type>STATIC</compression-type>
+    </compression>
+    <frame-structure>193</frame-structure>
+    <cp-type>NORMAL</cp-type>
+    <cp-length>352</cp-length>
+    <cp-length-other>288</cp-length-other>
+    <offset-to-absolute-frequency-center>0</offset-to-absolute-frequency-center>
+    <ul-fft-sampling-offsets>
+      <scs>KHZ_30</scs>
+      <ul-fft-sampling-offset>0</ul-fft-sampling-offset>
+    </ul-fft-sampling-offsets>
+    <e-axcid>
+      <o-du-port-bitmask>61440</o-du-port-bitmask>
+      <band-sector-bitmask>3840</band-sector-bitmask>
+      <ccid-bitmask>240</ccid-bitmask>
+      <ru-port-bitmask>15</ru-port-bitmask>
+      <eaxc-id>7</eaxc-id>
+    </e-axcid>
+    <non-time-managed-delay-enabled>true</non-time-managed-delay-enabled>
+  </low-level-rx-endpoints>
+  <tx-array-carriers>
+    <name>TxArray0</name>
+    <absolute-frequency-center>623334</absolute-frequency-center>
+    <center-of-channel-bandwidth>3350010000</center-of-channel-bandwidth>
+    <channel-bandwidth>100000000</channel-bandwidth>
+    <active>ACTIVE</active>
+    <gain>24.0</gain>
+    <downlink-radio-frame-offset>0</downlink-radio-frame-offset>
+    <downlink-sfn-offset>0</downlink-sfn-offset>
+  </tx-array-carriers>
+  <tx-array-carriers>
+    <name>TxArray1</name>
+    <absolute-frequency-center>623334</absolute-frequency-center>
+    <center-of-channel-bandwidth>3350010000</center-of-channel-bandwidth>
+    <channel-bandwidth>100000000</channel-bandwidth>
+    <active>ACTIVE</active>
+    <gain>24.0</gain>
+    <downlink-radio-frame-offset>0</downlink-radio-frame-offset>
+    <downlink-sfn-offset>0</downlink-sfn-offset>
+  </tx-array-carriers>
+  <tx-array-carriers>
+    <name>TxArray2</name>
+    <absolute-frequency-center>623334</absolute-frequency-center>
+    <center-of-channel-bandwidth>3350010000</center-of-channel-bandwidth>
+    <channel-bandwidth>100000000</channel-bandwidth>
+    <active>ACTIVE</active>
+    <gain>24.0</gain>
+    <downlink-radio-frame-offset>0</downlink-radio-frame-offset>
+    <downlink-sfn-offset>0</downlink-sfn-offset>
+  </tx-array-carriers>
+  <tx-array-carriers>
+    <name>TxArray3</name>
+    <absolute-frequency-center>623334</absolute-frequency-center>
+    <center-of-channel-bandwidth>3350010000</center-of-channel-bandwidth>
+    <channel-bandwidth>100000000</channel-bandwidth>
+    <active>ACTIVE</active>
+    <gain>24.0</gain>
+    <downlink-radio-frame-offset>0</downlink-radio-frame-offset>
+    <downlink-sfn-offset>0</downlink-sfn-offset>
+  </tx-array-carriers>
+  <rx-array-carriers>
+    <name>RxArray0</name>
+    <absolute-frequency-center>623334</absolute-frequency-center>
+    <center-of-channel-bandwidth>3350010000</center-of-channel-bandwidth>
+    <channel-bandwidth>100000000</channel-bandwidth>
+    <active>ACTIVE</active>
+    <downlink-radio-frame-offset>0</downlink-radio-frame-offset>
+    <downlink-sfn-offset>0</downlink-sfn-offset>
+    <gain-correction>0.0</gain-correction>
+    <n-ta-offset>0</n-ta-offset>
+  </rx-array-carriers>
+  <rx-array-carriers>
+    <name>RxArray1</name>
+    <absolute-frequency-center>623334</absolute-frequency-center>
+    <center-of-channel-bandwidth>3350010000</center-of-channel-bandwidth>
+    <channel-bandwidth>100000000</channel-bandwidth>
+    <active>ACTIVE</active>
+    <downlink-radio-frame-offset>0</downlink-radio-frame-offset>
+    <downlink-sfn-offset>0</downlink-sfn-offset>
+    <gain-correction>0.0</gain-correction>
+    <n-ta-offset>0</n-ta-offset>
+  </rx-array-carriers>
+  <rx-array-carriers>
+    <name>RxArray2</name>
+    <absolute-frequency-center>623334</absolute-frequency-center>
+    <center-of-channel-bandwidth>3350010000</center-of-channel-bandwidth>
+    <channel-bandwidth>100000000</channel-bandwidth>
+    <active>ACTIVE</active>
+    <downlink-radio-frame-offset>0</downlink-radio-frame-offset>
+    <downlink-sfn-offset>0</downlink-sfn-offset>
+    <gain-correction>0.0</gain-correction>
+    <n-ta-offset>0</n-ta-offset>
+  </rx-array-carriers>
+  <rx-array-carriers>
+    <name>RxArray3</name>
+    <absolute-frequency-center>623334</absolute-frequency-center>
+    <center-of-channel-bandwidth>3350010000</center-of-channel-bandwidth>
+    <channel-bandwidth>100000000</channel-bandwidth>
+    <active>ACTIVE</active>
+    <downlink-radio-frame-offset>0</downlink-radio-frame-offset>
+    <downlink-sfn-offset>0</downlink-sfn-offset>
+    <gain-correction>0.0</gain-correction>
+    <n-ta-offset>0</n-ta-offset>
+  </rx-array-carriers>
+</user-plane-configuration>
+
+[HW]   [MPLANE] RPC reply = OK.
+[HW]   [MPLANE] Successfully edited the candidate datastore for RU "192.168.81.4".
+[HW]   [MPLANE] RPC request to RU "192.168.81.4" = <validate> candidate datastore.
+[HW]   [MPLANE] RPC reply = OK.
+[HW]   [MPLANE] Successfully validated candidate datastore for RU "192.168.81.4".
+[HW]   [MPLANE] RPC request to RU "192.168.81.4" = <commit> candidate datastore.
+[HW]   [MPLANE] RPC reply = OK.
+[HW]   [MPLANE] Successfully commited configuration into running datastore for RU "192.168.81.4".
+[HW]   [MPLANE] Received notification from RU "192.168.81.4" at (2025-08-28T10:37:19.335228846+00:00)
+{
+  "o-ran-uplane-conf:rx-array-carriers-state-change": {
+    "rx-array-carriers": [
+      {
+        "name": "RxArray0",
+        "state": "BUSY"
+      }
+    ]
+  }
+}
+
+[HW]   [MPLANE] Received notification from RU "192.168.81.4" at (2025-08-28T10:37:19.368360865+00:00)
+{
+  "o-ran-uplane-conf:rx-array-carriers-state-change": {
+    "rx-array-carriers": [
+      {
+        "name": "RxArray1",
+        "state": "BUSY"
+      }
+    ]
+  }
+}
+
+[HW]   [MPLANE] Received notification from RU "192.168.81.4" at (2025-08-28T10:37:19.414703766+00:00)
+{
+  "o-ran-uplane-conf:rx-array-carriers-state-change": {
+    "rx-array-carriers": [
+      {
+        "name": "RxArray2",
+        "state": "BUSY"
+      }
+    ]
+  }
+}
+
+[HW]   [MPLANE] Received notification from RU "192.168.81.4" at (2025-08-28T10:37:19.452921618+00:00)
+{
+  "o-ran-uplane-conf:rx-array-carriers-state-change": {
+    "rx-array-carriers": [
+      {
+        "name": "RxArray3",
+        "state": "BUSY"
+      }
+    ]
+  }
+}
+
+[HW]   [MPLANE] Received notification from RU "192.168.81.4" at (2025-08-28T10:37:19.471419021+00:00)
+{
+  "ietf-netconf-notifications:netconf-config-change": {
+    "changed-by": {
+      "username": "root",
+      "session-id": 0
+    },
+    "datastore": "running",
+    "edit": [
+      {
+        "target": "/ietf-interfaces:interfaces/interface[name='INTERFACE_0']",
+        "operation": "create"
+      },
+      {
+        "target": "/ietf-interfaces:interfaces/interface[name='INTERFACE_0']/name",
+        "operation": "create"
+      },
+...
+[HW]   [MPLANE] Received notification from RU "192.168.81.4" at (2025-08-28T10:37:19.678251110+00:00)
+{
+  "o-ran-uplane-conf:tx-array-carriers-state-change": {
+    "tx-array-carriers": [
+      {
+        "name": "TxArray0",
+        "state": "BUSY"
+      }
+    ]
+  }
+}
+
+[HW]   [MPLANE] Received notification from RU "192.168.81.4" at (2025-08-28T10:37:19.715498360+00:00)
+{
+  "o-ran-uplane-conf:tx-array-carriers-state-change": {
+    "tx-array-carriers": [
+      {
+        "name": "TxArray1",
+        "state": "BUSY"
+      }
+    ]
+  }
+}
+
+[HW]   [MPLANE] Received notification from RU "192.168.81.4" at (2025-08-28T10:37:19.830268973+00:00)
+{
+  "o-ran-uplane-conf:tx-array-carriers-state-change": {
+    "tx-array-carriers": [
+      {
+        "name": "TxArray2",
+        "state": "BUSY"
+      }
+    ]
+  }
+}
+
+[HW]   [MPLANE] Received notification from RU "192.168.81.4" at (2025-08-28T10:37:19.853387657+00:00)
+{
+  "o-ran-uplane-conf:tx-array-carriers-state-change": {
+    "tx-array-carriers": [
+      {
+        "name": "TxArray3",
+        "state": "BUSY"
+      }
+    ]
+  }
+}
+
+[HW]   [MPLANE] Received notification from RU "192.168.81.4" at (2025-08-28T10:37:24.515262267+00:00)
+{
+  "o-ran-uplane-conf:rx-array-carriers-state-change": {
+    "rx-array-carriers": [
+      {
+        "name": "RxArray0",
+        "state": "READY"
+      }
+    ]
+  }
+}
+
+[HW]   [MPLANE] Received notification from RU "192.168.81.4" at (2025-08-28T10:37:24.535692962+00:00)
+{
+  "o-ran-uplane-conf:rx-array-carriers-state-change": {
+    "rx-array-carriers": [
+      {
+        "name": "RxArray1",
+        "state": "READY"
+      }
+    ]
+  }
+}
+
+[HW]   [MPLANE] Received notification from RU "192.168.81.4" at (2025-08-28T10:37:24.557423764+00:00)
+{
+  "o-ran-uplane-conf:rx-array-carriers-state-change": {
+    "rx-array-carriers": [
+      {
+        "name": "RxArray2",
+        "state": "READY"
+      }
+    ]
+  }
+}
+
+[HW]   [MPLANE] Received notification from RU "192.168.81.4" at (2025-08-28T10:37:24.579066867+00:00)
+{
+  "o-ran-uplane-conf:rx-array-carriers-state-change": {
+    "rx-array-carriers": [
+      {
+        "name": "RxArray3",
+        "state": "READY"
+      }
+    ]
+  }
+}
+
+[HW]   [MPLANE] Received notification from RU "192.168.81.4" at (2025-08-28T10:37:24.604192995+00:00)
+{
+  "o-ran-uplane-conf:tx-array-carriers-state-change": {
+    "tx-array-carriers": [
+      {
+        "name": "TxArray0",
+        "state": "READY"
+      }
+    ]
+  }
+}
+
+[HW]   [MPLANE] Received notification from RU "192.168.81.4" at (2025-08-28T10:37:24.629830498+00:00)
+{
+  "o-ran-uplane-conf:tx-array-carriers-state-change": {
+    "tx-array-carriers": [
+      {
+        "name": "TxArray1",
+        "state": "READY"
+      }
+    ]
+  }
+}
+
+[HW]   [MPLANE] Received notification from RU "192.168.81.4" at (2025-08-28T10:37:24.651062685+00:00)
+{
+  "o-ran-uplane-conf:tx-array-carriers-state-change": {
+    "tx-array-carriers": [
+      {
+        "name": "TxArray2",
+        "state": "READY"
+      }
+    ]
+  }
+}
+
+[HW]   [MPLANE] Received notification from RU "192.168.81.4" at (2025-08-28T10:37:24.672865767+00:00)
+{
+  "o-ran-uplane-conf:tx-array-carriers-state-change": {
+    "tx-array-carriers": [
+      {
+        "name": "TxArray3",
+        "state": "READY"
+      }
+    ]
+  }
+}
+
+[HW]   [MPLANE] RU "192.168.81.4" is now ready.
+[HW]   [MPLANE] RPC request to RU "192.168.81.4" = <edit-config>:
+<performance-measurement-objects xmlns="urn:o-ran:performance-management:1.0">
+  <rx-window-measurement-interval>10</rx-window-measurement-interval>
+  <tx-measurement-interval>10</tx-measurement-interval>
+  <notification-interval>10</notification-interval>
+  <rx-window-measurement-objects>
+    <measurement-object>RX_ON_TIME</measurement-object>
+    <active>true</active>
+    <object-unit>RU</object-unit>
+    <report-info>COUNT</report-info>
+  </rx-window-measurement-objects>
+  <rx-window-measurement-objects>
+    <measurement-object>RX_EARLY</measurement-object>
+    <active>true</active>
+    <object-unit>RU</object-unit>
+    <report-info>COUNT</report-info>
+  </rx-window-measurement-objects>
+  <rx-window-measurement-objects>
+    <measurement-object>RX_LATE</measurement-object>
+    <active>true</active>
+    <object-unit>RU</object-unit>
+    <report-info>COUNT</report-info>
+  </rx-window-measurement-objects>
+  <rx-window-measurement-objects>
+    <measurement-object>RX_TOTAL</measurement-object>
+    <active>true</active>
+    <object-unit>RU</object-unit>
+    <report-info>COUNT</report-info>
+  </rx-window-measurement-objects>
+  <rx-window-measurement-objects>
+    <measurement-object>RX_ON_TIME_C</measurement-object>
+    <active>true</active>
+    <object-unit>RU</object-unit>
+    <report-info>COUNT</report-info>
+  </rx-window-measurement-objects>
+  <rx-window-measurement-objects>
+    <measurement-object>RX_EARLY_C</measurement-object>
+    <active>true</active>
+    <object-unit>RU</object-unit>
+    <report-info>COUNT</report-info>
+  </rx-window-measurement-objects>
+  <rx-window-measurement-objects>
+    <measurement-object>RX_LATE_C</measurement-object>
+    <active>true</active>
+    <object-unit>RU</object-unit>
+    <report-info>COUNT</report-info>
+  </rx-window-measurement-objects>
+  <tx-measurement-objects>
+    <measurement-object>TX_TOTAL</measurement-object>
+    <active>true</active>
+    <object-unit>RU</object-unit>
+    <report-info>COUNT</report-info>
+  </tx-measurement-objects>
+</performance-measurement-objects>
+
+[HW]   [MPLANE] RPC reply = OK.
+[HW]   [MPLANE] Successfully edited the candidate datastore for RU "192.168.81.4".
+[HW]   [MPLANE] RPC request to RU "192.168.81.4" = <validate> candidate datastore.
+[HW]   [MPLANE] RPC reply = OK.
+[HW]   [MPLANE] Successfully validated candidate datastore for RU "192.168.81.4".
+[HW]   [MPLANE] RPC request to RU "192.168.81.4" = <commit> candidate datastore.
+[HW]   [MPLANE] RPC reply = OK.
+[HW]   [MPLANE] Successfully commited configuration into running datastore for RU "192.168.81.4".
+[HW]   [MPLANE] Sucessfully activated PM after start-up procedure for RU "192.168.81.4".
+```
+</details>
 
 Note: If you wish to run the fronthaul without M-plane, no need for recompilation, as the library `oran_fhlib_5g` already exists.
 The only mandatory step is to link `oran_fhlib_5g` to `oai_transpro` library.

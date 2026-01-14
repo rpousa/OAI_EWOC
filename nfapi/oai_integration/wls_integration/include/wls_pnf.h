@@ -30,4 +30,6 @@ bool wls_pnf_nr_send_p7_message(pnf_p7_t* pnf_p7,nfapi_nr_p7_message_header_t *m
 void *wls_fapi_pnf_nr_start_thread(void *ptr);
 int wls_fapi_nr_pnf_start();
 void wls_pnf_set_p7_config(void *p7_config);
+void wls_fapi_nr_pnf_stop();
+void wls_pnf_close(pthread_t p5_thread);
 #endif // OPENAIRINTERFACE_WLS_PNF_H

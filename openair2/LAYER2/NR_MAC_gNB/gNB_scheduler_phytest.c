@@ -55,9 +55,11 @@ uint32_t target_dl_bw = 50;
 uint64_t dlsch_slot_bitmap = (1<<1);
 
 /* schedules whole bandwidth for first user, all the time */
-void nr_preprocessor_phytest(module_id_t module_id, frame_t frame, slot_t slot)
+void nr_preprocessor_phytest(gNB_MAC_INST *mac, post_process_pdsch_t *pp_pdsch)
 {
-  gNB_MAC_INST *mac = RC.nrmac[module_id];
+  frame_t frame = pp_pdsch->frame;
+  slot_t slot = pp_pdsch->slot;
+
   /* already mutex protected: held in gNB_dlsch_ulsch_scheduler() */
   int slot_period = slot % mac->frame_structure.numb_slots_period;
   if (!is_xlsch_in_slot(dlsch_slot_bitmap, slot_period))
@@ -86,21 +88,38 @@ void nr_preprocessor_phytest(module_id_t module_id, frame_t frame, slot_t slot)
   if(!tda_info.valid_tda)
     return;
 
-  sched_ctrl->sched_pdsch.tda_info = tda_info;
-  sched_ctrl->sched_pdsch.time_domain_allocation = tda;
-
   /* find largest unallocated chunk */
   const int bwpSize = dl_bwp->BWPSize;
   const int BWPStart = dl_bwp->BWPStart;
 
-  // TODO implement beam procedures for phy-test mode
-  int beam = 0;
+  /* This is a primitive beam allocation procedure for PDSCH in phytest mode which is
+  intended to be used to verify the beamformed signal in VSA. The beam allocation of PDSCH
+  slots follows the SSB slots even in slots that don't have SSB. */
+  uint8_t num_ssb = 0;
+  const uint64_t ssbBitmap = get_ssb_bitmap_and_len(scc, &num_ssb);
+  int ssb_idx_beam = 0;
+  for (int i_ssb = 0; i_ssb < num_ssb; i_ssb++) {
+    if (IS_BIT_SET(ssbBitmap, (63 - i_ssb))) {
+      NR_SubcarrierSpacing_t scs = *scc->ssbSubcarrierSpacing;
+      const long band = *scc->downlinkConfigCommon->frequencyInfoDL->frequencyBandList.list.array[0];
+      uint16_t ssb_start_symbol = get_ssb_start_symbol(band, scs, i_ssb);
+      // select beam for PDSCH in current slot based on SSB beam
+      if ((ssb_start_symbol / NR_NUMBER_OF_SYMBOLS_PER_SLOT) == (slot % mac->frame_structure.numb_slots_period)) {
+        ssb_idx_beam = i_ssb;
+        break;
+      }
+    }
+  }
+  int beam_idx = get_beam_from_ssbidx(mac, ssb_idx_beam);
+  NR_beam_alloc_t beam = beam_allocation_procedure(&mac->beam_info, frame, slot, beam_idx, mac->frame_structure.numb_slots_frame);
+  AssertFatal(beam.idx > -1, "Can't allocate beam %d in phytest scheduler\n", beam_idx);
+  UE->UE_beam_index = get_allocated_beam(&mac->beam_info, frame, slot, mac->frame_structure.numb_slots_frame, beam.idx);
 
   int rbStart = 0;
   int rbSize = 0;
   if (target_dl_bw>bwpSize)
     target_dl_bw = bwpSize;
-  uint16_t *vrb_map = mac->common_channels[CC_id].vrb_map[beam];
+  uint16_t *vrb_map = mac->common_channels[CC_id].vrb_map[beam.idx];
   /* loop ensures that we allocate exactly target_dl_bw, or return */
   while (true) {
     /* advance to first free RB */
@@ -133,21 +152,22 @@ void nr_preprocessor_phytest(module_id_t module_id, frame_t frame, slot_t slot)
   sched_ctrl->num_total_bytes += sched_ctrl->rlc_status[lcid].bytes_in_buffer;
 
   int CCEIndex = get_cce_index(mac,
-                               CC_id, slot, UE->rnti,
+                               CC_id,
+                               slot,
+                               UE->rnti,
                                &sched_ctrl->aggregation_level,
-                               beam,
+                               beam.idx,
                                sched_ctrl->search_space,
                                sched_ctrl->coreset,
                                &sched_ctrl->sched_pdcch,
                                0);
   AssertFatal(CCEIndex >= 0, "Could not find CCE for UE %04x\n", UE->rnti);
 
-  NR_sched_pdsch_t *sched_pdsch = &sched_ctrl->sched_pdsch;
-  if (sched_pdsch->dl_harq_pid == -1)
-    sched_pdsch->dl_harq_pid = sched_ctrl->available_dl_harq.head;
-
   int alloc = -1;
-  if (!get_FeedbackDisabled(UE->sc_info.downlinkHARQ_FeedbackDisabled_r17, sched_pdsch->dl_harq_pid)) {
+  int harq_pid = sched_ctrl->retrans_dl_harq.head;
+  if (harq_pid < 0)
+    harq_pid = sched_ctrl->available_dl_harq.head;
+  if (!get_FeedbackDisabled(UE->sc_info.downlinkHARQ_FeedbackDisabled_r17, harq_pid)) {
     int r_pucch = nr_get_pucch_resource(sched_ctrl->coreset, UE->current_UL_BWP.pucch_Config, CCEIndex);
     alloc = nr_acknack_scheduling(mac, UE, frame, slot, 0, r_pucch, 0);
     if (alloc < 0) {
@@ -158,49 +178,40 @@ void nr_preprocessor_phytest(module_id_t module_id, frame_t frame, slot_t slot)
 
   sched_ctrl->cce_index = CCEIndex;
 
-  fill_pdcch_vrb_map(mac,
-                     CC_id,
-                     &sched_ctrl->sched_pdcch,
-                     CCEIndex,
-                     sched_ctrl->aggregation_level,
-                     beam);
+  fill_pdcch_vrb_map(mac, CC_id, &sched_ctrl->sched_pdcch, CCEIndex, sched_ctrl->aggregation_level, beam.idx);
 
-  //AssertFatal(alloc,
-  //            "could not find uplink slot for PUCCH (RNTI %04x@%d.%d)!\n",
-  //            rnti, frame, slot);
-
-  sched_pdsch->pucch_allocation = alloc;
-  sched_pdsch->rbStart = rbStart;
-  sched_pdsch->rbSize = rbSize;
-  sched_pdsch->bwp_info = get_pdsch_bwp_start_size(mac, UE);
-  sched_pdsch->dmrs_parms = get_dl_dmrs_params(scc,
-                                               dl_bwp,
-                                               &tda_info,
-                                               target_dl_Nl);
-
-  sched_pdsch->mcs = target_dl_mcs;
-  sched_pdsch->nrOfLayers = target_dl_Nl;
-  sched_pdsch->Qm = nr_get_Qm_dl(sched_pdsch->mcs, dl_bwp->mcsTableIdx);
-  sched_pdsch->R = nr_get_code_rate_dl(sched_pdsch->mcs, dl_bwp->mcsTableIdx);
+  NR_sched_pdsch_t sched_pdsch = {
+      .rbSize = rbSize,
+      .rbStart = rbStart,
+      .mcs = target_dl_mcs,
+      .R = nr_get_code_rate_dl(target_dl_mcs, dl_bwp->mcsTableIdx),
+      .Qm = nr_get_Qm_dl(target_dl_mcs, dl_bwp->mcsTableIdx),
+      // tbSize further below
+      .dl_harq_pid = sched_ctrl->retrans_dl_harq.head, // PID of HARQ awaiting retransmission, or -1 otherwise
+      .pucch_allocation = alloc,
+      .pm_index = 0,
+      .nrOfLayers = target_dl_Nl,
+      .bwp_info = get_pdsch_bwp_start_size(mac, UE),
+      .dmrs_parms = get_dl_dmrs_params(scc, dl_bwp, &tda_info, target_dl_Nl),
+      .time_domain_allocation = tda,
+      .tda_info = tda_info,
+  };
   sched_ctrl->dl_bler_stats.mcs = target_dl_mcs; /* for logging output */
-  sched_pdsch->tb_size = nr_compute_tbs(sched_pdsch->Qm,
-                                        sched_pdsch->R,
-                                        sched_pdsch->rbSize,
-                                        tda_info.nrOfSymbols,
-                                        sched_pdsch->dmrs_parms.N_PRB_DMRS * sched_pdsch->dmrs_parms.N_DMRS_SLOT,
-                                        0 /* N_PRB_oh, 0 for initialBWP */,
-                                        0 /* tb_scaling */,
-                                        sched_pdsch->nrOfLayers)
-                         >> 3;
+  sched_pdsch.tb_size = nr_compute_tbs(sched_pdsch.Qm,
+                                       sched_pdsch.R,
+                                       sched_pdsch.rbSize,
+                                       tda_info.nrOfSymbols,
+                                       sched_pdsch.dmrs_parms.N_PRB_DMRS * sched_pdsch.dmrs_parms.N_DMRS_SLOT,
+                                       0 /* N_PRB_oh, 0 for initialBWP */,
+                                       0 /* tb_scaling */,
+                                       target_dl_Nl)
+                        >> 3;
 
-  /* get the PID of a HARQ process awaiting retransmission, or -1 otherwise */
-  sched_pdsch->dl_harq_pid = sched_ctrl->retrans_dl_harq.head;
+  post_process_dlsch(mac, pp_pdsch, UE, &sched_pdsch);
 
   /* mark the corresponding RBs as used */
-  for (int rb = 0; rb < sched_pdsch->rbSize; rb++)
-    vrb_map[rb + sched_pdsch->rbStart + BWPStart] = SL_to_bitmap(tda_info.startSymbolIndex, tda_info.nrOfSymbols);
-
-  if ((frame&127) == 0) LOG_D(MAC,"phytest: %d.%d DL mcs %d, DL rbStart %d, DL rbSize %d\n", frame, slot, sched_pdsch->mcs, rbStart,rbSize);
+  for (int rb = 0; rb < sched_pdsch.rbSize; rb++)
+    vrb_map[rb + sched_pdsch.rbStart + BWPStart] = SL_to_bitmap(tda_info.startSymbolIndex, tda_info.nrOfSymbols);
 }
 
 uint32_t target_ul_mcs = 9;

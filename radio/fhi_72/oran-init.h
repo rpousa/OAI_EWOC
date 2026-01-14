@@ -22,6 +22,9 @@
 #ifndef ORAN_INIT_H
 #define ORAN_INIT_H
 
+#include "common/utils/nr/nr_common.h"
+#include "openair2/LAYER2/NR_MAC_COMMON/nr_prach_config.h"
+
 typedef struct oran_bufs {
   struct xran_flat_buffer tx[XRAN_MAX_ANTENNA_NR][XRAN_N_FE_BUF_LEN][XRAN_NUM_OF_SYMBOL_PER_SLOT];
   struct xran_flat_buffer tx_prbmap[XRAN_MAX_ANTENNA_NR][XRAN_N_FE_BUF_LEN];
@@ -62,6 +65,16 @@ int *oai_oran_initialize(struct xran_fh_init *fh_init, struct xran_fh_config *fh
 oran_buf_list_t *get_xran_buffers(uint32_t port_id);
 struct xran_fh_init *get_xran_fh_init(void);
 struct xran_fh_config *get_xran_fh_config(uint32_t port_id);
-uint32_t get_prach_conf_duration(uint32_t port_id);
+
+/**
+ * @brief queries PRACH information necessary for the FHI
+ *
+ * @arg port_id XRAN port id
+ * @return PRACH information holding among other information:
+ * - N_dur PRACH duration from TS 38.211 Table 6.3.3.2-2/3/4
+ * - x from TS 38.211 Table 6.3.3.2-2/3/4
+ * - y from TS 38.211 Table 6.3.3.2-2/3/4
+ */
+nr_prach_info_t get_prach_info(uint32_t port_id);
 
 #endif /* ORAN_INIT_H */

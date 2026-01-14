@@ -51,8 +51,9 @@ static void initialize_agent(ngran_node_t node_type, e2_agent_args_t oai_args)
 
   printf("After RCconfig_NR_E2agent %s %s \n",oai_args.sm_dir, oai_args.ip  );
 
-  fr_args_t args = { .ip = oai_args.ip }; // init_fr_args(0, NULL);
-  memcpy(args.libs_dir, oai_args.sm_dir, 128);
+  fr_args_t args = {0};
+  memcpy(args.ip, oai_args.ip, FR_IP_ADDRESS_LEN);
+  memcpy(args.libs_dir, oai_args.sm_dir, FR_CONF_FILE_LEN);
 
   sleep(1);
 
@@ -150,7 +151,8 @@ int main(int argc, char **argv)
   time_manager_start(tick_functions, tick_functions_count, TIME_SOURCE_REALTIME);
 
   // strdup to put the sring in the core file for post mortem identification
-  LOG_I(HW, "Version: %s\n", strdup(OAI_PACKAGE_VERSION));
+  char *v = strdup(OAI_PACKAGE_VERSION);
+  LOG_I(HW, "Version: %s\n", v);
   set_softmodem_sighandler();
   itti_init(TASK_MAX, tasks_info);
   int rc;
@@ -188,6 +190,8 @@ int main(int argc, char **argv)
   itti_wait_tasks_end(NULL);
 
   time_manager_finish();
+
+  free(v);
 
   logClean();
   printf("Bye.\n");

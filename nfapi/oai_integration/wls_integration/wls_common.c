@@ -20,7 +20,7 @@
  */
 
 #include "wls_common.h"
-
+#include "wls_lib.h"
 void fill_fapi_list_elem(p_fapi_api_queue_elem_t currElem, p_fapi_api_queue_elem_t nextElem, const uint8_t msgType, const uint8_t numMsgInBlock, const uint32_t alignOffset)
 {
     currElem->msg_type             = msgType;
@@ -90,9 +90,19 @@ uint8_t wls_send_fapi_msg(PWLS_MAC_CTX pWls, const uint16_t message_id, const in
 {
   int num_avail_blocks = WLS_NumBlocks(pWls->hWls);
   NFAPI_TRACE(NFAPI_TRACE_DEBUG,"num_avail_blocks is %d\n", num_avail_blocks);
+  int counter = 0;
   while (num_avail_blocks < 2) {
     num_avail_blocks = WLS_NumBlocks(pWls->hWls);
     NFAPI_TRACE(NFAPI_TRACE_DEBUG,"num_avail_blocks is %d\n", num_avail_blocks);
+    if (message_id == NFAPI_NR_PHY_MSG_TYPE_STOP_INDICATION) {
+      // In the case of the STOP.indication, it can happen that this is called after the VNF stopped
+      // For example, if it crashed for some reason, in that case, implement a timeout and return
+      usleep(10 * 1000);
+      counter++;
+      if (counter == 10) {
+        return true;
+      }
+    }
   }
   /* get PA blocks for header and msg */
   uint64_t pa_hdr = dequeueBlock(pWls);

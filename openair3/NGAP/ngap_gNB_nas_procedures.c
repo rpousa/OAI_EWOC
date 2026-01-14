@@ -76,9 +76,9 @@ static ngap_gNB_amf_data_t *select_amf(ngap_gNB_instance_t *instance_p, const ng
     const nr_guami_t *guami = &msg->ue_identity.guami;
     LOG_D(NGAP,
           "GUAMI is present: MCC=%03d MNC=%0*d RegionID=%d SetID=%d Pointer=%d\n",
-          guami->mcc,
-          guami->mnc_len,
-          guami->mnc,
+          guami->plmn.mcc,
+          guami->plmn.mnc_digit_length,
+          guami->plmn.mnc,
           guami->amf_region_id,
           guami->amf_set_id,
           guami->amf_pointer);
@@ -89,9 +89,9 @@ static ngap_gNB_amf_data_t *select_amf(ngap_gNB_instance_t *instance_p, const ng
             msg->gNB_ue_ngap_id,
             amf->amf_name,
             amf->assoc_id,
-            guami->mcc,
-            guami->mnc_len,
-            guami->mnc,
+            guami->plmn.mcc,
+            guami->plmn.mnc_digit_length,
+            guami->plmn.mnc,
             guami->amf_region_id,
             guami->amf_set_id,
             guami->amf_pointer);
@@ -181,7 +181,6 @@ int ngap_gNB_handle_nas_first_req(instance_t instance, ngap_nas_first_req_t *UEf
     .amf_ref = amf,
     .gNB_ue_ngap_id = UEfirstReq->gNB_ue_ngap_id,
     .gNB_instance = instance_p,
-    .selected_plmn_identity = UEfirstReq->plmn,
   };
 
   // RAN UE NGAP ID (M)
@@ -211,16 +210,14 @@ int ngap_gNB_handle_nas_first_req(instance_t instance, ngap_nas_first_req_t *UEf
     ie->value.choice.UserLocationInformation.present = NGAP_UserLocationInformation_PR_userLocationInformationNR;
     asn1cCalloc(ie->value.choice.UserLocationInformation.choice.userLocationInformationNR, userinfo_nr_p);
 
-    /* Set nRCellIdentity. default userLocationInformationNR */
-    MACRO_GNB_ID_TO_CELL_IDENTITY(instance_p->gNB_id,
-                                  0, // Cell ID
-                                  &userinfo_nr_p->nR_CGI.nRCellIdentity);
+    /* NR CGI: use gNB ID and Cell ID passed from RRC */
+    MACRO_GNB_ID_TO_CELL_IDENTITY(instance_p->gNB_id, UEfirstReq->nr_cell_id, &userinfo_nr_p->nR_CGI.nRCellIdentity);
 
-    plmn_id_t *plmn = &ue_desc_p.selected_plmn_identity;
+    /* Use UE's selected PLMN for nR-CGI (from Initial UE Message) */
+    plmn_id_t *plmn = &UEfirstReq->plmn;
     MCC_MNC_TO_TBCD(plmn->mcc, plmn->mnc, plmn->mnc_digit_length, &userinfo_nr_p->nR_CGI.pLMNIdentity);
 
-    /* In case of network sharing,
-       the selected PLMN is indicated by the PLMN Identity IE within the TAI IE */
+    /* Set TAI - use UE's selected PLMN */
     INT24_TO_OCTET_STRING(instance_p->tac, &userinfo_nr_p->tAI.tAC);
     MCC_MNC_TO_PLMNID(plmn->mcc, plmn->mnc, plmn->mnc_digit_length, &userinfo_nr_p->tAI.pLMNIdentity);
   }
@@ -444,17 +441,20 @@ int ngap_gNB_nas_uplink(instance_t instance, ngap_uplink_nas_t *ngap_uplink_nas_
     ie->value.choice.UserLocationInformation.present = NGAP_UserLocationInformation_PR_userLocationInformationNR;
     asn1cCalloc(ie->value.choice.UserLocationInformation.choice.userLocationInformationNR, userinfo_nr_p);
 
-    /* Set nRCellIdentity. default userLocationInformationNR */
+    /* Set nRCellIdentity: use gNB ID and Cell ID */
     MACRO_GNB_ID_TO_CELL_IDENTITY(ngap_gNB_instance_p->gNB_id,
-                                  0, // Cell ID
+                                  ngap_uplink_nas_p->nr_cell_id,
                                   &userinfo_nr_p->nR_CGI.nRCellIdentity);
-    plmn_id_t *plmn = &ue_context_p->selected_plmn_identity;
+
+    /* NR CGI */
+    plmn_id_t *plmn = &ngap_uplink_nas_p->plmn;
     MCC_MNC_TO_TBCD(plmn->mcc, plmn->mnc, plmn->mnc_digit_length, &userinfo_nr_p->nR_CGI.pLMNIdentity);
 
-    /* Set TAI */
-    INT24_TO_OCTET_STRING(ngap_gNB_instance_p->tac, &userinfo_nr_p->tAI.tAC);
+    /* TAI */
+    INT24_TO_OCTET_STRING(ngap_uplink_nas_p->tac, &userinfo_nr_p->tAI.tAC);
     MCC_MNC_TO_PLMNID(plmn->mcc, plmn->mnc, plmn->mnc_digit_length, &userinfo_nr_p->tAI.pLMNIdentity);
   }
+
   if (ngap_gNB_encode_pdu(&pdu, &buffer, &length) < 0) {
     NGAP_ERROR("Failed to encode uplink NAS transport\n");
     /* Encode procedure has failed... */
@@ -591,6 +591,24 @@ static byte_array_t encode_ngap_pdusession_setup_response_transfer(const pdusess
   ASN_STRUCT_FREE_CONTENTS_ONLY(asn_DEF_NGAP_PDUSessionResourceSetupResponseTransfer, &pdusessionTransfer);
   out.buf = res.buffer;
   out.len = res.result.encoded;
+  return out;
+}
+
+/** @brief PDU Session Resource Release Response Transfer encoding (9.3.4.21 3GPP TS 38.413)
+ *  The transfer structure contains only an optional Secondary RAT Usage Information IE.
+ *  Since we don't use secondary RAT (MR-DC), we encode an empty structure. */
+static byte_array_t encode_ngap_pdusession_release_response_transfer(void)
+{
+  NGAP_PDUSessionResourceReleaseResponseTransfer_t pdusessionTransfer = {0};
+
+  // Encode
+  asn_encode_to_new_buffer_result_t res = asn_encode_to_new_buffer(NULL,
+                                                                   ATS_ALIGNED_CANONICAL_PER,
+                                                                   &asn_DEF_NGAP_PDUSessionResourceReleaseResponseTransfer,
+                                                                   &pdusessionTransfer);
+  AssertFatal(res.buffer, "ASN1 message encoding failed (%s, %lu)!\n", res.result.failed_type->name, res.result.encoded);
+  ASN_STRUCT_FREE_CONTENTS_ONLY(asn_DEF_NGAP_PDUSessionResourceReleaseResponseTransfer, &pdusessionTransfer);
+  byte_array_t out = {.buf = res.buffer, .len = res.result.encoded};
   return out;
 }
 
@@ -1200,22 +1218,28 @@ int ngap_gNB_pdusession_release_resp(instance_t instance, ngap_pdusession_releas
     ie->value.choice.RAN_UE_NGAP_ID = pdusession_release_resp_p->gNB_ue_ngap_id;
   }
 
-  /* optional */
-  if (pdusession_release_resp_p->nb_of_pdusessions_released > 0) {
+  /* PDU Session Resource Released List (mandatory) */
+  {
     asn1cSequenceAdd(out->protocolIEs.list, NGAP_PDUSessionResourceReleaseResponseIEs_t, ie);
     ie->id = NGAP_ProtocolIE_ID_id_PDUSessionResourceReleasedListRelRes;
     ie->criticality = NGAP_Criticality_ignore;
     ie->value.present = NGAP_PDUSessionResourceReleaseResponseIEs__value_PR_PDUSessionResourceReleasedListRelRes;
-    
+
     for (i = 0; i < pdusession_release_resp_p->nb_of_pdusessions_released; i++) {
-      asn1cSequenceAdd(ie->value.choice.PDUSessionResourceReleasedListRelRes.list, NGAP_PDUSessionResourceReleasedItemRelRes_t, item);
+      NGAP_PDUSessionResourceReleasedListRelRes_t *list = &ie->value.choice.PDUSessionResourceReleasedListRelRes;
+      asn1cSequenceAdd(list->list, NGAP_PDUSessionResourceReleasedItemRelRes_t, item);
       pdusession_release_t *r = &pdusession_release_resp_p->pdusession_release[i];
+      /* PDU Session ID (mandatory) */
       item->pDUSessionID = r->pdusession_id;
-      OCTET_STRING_fromBuf(&item->pDUSessionResourceReleaseResponseTransfer, (const char *)r->data.buf, r->data.len);
-      NGAP_DEBUG("pdusession_release_resp: pdusession ID %ld\n", item->pDUSessionID);
+      /* PDU Session Resource Release Response Transfer (mandatory) */
+      // Empty transfer is valid since Secondary RAT Usage Information is optional and not used
+      byte_array_t transfer = encode_ngap_pdusession_release_response_transfer();
+      OCTET_STRING_fromBuf(&item->pDUSessionResourceReleaseResponseTransfer, (const char *)transfer.buf, transfer.len);
+      free_byte_array(transfer);
+      NGAP_DEBUG("PDU Session Resource Release Response: pdusession ID %ld\n", item->pDUSessionID);
     }
   }
-  
+
   if (ngap_gNB_encode_pdu(&pdu, &buffer, &length) < 0) {
     NGAP_ERROR("Failed to encode release response\n");
     /* Encode procedure has failed... */

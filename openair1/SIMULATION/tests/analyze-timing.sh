@@ -6,12 +6,9 @@
 
 function die() { echo $@ 1>&2; exit 1; }
 
-# RC will be the return code. If any rule fails, it will set RC=1, which will
-# make the script fail. Print also every line, because the logs are piped into
-# this script, but a user is typically also interested into the raw logs.
+# Print every line, because the logs are piped into this script, but a user is
+# typically also interested into the raw logs.
 SCRIPT='
-  BEGIN { RC = 0; }
-
   { print $0 }
 '
 
@@ -24,9 +21,16 @@ while [ $# -gt 0 ]; do
   shift 2
 
   # Add a rule that searches for a PATTERN + number, and checks against
-  # CONDition. If the condition does not hold, it is counted as a failure (sets
-  # RC to signal error). In both cases, the result is logged in an array to
-  # output at the end of the script.
+  # CONDition. If the condition does not hold, it is counted as a failure. In
+  # both cases, the result is logged in an array to output at the end of the
+  # script.
+  #
+  # To search for the number, first substr() returns what has been matched
+  # (PATTERN + number), and sub() deletes PATTERN and whitespace, resulting in
+  # the number (measurement). To force number into a numeric context, we add 0,
+  # as awk would otherwise compare a string to a number (example:
+  #   gawk 'BEGIN { meas = "117"; if (meas > 96) { } else { print "fail";}}'
+  # printfs "fail").
   #
   # Example: pattern "PHY proc tx", condition "< 200"
   # The awk script tries to match every line for "PHY proc tx _NUMBER_" (where
@@ -35,14 +39,15 @@ while [ $# -gt 0 ]; do
   # If the condition holds, will set "CHECK PHY proc tx _NUMBER_ < 200 SUCCESS".
   # If the condition fails, will set "CHECK PHY proc tx _NUMBER_ < 200 FAIL".
   SCRIPT+='
-  match($0, /'${PATTERN}' +([0-9]+(\.[0-9]+)?)/, n) {
-    if (n[1] '${COND}') {
+  match($0, /'${PATTERN}' +([0-9]+(\.[0-9]+)?)/) {
+    meas = substr($0, RSTART, RLENGTH);
+    sub(/'${PATTERN}' +/, "", meas);
+    if ((meas+0) '${COND}') {
       r = "SUCCESS";
     } else {
       r = "FAIL";
-      RC = 1;
     }
-    RESULTS['${NUM}']=sprintf("CHECK %-35s %7.2f %-8s %s", "'${PATTERN}'", n[1], " '${COND}'", r);
+    RESULTS['${NUM}']=sprintf("CHECK %-35s %7.2f %-8s %s", "'${PATTERN}'", meas, " '${COND}'", r);
   }
 '
 
@@ -54,7 +59,6 @@ while [ $# -gt 0 ]; do
   END {
     if (!RESULTS['${NUM}']) {
       RESULTS['${NUM}']=sprintf("CHECK %-35s          %-7s NOTFOUND", "'${PATTERN}'", "'${COND}'");
-      RC = 1;
     }
   }
 '
@@ -66,8 +70,11 @@ done
 # (0 on success, i.e..all conditions checked, otherwise 1 on failure).
 SCRIPT+='
   END {
+    RC = 0;
     for (i = 0; i < '${NUM}'; ++i) {
       print RESULTS[i]
+      if (!(RESULTS[i] ~ /SUCCESS$/))
+        RC = 1;
     }
     exit RC
   }

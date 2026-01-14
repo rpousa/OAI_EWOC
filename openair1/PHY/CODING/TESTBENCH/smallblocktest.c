@@ -13,7 +13,7 @@ int main(int argc, char *argv[])
   cpu_meas_enabled = 1;
   reset_meas(&timeEncoder);
   reset_meas(&timeDecoder);
-  randominit(0);
+  randominit();
 
   int ret = 1;
   int arguments, iterations = 1000, messageLength = 11;

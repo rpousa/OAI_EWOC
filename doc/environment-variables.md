@@ -9,7 +9,8 @@ OAI uses/supports a number of environment variables, documented in the following
 - `NVRAM_DIR`: directory to read/write NVRAM data in (5G) `nvram` tool; if not defined, will use `PWD` (working directory)
 - `OAI_CONFIGMODULE`: can be used to pass the configuration file instead of `-O`
 - `OAI_GDBSTACKS`: if defined when hitting an assertion (`DevAssert()`, `AssertFatal()`, ...), OAI will load `gdb` and provide a backtrace for every thread
-- `OAI_RNGSEED`: overwrites any seed for random number generators (RNG) in simulators
+- `OAI_RNGSEED`: provide a fixed seed for random number generators (RNG). If
+  this variable is absent, a random seed will be read (from `/dev/urandom`).
 - `USIM_DIR`: directory to read/write USIM data in (4G) `usim` tool; if not defined, will use `PWD` (working directory)
 
 Furthermore, these variables appear in code that is not maintained and maybe not even compiled anywhere:

@@ -141,6 +141,43 @@ bool init_mplane(ru_session_list_t *ru_session_list)
   return true;
 }
 
+static void init_ru_notif(ru_session_t *ru_session, const char* buffer)
+{
+  char* usage_state = get_ru_xml_node(buffer, "usage-state");
+  if (usage_state != NULL && strcmp(usage_state, "busy") == 0) {
+    ru_session->ru_notif.rx_carrier_state = BUSY_CARRIER;
+    ru_session->ru_notif.tx_carrier_state = BUSY_CARRIER;
+    ru_session->ru_notif.config_change = true;
+  } else if (usage_state != NULL && strcmp(usage_state, "active") == 0) {
+    ru_session->ru_notif.rx_carrier_state = READY_CARRIER;
+    ru_session->ru_notif.tx_carrier_state = READY_CARRIER;
+    ru_session->ru_notif.config_change = true;
+  } else { // "idle" or NULL
+    ru_session->ru_notif.rx_carrier_state = DISABLED_CARRIER;
+    ru_session->ru_notif.tx_carrier_state = DISABLED_CARRIER;
+    ru_session->ru_notif.config_change = false;
+  }
+
+  char *oper_state = get_ru_xml_node(buffer, "oper-state");
+  ru_session->ru_notif.hardware.oper_state = (str_to_enum_oper(oper_state) != OPER_COUNT) ? str_to_enum_oper(oper_state) : ENABLED_OPER;
+
+  char *admin_state = get_ru_xml_node(buffer, "admin-state");
+  ru_session->ru_notif.hardware.admin_state = (str_to_enum_admin(admin_state) != ADMIN_COUNT) ? str_to_enum_admin(admin_state) : UNLOCKED_ADMIN;
+
+  char *avail_state = get_ru_xml_node(buffer, "availability-state");
+  ru_session->ru_notif.hardware.avail_state = (str_to_enum_avail(avail_state) != AVAIL_COUNT) ? str_to_enum_avail(avail_state) : NORMAL_AVAIL;
+
+  char *ptp_state = get_ru_xml_node(buffer, "sync-state");
+  ru_session->ru_notif.ptp_state = str_to_enum_ptp(ptp_state);
+  MP_LOG_I("RU is in \"%s\" sync state.\n", ptp_state);
+
+  free(usage_state);
+  free(oper_state);
+  free(admin_state);
+  free(avail_state);
+  free(ptp_state);
+}
+
 bool manage_ru(ru_session_t *ru_session, const openair0_config_t *oai, const size_t num_rus)
 {
   bool success = false;
@@ -149,12 +186,8 @@ bool manage_ru(ru_session_t *ru_session, const openair0_config_t *oai, const siz
   success = get_mplane(ru_session, &operational_ds);
   AssertError(success, return false, "[MPLANE] Unable to continue: could not get RU answer via get_mplane().\n");
 
-  bool ptp_state = false;
-  const char *sync_state = get_ru_xml_node(operational_ds, "sync-state");
-  if (strcmp(sync_state, "LOCKED") == 0) {
-    MP_LOG_I("RU is already PTP synchronized.\n");
-    ptp_state = true;
-  }
+  // init RU notifications
+  init_ru_notif(ru_session, operational_ds);
 
   /* 1) as per M-plane spec, RU must be in supervised mode,
         where stream = NULL && filter = "/o-ran-supervision:supervision-notification";
@@ -163,7 +196,6 @@ bool manage_ru(ru_session_t *ru_session, const openair0_config_t *oai, const siz
     => since more than one subscription at the time within one session is not possible, we will subscribe to all notifications */
   const char *stream = "NETCONF";
   const char *filter = NULL;
-  ru_session->ru_notif.ptp_state = ptp_state;
   success = subscribe_mplane(ru_session, stream, filter, (void *)&ru_session->ru_notif);
   AssertError(success, return false, "[MPLANE] Unable to continue: could not get RU answer via subscribe_mplane().\n");
 
@@ -189,26 +221,18 @@ bool manage_ru(ru_session_t *ru_session, const openair0_config_t *oai, const siz
   success = load_yang_models(ru_session, operational_ds);
   AssertError(success, return false, "[MPLANE] Unable to load yang models.\n");
 
-  if (ru_session->ru_notif.ptp_state) {
-    char *content = NULL;
-    success = configure_ru_from_yang(ru_session, oai, num_rus, &content);
-    AssertError(success, return false, "[MPLANE] Unable to create content for <edit-config> RPC for start-up procedure.\n");
+  while (1) {
+    sleep(5);
+    if (!ru_session->ru_notif.ptp_state && !ru_session->ru_notif.hardware.oper_state && !ru_session->ru_notif.hardware.admin_state && !ru_session->ru_notif.hardware.avail_state) {
+      char *content = NULL;
+      success = configure_ru_from_yang(ru_session, oai, num_rus, &content);
+      AssertError(success, return false, "[MPLANE] Unable to create content for <edit-config> RPC for start-up procedure.\n");
 
-    success = edit_val_commmit_rpc(ru_session, content);
-    AssertError(success, return false, "[MPLANE] Unable to continue.\n");
-    free(content);
-  }
-
-  const char *usage_state = get_ru_xml_node(operational_ds, "usage-state");
-  MP_LOG_I("Usage state = \"%s\" for RU \"%s\".\n", usage_state, ru_session->ru_ip_add);
-  if (strcmp(usage_state, "busy") == 0) { // carriers are already activated
-    ru_session->ru_notif.rx_carrier_state = true;
-    ru_session->ru_notif.tx_carrier_state = true;
-    ru_session->ru_notif.config_change = true;
-  } else {
-    ru_session->ru_notif.rx_carrier_state = false;
-    ru_session->ru_notif.tx_carrier_state = false;
-    ru_session->ru_notif.config_change = false;
+      success = edit_val_commmit_rpc(ru_session, content);
+      AssertError(success, return false, "[MPLANE] Unable to continue.\n");
+      free(content);
+      break;
+    }
   }
 
   free(operational_ds);

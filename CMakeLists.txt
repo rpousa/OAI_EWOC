@@ -464,6 +464,9 @@ target_include_directories(f1ap PUBLIC F1AP_DIR)
 target_link_libraries(f1ap PUBLIC asn1_f1ap GTPV1U)
 target_link_libraries(f1ap PRIVATE ngap nr_rrc HASHTABLE f1ap_lib)
 target_include_directories(f1ap PRIVATE ${F1AP_DIR}/lib)
+if(E2_AGENT)
+  target_compile_definitions(f1ap PRIVATE E2_AGENT)
+endif()
 
 # LPP
 ##############
@@ -652,7 +655,6 @@ add_library(SCHED_LIB ${SCHED_SRC})
 target_link_libraries(SCHED_LIB PRIVATE asn1_lte_rrc_hdrs)
 
 set(SCHED_NR_SRC
-  ${OPENAIR1_DIR}/SCHED_NR/fapi_nr_l1.c
   ${OPENAIR1_DIR}/SCHED_NR/phy_procedures_nr_gNB.c
   ${OPENAIR1_DIR}/SCHED_NR/nr_prach_procedures.c
   ${OPENAIR1_DIR}/SCHED_NR/phy_frame_config_nr.c
@@ -939,7 +941,6 @@ set(PHY_SRC_UE
   ${OPENAIR1_DIR}/PHY/NR_TRANSPORT/nr_dci.c
   ${OPENAIR1_DIR}/PHY/NR_TRANSPORT/nr_dci_tools.c
   ${OPENAIR1_DIR}/PHY/NR_TRANSPORT/nr_dlsch.c
-  ${OPENAIR1_DIR}/PHY/NR_TRANSPORT/nr_dlsch_tools.c
   ${OPENAIR1_DIR}/PHY/NR_TRANSPORT/nr_dlsch_coding.c
   ${OPENAIR1_DIR}/PHY/NR_TRANSPORT/nr_ulsch_decoding.c
   ${OPENAIR1_DIR}/PHY/NR_TRANSPORT/nr_ulsch.c
@@ -978,6 +979,7 @@ set(PHY_SRC_UE
   ${OPENAIR1_DIR}/PHY/NR_UE_TRANSPORT/cic_filter_nr.c
   ${OPENAIR1_DIR}/PHY/NR_UE_TRANSPORT/nr_initial_sync.c
   ${OPENAIR1_DIR}/PHY/NR_UE_TRANSPORT/nr_initial_sync_sl.c
+  ${OPENAIR1_DIR}/PHY/NR_UE_TRANSPORT/nr_ntn_l1.c
   ${OPENAIR1_DIR}/PHY/NR_UE_TRANSPORT/nr_ue_rf_helpers.c
   ${OPENAIR1_DIR}/PHY/NR_UE_TRANSPORT/nr_pbch.c
   ${OPENAIR1_DIR}/PHY/NR_UE_TRANSPORT/nr_psbch_rx.c
@@ -1037,11 +1039,11 @@ pkg_check_modules(lapacke REQUIRED lapacke)
 
 add_library(PHY_UE ${PHY_SRC_UE})
 target_link_libraries(PHY_UE PRIVATE asn1_lte_rrc_hdrs asn1_nr_rrc_hdrs UTIL)
-# RHEL needs also cblas, but Ubuntu does not have it. So `cblas_LIBRARIES` will
-# be empty for Ubuntu, a no-op
+# RHEL needs also cblas, but Ubuntu does not have it. So `cblas_LIBRARIES` and
+# `cblas_INCLUDE_DIRS` will be empty for Ubuntu, a no-op
 pkg_check_modules(cblas cblas)
 target_link_libraries(PHY_UE PRIVATE ${blas_LIBRARIES} ${cblas_LIBRARIES} ${lapacke_LIBRARIES})
-target_include_directories(PHY_UE PRIVATE ${blas_INCLUDE_DIRS} ${lapacke_INCLUDE_DIRS})
+target_include_directories(PHY_UE PRIVATE ${blas_INCLUDE_DIRS} ${cblas_INCLUDE_DIRS} ${lapacke_INCLUDE_DIRS})
 
 add_library(PHY_NR_COMMON ${PHY_NR_SRC_COMMON})
 target_link_libraries(PHY_NR_COMMON PUBLIC UTIL)
@@ -1184,7 +1186,6 @@ set(NR_L2_SRC_UE
   ${NR_UE_RRC_DIR}/L2_interface_ue.c
   ${NR_UE_RRC_DIR}/main_ue.c
   ${NR_UE_RRC_DIR}/rrc_UE.c
-  ${NR_UE_RRC_DIR}/rrc_nsa.c
   ${NR_UE_RRC_DIR}/rrc_timers_and_constants.c
   ${NR_UE_RRC_DIR}/rrc_sl_preconfig.c
   )
@@ -1216,7 +1217,6 @@ set (MAC_SRC
 
 set (MAC_NR_SRC
   ${NR_PHY_INTERFACE_DIR}/NR_IF_Module.c
-  ${NR_PHY_INTERFACE_DIR}/nr_sched_response.c
   ${NR_GNB_MAC_DIR}/main.c
   ${NR_GNB_MAC_DIR}/config.c
   ${NR_GNB_MAC_DIR}/gNB_scheduler.c
@@ -1284,12 +1284,6 @@ set (MISC_NFAPI_LTE
 
 add_library(MISC_NFAPI_LTE_LIB ${MISC_NFAPI_LTE})
 
-set (MISC_NFAPI_NR
- ${OPENAIR1_DIR}/SCHED/nfapi_nr_dummy.c
- )
-
-add_library(MISC_NFAPI_NR_LIB ${MISC_NFAPI_NR})
-
 add_library(L2
   ${L2_SRC}
   ${MAC_SRC}
@@ -1298,6 +1292,9 @@ add_library(L2
   )
 target_link_libraries(L2 PRIVATE x2ap s1ap lte_rrc m2ap)
 target_link_libraries(L2 PRIVATE asn1_lte_rrc_hdrs asn1_nr_rrc_hdrs)
+if(E2_AGENT)
+  target_compile_definitions(L2 PRIVATE ${E2AP_VERSION} ${KPM_VERSION} E2_AGENT)
+endif()
 
 add_library(MAC_UE_NR ${MAC_NR_SRC_UE})
 target_link_libraries(MAC_UE_NR PRIVATE asn1_lte_rrc_hdrs asn1_nr_rrc_hdrs PUBLIC nr_ue_power_procedures nr_ue_ra_procedures)
@@ -1313,6 +1310,9 @@ add_library(L2_NR
 target_link_libraries(L2_NR PRIVATE ds alg)
 target_link_libraries(L2_NR PRIVATE f1ap_lib)
 target_include_directories(L2_NR PRIVATE ${F1AP_DIR}/lib)
+if(E2_AGENT)
+  target_compile_definitions(L2_NR PRIVATE ${E2AP_VERSION} ${KPM_VERSION} E2_AGENT)
+endif()
 
 add_library(e1_if
   ${NR_RRC_DIR}/cucp_cuup_direct.c
@@ -1977,7 +1977,6 @@ target_link_libraries(nr_pbchsim PRIVATE asn1_nr_rrc_hdrs asn1_lte_rrc_hdrs)
 add_executable(nr_psbchsim
   ${OPENAIR1_DIR}/SIMULATION/NR_PHY/psbchsim.c
   ${OPENAIR_DIR}/executables/softmodem-common.c
-  ${NR_UE_RRC_DIR}/rrc_nsa.c
   ${NFAPI_USER_DIR}/nfapi.c
   ${NFAPI_USER_DIR}/gnb_ind_vars.c
   ${PHY_INTERFACE_DIR}/queue_t.c
@@ -1998,7 +1997,6 @@ target_link_libraries(nr_pucchsim PRIVATE asn1_nr_rrc_hdrs asn1_lte_rrc_hdrs)
 add_executable(nr_dlsim
   ${OPENAIR1_DIR}/SIMULATION/NR_PHY/dlsim.c
   ${OPENAIR_DIR}/executables/softmodem-common.c
-  ${NR_UE_RRC_DIR}/rrc_nsa.c
   ${NFAPI_USER_DIR}/nfapi.c
   ${NFAPI_USER_DIR}/gnb_ind_vars.c
   ${PHY_INTERFACE_DIR}/queue_t.c
@@ -2028,7 +2026,6 @@ target_link_libraries(nr_ulschsim PRIVATE asn1_nr_rrc_hdrs asn1_lte_rrc_hdrs)
 add_executable(nr_ulsim
   ${OPENAIR1_DIR}/SIMULATION/NR_PHY/ulsim.c
   ${OPENAIR_DIR}/executables/softmodem-common.c
-  ${NR_UE_RRC_DIR}/rrc_nsa.c
   ${NFAPI_USER_DIR}/nfapi.c
   ${NFAPI_USER_DIR}/gnb_ind_vars.c
   ${PHY_INTERFACE_DIR}/queue_t.c
@@ -2095,7 +2092,7 @@ if (${T_TRACER})
         oai_eth_transpro HASHTABLE UTIL
         SECURITY SCHED_LIB SCHED_NR_LIB SCHED_RU_LIB SCHED_UE_LIB SCHED_NR_UE_LIB
         NFAPI_LIB NFAPI_PNF_LIB NFAPI_VNF_LIB NFAPI_USER_LIB
-        MISC_NFAPI_LTE_LIB MISC_NFAPI_NR_LIB
+        MISC_NFAPI_LTE_LIB
         PHY_COMMON PHY PHY_UE PHY_NR PHY_NR_COMMON PHY_NR_UE PHY_RU
         L2 L2_LTE L2_NR L2_LTE_NR L2_UE NR_L2_UE MAC_NR_COMMON MAC_UE_NR ngap
         GTPV1U SCTP_CLIENT MME_APP LIB_NAS_UE SIMU

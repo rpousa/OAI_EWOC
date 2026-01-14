@@ -56,8 +56,8 @@ int generate_drs_pusch(PHY_VARS_UE *ue,
   //uint32_t phase_shift; // phase shift for cyclic delay in DM RS
   //uint8_t alpha_ind;
 
-  int16_t alpha_re[12] = {32767, 28377, 16383,     0,-16384,  -28378,-32768,-28378,-16384,    -1, 16383, 28377};
-  int16_t alpha_im[12] = {0,     16383, 28377, 32767, 28377,   16383,     0,-16384,-28378,-32768,-28378,-16384};
+  int16_t alpha_re[12] = {32767, 28377, 16383, 0, -16384, -28378, -32767, -28378, -16384, -1, 16383, 28377};
+  int16_t alpha_im[12] = {0, 16383, 28377, 32767, 28377, 16383, 0, -16384, -28378, -32767, -28378, -16384};
 
   uint8_t cyclic_shift,cyclic_shift0=0,cyclic_shift1=0;
   LTE_DL_FRAME_PARMS *fp = (ue==NULL) ? frame_parms : &ue->frame_parms;

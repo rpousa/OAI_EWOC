@@ -160,6 +160,12 @@ static void nr_initiate_handover(const gNB_RRC_INST *rrc,
     ho_ctx->source->du_ue_id = ue_data.secondary_ue;
     ho_ctx->source->old_rnti = ue->rnti;
 
+    // Save the GTP-U tunnel info for source DU before process UE context setup request/response
+    // since tunnel info will be updated by calling store_du_f1u_tunnel() in rrc_CU_process_ue_context_setup_response()
+    FOR_EACH_SEQ_ARR(drb_t *, drb, &ue->drbs) {
+      ho_ctx->source->old_du_tunnel_config = drb->du_tunnel_config;
+    }
+
     int result = asn_copy(&asn_DEF_NR_CellGroupConfig, (void **)&ho_ctx->source->old_cellGroupConfig, ue->masterCellGroup);
     AssertFatal(result == 0, "error during asn_copy() of CellGroupConfig\n");
   }
@@ -186,12 +192,7 @@ static void nr_initiate_handover(const gNB_RRC_INST *rrc,
   meas_config->buf = calloc_or_fail(1, NR_RRC_BUF_SIZE);
   meas_config->len = do_NR_MeasConfig(ue->measConfig, meas_config->buf, NR_RRC_BUF_SIZE);
 
-  byte_array_t *meas_timing_config = NULL;
-  if (target_du->mtc) {
-    meas_timing_config = calloc_or_fail(1, sizeof(*meas_timing_config));
-    meas_timing_config->buf = calloc_or_fail(1, NR_RRC_BUF_SIZE);
-    meas_timing_config->len = do_NR_MeasurementTimingConfiguration(target_du->mtc, meas_timing_config->buf, NR_RRC_BUF_SIZE);
-  }
+  byte_array_t *meas_timing_config = get_meas_timing_config(target_du->mtc, ue->measConfig);
 
   byte_array_t *hpi = malloc_or_fail(sizeof(*hpi));
   *hpi = copy_byte_array(*ho_prep_info);
@@ -625,4 +626,36 @@ void nr_HO_N2_trigger_telnet(gNB_RRC_INST *rrc, uint32_t neighbour_pci, uint32_t
   }
 
   nr_rrc_trigger_n2_ho(rrc, UE, scell_du->nr_pci, neighbour);
+<<<<<<< HEAD
 }
+=======
+}
+
+// This function detects if there are at least two different ssbFrequency values, and if so, returns meas_timing_config;
+// otherwise, it returns NULL. When you return NULL, the measurement gaps will not be configured.
+byte_array_t *get_meas_timing_config(const NR_MeasurementTimingConfiguration_t *mtc, const NR_MeasConfig_t *measConfig)
+{
+  if (!mtc || !measConfig || !measConfig->measObjectToAddModList)
+    return NULL;
+
+  byte_array_t *meas_timing_config = NULL;
+  NR_MeasObjectToAddModList_t *mo_list = measConfig->measObjectToAddModList;
+  NR_ARFCN_ValueNR_t ssbFrequency0 = 0;
+  for (int i = 0; i < mo_list->list.count; i++) {
+    NR_MeasObjectToAddMod_t *mo = mo_list->list.array[i];
+    if (mo->measObject.present != NR_MeasObjectToAddMod__measObject_PR_measObjectNR)
+      continue;
+    NR_MeasObjectNR_t *monr = mo->measObject.choice.measObjectNR;
+    if (i == 0) {
+      ssbFrequency0 = *monr->ssbFrequency;
+    } else if (ssbFrequency0 != *monr->ssbFrequency) {
+      meas_timing_config = calloc_or_fail(1, sizeof(*meas_timing_config));
+      meas_timing_config->buf = calloc_or_fail(1, NR_RRC_BUF_SIZE);
+      meas_timing_config->len = do_NR_MeasurementTimingConfiguration(mtc, meas_timing_config->buf, NR_RRC_BUF_SIZE);
+      break;
+    }
+  }
+
+  return meas_timing_config;
+}
+>>>>>>> refs/remotes/origin/develop

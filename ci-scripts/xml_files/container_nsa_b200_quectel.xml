@@ -247,6 +247,7 @@
     <testCase id="060000">
       <class>UndeployCoreNetwork</class>
       <desc>Terminate EPC</desc>
+      <always_exec>true</always_exec>
       <cn_id>ltebox-nepes</cn_id>
     </testCase>
 

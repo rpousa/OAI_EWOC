@@ -665,6 +665,18 @@ int nfapi_vnf_stop_req(nfapi_vnf_config_t* config, int p5_idx, nfapi_stop_reques
 
 	return vnf_pack_and_send_p5_message(_this, p5_idx, &req->header, sizeof(nfapi_stop_request_t));
 }
+
+int nfapi_nr_vnf_stop_req(nfapi_vnf_config_t* config, int p5_idx, nfapi_nr_stop_request_scf_t* req)
+{
+  if (config == 0 || req == 0)
+    return -1;
+
+  vnf_t* _this = (vnf_t*)(config);
+  AssertFatal(config->send_p5_msg, "Function pointer must be configured\n");
+  NFAPI_TRACE(NFAPI_TRACE_INFO, "[VNF] Sending NFAPI STOP.request\n");
+  return config->send_p5_msg(_this, p5_idx, &req->header, sizeof(nfapi_nr_stop_request_scf_t));
+}
+
 int nfapi_vnf_measurement_req(nfapi_vnf_config_t* config, int p5_idx, nfapi_measurement_request_t* req)
 {
 	if(config == 0 || req == 0)

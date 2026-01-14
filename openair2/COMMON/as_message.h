@@ -218,10 +218,6 @@ typedef struct kenb_refresh_req_s {
   uint8_t kenb[32];
 } kenb_refresh_req_t;
 
-typedef struct nsa_oai_tun_nsa_s {
-  uint8_t buffer[500];
-} nas_oai_tun_nsa_t;
-
 /*
  * NAS->AS - Cell Information request
  * NAS request AS to search for a suitable cell belonging to the selected

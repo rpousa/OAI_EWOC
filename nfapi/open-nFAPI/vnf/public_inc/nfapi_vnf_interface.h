@@ -210,6 +210,24 @@ typedef struct nfapi_vnf_config
 	int (*pnf_start_resp)(nfapi_vnf_config_t* config, int p5_idx, nfapi_pnf_start_response_t* resp);
 	int (*pnf_nr_start_resp)(nfapi_vnf_config_t* config, int p5_idx, nfapi_nr_pnf_start_response_t* resp);
 
+  /*! A callback for the STOP.indication
+   *  \param config A pointer to the vnf configuration
+   *  \param p5_idx The p5 index used to indicate a particular pnf p5 connection
+   *  \param ind A data structure for the decoded STOP.indication This will
+   *              have been allocated on the stack.
+   *  \return not currently used.
+   *
+   *  The STOP.indication contains the result of the STOP.request
+   *
+   *
+   *  ind may contain pointers to dynamically allocated sub structures
+   *  such as the vendor_extention. The dynamically allocated structure will
+   *  be deallocated on return. If the client wishes to 'keep' the structures
+   *  then the substructure pointers should be set to 0 and then the client should
+   *  use the codec_config.deallocate function to release it at a future point
+   */
+  int (*nr_stop_ind)(nfapi_vnf_config_t* config, int p5_idx, nfapi_nr_stop_indication_scf_t* ind);
+
 	/*! A callback for the PNF_STOP.resp
 	 *  \param config A pointer to the vnf configuration
 	 *  \param p5_idx The p5 index used to indicate a particular pnf p5 connection
@@ -640,6 +658,7 @@ int nfapi_nr_vnf_start_req(nfapi_vnf_config_t* config, int p5_idx, nfapi_nr_star
  * \return  0 means success, -1 failure
  */
 int nfapi_vnf_stop_req(nfapi_vnf_config_t* config, int p5_idx, nfapi_stop_request_t* req);
+int nfapi_nr_vnf_stop_req(nfapi_vnf_config_t* config, int p5_idx, nfapi_nr_stop_request_scf_t* req);
 
 /*! Send the MEASUREMENT.request
  * \param config A pointer to a vnf config

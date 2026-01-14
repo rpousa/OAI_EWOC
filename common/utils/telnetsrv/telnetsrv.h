@@ -76,7 +76,7 @@ typedef struct webdatadef {
 typedef void(*telnet_printfunc_t)(const char* format, ...);
 typedef int(*cmdfunc_t)(char*, int, telnet_printfunc_t prnt);
 typedef int (*webfunc_t)(char *cmdbuff, int debug, telnet_printfunc_t prnt, ...);
-typedef int (*webfunc_getdata_t)(char *cmdbuff, int debug, void *data, telnet_printfunc_t prnt);
+typedef int (*webfunc_getdata_t)(const char *cmdbuff, int debug, void *data, telnet_printfunc_t prnt);
 typedef int(*qcmdfunc_t)(char*, int, telnet_printfunc_t prnt,void *arg);
 
 #define TELNETSRV_CMDFLAG_PUSHINTPOOLQ (1 << 0) // ask the telnet server to push the command in a thread pool queue
@@ -195,7 +195,7 @@ VT escape sequence definition, for smarter display....
 #define TELNET_ADDCMD_FNAME "add_telnetcmd"
 #define TELNET_POLLCMDQ_FNAME "poll_telnetcmdq"
 #define TELNET_PUSHCMD_FNAME "telnet_pushcmd"
-typedef int(*add_telnetcmd_func_t)(char *, telnetshell_vardef_t *, telnetshell_cmddef_t *);
+typedef int(*add_telnetcmd_func_t)(const char *, telnetshell_vardef_t *, telnetshell_cmddef_t *);
 typedef void(*poll_telnetcmdq_func_t)(void *qid,void *arg);
 typedef void (*push_telnetcmd_func_t)(telnetshell_cmddef_t *cmd, char *cmdbuff, telnet_printfunc_t prnt);
 #ifdef TELNETSERVERCODE

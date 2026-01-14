@@ -152,7 +152,7 @@ void set_tdd_config_nr(nfapi_nr_config_request_scf_t *cfg, frame_structure_t *fs
   }
 }
 
-int nr_slot_select(nfapi_nr_config_request_scf_t *cfg, int nr_frame, int nr_slot)
+int nr_slot_select(const nfapi_nr_config_request_scf_t *cfg, int nr_frame, int nr_slot)
 {
   (void) nr_frame;
 

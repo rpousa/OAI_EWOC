@@ -150,7 +150,7 @@ int config_cmdlineonly_getlist(configmodule_interface_t *cfg,
   return 0;
 }
 
-int config_cmdlineonly_get(configmodule_interface_t *cfg, paramdef_t *cfgoptions, int numoptions, char *prefix)
+int config_cmdlineonly_get(configmodule_interface_t *cfg, paramdef_t *cfgoptions, int numoptions, const char *prefix)
 {
   int defval;
   int fatalerror=0;
@@ -240,6 +240,7 @@ configmodule_interface_t *load_configmodule(int argc,
   for (int i=0; i<argc; i++)
     printf("\"%s\" ", argv[i]);
   printf("\n");
+  fflush(stdout);
 
   /* first parse the command line to look for the -O option */
   for (i = 0; i<argc; i++) {

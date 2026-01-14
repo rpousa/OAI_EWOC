@@ -88,7 +88,6 @@ TEST(nr_asn1, paging)
 void free_RRCReconfiguration_params(nr_rrc_reconfig_param_t params)
 {
   ASN_STRUCT_FREE(asn_DEF_NR_MeasConfig, params.meas_config);
-  ASN_STRUCT_FREE(asn_DEF_NR_DRB_ToReleaseList, params.drb_release_list);
   ASN_STRUCT_FREE(asn_DEF_NR_DRB_ToAddModList, params.drb_config_list);
   ASN_STRUCT_FREE(asn_DEF_NR_SRB_ToAddModList, params.srb_config_list);
   ASN_STRUCT_FREE(asn_DEF_NR_SecurityConfig, params.security_config);

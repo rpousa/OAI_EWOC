@@ -87,13 +87,15 @@ services:
             timeout: 5s
             retries: 5
     oai-gnb:
-        image: ${REGISTRY:-oaisoftwarealliance}/${GNB_IMG:-oai-gnb}:${TAG:-develop}
+        image: ${REGISTRY-oaisoftwarealliance/}${GNB_IMG:-oai-gnb}:${TAG:-develop}
         container_name: rfsim5g-oai-gnb
         cap_drop:
             - ALL
         environment:
             USE_ADDITIONAL_OPTIONS: --rfsim --log_config.global_log_options level,nocolor,time
-            ASAN_OPTIONS: detect_leaks=0
+                                    --telnetsrv --telnetsrv.listenaddr 192.168.71.140
+                                    --telnetsrv.shrmod ci
+            ASAN_OPTIONS: detect_leaks=0:detect_odr_violation=0
         depends_on:
             - oai-ext-dn
         networks:
@@ -110,7 +112,7 @@ services:
             retries: 5
 
     oai-nr-ue:
-        image: ${REGISTRY:-oaisoftwarealliance}/${NRUE_IMG:-oai-nr-ue}:${TAG:-develop}
+        image: ${REGISTRY-oaisoftwarealliance/}${NRUE_IMG:-oai-nr-ue}:${TAG:-develop}
         container_name: rfsim5g-oai-nr-ue
         cap_drop:
             - ALL
@@ -123,7 +125,7 @@ services:
                 --rfsim --rfsimulator.prop_delay 20 --rfsimulator.options chanmod
                 --rfsimulator.serveraddr 192.168.71.140
                 --time-sync-I 0.1 --ntn-initial-time-drift -46
-                --autonomous-ta --initial-fo 57340 --cont-fo-comp 2
+                --initial-fo 57340 --cont-fo-comp 2
                 --log_config.global_log_options level,nocolor,time
                 --num-ul-actors 1
         depends_on:

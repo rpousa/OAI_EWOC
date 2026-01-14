@@ -31,6 +31,9 @@
  \warning
 */
 
+#ifndef __PHY_SCH_PROCESSING_TIME_H__
+#define __PHY_SCH_PROCESSING_TIME_H__
+
 /* TS 38.214 Table 5.3-1: PDSCH processing time for PDSCH processing capability 1
 //   corresponding to the PDSCH decoding time N_1 [symbols]
 // where mu corresponds to the one of {mu_PDCCH, mu_PDSCH, mu_UL}
@@ -139,3 +142,5 @@ static const float pusch_d_2_2_timing_capability_2[4][2] = {
 {  2,      9   },
 {  3,      18  },
 };
+
+#endif

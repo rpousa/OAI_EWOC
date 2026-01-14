@@ -231,8 +231,7 @@ bool pdcp_data_req(protocol_ctxt_t  *ctxt_pP,
   hashtable_rc_t     h_rc;
   uint8_t            rb_offset= (srb_flagP == 0) ? DTCH -1 : 0;
   uint16_t           pdcp_uid=0;
-  VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME(VCD_SIGNAL_DUMPER_FUNCTIONS_PDCP_DATA_REQ,VCD_FUNCTION_IN);
-  CHECK_CTXT_ARGS(ctxt_pP);
+  VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME(VCD_SIGNAL_DUMPER_FUNCTIONS_PDCP_DATA_REQ, VCD_FUNCTION_IN);
 #if T_TRACER
 
   if (ctxt_pP->enb_flag != ENB_FLAG_NO)
@@ -1262,7 +1261,7 @@ pdcp_run (
 
   // IP/NAS -> PDCP traffic : TX, read the pkt from the upper layer buffer
   //  if (LINK_ENB_PDCP_TO_GTPV1U && ctxt_pP->enb_flag == ENB_FLAG_NO) {
-  if (!get_softmodem_params()->emulate_l1 && (IS_SOFTMODEM_NOS1 || ctxt_pP->enb_flag == ENB_FLAG_NO)) {
+  if (IS_SOFTMODEM_NOS1 || ctxt_pP->enb_flag == ENB_FLAG_NO) {
     pdcp_fifo_read_input_sdus(ctxt_pP);
   }
 
@@ -1272,9 +1271,7 @@ pdcp_run (
   } else {
     start_meas(&UE_pdcp_stats[ctxt_pP->module_id].pdcp_ip);
   }
-  if (!get_softmodem_params()->emulate_l1) {
-    pdcp_fifo_flush_sdus(ctxt_pP);
-  }
+  pdcp_fifo_flush_sdus(ctxt_pP);
 
   if (ctxt_pP->enb_flag) {
     stop_meas(&eNB_pdcp_stats[ctxt_pP->module_id].pdcp_ip);

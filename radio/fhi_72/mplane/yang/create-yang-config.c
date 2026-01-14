@@ -233,85 +233,91 @@ static bool create_uplane_conf_v2(const ru_session_t *ru_session, const openair0
   ret = lyd_new_path(NULL, (struct ly_ctx *)ru_session->ctx, "/o-ran-uplane-conf:user-plane-configuration", NULL, 0, root);
   VERIFY_SUCCESS(ret == LY_SUCCESS, "[MPLANE] Failed to create root \"user-plane-configuration\" node.\n");
 
-  if (ru_session->ru_mplane_config.rx_carriers.num != 1 || ru_session->ru_mplane_config.tx_carriers.num !=1)
-    MP_LOG_I("Only one carrier supported at the moment.\n");
-  
+  const size_t num_rx_ch = oai->rx_num_channels / num_rus;
+
   // RX carriers
-  struct lyd_node *rx_carrier_node = NULL;
-  ret = lyd_new_list(*root, NULL, "rx-array-carriers", 0, &rx_carrier_node, ru_session->ru_mplane_config.rx_carriers.name[0]);
-  VERIFY_SUCCESS(ret == LY_SUCCESS, "[MPLANE] Failed to create \"rx-array-carriers\" node.\n");
+  const size_t num_rx_carriers = (ru_session->ru_mplane_config.rx_carriers.num == 1) ? 1 : num_rx_ch;
+  for (size_t i = 0; i < num_rx_carriers; i++) {
+    struct lyd_node *rx_carrier_node = NULL;
+    ret = lyd_new_list(*root, NULL, "rx-array-carriers", 0, &rx_carrier_node, ru_session->ru_mplane_config.rx_carriers.name[i]);
+    VERIFY_SUCCESS(ret == LY_SUCCESS, "[MPLANE] Failed to create \"rx-array-carriers\" node.\n");
 
-  char rx_freq[16];
-  snprintf(rx_freq, sizeof(rx_freq), "%.0f", oai->rx_freq[0]);
-  ret = lyd_new_term(rx_carrier_node, NULL, "center-of-channel-bandwidth", rx_freq, 0, NULL);
-  VERIFY_SUCCESS(ret == LY_SUCCESS, "[MPLANE] Failed to create \"center-of-channel-bandwidth\" node.\n");
+    char rx_freq[16];
+    snprintf(rx_freq, sizeof(rx_freq), "%.0f", oai->rx_freq[0]);
+    ret = lyd_new_term(rx_carrier_node, NULL, "center-of-channel-bandwidth", rx_freq, 0, NULL);
+    VERIFY_SUCCESS(ret == LY_SUCCESS, "[MPLANE] Failed to create \"center-of-channel-bandwidth\" node.\n");
 
-  char rx_arfcn[16];
-  snprintf(rx_arfcn, sizeof(rx_arfcn), "%d", to_nrarfcn(oai->nr_band, oai->rx_freq[0], oai->nr_scs_for_raster, oai->rx_bw));
-  ret = lyd_new_term(rx_carrier_node, NULL, "absolute-frequency-center", rx_arfcn, 0, NULL);
-  VERIFY_SUCCESS(ret == LY_SUCCESS, "[MPLANE] Failed to create \"absolute-frequency-center\" node.\n");
+    char rx_arfcn[16];
+    snprintf(rx_arfcn, sizeof(rx_arfcn), "%d", to_nrarfcn(oai->nr_band, oai->rx_freq[0], oai->nr_scs_for_raster, oai->rx_bw));
+    ret = lyd_new_term(rx_carrier_node, NULL, "absolute-frequency-center", rx_arfcn, 0, NULL);
+    VERIFY_SUCCESS(ret == LY_SUCCESS, "[MPLANE] Failed to create \"absolute-frequency-center\" node.\n");
 
-  char rx_bw[16];
-  snprintf(rx_bw, sizeof(rx_bw), "%.0f", oai->rx_bw);
-  ret = lyd_new_term(rx_carrier_node, NULL, "channel-bandwidth", rx_bw, 0, NULL);
-  VERIFY_SUCCESS(ret == LY_SUCCESS, "[MPLANE] Failed to create \"channel-bandwidth\" node.\n");
+    char rx_bw[16];
+    snprintf(rx_bw, sizeof(rx_bw), "%.0f", oai->rx_bw);
+    ret = lyd_new_term(rx_carrier_node, NULL, "channel-bandwidth", rx_bw, 0, NULL);
+    VERIFY_SUCCESS(ret == LY_SUCCESS, "[MPLANE] Failed to create \"channel-bandwidth\" node.\n");
 
-  ret = lyd_new_term(rx_carrier_node, NULL, "downlink-radio-frame-offset", "0", 0, NULL);
-  VERIFY_SUCCESS(ret == LY_SUCCESS, "[MPLANE] Failed to create \"downlink-radio-frame-offset\" node.\n");
+    ret = lyd_new_term(rx_carrier_node, NULL, "downlink-radio-frame-offset", "0", 0, NULL);
+    VERIFY_SUCCESS(ret == LY_SUCCESS, "[MPLANE] Failed to create \"downlink-radio-frame-offset\" node.\n");
 
-  ret = lyd_new_term(rx_carrier_node, NULL, "downlink-sfn-offset", "0", 0, NULL);
-  VERIFY_SUCCESS(ret == LY_SUCCESS, "[MPLANE] Failed to create \"downlink-sfn-offset\" node.\n");
+    ret = lyd_new_term(rx_carrier_node, NULL, "downlink-sfn-offset", "0", 0, NULL);
+    VERIFY_SUCCESS(ret == LY_SUCCESS, "[MPLANE] Failed to create \"downlink-sfn-offset\" node.\n");
 
-  // gain offset applied uniformly across all array elements or layers
-  // needs to be within <gain-correction-range>
-  ret = lyd_new_term(rx_carrier_node, NULL, "gain-correction", "0", 0, NULL);
-  VERIFY_SUCCESS(ret == LY_SUCCESS, "[MPLANE] Failed to create \"gain-correction\" node.\n");
+    // gain offset applied uniformly across all array elements or layers
+    // needs to be within <gain-correction-range>
+    ret = lyd_new_term(rx_carrier_node, NULL, "gain-correction", "0", 0, NULL);
+    VERIFY_SUCCESS(ret == LY_SUCCESS, "[MPLANE] Failed to create \"gain-correction\" node.\n");
 
-  ret = lyd_new_term(rx_carrier_node, NULL, "n-ta-offset", "0", 0, NULL);
-  VERIFY_SUCCESS(ret == LY_SUCCESS, "[MPLANE] Failed to create \"n-ta-offset\" node.\n");
+    ret = lyd_new_term(rx_carrier_node, NULL, "n-ta-offset", "0", 0, NULL);
+    VERIFY_SUCCESS(ret == LY_SUCCESS, "[MPLANE] Failed to create \"n-ta-offset\" node.\n");
 
-  ret = lyd_new_term(rx_carrier_node, NULL, "active", "ACTIVE", 0, NULL);
-  VERIFY_SUCCESS(ret == LY_SUCCESS, "[MPLANE] Failed to create \"active\" node.\n");
+    ret = lyd_new_term(rx_carrier_node, NULL, "active", "ACTIVE", 0, NULL);
+    VERIFY_SUCCESS(ret == LY_SUCCESS, "[MPLANE] Failed to create \"active\" node.\n");
+  }
+
+  const size_t num_tx_ch = oai->tx_num_channels / num_rus;
 
   // TX carriers
-  struct lyd_node *tx_carrier_node = NULL;
-  ret = lyd_new_list(*root, NULL, "tx-array-carriers", 0, &tx_carrier_node, ru_session->ru_mplane_config.tx_carriers.name[0]);
-  VERIFY_SUCCESS(ret == LY_SUCCESS, "[MPLANE] Failed to create \"tx-array-carriers\" node.\n");
+  const size_t num_tx_carriers = (ru_session->ru_mplane_config.tx_carriers.num == 1) ? 1 : num_tx_ch;
+  for (size_t i = 0; i < num_tx_carriers; i++) {
+    struct lyd_node *tx_carrier_node = NULL;
+    ret = lyd_new_list(*root, NULL, "tx-array-carriers", 0, &tx_carrier_node, ru_session->ru_mplane_config.tx_carriers.name[i]);
+    VERIFY_SUCCESS(ret == LY_SUCCESS, "[MPLANE] Failed to create \"tx-array-carriers\" node.\n");
 
-  char tx_freq[16];
-  snprintf(tx_freq, sizeof(tx_freq), "%.0f", oai->tx_freq[0]);
-  ret = lyd_new_term(tx_carrier_node, NULL, "center-of-channel-bandwidth", tx_freq, 0, NULL);
-  VERIFY_SUCCESS(ret == LY_SUCCESS, "[MPLANE] Failed to create \"center-of-channel-bandwidth\" node.\n");
+    char tx_freq[16];
+    snprintf(tx_freq, sizeof(tx_freq), "%.0f", oai->tx_freq[0]);
+    ret = lyd_new_term(tx_carrier_node, NULL, "center-of-channel-bandwidth", tx_freq, 0, NULL);
+    VERIFY_SUCCESS(ret == LY_SUCCESS, "[MPLANE] Failed to create \"center-of-channel-bandwidth\" node.\n");
 
-  char tx_arfcn[16];
-  snprintf(tx_arfcn, sizeof(tx_arfcn), "%d", to_nrarfcn(oai->nr_band, oai->tx_freq[0], oai->nr_scs_for_raster, oai->tx_bw));
-  ret = lyd_new_term(tx_carrier_node, NULL, "absolute-frequency-center", tx_arfcn, 0, NULL);
-  VERIFY_SUCCESS(ret == LY_SUCCESS, "[MPLANE] Failed to create \"absolute-frequency-center\" node.\n");
+    char tx_arfcn[16];
+    snprintf(tx_arfcn, sizeof(tx_arfcn), "%d", to_nrarfcn(oai->nr_band, oai->tx_freq[0], oai->nr_scs_for_raster, oai->tx_bw));
+    ret = lyd_new_term(tx_carrier_node, NULL, "absolute-frequency-center", tx_arfcn, 0, NULL);
+    VERIFY_SUCCESS(ret == LY_SUCCESS, "[MPLANE] Failed to create \"absolute-frequency-center\" node.\n");
 
-  char tx_bw[16];
-  snprintf(tx_bw, sizeof(tx_bw), "%.0f", oai->tx_bw);
-  ret = lyd_new_term(tx_carrier_node, NULL, "channel-bandwidth", tx_bw, 0, NULL);
-  VERIFY_SUCCESS(ret == LY_SUCCESS, "[MPLANE] Failed to create \"channel-bandwidth\" node.\n");
+    char tx_bw[16];
+    snprintf(tx_bw, sizeof(tx_bw), "%.0f", oai->tx_bw);
+    ret = lyd_new_term(tx_carrier_node, NULL, "channel-bandwidth", tx_bw, 0, NULL);
+    VERIFY_SUCCESS(ret == LY_SUCCESS, "[MPLANE] Failed to create \"channel-bandwidth\" node.\n");
 
-  // oai->tx_gain takes the value of att_tx from the RU section of gNB config file
-  // we assume the same gain is applied to all channels; same as above for the frequency
-  const double tx_gain_value = ((oai->tx_gain[0] * 10000) < ru_session->xran_mplane.max_tx_gain) ? (oai->tx_gain[0] * 10000) : ru_session->xran_mplane.max_tx_gain;
-  char tx_gain_str[8];
-  snprintf(tx_gain_str, sizeof(tx_gain_str), "%.f", tx_gain_value);
-  ret = lyd_new_term(tx_carrier_node, NULL, "gain", tx_gain_str, 0, NULL);
-  VERIFY_SUCCESS(ret == LY_SUCCESS, "[MPLANE] Failed to create \"gain\" node.\n");
+    // oai->tx_gain takes the value of att_tx from the RU section of gNB config file
+    // we assume the same gain is applied to all channels; same as above for the frequency
+    const double tx_gain_value = ((oai->tx_gain[0] * 10000) < ru_session->xran_mplane.max_tx_gain) ? (oai->tx_gain[0] * 10000) : ru_session->xran_mplane.max_tx_gain;
+    char tx_gain_str[8];
+    snprintf(tx_gain_str, sizeof(tx_gain_str), "%.f", tx_gain_value);
+    ret = lyd_new_term(tx_carrier_node, NULL, "gain", tx_gain_str, 0, NULL);
+    VERIFY_SUCCESS(ret == LY_SUCCESS, "[MPLANE] Failed to create \"gain\" node.\n");
   
-  ret = lyd_new_term(tx_carrier_node, NULL, "downlink-radio-frame-offset", "0", 0, NULL);
-  VERIFY_SUCCESS(ret == LY_SUCCESS, "[MPLANE] Failed to create \"downlink-radio-frame-offset\" node.\n");
+    ret = lyd_new_term(tx_carrier_node, NULL, "downlink-radio-frame-offset", "0", 0, NULL);
+    VERIFY_SUCCESS(ret == LY_SUCCESS, "[MPLANE] Failed to create \"downlink-radio-frame-offset\" node.\n");
 
-  ret = lyd_new_term(tx_carrier_node, NULL, "downlink-sfn-offset", "0", 0, NULL);
-  VERIFY_SUCCESS(ret == LY_SUCCESS, "[MPLANE] Failed to create \"downlink-sfn-offset\" node.\n");
+    ret = lyd_new_term(tx_carrier_node, NULL, "downlink-sfn-offset", "0", 0, NULL);
+    VERIFY_SUCCESS(ret == LY_SUCCESS, "[MPLANE] Failed to create \"downlink-sfn-offset\" node.\n");
 
-  ret = lyd_new_term(tx_carrier_node, NULL, "active", "ACTIVE", 0, NULL);
-  VERIFY_SUCCESS(ret == LY_SUCCESS, "[MPLANE] Failed to create \"active\" node.\n");
+    ret = lyd_new_term(tx_carrier_node, NULL, "active", "ACTIVE", 0, NULL);
+    VERIFY_SUCCESS(ret == LY_SUCCESS, "[MPLANE] Failed to create \"active\" node.\n");
+  }
 
   // PUSCH & PRACH endpoints
-  const size_t num_rx_ch = oai->rx_num_channels / num_rus;
   for (size_t i = 0; i < num_rx_ch; i++) {
     struct lyd_node *pusch_node = NULL;
     ret = lyd_new_list(*root, NULL, "low-level-rx-endpoints", 0, &pusch_node, ru_session->ru_mplane_config.rx_endpoints.name[i]);
@@ -330,7 +336,6 @@ static bool create_uplane_conf_v2(const ru_session_t *ru_session, const openair0
   }
 
   // PDSCH endpoints
-  const size_t num_tx_ch = oai->tx_num_channels / num_rus;
   for (size_t i = 0; i < num_tx_ch; i++) {
     struct lyd_node *pdsch_node = NULL;
     ret = lyd_new_list(*root, NULL, "low-level-tx-endpoints", 0, &pdsch_node, ru_session->ru_mplane_config.tx_endpoints.name[i]);
@@ -342,6 +347,7 @@ static bool create_uplane_conf_v2(const ru_session_t *ru_session, const openair0
 
   // PUSCH and PRACH links
   for (size_t i = 0; i < num_rx_ch; i++) {
+    const size_t rx_carrier_id = (num_rx_carriers == 1) ? 0 : i;
     // PUSCH
     struct lyd_node *pusch_link_node = NULL;
     char pusch_link[16];
@@ -352,7 +358,7 @@ static bool create_uplane_conf_v2(const ru_session_t *ru_session, const openair0
     ret = lyd_new_term(pusch_link_node, NULL, "processing-element", u_proc_elem, 0, NULL);
     VERIFY_SUCCESS(ret == LY_SUCCESS, "[MPLANE] Failed to create \"processing-element\" node.\n");
 
-    ret = lyd_new_term(pusch_link_node, NULL, "rx-array-carrier", ru_session->ru_mplane_config.rx_carriers.name[0], 0, NULL);
+    ret = lyd_new_term(pusch_link_node, NULL, "rx-array-carrier", ru_session->ru_mplane_config.rx_carriers.name[rx_carrier_id], 0, NULL);
     VERIFY_SUCCESS(ret == LY_SUCCESS, "[MPLANE] Failed to create \"rx-array-carrier\" node.\n");
 
     ret = lyd_new_term(pusch_link_node, NULL, "low-level-rx-endpoint", ru_session->ru_mplane_config.rx_endpoints.name[i], 0, NULL);
@@ -368,7 +374,7 @@ static bool create_uplane_conf_v2(const ru_session_t *ru_session, const openair0
     ret = lyd_new_term(prach_link_node, NULL, "processing-element", u_proc_elem, 0, NULL);
     VERIFY_SUCCESS(ret == LY_SUCCESS, "[MPLANE] Failed to create \"processing-element\" node.\n");
 
-    ret = lyd_new_term(prach_link_node, NULL, "rx-array-carrier", ru_session->ru_mplane_config.rx_carriers.name[0], 0, NULL);
+    ret = lyd_new_term(prach_link_node, NULL, "rx-array-carrier", ru_session->ru_mplane_config.rx_carriers.name[rx_carrier_id], 0, NULL);
     VERIFY_SUCCESS(ret == LY_SUCCESS, "[MPLANE] Failed to create \"rx-array-carrier\" node.\n");
 
     const size_t prach_endpoint_name_offset = i + (ru_session->ru_mplane_config.rx_endpoints.num / 2);
@@ -378,6 +384,7 @@ static bool create_uplane_conf_v2(const ru_session_t *ru_session, const openair0
 
   // PDSCH links
   for (size_t i = 0; i < num_tx_ch; i++) {
+    const size_t tx_carrier_id = (num_tx_carriers == 1) ? 0 : i;
     struct lyd_node *pdsch_link_node = NULL;
     char pdsch_link[16];
     snprintf(pdsch_link, sizeof(pdsch_link), "%s%ld", "PdschLink", i);
@@ -387,7 +394,7 @@ static bool create_uplane_conf_v2(const ru_session_t *ru_session, const openair0
     ret = lyd_new_term(pdsch_link_node, NULL, "processing-element", u_proc_elem, 0, NULL);
     VERIFY_SUCCESS(ret == LY_SUCCESS, "[MPLANE] Failed to create \"processing-element\" node.\n");
 
-    ret = lyd_new_term(pdsch_link_node, NULL, "tx-array-carrier", ru_session->ru_mplane_config.tx_carriers.name[0], 0, NULL);
+    ret = lyd_new_term(pdsch_link_node, NULL, "tx-array-carrier", ru_session->ru_mplane_config.tx_carriers.name[tx_carrier_id], 0, NULL);
     VERIFY_SUCCESS(ret == LY_SUCCESS, "[MPLANE] Failed to create \"tx-array-carrier\" node.\n");
 
     ret = lyd_new_term(pdsch_link_node, NULL, "low-level-tx-endpoint", ru_session->ru_mplane_config.tx_endpoints.name[i], 0, NULL);

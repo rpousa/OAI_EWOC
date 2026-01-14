@@ -8,6 +8,11 @@
 #include <stdio.h>
 #include <math.h>
 
+typedef enum {
+  FRAMELOG_BUFFER,
+  FRAMELOG_BUFFER_dB,
+} framelog_buffer_type_t;
+
 struct framelog {
   struct logger common;
   void *database;
@@ -22,6 +27,7 @@ struct framelog {
   int skip_current;     /* internal data for the skip mechanism */
   int skip_on;          /* internal data for the skip mechanism */
   int update_only_at_sf9;
+  framelog_buffer_type_t type;
 };
 
 static void _event(void *p, event e)
@@ -52,7 +58,10 @@ static void _event(void *p, event e)
   }
   if (l->skip_on) return;
 
-  nsamples = bsize / (2*sizeof(int16_t));
+  if (l->type == FRAMELOG_BUFFER)
+    nsamples = bsize / (2 * sizeof(int16_t));
+  else
+    nsamples = bsize / sizeof(int16_t);
 
   if (l->blength != nsamples * 10) {
     l->blength = nsamples * 10;
@@ -71,10 +80,15 @@ static void _event(void *p, event e)
   }
 
   /* TODO: compute the LOGs in the plotter (too much useless computations) */
-  for (i = 0; i < nsamples; i++) {
-    int I = ((int16_t *)buffer)[i*2];
-    int Q = ((int16_t *)buffer)[i*2+1];
-    l->buffer[subframe * nsamples + i] = 10*log10(1.0+(float)(I*I+Q*Q));
+  if (l->type == FRAMELOG_BUFFER_dB) {
+    for (i = 0; i < nsamples; i++)
+      l->buffer[subframe * nsamples + i] = ((int16_t *)buffer)[i];
+  } else {
+    for (i = 0; i < nsamples; i++) {
+      int I = ((int16_t *)buffer)[i * 2];
+      int Q = ((int16_t *)buffer)[i * 2 + 1];
+      l->buffer[subframe * nsamples + i] = 10 * log10(1.0 + (float)(I * I + Q * Q));
+    }
   }
 
   if (l->update_only_at_sf9 == 0 || subframe == 9)
@@ -132,6 +146,8 @@ logger *new_framelog(event_handler *h, void *database,
     abort();
   }
 
+  ret->type = FRAMELOG_BUFFER;
+
   return ret;
 }
 
@@ -152,4 +168,10 @@ void framelog_set_update_only_at_sf9(logger *_this, int update_only_at_sf9)
 {
   struct framelog *l = _this;
   l->update_only_at_sf9 = update_only_at_sf9;
+}
+
+void framelog_set_type_buffer_db(logger *_this)
+{
+  struct framelog *l = _this;
+  l->type = FRAMELOG_BUFFER_dB;
 }

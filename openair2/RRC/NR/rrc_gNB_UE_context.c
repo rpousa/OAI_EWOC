@@ -218,8 +218,6 @@ rrc_gNB_ue_context_t *rrc_gNB_create_ue_context(sctp_assoc_t assoc_id,
               ue->rrc_ue_id);
   bool success = cu_add_f1_ue_data(ue->rrc_ue_id, &ue_data);
   DevAssert(success);
-  ue->max_delays_pdu_session = 20; /* see rrc_gNB_process_NGAP_PDUSESSION_SETUP_REQ() */
-  ue->ongoing_pdusession_setup_request = false;
 
   // Initialise setup PDU Sessions list
   seq_arr_init(&ue->pduSessions, sizeof(rrc_pdu_session_param_t));

@@ -151,7 +151,7 @@ int main(int argc, char **argv)
     exit_fun("[NR_PUCCHSIM] Error, configuration module init failed\n");
   }
 
-  randominit(0);
+  randominit();
   logInit();
 
   int c;

@@ -108,10 +108,6 @@ int main(int argc, char **argv) {
     .sdr_addrs=usrp_addrs,
     //! Auto calibration flag
     .autocal={0},
-    //! rf devices work with x bits iqs when oai have its own iq format
-    //! the two following parameters are used to convert iqs
-    .iq_txshift=0,
-    .iq_rxrescale=0,
     //! Configuration file for LMS7002M
     .configFilename="",
     //! remote IP/MAC addr for Ethernet interface
