@@ -2895,6 +2895,7 @@ static bool write_rrc_stats(const gNB_RRC_INST *rrc)
   }
 
   fprintf(f, "\n");
+  dump_cu_info(rrc, f);
   dump_du_info(rrc, f);
 
   fclose(f);

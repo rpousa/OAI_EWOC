@@ -102,6 +102,8 @@ bool trigger_bearer_setup(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE, int n, pdusession
 
 int rrc_gNB_generate_pcch_msg(sctp_assoc_t assoc_id, const NR_SIB1_t *sib, uint32_t tmsi, uint8_t paging_drx);
 
+void dump_cu_info(const gNB_RRC_INST *rrc, FILE *f);
+
 /** @}*/
 
 /* UE Management Procedures */

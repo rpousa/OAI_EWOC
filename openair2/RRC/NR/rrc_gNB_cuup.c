@@ -339,3 +339,41 @@ void rrc_gNB_process_e1_lost_connection(gNB_RRC_INST *rrc, e1ap_lost_connection_
   DevAssert(removed != NULL);
   rrc->num_cuups--;
 }
+
+void dump_cu_info(const gNB_RRC_INST *rrc, FILE *f){
+  fprintf(f, "gNB-CU RRC instance at %u\n", rrc->node_id);
+  fprintf(f, "Node name: %s\n", rrc->node_name ? rrc->node_name : "not set");
+  fprintf(f, "CUCP PLMNs served:\n");
+  for (int j = 0; j < rrc->configuration.num_plmn; j++) {
+    fprintf(f, "  PLMN %03d.%0*d\n",
+            rrc->configuration.plmn[j].mcc,
+            rrc->configuration.plmn[j].mnc_digit_length,
+            rrc->configuration.plmn[j].mnc);
+  }
+  fprintf(f, "%ld connected CUUPs \n", rrc->num_cuups);
+  int i = 1;
+  nr_rrc_cuup_container_t *cuup = NULL;
+  RB_FOREACH(cuup, rrc_cuup_tree, &((gNB_RRC_INST *)rrc)->cuups){
+    const e1ap_setup_req_t *sr = cuup->setup_req;
+    fprintf(f, "[%d] CUUP ID %ld (%s) ", i++, sr->gNB_cu_up_id, sr->gNB_cu_up_name);
+    if (cuup->assoc_id == -1) {
+      fprintf(f, "integrated CU");
+    } else {
+      fprintf(f, "assoc_id %d", cuup->assoc_id);
+    }
+    for (int j = 0; j < sr->supported_plmns; j++){
+    fprintf(f, "  PLMN supported %03d.%0*d\n",
+            sr->plmn[j].id.mcc,
+            sr->plmn[j].id.mnc_digit_length,
+            sr->plmn[j].id.mnc);
+      for (int k = 0; k < sr->plmn[j].supported_slices; k++){
+        fprintf(f, " S-NSSAI SST %d and SD %d \n", sr->plmn[j].slice[k].sst, sr->plmn[j].slice[k].sd);
+      }
+    }
+  }
+}
+
+nr_rrc_cuup_container_t *get_cuup_by_assoc_id(gNB_RRC_INST *rrc, sctp_assoc_t assoc_id){
+  nr_rrc_cuup_container_t e = {.assoc_id = assoc_id};
+  return RB_FIND(rrc_cuup_tree, &rrc->cuups, &e);
+}
