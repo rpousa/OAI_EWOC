@@ -68,22 +68,22 @@ void nr_layer_mapping(int nbCodes,
   @param[out] tx_layers, modulated symbols for each layer
 */
 void nr_ue_layer_mapping(const c16_t *mod_symbs, const int n_layers, const int n_symbs, c16_t tx_layers[][n_symbs]);
+
 /*!
 \brief This function implements the OFDM front end processor on reception (FEP)
 \param frame_parms Pointer to frame parameters
-\param rxdata Pointer to input data in time domain
-\param rxdataF Pointer to output data in frequency domain
+\param rxdata Pointer to input data in time domain for one frame
+\param rxdataF Pointer to output data in frequency domain for one symbol
 \param symbol symbol within slot (0..12/14)
-\param Ns Slot number (0..19)
-\param sample_offset offset within rxdata (points to beginning of subframe)
+\param slot Slot number
+\param sample_offset offset within rxdata (points to beginning of symbol)
 */
-
-int nr_slot_fep_ul(NR_DL_FRAME_PARMS *frame_parms,
-                   int32_t *rxdata,
-                   int32_t *rxdataF,
-                   unsigned char symbol,
-                   unsigned char Ns,
-                   int sample_offset);
+int nr_symbol_fep_ul(const NR_DL_FRAME_PARMS *fp,
+                     const c16_t *rxdata,
+                     c16_t *rxdataF,
+                     unsigned char symbol,
+                     unsigned char slot,
+                     int sample_offset);
 
 /*!
 \brief This function implements the dft transform precoding in PUSCH
@@ -110,6 +110,15 @@ void apply_nr_rotation_TX(const NR_DL_FRAME_PARMS *fp,
                           int nb_rb,
                           int first_symbol,
                           int nsymb);
+
+void nr_ofdm_demod_and_rx_rotation(c16_t **rxdata,
+                                   c16_t **rxdataF,
+                                   const NR_DL_FRAME_PARMS *fp,
+                                   int nb_antennas,
+                                   int slot,
+                                   int slot_offsetF,
+                                   enum nr_Link linktype,
+                                   bool was_symbol_used[NR_NUMBER_OF_SYMBOLS_PER_SLOT]);
 
 void perform_symbol_rotation(NR_DL_FRAME_PARMS *fp, double f0, c16_t *symbol_rotation);
 

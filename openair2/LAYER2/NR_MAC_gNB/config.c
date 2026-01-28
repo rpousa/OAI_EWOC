@@ -777,20 +777,17 @@ static void initialize_beam_information(NR_beam_info_t *beam_info, int mu, int s
   }
 }
 
-static void config_sched_ctrlCommon(gNB_MAC_INST *nr_mac)
+static void config_sched_ctrlSIB1(gNB_MAC_INST *nr_mac)
 {
   const NR_MIB_t *mib = nr_mac->common_channels[0].mib->message.choice.mib;
   NR_ServingCellConfigCommon_t *scc = nr_mac->common_channels[0].ServingCellConfigCommon;
 
-  NR_UE_sched_ctrl_t *sched_ctrlCommon = calloc_or_fail(1, sizeof(*sched_ctrlCommon));
-  nr_mac->sched_ctrlCommon = sched_ctrlCommon;
-  sched_ctrlCommon->search_space = calloc_or_fail(1, sizeof(*sched_ctrlCommon->search_space));
-  sched_ctrlCommon->coreset = calloc_or_fail(1, sizeof(*sched_ctrlCommon->coreset));
+  NR_sched_ctrl_sib1_t *sched_ctrlCommon = calloc_or_fail(1, sizeof(*sched_ctrlCommon));
+  nr_mac->sched_ctrlSIB1 = sched_ctrlCommon;
 
   NR_SubcarrierSpacing_t scs = *scc->ssbSubcarrierSpacing;
   const long band = *scc->downlinkConfigCommon->frequencyInfoDL->frequencyBandList.list.array[0];
-  uint16_t ssb_start_symbol = get_ssb_start_symbol(band, scs, 0);
-
+  const int bw = scc->downlinkConfigCommon->frequencyInfoDL->scs_SpecificCarrierList.list.array[0]->carrierBandwidth;
   int8_t ssb_period = *scc->ssb_periodicityServingCell;
   uint8_t ssb_frame_periodicity = 1;
   if (ssb_period > 1)
@@ -801,24 +798,39 @@ static void config_sched_ctrlCommon(gNB_MAC_INST *nr_mac)
   const int prb_offset = frequency_range == FR1 ? nr_mac->ssb_OffsetPointA >> scs : nr_mac->ssb_OffsetPointA >> (scs - 2);
 
   NR_Type0_PDCCH_CSS_config_t type0_PDCCH_CSS_config = {0};
-  get_type0_PDCCH_CSS_config_parameters(&type0_PDCCH_CSS_config,
-                                        0,
-                                        mib,
-                                        numb_slots_frame,
-                                        nr_mac->ssb_SubcarrierOffset,
-                                        ssb_start_symbol,
-                                        scs,
-                                        frequency_range,
-                                        band,
-                                        0,
-                                        ssb_frame_periodicity,
-                                        prb_offset);
-
-  fill_searchSpaceZero(sched_ctrlCommon->search_space, numb_slots_frame, &type0_PDCCH_CSS_config);
-
-  fill_coresetZero(sched_ctrlCommon->coreset, &type0_PDCCH_CSS_config);
+  for (int i = 0; i < get_max_ssbs(scc); i++) {
+    if (is_ssb_configured(scc, i)) {
+      uint16_t ssb_start_symbol = get_ssb_start_symbol(band, scs, i);
+      get_type0_PDCCH_CSS_config_parameters(&type0_PDCCH_CSS_config,
+                                            0,
+                                            mib,
+                                            numb_slots_frame,
+                                            nr_mac->ssb_SubcarrierOffset,
+                                            ssb_start_symbol,
+                                            scs,
+                                            frequency_range,
+                                            band,
+                                            bw,
+                                            i,
+                                            ssb_frame_periodicity,
+                                            prb_offset);
+      fill_searchSpaceZero(&sched_ctrlCommon->search_space[i], numb_slots_frame, &type0_PDCCH_CSS_config);
+    }
+  }
+  // CSET0 doesn't depend on SSB index
+  fill_coresetZero(&sched_ctrlCommon->coreset, &type0_PDCCH_CSS_config);
   nr_mac->cset0_bwp_start = type0_PDCCH_CSS_config.cset_start_rb;
   nr_mac->cset0_bwp_size = type0_PDCCH_CSS_config.num_rbs;
+  if (type0_PDCCH_CSS_config.type0_pdcch_ss_mux_pattern > 1) {
+    int bwp_start = NRRIV2PRBOFFSET(scc->downlinkConfigCommon->initialDownlinkBWP->genericParameters.locationAndBandwidth,
+                                    MAX_BWP_SIZE);
+    int bwp_size = NRRIV2BW(scc->downlinkConfigCommon->initialDownlinkBWP->genericParameters.locationAndBandwidth, MAX_BWP_SIZE);
+    // we need to configure a commonControlResourceSet != 0
+    // because CSET0 would start from a symbol != 0 and that's unwanted for anything but SIB1
+    // The network configures the commonControlResourceSet in SIB1 so that it is contained in the bandwidth of CSET0
+    bool do_TCI = nr_mac->radio_config.do_TCI;
+    configure_coreset_for_mux23(scc, nr_mac->cset0_bwp_start - bwp_start, nr_mac->cset0_bwp_size, bwp_start, bwp_size, do_TCI);
+  }
 }
 
 /**
@@ -888,7 +900,7 @@ void nr_mac_config_scc(gNB_MAC_INST *nrmac, NR_ServingCellConfigCommon_t *scc, c
   find_SSB_and_RO_available(nrmac);
 
   if (IS_SA_MODE(get_softmodem_params()))
-    config_sched_ctrlCommon(nrmac);
+    config_sched_ctrlSIB1(nrmac);
 
   seq_arr_init(&nrmac->ul_tda, sizeof(NR_tda_info_t));
   init_ul_tda_info(scc->uplinkConfigCommon->initialUplinkBWP->pusch_ConfigCommon->choice.setup->pusch_TimeDomainAllocationList, &nrmac->ul_tda);

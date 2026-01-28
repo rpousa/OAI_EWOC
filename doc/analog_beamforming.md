@@ -1,8 +1,10 @@
+# Implementation of Analog Beamforming
+
 This document explains the implementation of analog beamforming in OAI codebase.
 
 [[_TOC_]]
 
-# Introduction to analog beamforming
+## Introduction to analog beamforming
 
 Beamforming is a technique applied to antenna arrays to create a directional radiation pattern. This often consists in providing a different phase shift to each element of the array such that signals with a different angle of arrival/departure experience a change in radiation pattern because of constructive or destructive interference.
 
@@ -12,9 +14,9 @@ The presence of a limited number of predefined beams at RU poses constraints to 
 
 Analog beamforming implementation also allows to enable distributed antenna systems (DAS), where each beam corrisponds to one antenna (or a set of antennas) of the system. In this scenario, the scheduler constaint is alleviated because normally the number of concurrent beams allowed equals the total number of beams.
 
-# Configuration file fields for analog beamforming
+## Configuration file fields for analog beamforming
 
-A set of parameters in configuration files controls the implementation of analog beamforming and instructs the scheduler on how to behave in such scenarios. Since most notably this technique in 5G is employed in FR2, the configuration file example currently available is a RFsim one for band 261. [Config file example](../ci-scripts/conf_files/gnb.sa.band261.u3.32prb.rfsim.conf)
+A set of parameters in configuration files controls the implementation of analog beamforming and instructs the scheduler on how to behave in such scenarios. Since most notably this technique in 5G is employed in FR2, the configuration file example currently available is a RFsim one for band 261. [Config file example](../ci-scripts/conf_files/gnb.sa.band257.u3.66prb.rfsim.conf)
 
 In the `MACRLC` section of configuration files, there are three new parameters: `set_analog_beamforming`, `beam_duration` and `beams_per_period`. The explanation of these parameters is here provided:
 - `set_analog_beamforming` can be set a value equal to 1 or 2 to activate or 0 to desactivate analog beamforming (default value is 0)
@@ -24,9 +26,9 @@ In the `MACRLC` section of configuration files, there are three new parameters: 
 
 Setting analog beamforming to 1 or 2 changes the way FAPI beam index is treated. By setting 1, we instruct L1 to look up in Hi-PHY preconfigured DBM beam index. By setting 2, we instruct L2 to directly signal to Lo-PHY the beam index (e.g. over 7.2x fronthaul).
 
-DAS is enabled by setting to 1 the parameter `enable_das` in the L1 section of the configuration file. In case of DAS enabled, the field `beam_weights` in `MACRLC` section can be omitted.
+DAS is enabled by setting to 1 the parameter `enable_das` in the L1 section of the configuration file. In case of DAS enabled, the field `beam_weights` in `MACRLC` section can be omitted and the number of beams per period equals the total number of beams.
 
-# Implementation in OAI scheduler
+## Implementation in OAI scheduler
 
 A new MAC structure `NR_beam_info_t` controls the behavior of the scheduler in presence of analog beamforming. Besides the already mentioned parameters `beam_duration` and `beams_per_period`, the structure also holds a matrix `beam_allocation[i][j]`, whose indices `i` and `j` stands respectively for the number of beams in the period and the slot index (the size of the latter depends on the frame characteristics).
 This matrix contains the beams already allocated in a given slot, to flag the scheduler to use one of these to schedule a UE in one of these beams. If the matrix is full (all the beams in the given period, e.g. slot) are already allocated, the scheduler can't allocate a UE in a new beam.
@@ -43,7 +45,7 @@ In phy-test mode, beams are assigned to PDSCH slots in the same manner as SSB sl
 
 The DL slots in every TDD period will have beams 10,11,12,13,0,0,0
 
-# FAPI implementation
+## FAPI implementation
 
 To be noted that in our implementation analog beamforming is only partially supported in split mode.
 The index based beamforming relies on the Tx precoding and beamforming PDU definition of beam-ID, where MSB is used to signal if the ID can be directly used or is it a pointer to a pre-stored vector of weights.
@@ -55,14 +57,14 @@ In addition to that, a `config_request` structure defined as vendor extension (`
 
 Therefore, in case of analog beamforming, L2 provides in each channel FAPI message information about the beam index via the beam-ID parameter with MSB set to 1.
 
-# L1 implementation
+## L1 implementation
 
 To handle multiple concurrent beams, the buffers containing Tx and Rx data in frequency domain (`txdataF` and `rxdataF`) have been extended by one dimension to contain multiple concurrent beams to be transmitted/received.
 The function `beam_index_allocation`, called by every L1 channel, is responsible to match the FAPI analog beam index to the RU beam index and to store the latter `beam_id` structure, which allocates the beams per symbol, despite L2 only supporting beam change at slot level. At the same time, the function returns the concurrent beam index, to be used to store data in frequency domain buffers. While doing so, the function also checks if there is room for current beam in the list of concurrent beams, which should always be the case, if L2 properly allocated the channels.
 
 In case of DAS, since each beam corresponds to a specific antenna port, the `beam_index_allocation` function is simplified in the sense that the beam index corresponds to the antenna port index of the frequency domain buffers.
 
-# RU implementation
+## RU implementation
 
 The implementation is still work in progress.
 

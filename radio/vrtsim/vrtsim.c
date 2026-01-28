@@ -189,13 +189,13 @@ static void vrtsim_readconfig(vrtsim_state_t *vrtsim_state)
   } else {
     AssertFatal(false, "Invalid role configuration\n");
   }
-#ifdef ENABLE_TAPS_CLIENT
+#ifdef OAI_VRTSIM_TAPS_CLIENT
   if (vrtsim_state->taps_socket) {
     LOG_A(HW, "VRTSIM: will use taps socket %s\n", vrtsim_state->taps_socket);
   }
 #else
   if (vrtsim_state->taps_socket) {
-    AssertFatal(false, "Invalid configuration: Build with ENABLE_TAPS_CLIENT to use taps socket\n");
+    AssertFatal(false, "Invalid configuration: Build with OAI_VRTSIM_TAPS_CLIENT to use taps socket\n");
   }
 #endif
 }

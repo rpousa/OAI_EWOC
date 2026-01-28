@@ -24,73 +24,47 @@
   <htmlTabRef>TEST-MONO-N2-HO-B210</htmlTabRef>
   <htmlTabName>Monolithic N2 Handover 20 MHz TDD SA</htmlTabName>
   <htmlTabIcon>tasks</htmlTabIcon>
-  <TestCaseRequestedList>
-    000001
-    000002
-    000023
-    000003
-    000004
-    000005
-    000006
-    000007
-    000008
-    000009
-    000010
-    000011
-    000012
-    000013
-    000014
-    000015
-    000017
-    000018
-    000019
-    000016
-    000020
-    000021
-    000022
-  </TestCaseRequestedList>
-  <TestCaseExclusionList></TestCaseExclusionList>
-	
-  <testCase id="000001">
+
+  <testCase>
     <class>DeployCoreNetwork</class>
     <desc>Initialize 5G Core</desc>
     <cn_id>oc-cn5g-00103-ho</cn_id>
   </testCase>
 
-  <testCase id="000002">
+  <testCase>
     <class>Pull_Local_Registry</class>
     <desc>Pull Images from Local Registry</desc>
     <images>oai-gnb</images>
     <node>groot</node>
   </testCase>
 
-  <testCase id="000023">
+  <testCase>
     <class>Pull_Local_Registry</class>
     <desc>Pull Images from Local Registry</desc>
     <images>oai-gnb</images>
     <node>rocket</node>
   </testCase>
 
-  <testCase id="000003">
+  <testCase>
     <class>Create_Workspace</class>
     <desc>Create new Workspace for groot</desc>
     <node>groot</node>
   </testCase>
 
-  <testCase id="000005">
-    <class>Create_Workspace</class>
-    <desc>Create new Workspace on rocket</desc>
-    <node>rocket</node>
-  </testCase>
-
-  <testCase id="000004">
+  <testCase>
     <class>Custom_Command</class>
     <desc>Set initial attenuation on target gNB</desc>
     <node>rocket</node>
     <command>python3 %%workspace%%/ci-scripts/attenuatorctl.py -s 1,2 0 -s 3,4 25</command>
   </testCase>
 
-  <testCase id="000005">
+  <testCase>
+    <class>Create_Workspace</class>
+    <desc>Create new Workspace for rocket</desc>
+    <node>rocket</node>
+  </testCase>
+
+  <testCase>
     <class>Deploy_Object</class>
     <desc>Deploy Monolithic gNB-PCI0 (TDD/Band77/20MHz/B210) in a container</desc>
     <yaml_path>ci-scripts/yaml_files/5g_sa_n2_ho_b210</yaml_path>
@@ -98,7 +72,7 @@
     <services>oai-gnb-pci0</services>
   </testCase>
 
-  <testCase id="000006">
+  <testCase>
     <class>Deploy_Object</class>
     <desc>Deploy Monolithic gNB-PCI1 (TDD/Band77/20MHz/B210) in a container</desc>
     <yaml_path>ci-scripts/yaml_files/5g_sa_n2_ho_b210</yaml_path>
@@ -106,13 +80,13 @@
     <services>oai-gnb-pci1</services>
   </testCase>
 
-  <testCase id="000007">
+  <testCase>
     <class>Attach_UE</class>
     <desc>Attach Quectel</desc>
     <id>raspix</id>
   </testCase>
 
-  <testCase id="000008">
+  <testCase>
     <class>Ping</class>
     <desc>Ping: 100pings in 20sec</desc>
     <id>raspix</id>
@@ -121,20 +95,20 @@
     <ping_packetloss_threshold>5</ping_packetloss_threshold>
   </testCase>
 
-  <testCase id="000009">
+  <testCase>
     <class>IdleSleep</class>
     <desc>Sleep</desc>
     <idle_sleep_time_in_sec>5</idle_sleep_time_in_sec>
   </testCase>
 
-  <testCase id="000010">
+  <testCase>
     <class>Custom_Command</class>
     <desc>Gradually attenuate gNB-PCI0 (ch1-2=15dB) and gNB-PCI1 (ch3-4=0dB) over 5s to trigger N2 Handover to gNB-PCI1</desc>
     <node>rocket</node>
     <command>python3 %%workspace%%/ci-scripts/attenuatorctl.py -r 1,2 15 -r 3,4 0 -d 5</command>
   </testCase>
 
-  <testCase id="000011">
+  <testCase>
     <class>Ping</class>
     <desc>Ping: 50pings in 10sec</desc>
     <id>raspix</id>
@@ -143,21 +117,21 @@
     <ping_packetloss_threshold>5</ping_packetloss_threshold>
   </testCase>
 
-  <testCase id="000012">
+  <testCase>
     <class>Custom_Command</class>
     <desc>UE connected to gNB-PCI1?</desc>
     <node>rocket</node>
     <command>echo ci fetch_du_by_ue_id 1 | ncat 127.0.0.1 9090 | grep "3585"</command>
   </testCase>
 
-  <testCase id="000013">
+  <testCase>
     <class>Custom_Command</class>
     <desc>Gradually attenuate gNB-PCI0 (ch1-2=0dB) and gNB-PCI1 (ch3-4=15dB) over 5s to trigger N2 Handover back to gNB-PCI0</desc>
     <node>rocket</node>
     <command>python3 %%workspace%%/ci-scripts/attenuatorctl.py -r 1,2 0 -r 3,4 25 -d 5</command>
   </testCase>
 
-  <testCase id="000014">
+  <testCase>
     <class>Ping</class>
     <desc>Ping: 50pings in 10sec</desc>
     <id>raspix</id>
@@ -166,29 +140,21 @@
     <ping_packetloss_threshold>5</ping_packetloss_threshold>
   </testCase>
 
-  <testCase id="000015">
+  <testCase>
     <class>Custom_Command</class>
     <desc>UE connected to gNB-PCI0?</desc>
     <node>groot</node>
     <command>echo ci fetch_du_by_ue_id 1 | ncat 127.0.0.1 9090 | grep "3584"</command>
   </testCase>
 
-  <testCase id="000016">
-    <class>Custom_Command</class>
-    <always_exec>true</always_exec>
-    <desc>Reset all attenuators to 0dB</desc>
-    <node>rocket</node>
-    <command>python3 %%workspace%%/ci-scripts/attenuatorctl.py -s 1-4 0</command>
-  </testCase>
-
-  <testCase id="000017">
+  <testCase>
     <class>Detach_UE</class>
     <always_exec>true</always_exec>
     <desc>Detach Quectel</desc>
     <id>raspix</id>
   </testCase>
 
-  <testCase id="000018">
+  <testCase>
     <class>Undeploy_Object</class>
     <always_exec>true</always_exec>
     <desc>Undeploy Monolithic gNB-PCI0</desc>
@@ -196,7 +162,7 @@
     <yaml_path>ci-scripts/yaml_files/5g_sa_n2_ho_b210</yaml_path>
   </testCase>
 
-  <testCase id="000019">
+  <testCase>
     <class>Undeploy_Object</class>
     <always_exec>true</always_exec>
     <desc>Undeploy Monolithic gNB-PCI1</desc>
@@ -204,7 +170,15 @@
     <yaml_path>ci-scripts/yaml_files/5g_sa_n2_ho_b210</yaml_path>
   </testCase>
 
-  <testCase id="000020">
+  <testCase>
+    <class>Custom_Command</class>
+    <always_exec>true</always_exec>
+    <desc>Reset all attenuators to 0dB</desc>
+    <node>rocket</node>
+    <command>python3 %%workspace%%/ci-scripts/attenuatorctl.py -s 1-4 0</command>
+  </testCase>
+
+  <testCase>
     <class>Clean_Test_Server_Images</class>
     <always_exec>true</always_exec>
     <desc>Clean Test Images on Test Server</desc>
@@ -212,7 +186,7 @@
     <images>oai-gnb</images>
   </testCase>
 
-  <testCase id="000021">
+  <testCase>
     <class>Clean_Test_Server_Images</class>
     <always_exec>true</always_exec>
     <desc>Clean Test Images on Test Server</desc>
@@ -220,7 +194,7 @@
     <images>oai-gnb</images>
   </testCase>
 
-  <testCase id="000022">
+  <testCase>
     <class>UndeployCoreNetwork</class>
     <always_exec>true</always_exec>
     <desc>Terminate 5G Core</desc>

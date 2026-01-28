@@ -228,7 +228,12 @@ void oran_fh_if4p5_south_in(RU_t *ru, int *frame, int *slot)
   int f, sl;
   LOG_D(HW, "Read rxdataF %p,%p\n", ru_info.rxdataF[0], ru_info.rxdataF[1]);
   start_meas(&ru->rx_fhaul);
-  int ret = xran_fh_rx_read_slot(&ru_info, &f, &sl);
+  struct xran_fh_config *fh_cfg = get_xran_fh_config(0);
+  int ret = 0;
+  if (fh_cfg->RunSlotPrbMapBySymbolEnable)
+    ret = xran_fh_rx_read_slot_BySymbol(&ru_info, &f, &sl);
+  else
+    ret = xran_fh_rx_read_slot(&ru_info, &f, &sl);
   stop_meas(&ru->rx_fhaul);
   LOG_D(HW, "Read %d.%d rxdataF %p,%p\n", f, sl, ru_info.rxdataF[0], ru_info.rxdataF[1]);
   if (ret != 0) {
@@ -283,7 +288,12 @@ void oran_fh_if4p5_south_out(RU_t *ru, int frame, int slot, uint64_t timestamp)
 
   // printf("south_out:\tframe=%d\tslot=%d\ttimestamp=%ld\n",frame,slot,timestamp);
 
-  int ret = xran_fh_tx_send_slot(&ru_info, frame, slot, timestamp);
+  struct xran_fh_config *fh_cfg = get_xran_fh_config(0);
+  int ret = 0;
+  if (fh_cfg->RunSlotPrbMapBySymbolEnable)
+    ret = xran_fh_tx_send_slot_BySymbol(&ru_info, frame, slot, timestamp);
+  else
+    ret = xran_fh_tx_send_slot(&ru_info, frame, slot, timestamp);
   if (ret != 0) {
     printf("ORAN: ORAN_fh_if4p5_south_out ERROR in TX function \n");
   }

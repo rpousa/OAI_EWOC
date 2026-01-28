@@ -164,7 +164,6 @@ class Cluster:
 
 	def PullClusterImage(self, HTML, node, images, tag_prefix):
 		logging.debug(f'Pull OC image {images} to server {node}')
-		self.testCase_id = HTML.testCase_id
 		with cls_cmd.getConnection(node) as cmd:
 			succeeded = OC_login(cmd, self.OCUserName, self.OCPassword, CI_OC_RAN_NAMESPACE)
 			if not succeeded:
@@ -210,8 +209,6 @@ class Cluster:
 
 		logging.debug(f'Building on cluster triggered from server: {node}')
 		self.cmd = cls_cmd.RemoteCmd(node)
-
-		self.testCase_id = HTML.testCase_id
 
 		# Workaround for some servers, we need to erase completely the workspace
 		self.cmd.cd(lSourcePath)
@@ -412,7 +409,7 @@ class Cluster:
 		# the groovy scripts expects all logs in
 		# <jenkins-workspace>/<pipeline>/ci-scripts, so copy it there
 		with cls_cmd.LocalCmd() as c:
-			c.run(f'mkdir -p {os.getcwd()}/test_log_{ctx.test_id}/')
-			c.run(f'cp -r {ctx.logPath} {os.getcwd()}/test_log_{ctx.test_id}/')
+			c.run(f'mkdir -p {os.getcwd()}/test_log_{ctx.test_idx}/')
+			c.run(f'cp -r {ctx.logPath} {os.getcwd()}/test_log_{ctx.test_idx}/')
 
 		return status

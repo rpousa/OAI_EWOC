@@ -100,4 +100,5 @@
 // SDAP
 #define MAX_QOS_FLOWS 64
 
+#define SPEED_OF_LIGHT 299792458 // in m/s
 #endif /* __PLATFORM_CONSTANTS_H__ */

@@ -828,7 +828,7 @@ void nr_pdcch_channel_estimation(const PHY_VARS_NR_UE *ue,
          first_carrier_offset, BWPStart, coreset_start_rb, nb_rb_coreset);
 #endif
 
-  unsigned short coreset_start_subcarrier = first_carrier_offset+(BWPStart + coreset_start_rb)*12;
+  unsigned short coreset_start_subcarrier = (first_carrier_offset + (BWPStart + coreset_start_rb) * 12) % symb_sz;
 
 #if CH_INTERP
   int16_t *fl = filt16a_l1;

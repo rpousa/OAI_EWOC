@@ -1,3 +1,5 @@
+# SmallCellForum 5G (n)FAPI split
+
 This document describes the broad way in which the VNF and PNF work internally,
 from configuration, to P5 and P7 message exchange and processing.
 Their internal processing is broadly independent on which transport mechanism
@@ -8,14 +10,14 @@ To read more about the transport mechanisms available, and how to run the split,
 
 [[_TOC_]]
 
-# VNF/PNF Split
+## VNF/PNF Split
 
-The gNB is split into VNF(L2+) and PNF(L1)
+The gNB is split into VNF (L2+) and PNF (L1)
 
 These component are configured via the functions:
 
-- configure_nr_nfapi_vnf()
-- configure_nr_nfapi_pnf()
+- `configure_nr_nfapi_vnf()`
+- `configure_nr_nfapi_pnf()`
 
 These functions initialize the configuration appropriate for the transport mechanism selected ( setting the
 pack/unpack function pointers, as well as the appropriate send functions )
@@ -25,7 +27,7 @@ After this, a thread is created for the P5 receive loop, which initializes the t
 This created thread may be only for P5 messages, or P5 and P7, depending on the transport type
 
 - When using socket-based communication (which uses nFAPI encoding), the receiving loop for P7 messages is separate from
-  P5, it starts upon the PNF_START exchange
+  P5, it starts upon the `PNF_START` exchange
 - In the other transport mechanisms (WLS and nvIPC, which use FAPI encoding), the receiving loop is the same for P5 and
   P7 messages, the P7 configuration is done immediately after the P5 configuration.
 
@@ -40,8 +42,8 @@ them
 Upon the reception of a message (whether in its entirety or segmented in the case of nFAPI), the messages are sent to
 the appropriate handler:
 
-- pnf_nr_handle_p5_message
-- vnf_nr_handle_p4_p5_message
+- `pnf_nr_handle_p5_message`
+- `vnf_nr_handle_p4_p5_message`
 
 In each of these functions, there's a switch calling the appropriate handler according to the message ID, for example:
 
@@ -55,18 +57,17 @@ These loops are autonomous in their thread waiting incoming message.
 
 ## P7 interface main loop
 
-- Note: As explained before, the P7 reception loop is the same as the P5 messages when not using socket-based
-  communication
+> **Note:** As explained before, the P7 reception loop is the same as the P5 messages when not using socket-based communication
 
 In this case, when the P5 interface receives appropriate message, it starts the p7 interface by launching a thread
 
-- On the PNF, this is done in the START.request handler ( nr_start_request(...) )
-- On the VNF, this is done in ( configure_nr_p7_vnf(...) )
+- On the PNF, this is done in the START.request handler ( `nr_start_request(...)` )
+- On the VNF, this is done in ( `configure_nr_p7_vnf(...)` )
 
 Much in the same way as when processing P5 messages, the following functions are called to unpack and process them:
 
-- pnf_nr_handle_p7_message
-- vnf_nr_handle_p7_message
+- `pnf_nr_handle_p7_message`
+- `vnf_nr_handle_p7_message`
 
 ```
 case NFAPI_NR_PHY_MSG_TYPE_SLOT_INDICATION:
@@ -77,11 +78,11 @@ case NFAPI_NR_PHY_MSG_TYPE_SLOT_INDICATION:
 ## P7 UL transmission by PNF
 
 RF samples are received, and decoding is done by the PNF using control data transmitted by the VNF to the PNF through
-downlink p7 messages (UL_TTI.request and UL_DCI.request).
+downlink p7 messages (`UL_TTI.request` and `UL_DCI.request`).
 
-After decoding, results are accumulated into the gNB->UL_INFO structure at the PNF.
+After decoding, results are accumulated into the `gNB->UL_INFO` structure at the PNF.
 
-The data in the UL_INFO struct is transmitted through the configured send function pointer (send_p7_msg), which packs 
+The data in the UL_INFO struct is transmitted through the configured send function pointer (`send_p7_msg`), which packs 
 the message into a buffer according to the encoding and sends it to the VNF
 
 ```
@@ -123,7 +124,7 @@ int nfapi_pnf_p7_nr_rach_ind(nfapi_pnf_p7_config_t* config, nfapi_nr_rach_indica
 Through the P7 reception loop, the VNF receives a buffer containing the messages, which it handles by the following
 process:
 
-- Unpack the header by use of the hdr_unpack_func function pointer
+- Unpack the header by use of the `hdr_unpack_func` function pointer
 - According to the Message ID in the header, send the buffer to the appropriate handler by use of a switch statement:
 
 ```
@@ -133,7 +134,7 @@ process:
 
 ```
 
-- In the handler function, unpack the entire message, by using the unpack_func function pointer.
+- In the handler function, unpack the entire message, by using the `unpack_func` function pointer.
 - If the unpack procedure is successful, call the previously configure callback for that message type:
 
 ```
@@ -155,20 +156,18 @@ process:
 
 ```
 
-vnf_nr_dispatch_p7_message() is the function that contains the switch on various message headers so that the appropriate
+`vnf_nr_dispatch_p7_message()` is the function that contains the switch on various message headers so that the appropriate
 unpack function is called.
 
 ## P7 DL Transmission by VNF
 
-DL messages are scheduled at the VNF, through gNB_dlsch_ulsch_scheduler(). gNB_dlsch_ulsch_scheduler() is called when
-handling a SLOT.indication message in phy_nr_slot_indication().
+DL messages are scheduled at the VNF, through `gNB_dlsch_ulsch_scheduler()`. `gNB_dlsch_ulsch_scheduler()` is called when
+handling a SLOT.indication message in `phy_nr_slot_indication()`.
 
-The function phy_nr_slot_indication(nfapi_nr_slot_indication_scf_t *slot_ind) calls the functions oai_nfapi_[DL P7 msg]_
-req(), calling in turn call the send_p7_msg function pointer, which contain the logic to pack the message into a buffer
-and send it to the PNF.
-Finally, NR_UL_indication is called to process the other P7 messages received from the PNF that were put in theire
+The function `phy_nr_slot_indication(nfapi_nr_slot_indication_scf_t *slot_ind)` calls the functions `oai_nfapi_[DL P7 msg]_req()`, calling in turn call the send_p7_msg function pointer, which contain the logic to pack the message into a buffer and send it to the PNF.
+Finally, `NR_UL_indication` is called to process the other P7 messages received from the PNF that were put in their
 respective queues.
-For example, the TX_DATA.request message is sent in the following manner:
+For example, the `TX_DATA.request` message is sent in the following manner:
 
 ```
   if (g_sched_resp.TX_req.Number_of_PDUs > 0)
@@ -223,13 +222,13 @@ graph TD
 
 ## P7 DL Reception at PNF
 
-Through the infinite loop [while(pnf_p7->terminate == 0)] running in pnf_nr_p7_message_pump(), the PNF receives and
+Through the infinite loop `[while(pnf_p7->terminate == 0)]` running in `pnf_nr_p7_message_pump()`, the PNF receives and
 unpacks the downlink P7 message received on its socket. Based on the unpacked message, the appropriate message
 structures are filled in the PNF, and these are used further down the pipeline for processing.
 Through the P7 reception loop, the PNF receives a buffer containing a P7 message from the VNF, which it processes the
 following way:
 
-- Unpack the header by use of the hdr_unpack_func function pointer
+- Unpack the header by use of the `hdr_unpack_func` function pointer
 - According to the Message ID in the header, send the buffer to the appropriate handler by use of a switch statement:
 
 ```
@@ -259,8 +258,8 @@ following way:
       
   ```
 
-- The messages are later processed in the NR_slot_indication function, which is called in the tx_func function (
-  L1_tx_thread )
+- The messages are later processed in the `NR_slot_indication` function, which is called in the `tx_func` function 
+  `(L1_tx_thread )`
 
 ## PNF functional flowchart
 

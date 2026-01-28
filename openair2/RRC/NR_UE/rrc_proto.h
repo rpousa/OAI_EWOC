@@ -74,7 +74,7 @@ void nr_ue_rrc_timer_trigger(int module_id, int hfn, int frame, int gnb_id);
 void handle_t300_expiry(NR_UE_RRC_INST_t *rrc);
 void handle_t430_expiry(NR_UE_RRC_INST_t *rrc);
 
-int get_A2_event_time_to_trigger(long time_to_trigger);
+int get_event_time_to_trigger(long time_to_trigger);
 void reset_rlf_timers_and_constants(NR_UE_Timers_Constants_t *tac);
 void set_default_timers_and_constants(NR_UE_Timers_Constants_t *tac);
 void nr_rrc_set_sib1_timers_and_constants(NR_UE_Timers_Constants_t *tac, NR_SIB1_t *sib1);

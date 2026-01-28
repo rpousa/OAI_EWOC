@@ -48,8 +48,6 @@ void fix_ntn_epoch_hfn(PHY_VARS_NR_UE *UE, int hfn, int frame)
   LOG_I(PHY, "setting epoch_hfn = %d\n", *epoch_hfn);
 }
 
-#define SPEED_OF_LIGHT 299792458
-
 // calculate TA and Doppler based on the NTN-Config, if abs_subframe_tx < 0 then apply only Doppler
 void apply_ntn_timing_advance_and_doppler(PHY_VARS_NR_UE *UE, const NR_DL_FRAME_PARMS *fp, int abs_subframe_tx)
 {

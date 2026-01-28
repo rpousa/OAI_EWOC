@@ -431,21 +431,15 @@ void print_fh_config(const struct xran_fh_config *fh_config)
 #ifdef F_RELEASE
   printf("\
   RunSlotPrbMapBySymbolEnable %d\n\
+  LiteOnIgnoreUPSectionIdEnable %d\n\
   dssEnable %d\n\
   dssPeriod %d\n\
   technology[XRAN_MAX_DSS_PERIODICITY] (not filled as DSS disabled)\n",
       fh_config->RunSlotPrbMapBySymbolEnable,
+      fh_config->LiteOnIgnoreUPSectionIdEnable,
       fh_config->dssEnable,
       fh_config->dssPeriod);
 #endif
-}
-
-static const paramdef_t *gpd(const paramdef_t *pd, int num, const char *name)
-{
-  /* the config module does not know const-correctness... */
-  int idx = config_paramidx_fromname((paramdef_t *)pd, num, (char *)name);
-  DevAssert(idx >= 0);
-  return &pd[idx];
 }
 
 static uint64_t get_u64_mask(const paramdef_t *pd)
@@ -762,7 +756,8 @@ static bool set_fh_prach_config(void *mplane_api,
                                 const uint32_t max_num_ant,
                                 const paramdef_t *prachp,
                                 int nprach,
-                                struct xran_prach_config *prach_config)
+                                struct xran_prach_config *prach_config,
+                                bool liteon_prach_eAxC_offset)
 {
   const split7_config_t *s7cfg = &oai0->split7;
 
@@ -799,7 +794,10 @@ static bool set_fh_prach_config(void *mplane_api,
   prach_config->eAxC_offset = xran_mplane->prach_offset;
 #else
   uint8_t offset = *gpd(prachp, nprach, ORAN_PRACH_CONFIG_EAXC_OFFSET)->u8ptr;
-  prach_config->eAxC_offset = (offset != 0) ? offset : max_num_ant;
+  if (liteon_prach_eAxC_offset)
+    prach_config->eAxC_offset = offset;
+  else
+    prach_config->eAxC_offset = (offset != 0) ? offset : max_num_ant;
 #endif
 
   g_kbar = *gpd(prachp, nprach, ORAN_PRACH_CONFIG_KBAR)->uptr;
@@ -945,9 +943,14 @@ static bool set_fh_config(void *mplane_api, int ru_idx, int num_rus, enum xran_c
   fh_config->enableCP = 1; // enable C-plane
   fh_config->prachEnable = 1; // enable PRACH
   fh_config->srsEnable = 0; // enable SRS; used only if XRAN_CATEGORY_B
+  // For LiteOn E release, no need to take care of prach eAxC_offset. xran lib is hacked to handle it.
+  bool liteon_prach_eAxC_offset = false;
 #ifdef F_RELEASE
   fh_config->srsEnableCp = 0; // enable SRS CP; used only if XRAN_CATEGORY_B
   fh_config->SrsDelaySym = 0; // number of SRS delay symbols; used only if XRAN_CATEGORY_B
+  fh_config->RunSlotPrbMapBySymbolEnable    = *gpd(fhp, nfh, ORAN_CONFIG_RunSlotPrbMapBySymbol)->uptr;    // enable RunSlotPrbMapBySymbol
+  fh_config->LiteOnIgnoreUPSectionIdEnable  = *gpd(fhp, nfh, ORAN_CONFIG_LiteOnIgnoreUPSectionId)->uptr;  // enable LiteOnIgnoreUPSectionId
+  liteon_prach_eAxC_offset = fh_config->LiteOnIgnoreUPSectionIdEnable;
 #endif
   fh_config->puschMaskEnable = 0; // enable PUSCH mask; only used if id = O_RU
   fh_config->puschMaskSlot = 0; // specific which slot PUSCH channel masked; only used if id = O_RU
@@ -959,7 +962,7 @@ static bool set_fh_config(void *mplane_api, int ru_idx, int num_rus, enum xran_c
   fh_config->GPS_Alpha = 0; // refers to alpha as defined in section 9.7.2 of ORAN spec. this value should be alpha*(1/1.2288ns), range 0 - 1e7 (ns); offset_nsec = (pConf->GPS_Beta - offset_sec * 100) * 1e7 + pConf->GPS_Alpha
   fh_config->GPS_Beta = 0; // beta value as defined in section 9.7.2 of ORAN spec. range -32767 ~ +32767; offset_sec = pConf->GPS_Beta / 100
 
-  if (!set_fh_prach_config(mplane_api, oai0, fh_config->neAxc, prachp, nprach, &fh_config->prach_conf))
+  if (!set_fh_prach_config(mplane_api, oai0, fh_config->neAxc, prachp, nprach, &fh_config->prach_conf, liteon_prach_eAxC_offset))
     return false;
   /* SRS only used if XRAN_CATEGORY_B
     Note: srs_config->eAxC_offset >= prach_config->eAxC_offset + PRACH */
@@ -991,8 +994,6 @@ static bool set_fh_config(void *mplane_api, int ru_idx, int num_rus, enum xran_c
   fh_config->max_sections_per_symbol = 0; // not used in xran
 
 #ifdef F_RELEASE
-  fh_config->RunSlotPrbMapBySymbolEnable = 0; // enable PRB mapping by symbol with multisection
-
   fh_config->dssEnable = 0; // enable DSS (extension-9)
   fh_config->dssPeriod = 0; // DSS pattern period for LTE/NR
   // fh_config->technology[XRAN_MAX_DSS_PERIODICITY] // technology array represents slot is LTE(0)/NR(1); used only if DSS enabled

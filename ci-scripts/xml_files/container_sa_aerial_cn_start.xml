@@ -21,17 +21,14 @@
 
 -->
 <testCaseList>
-        <htmlTabRef>TEST-AERIAL-SA-CN-START</htmlTabRef>
-        <htmlTabName>Deploy 5GC</htmlTabName>
-        <htmlTabIcon>tasks</htmlTabIcon>
-        <TestCaseRequestedList>
-                555000
-        </TestCaseRequestedList>
-        <TestCaseExclusionList></TestCaseExclusionList>
-        <testCase id="555000">
-                <class>DeployCoreNetwork</class>
-                <desc>Initialize 5G Core</desc>
-                <cn_id>oc-cn5g-20897-aerial</cn_id>
-        </testCase>
-</testCaseList>
+  <htmlTabRef>TEST-AERIAL-SA-CN-START</htmlTabRef>
+  <htmlTabName>Deploy 5GC</htmlTabName>
+  <htmlTabIcon>tasks</htmlTabIcon>
 
+  <testCase>
+    <class>DeployCoreNetwork</class>
+    <desc>Initialize 5G Core</desc>
+    <cn_id>oc-cn5g-20897-aerial</cn_id>
+  </testCase>
+
+</testCaseList>

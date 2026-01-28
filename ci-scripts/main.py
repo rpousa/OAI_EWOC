@@ -58,7 +58,7 @@ import re		# reg
 import time		# sleep
 import os
 import subprocess
-import xml.etree.ElementTree as ET
+import lxml.etree as ET
 import logging
 import signal
 import traceback
@@ -98,7 +98,7 @@ def ExecuteActionWithParam(action, ctx, node):
 		if proxy_commit is not None:
 			CONTAINERS.proxyCommit = proxy_commit
 		if action == 'Build_eNB':
-			success = cls_native.Native.Build(ctx, node, HTML.testCase_id, HTML, RAN.eNBSourceCodePath, RAN.Build_eNB_args)
+			success = cls_native.Native.Build(ctx, node, HTML, RAN.eNBSourceCodePath, RAN.Build_eNB_args)
 		elif action == 'Build_Image':
 			success = CONTAINERS.BuildImage(ctx, node, HTML)
 		elif action == 'Build_Proxy':
@@ -306,10 +306,10 @@ def receive_signal(signum, frame):
         logging.warning("received signal again, exiting")
         sys.exit(1)
 
-def ShowTestID(ctx, desc):
+def ShowTestID(ctx, desc, file, line):
     logging.info(f'\u001B[1m----------------------------------------\u001B[0m')
-    logging.info(f'\u001B[1m Test ID: {ctx.test_id} (#{ctx.count}) \u001B[0m')
-    logging.info(f'\u001B[1m {desc} \u001B[0m')
+    logging.info(f'\u001B[1m Test #{ctx.test_idx} ({file}:{line})   \u001B[0m')
+    logging.info(f'\u001B[1m {desc}                                 \u001B[0m')
     logging.info(f'\u001B[1m----------------------------------------\u001B[0m')
 
 #-----------------------------------------------------------
@@ -455,45 +455,10 @@ elif re.match('^TesteNB$', mode, re.IGNORECASE) or re.match('^TestUE$', mode, re
 	xmlTree = ET.parse(xml_test_file)
 	xmlRoot = xmlTree.getroot()
 
-	exclusion_tests=xmlRoot.findtext('TestCaseExclusionList',default='')
-	requested_tests=xmlRoot.findtext('TestCaseRequestedList',default='')
 	if (HTML.nbTestXMLfiles == 1):
 		HTML.htmlTabRefs.append(xmlRoot.findtext('htmlTabRef',default='test-tab-0'))
 		HTML.htmlTabNames.append(xmlRoot.findtext('htmlTabName',default='Test-0'))
 	all_tests=xmlRoot.findall('testCase')
-
-	exclusion_tests=exclusion_tests.split()
-	requested_tests=requested_tests.split()
-
-	#check that exclusion tests are well formatted
-	#(6 digits or less than 6 digits followed by +)
-	for test in exclusion_tests:
-		if     (not re.match('^[0-9]{6}$', test) and
-				not re.match('^[0-9]{1,5}\\+$', test)):
-			logging.error('exclusion test is invalidly formatted: ' + test)
-			sys.exit(1)
-		else:
-			logging.info(test)
-
-	#check that requested tests are well formatted
-	#(6 digits or less than 6 digits followed by +)
-	#be verbose
-	for test in requested_tests:
-		if     (re.match('^[0-9]{6}$', test) or
-				re.match('^[0-9]{1,5}\\+$', test)):
-			logging.info('test group/case requested: ' + test)
-		else:
-			logging.error('requested test is invalidly formatted: ' + test)
-			sys.exit(1)
-
-	#get the list of tests to be done
-	todo_tests=[]
-	for test in requested_tests:
-		if    (test_in_list(test, exclusion_tests)):
-			logging.info('test will be skipped: ' + test)
-		else:
-			#logging.info('test will be run: ' + test)
-			todo_tests.append(test)
 
 	signal.signal(signal.SIGINT, receive_signal)
 
@@ -502,46 +467,42 @@ elif re.match('^TesteNB$', mode, re.IGNORECASE) or re.match('^TestUE$', mode, re
 	task_set_succeeded = True
 	HTML.startTime=int(round(time.time() * 1000))
 
-	i = 0
-	for test_case_id in todo_tests:
-		for test in all_tests:
-			if test_runner_abort:
+	for index, test in enumerate(all_tests, start=1):
+		if test_runner_abort:
+			task_set_succeeded = False
+		test_case_idx = f"{index:06d}"
+		ctx = TestCaseCtx(int(test_case_idx), logPath)
+		HTML.testCaseIdx = test_case_idx
+		desc = test.findtext('desc')
+		node = test.findtext('node') if not force_local else 'localhost'
+		always_exec = test.findtext('always_exec') in ['True', 'true', 'Yes', 'yes']
+		may_fail = test.findtext('may_fail') in ['True', 'true', 'Yes', 'yes']
+		HTML.desc = desc
+		action = test.findtext('class')
+		if not CheckClassValidity(xml_class_list, action, test_case_idx):
+			task_set_succeeded = False
+			continue
+		file = os.path.basename(xml_test_file)
+		line = test.find('class').sourceline
+		ShowTestID(ctx, desc, file, line)
+		if not task_set_succeeded and not always_exec:
+			msg = f"skipping test due to prior error"
+			logging.warning(msg)
+			HTML.CreateHtmlTestRowQueue(msg, "SKIP", [])
+			continue
+		try:
+			test_succeeded = ExecuteActionWithParam(action, ctx, node)
+			if not test_succeeded and may_fail:
+				logging.warning(f"test ID {test_case_idx} action {action} may or may not fail, proceeding despite error")
+			elif not test_succeeded:
+				logging.error(f"test ID {test_case_idx} action {action} failed ({test_succeeded}), skipping next tests")
 				task_set_succeeded = False
-			id = test.get('id')
-			if test_case_id != id:
-				continue
-			i += 1
-			CiTestObj.testCase_id = id
-			ctx = TestCaseCtx(i, int(id), logPath)
-			HTML.testCase_id=CiTestObj.testCase_id
-			desc = test.findtext('desc')
-			node = test.findtext('node') if not force_local else 'localhost'
-			always_exec = test.findtext('always_exec') in ['True', 'true', 'Yes', 'yes']
-			may_fail = test.findtext('may_fail') in ['True', 'true', 'Yes', 'yes']
-			HTML.desc = desc
-			action = test.findtext('class')
-			if (CheckClassValidity(xml_class_list, action, id) == False):
-				task_set_succeeded = False
-				continue
-			ShowTestID(ctx, desc)
-			if not task_set_succeeded and not always_exec:
-				msg = f"skipping test due to prior error"
-				logging.warning(msg)
-				HTML.CreateHtmlTestRowQueue(msg, "SKIP", [])
-				break
-			try:
-				test_succeeded = ExecuteActionWithParam(action, ctx, node)
-				if not test_succeeded and may_fail:
-					logging.warning(f"test ID {test_case_id} action {action} may or may not fail, proceeding despite error")
-				elif not test_succeeded:
-					logging.error(f"test ID {test_case_id} action {action} failed ({test_succeeded}), skipping next tests")
-					task_set_succeeded = False
-			except Exception as e:
-				s = traceback.format_exc()
-				logging.error(f'while running CI, an exception occurred:\n{s}')
-				HTML.CreateHtmlTestRowQueue("N/A", 'KO', [f"CI test code encountered an exception:\n{s}"])
-				task_set_succeeded = False
-				break
+		except Exception as e:
+			s = traceback.format_exc()
+			logging.error(f'while running CI, an exception occurred:\n{s}')
+			HTML.CreateHtmlTestRowQueue("N/A", 'KO', [f"CI test code encountered an exception:\n{s}"])
+			task_set_succeeded = False
+			continue
 
 	if not task_set_succeeded:
 		logging.error('\u001B[1;37;41mScenario failed\u001B[0m')

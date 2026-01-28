@@ -5,46 +5,55 @@ In addition, it synchronizes and combines data traces and control information (m
 
 ## Data Recording Application Architecture 
 
-Data Recording Application designed to have multiple services in different simulation environments: 
+Data Recording Application designed to have multiple services in different simulation environments:
+
 - Data Control Service (Python)
 - Data collection (T-Tracer) Service (C)
 - Data Conversion Service (Python)
 
-Regarding to the APIs between different services, they are such as the following: 
+Regarding to the APIs between different services, they are such as the following:
+
 - Data Control Service -> Data Collection (T–Tracer) Service: The API is based on a shared memory.
 - Data Collection (T–Tracer) Service -> 5G NR Stack: T-Tracer Framework, ethernet connection.
 - Data Collection (T–Tracer) Service -> Data Conversion Service: The API is based on a shared memory.
 
 The following figure shows OAI gNB and UE with the Data Recording App system architecture. 
 
-<img src="images/data_recording_arch.svg" alt="OAI gNB and UE with the Data Recording App system architectur" width="1000">
+![OAI gNB and UE with the Data Recording App system architecture](./images/data_recording_arch.svg)
 
 ## Required Packages
 Install all required system packages with the following commands:
+
 ```bash
 sudo apt-get update
 sudo apt-get install -y python3-sysv-ipc libxft-dev
 ```
 
 Then, install all required python packages with the following commands:
+
 ```bash
 python3 -m pip install sigmf==1.2.1 termcolor bitarray pandas numpy==1.23
 ```
 
 User can install all required python packages also using the `requirements.txt` file:
+
 ```bash
 python3 -m pip install -r common/utils/data_recording/requirements.txt
 ```
 
 ## Configuration Files
+
 ### Main Data Recording JSON Configuration File
+
 The Data Recording application provides configuration file in [JSON](http://www.json.org/) format. It is stored in [common/utils/data_recording/config/config_data_recording.json](../common/utils/data_recording/config/config_data_recording.json) folder. The main parameters are:
+
 - **data_storage_path**: Path to directory for data storage
 - **num_records**: Number of requested data records in slots
 - **t_tracer_message_definition_file**: T-Tracer message definition file
 - **parameter_map_file**: Parameter mapping dictionary (OAI parameters to standardized metadata). It is located here: [common/utils/data_recording/config/wireless_link_parameter_map.yaml](../common/utils/data_recording/config/wireless_link_parameter_map.yaml) 
 - **start_frame_number**: It can be used to start the recording from a specific frame, but it is not yet supported.
 - **base_station**:
+
     - requested_tracer_messages: Requested base station data traces. The supported messages are:
         - GNB_PHY_UL_FD_PUSCH_IQ
         - GNB_PHY_UL_FD_DMRS
@@ -53,6 +62,7 @@ The Data Recording application provides configuration file in [JSON](http://www.
         - GNB_PHY_UL_PAYLOAD_RX_BITS
     - meta_data: Additional base station metadata (additional fixed base station parameters that cannot be read from the system yet, but shall be included into the SigMF metadata)
 - **user_equipment** 
+
     - requested_tracer_messages: Requested user equipment data traces. The supported messages are:
         - UE_PHY_UL_SCRAMBLED_TX_BITS
         - UE_PHY_UL_PAYLOAD_TX_BITS
@@ -142,6 +152,7 @@ The following figure shows an example of Wireless Link Parameter Map Dictionary.
 ### Global Metadata
 There are some metadata parameters that the user may need to change only once. Those parameters have been hard coded in the Data Recording App header.
 [common/utils/data_recording/data_recording_app_v1.0.py](../common/utils/data_recording/data_recording_app_v1.0.py). Those are:
+
 - The global metadata such as: author, description,  sigmf collection file prefix, datetime_offset, enable saving config Data Recording App in json file with recorded data, and name of signal generator (i.e. 5gnr_oai). The name of signal generator is used for parameter mapping dictionary (OAI parameters to standardized metadata).
 - The mapping between supported OAI messages and file_name_prefix, scope, and description.
 
@@ -230,9 +241,10 @@ Run NR gNB Softmodem in RF Simulation:
 ```
 sudo ./cmake_targets/ran_build/build/nr-softmodem -O ./targets/PROJECTS/GENERIC-NR-5GC/CONF/gnb.band78.sa.fr1.106PRB.1x1.usrpx410_3300MHz.conf --gNBs.[0].min_rxtxtime 6 --rfsim --rfsimulator.serveraddr server --phy-test -d --T_stdout 2 --T_nowait
 ```
-Note: User needs to change the name of gNB config file to your gNB config file. 
+> **Note:** User needs to change the name of gNB config file to your gNB config file.
 
 It is worth mentioning that the possible values for T-tracer control options
+
 - --T_stdout option:  default 1
     - --T_stdout = 0: Disable output on the terminal and only use the T tracer
     - --T_stdout = 1: Disable the T tracer and only output on the terminal
@@ -258,6 +270,7 @@ sudo ./cmake_targets/ran_build/build/nr-uesoftmodem --rfsim --rfsimulator.server
 
 ### Step3: Run Data Recording Application Services
 First, compile the Data Collection (T-Tracer) Services:
+
 - Go to: `common/utils/T/tracer`
 - Compile gNB and UE Data Collection Services (T-Tracer Apps)
 ```
@@ -285,7 +298,7 @@ python3 data_recording_app_v1.0.py
 The recorded data set will be stored in the configured path, assume `/home/user/workarea/oai_recorded_data/`. 
 The following figure shows an example of recorded data set.
 
-<img src="images/sigmf_dataset.svg" alt="Example from SigMF recorded data set" width="600">
+![Example from SigMF recorded data set](./images/sigmf_dataset.svg)
 
 ## Overview on Collected Data Set
 
@@ -346,6 +359,7 @@ The following figure shows an example of SigMF collection file and how it bundle
 ```
 
 Each SigMF metadata has three sections:
+
 - global: The standardized global parameters are presented here to understand and read the binary data.
 - captures: The standardized capture parameters provide details about the capture process.
 - annotations: It provides details about the recording scenario.
@@ -482,7 +496,8 @@ For synchronization validation and to show how to read SigMF metadata, a simple 
     - Number of OFDM symbols = 13
     - So, the valid number of bits in the transport block (slot) is: 3312 bits. If we will fill DMRS locations by zeros, the number of bits is: 3744 bits, but it is not done due to the real-timing issues. For Tx scrambled bits data de-serialization, the user can reconstruct the Tx Scrambled Bits Grid (2D Grid) by using the captured DMRS grid or Channel Estimates Grid as a reference and no need to derive the DMRS symbols locations based on 5G NR config parameters.
 
-<img src="images/data_serialization_tx_scrambled_bit_message.svg" alt="Data serialization " width="500">
+![Data serialization](./images/data_serialization_tx_scrambled_bit_message.svg)
 
 ### To Do List:
+
 - Provide an overview about the different services of the Data Recording App (Data Control Service, Data collection (T-Tracer) Service, Data Conversion Service) and the APIs definition between them.

@@ -17,7 +17,7 @@ add_library(oran_fhlib_5g MODULE
 )
 
 set(E_VERSION 5.1.6)
-set(F_VERSION 6.1.5)
+set(F_VERSION 6.1.6)
 
 find_package(xran REQUIRED)
 if(xran_VERSION VERSION_EQUAL E_VERSION)

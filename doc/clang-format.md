@@ -1,15 +1,15 @@
 We use [clang-format](https://clang.llvm.org/docs/ClangFormat.html) to format our code.
 
-# Integration into editors
+## Integration into editors
 
 Integration into various editors (`vim`, `emacs`, `VSCode`, `CLion`) is on the
 [clang-format project page](https://clang.llvm.org/docs/ClangFormat.html).
 
 There is also an [eclipse plugin](https://github.com/wangzw/CppStyle).
 
-# Integration into git
+## Integration into git
 
-## Short version
+### Short version
 
 See below for a more detailed explanation. In short: Add this to `~/.gitconfig`:
 ```
@@ -24,7 +24,7 @@ diff`. To add modified lines to your commit, stage them as well, then commit.
 There is also a pre-commit hook that you can install.  To install it, copy it
 `pre-commit-clang` to `.git/hooks/pre-commit`, and make it executable.
 
-## Long version
+### Long version
 
 In order to integrate `clang-format` into `git`, follow these steps:
 
@@ -65,6 +65,6 @@ When this is done, you are set up. How to use:
 6) Commit. It won't work if code is not properly formatted due to the
    pre-commit hook. Force committing with `git commit --no-verify`
 
-# Checking errors introduced by a branch
+## Checking errors introduced by a branch
 
 Here is the script that can be used to detect any clang-format errors introduced by a branch [here](../tools/formatting/README.md)

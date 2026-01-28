@@ -20,35 +20,30 @@
 -->
 
 <testCaseList>
-        <htmlTabRef>test-t2-offload-enc-dec</htmlTabRef>
-        <htmlTabName>Test T2 Offload</htmlTabName>
-        <htmlTabIcon>tasks</htmlTabIcon>
-        <TestCaseRequestedList>
-                010204
-                111111
-                402010
-        </TestCaseRequestedList>
-        <TestCaseExclusionList></TestCaseExclusionList>
+  <htmlTabRef>test-t2-offload-enc-dec</htmlTabRef>
+  <htmlTabName>Test T2 Offload</htmlTabName>
+  <htmlTabIcon>tasks</htmlTabIcon>
 
-        <testCase id="010204">
-                <class>Custom_Command</class>
-                <desc>Disable Sleep States</desc>
-                <node>caracal</node>
-                <command>sudo cpupower idle-set -D 0</command>
-        </testCase>
+  <testCase>
+    <class>Custom_Command</class>
+    <desc>Disable Sleep States</desc>
+    <node>caracal</node>
+    <command>sudo cpupower idle-set -D 0</command>
+  </testCase>
 
-        <testCase id="402010">
-                <class>Custom_Command</class>
-                <always_exec>true</always_exec>
-                <desc>Enable Sleep States</desc>
-                <node>caracal</node>
-                <command>sudo cpupower idle-set -E</command>
-        </testCase>
+  <testCase>
+    <class>Build_Deploy_Source_PhySim</class>
+    <desc>Build and Deploy PhySim T2 Offload tests</desc>
+    <node>caracal</node>
+    <ctest-opt>-R 5g-offload -j1</ctest-opt>
+  </testCase>
 
-        <testCase id="111111">
-                <class>Build_Deploy_Source_PhySim</class>
-                <desc>Build and Deploy PhySim T2 Offload tests</desc>
-                <node>caracal</node>
-                <ctest-opt>-R 5g-offload -j1</ctest-opt>
-        </testCase>
+  <testCase>
+    <class>Custom_Command</class>
+    <always_exec>true</always_exec>
+    <desc>Enable Sleep States</desc>
+    <node>caracal</node>
+    <command>sudo cpupower idle-set -E</command>
+  </testCase>
+
 </testCaseList>

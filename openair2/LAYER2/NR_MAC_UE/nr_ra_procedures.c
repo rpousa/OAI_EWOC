@@ -1114,9 +1114,9 @@ void nr_ra_succeeded(NR_UE_MAC_INST_t *mac, const uint8_t gNB_index, const frame
   RA_config_t *ra = &mac->ra;
 
   if (ra->cfra) {
-    LOG_I(MAC, "[UE %d][%d.%d][RAPROC] RA procedure succeeded. CFRA: RAR successfully received.\n", mac->ue_id, frame, slot);
+    LOG_A(NR_MAC, "[UE %d][%d.%d][RAPROC] RA procedure succeeded. CFRA: RAR successfully received.\n", mac->ue_id, frame, slot);
   } else {
-    LOG_A(MAC,
+    LOG_A(NR_MAC,
           "[UE %d][%d.%d][RAPROC] %d-Step RA procedure succeeded. CBRA: Contention Resolution is successful.\n",
           mac->ue_id,
           frame,
@@ -1126,6 +1126,10 @@ void nr_ra_succeeded(NR_UE_MAC_INST_t *mac, const uint8_t gNB_index, const frame
     ra->t_crnti = 0;
     nr_timer_stop(&ra->contention_resolution_timer);
   }
+
+  // rach-ConfigDedicated is one shot configuration to be used only for a specific instance of reconfiguration with sync
+  if (ra->rach_ConfigDedicated)
+    asn1cFreeStruc(asn_DEF_NR_RACH_ConfigDedicated, ra->rach_ConfigDedicated);
 
   ra->RA_active = false;
   mac->msg3_C_RNTI = false;

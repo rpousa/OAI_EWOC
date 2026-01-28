@@ -43,6 +43,7 @@
 #include "lib/f1ap_rrc_message_transfer.h"
 #include "lib/f1ap_interface_management.h"
 #include "lib/f1ap_ue_context.h"
+#include "lib/f1ap_positioning.h"
 
 void exit_function(const char *file, const char *function, const int line, const char *s, const int assert)
 {
@@ -1268,6 +1269,1100 @@ static void test_f1ap_ue_context_release_complete()
   printf("%s() successful\n", __func__);
 }
 
+static void test_f1ap_positioning_information_request()
+{
+  f1ap_positioning_information_req_t orig = {
+      .gNB_CU_ue_id = 12,
+      .gNB_DU_ue_id = 19,
+  };
+  F1AP_F1AP_PDU_t *f1enc = encode_positioning_information_req(&orig);
+  F1AP_F1AP_PDU_t *f1dec = f1ap_encode_decode(f1enc);
+  f1ap_msg_free(f1enc);
+
+  f1ap_positioning_information_req_t decoded = {0};
+  bool ret = decode_positioning_information_req(f1dec, &decoded);
+  AssertFatal(ret, "decode_positioning_information_req(): could not decode message\n");
+  f1ap_msg_free(f1dec);
+
+  ret = eq_positioning_information_req(&orig, &decoded);
+  AssertFatal(ret, "eq_positioning_information_req(): decoded message doesn't match\n");
+  free_positioning_information_req(&decoded);
+
+  f1ap_positioning_information_req_t cp = cp_positioning_information_req(&orig);
+  ret = eq_positioning_information_req(&orig, &cp);
+  AssertFatal(ret, "eq_positioning_information_req(): copied message doesn't match\n");
+  free_positioning_information_req(&orig);
+  free_positioning_information_req(&cp);
+
+  printf("%s() successful\n", __func__);
+}
+
+static void fill_srs_carrier_list(f1ap_srs_carrier_list_t *srs_carrier_list)
+{
+  uint32_t srs_carrier_list_len = 2;
+  srs_carrier_list->srs_carrier_list_length = srs_carrier_list_len;
+  srs_carrier_list->srs_carrier_list_item = calloc_or_fail(srs_carrier_list_len, sizeof(*srs_carrier_list->srs_carrier_list_item));
+  for (int i = 0; i < srs_carrier_list_len; i++) {
+    f1ap_srs_carrier_list_item_t *srs_carrier_list_item = &srs_carrier_list->srs_carrier_list_item[i];
+    // pointA
+    srs_carrier_list_item->pointA = 87641 + i;
+
+    // Uplink Channel BW-PerSCS-List
+    f1ap_uplink_channel_bw_per_scs_list_t *uplink_channel_bw_per_scs_list = &srs_carrier_list_item->uplink_channel_bw_per_scs_list;
+
+    uint32_t scs_specific_carrier_list_length = 3;
+    uplink_channel_bw_per_scs_list->scs_specific_carrier_list_length = scs_specific_carrier_list_length;
+    uplink_channel_bw_per_scs_list->scs_specific_carrier =
+        calloc_or_fail(scs_specific_carrier_list_length, sizeof(*uplink_channel_bw_per_scs_list->scs_specific_carrier));
+    for (int j = 0; j < scs_specific_carrier_list_length; j++) {
+      f1ap_scs_specific_carrier_t *scs_specific_carrier = &uplink_channel_bw_per_scs_list->scs_specific_carrier[j];
+      // offset to carrier
+      scs_specific_carrier->offset_to_carrier = 100 + i + j;
+      // subcarrier spacing
+      scs_specific_carrier->subcarrier_spacing = F1AP_SUBCARRIER_SPACING_30KHZ;
+      // carrier bandwidth
+      scs_specific_carrier->carrier_bandwidth = 106 + i + j;
+    }
+
+    // Active UL BWP
+    f1ap_active_ul_bwp_t *active_ul_bwp = &srs_carrier_list_item->active_ul_bwp;
+
+    // location and bandwidth
+    active_ul_bwp->location_and_bandwidth = 2775 + i;
+    // subcarrier spacing
+    active_ul_bwp->subcarrier_spacing = F1AP_SUBCARRIER_SPACING_30KHZ;
+    // cyclic prefix
+    active_ul_bwp->cyclic_prefix = F1AP_CP_TYPE_NORMAL;
+    // Tx Direct Current Location
+    active_ul_bwp->tx_direct_current_location = 10 + i;
+
+    // SRS Config
+    f1ap_srs_config_t *sRSConfig = &active_ul_bwp->srs_config;
+
+    // srs_resource_list
+    sRSConfig->srs_resource_list = calloc_or_fail(1, sizeof(*sRSConfig->srs_resource_list));
+    f1ap_srs_resource_list_t *srs_resource_list = sRSConfig->srs_resource_list;
+    uint32_t srs_resource_list_length = 3;
+    srs_resource_list->srs_resource_list_length = srs_resource_list_length;
+    srs_resource_list->srs_resource = calloc_or_fail(srs_resource_list_length, sizeof(*srs_resource_list->srs_resource));
+
+    // SRS resource config 1 : periodic
+    f1ap_srs_resource_t *srs_resource = &srs_resource_list->srs_resource[0];
+    srs_resource->srs_resource_id = 22;
+    srs_resource->nr_of_srs_ports = F1AP_SRS_NUMBER_OF_PORTS_N2;
+    srs_resource->transmission_comb.present = F1AP_TRANSMISSION_COMB_PR_N2;
+    srs_resource->transmission_comb.choice.n2.comb_offset_n2 = 1;
+    srs_resource->transmission_comb.choice.n2.cyclic_shift_n2 = 3;
+    srs_resource->start_position = 8;
+    srs_resource->nr_of_symbols = F1AP_SRS_NUMBER_OF_SYMBOLS_N4;
+    srs_resource->repetition_factor = F1AP_SRS_REPETITION_FACTOR_RF2;
+    srs_resource->freq_domain_position = 32;
+    srs_resource->freq_domain_shift = 108;
+    srs_resource->c_srs = 31;
+    srs_resource->b_srs = 1;
+    srs_resource->b_hop = 3;
+    srs_resource->group_or_sequence_hopping = F1AP_GROUPORSEQUENCEHOPPING_GROUPHOPPING;
+    srs_resource->resource_type.present = F1AP_RESOURCE_TYPE_PR_PERIODIC;
+
+    f1ap_resource_type_periodic_t *periodic = &srs_resource->resource_type.choice.periodic;
+    periodic->periodicity = F1AP_SRS_RESOURCE_TYPE_PERIODICITY_SLOT16;
+    periodic->offset = 1000;
+    srs_resource->sequence_id = 18;
+
+    // SRS resource config 2 : semi-persistent
+    srs_resource = &srs_resource_list->srs_resource[1];
+    srs_resource->srs_resource_id = 24;
+    srs_resource->nr_of_srs_ports = F1AP_SRS_NUMBER_OF_PORTS_N4;
+    srs_resource->transmission_comb.present = F1AP_TRANSMISSION_COMB_PR_N4;
+    srs_resource->transmission_comb.choice.n2.comb_offset_n2 = 3;
+    srs_resource->transmission_comb.choice.n2.cyclic_shift_n2 = 5;
+    srs_resource->start_position = 8;
+    srs_resource->nr_of_symbols = F1AP_SRS_NUMBER_OF_SYMBOLS_N2;
+    srs_resource->repetition_factor = F1AP_SRS_REPETITION_FACTOR_RF2;
+    srs_resource->freq_domain_position = 32;
+    srs_resource->freq_domain_shift = 108;
+    srs_resource->c_srs = 31;
+    srs_resource->b_srs = 1;
+    srs_resource->b_hop = 3;
+    srs_resource->group_or_sequence_hopping = F1AP_GROUPORSEQUENCEHOPPING_GROUPHOPPING;
+    srs_resource->resource_type.present = F1AP_RESOURCE_TYPE_PR_SEMI_PERSISTENT;
+
+    srs_resource->resource_type.present = F1AP_RESOURCE_TYPE_PR_SEMI_PERSISTENT;
+    f1ap_resource_type_semi_persistent_t *semi_persistent = &srs_resource->resource_type.choice.semi_persistent;
+    semi_persistent->periodicity = F1AP_SRS_RESOURCE_TYPE_PERIODICITY_SLOT40;
+    semi_persistent->offset = 1000;
+    srs_resource->sequence_id = 12;
+
+    // SRS resource config 2 : aperiodic
+    srs_resource = &srs_resource_list->srs_resource[2];
+    srs_resource->srs_resource_id = 26;
+    srs_resource->nr_of_srs_ports = F1AP_SRS_NUMBER_OF_PORTS_N2;
+    srs_resource->transmission_comb.present = F1AP_TRANSMISSION_COMB_PR_N2;
+    srs_resource->transmission_comb.choice.n2.comb_offset_n2 = 1;
+    srs_resource->transmission_comb.choice.n2.cyclic_shift_n2 = 3;
+    srs_resource->start_position = 8;
+    srs_resource->nr_of_symbols = F1AP_SRS_NUMBER_OF_SYMBOLS_N4;
+    srs_resource->repetition_factor = F1AP_SRS_REPETITION_FACTOR_RF2;
+    srs_resource->freq_domain_position = 32;
+    srs_resource->freq_domain_shift = 108;
+    srs_resource->c_srs = 31;
+    srs_resource->b_srs = 1;
+    srs_resource->b_hop = 3;
+    srs_resource->group_or_sequence_hopping = F1AP_GROUPORSEQUENCEHOPPING_SEQUENCEHOPPING;
+    srs_resource->resource_type.present = F1AP_RESOURCE_TYPE_PR_APERIODIC;
+    // set aperiodic = 0 to enable
+    srs_resource->resource_type.choice.aperiodic = 0;
+    srs_resource->sequence_id = 10;
+
+    // optional: pos_srs_resource_list
+    sRSConfig->pos_srs_resource_list = calloc_or_fail(1, sizeof(*sRSConfig->pos_srs_resource_list));
+    f1ap_pos_srs_resource_list_t *pos_srs_resource_list = sRSConfig->pos_srs_resource_list;
+    uint32_t pos_srs_resource_list_length = 3;
+    pos_srs_resource_list->pos_srs_resource_list_length = pos_srs_resource_list_length;
+    pos_srs_resource_list->pos_srs_resource_item =
+        calloc_or_fail(pos_srs_resource_list_length, sizeof(*pos_srs_resource_list->pos_srs_resource_item));
+
+    // periodic
+    f1ap_pos_srs_resource_item_t *pos_srs_resource = &pos_srs_resource_list->pos_srs_resource_item[0];
+    pos_srs_resource->srs_pos_resource_id = 12;
+    pos_srs_resource->transmission_comb_pos.present = F1AP_TRANSMISSION_COMB_POS_PR_N2;
+    pos_srs_resource->transmission_comb_pos.choice.n2.comb_offset_n2 = 1;
+    pos_srs_resource->transmission_comb_pos.choice.n2.cyclic_shift_n2 = 4;
+    pos_srs_resource->start_position = 9;
+    pos_srs_resource->nr_of_symbols = F1AP_SRS_RESOURCE_ITEM_NUMBER_OF_SYMBOLS_N8;
+    pos_srs_resource->freq_domain_shift = 100;
+    pos_srs_resource->c_srs = 20;
+    pos_srs_resource->group_or_sequence_hopping = F1AP_GROUPORSEQUENCEHOPPING_GROUPHOPPING;
+    pos_srs_resource->resource_type_pos.present = F1AP_RESOURCE_TYPE_POS_PR_PERIODIC;
+    pos_srs_resource->resource_type_pos.choice.periodic.periodicity = F1AP_SRS_RESOURCE_TYPE_POS_PERIODICITY_SLOT5;
+    pos_srs_resource->resource_type_pos.choice.periodic.offset = 10;
+    pos_srs_resource->sequence_id = 1;
+
+    // semi-persistent
+    pos_srs_resource = &pos_srs_resource_list->pos_srs_resource_item[1];
+    pos_srs_resource->srs_pos_resource_id = 13;
+    pos_srs_resource->transmission_comb_pos.present = F1AP_TRANSMISSION_COMB_POS_PR_N4;
+    pos_srs_resource->transmission_comb_pos.choice.n4.comb_offset_n4 = 3;
+    pos_srs_resource->transmission_comb_pos.choice.n4.cyclic_shift_n4 = 5;
+    pos_srs_resource->start_position = 12;
+    pos_srs_resource->nr_of_symbols = F1AP_SRS_RESOURCE_ITEM_NUMBER_OF_SYMBOLS_N12;
+    pos_srs_resource->freq_domain_shift = 100;
+    pos_srs_resource->c_srs = 20;
+    pos_srs_resource->group_or_sequence_hopping = F1AP_GROUPORSEQUENCEHOPPING_GROUPHOPPING;
+    pos_srs_resource->resource_type_pos.present = F1AP_RESOURCE_TYPE_POS_PR_SEMI_PERSISTENT;
+    pos_srs_resource->resource_type_pos.choice.semi_persistent.periodicity = F1AP_SRS_RESOURCE_TYPE_POS_PERIODICITY_SLOT32;
+    pos_srs_resource->resource_type_pos.choice.semi_persistent.offset = 5;
+    pos_srs_resource->sequence_id = 2;
+
+    // aperiodic
+    pos_srs_resource = &pos_srs_resource_list->pos_srs_resource_item[2];
+    pos_srs_resource->srs_pos_resource_id = 14;
+    pos_srs_resource->transmission_comb_pos.present = F1AP_TRANSMISSION_COMB_POS_PR_N8;
+    pos_srs_resource->transmission_comb_pos.choice.n8.comb_offset_n8 = 5;
+    pos_srs_resource->transmission_comb_pos.choice.n8.cyclic_shift_n8 = 2;
+    pos_srs_resource->start_position = 9;
+    pos_srs_resource->nr_of_symbols = F1AP_SRS_RESOURCE_ITEM_NUMBER_OF_SYMBOLS_N4;
+    pos_srs_resource->freq_domain_shift = 100;
+    pos_srs_resource->c_srs = 20;
+    pos_srs_resource->group_or_sequence_hopping = F1AP_GROUPORSEQUENCEHOPPING_SEQUENCEHOPPING;
+    pos_srs_resource->resource_type_pos.present = F1AP_RESOURCE_TYPE_POS_PR_APERIODIC;
+    pos_srs_resource->resource_type_pos.choice.periodic.periodicity = F1AP_SRS_RESOURCE_TYPE_POS_PERIODICITY_SLOT5;
+    pos_srs_resource->resource_type_pos.choice.aperiodic.slot_offset = 31;
+    pos_srs_resource->sequence_id = 3;
+
+    // optional: srs_resource_set_list
+    sRSConfig->srs_resource_set_list = calloc_or_fail(1, sizeof(*sRSConfig->srs_resource_set_list));
+    f1ap_srs_resource_set_list_t *srs_resource_set_list = sRSConfig->srs_resource_set_list;
+    uint32_t srs_resource_set_list_length = 3;
+    srs_resource_set_list->srs_resource_set_list_length = srs_resource_set_list_length;
+    srs_resource_set_list->srs_resource_set =
+        calloc_or_fail(srs_resource_set_list_length, sizeof(*srs_resource_set_list->srs_resource_set));
+
+    // periodic
+    f1ap_srs_resource_set_t *srs_resource_set = &srs_resource_set_list->srs_resource_set[0];
+    srs_resource_set->srs_resource_set_id = 0;
+    uint8_t srs_resource_id_list_length = 5;
+    srs_resource_set->srs_resource_id_list.srs_resource_id_list_length = srs_resource_id_list_length;
+    srs_resource_set->srs_resource_id_list.srs_resource_id =
+        calloc_or_fail(srs_resource_id_list_length, sizeof(*srs_resource_set->srs_resource_id_list.srs_resource_id));
+    for (int k = 0; k < srs_resource_id_list_length; k++) {
+      srs_resource_set->srs_resource_id_list.srs_resource_id[k] = k;
+    }
+    srs_resource_set->resource_set_type.present = F1AP_RESOURCE_SET_TYPE_PR_PERIODIC;
+    // set periodic = 0 to enable
+    srs_resource_set->resource_set_type.choice.periodic = 0;
+
+    // semi-persistent
+    srs_resource_set = &srs_resource_set_list->srs_resource_set[1];
+    srs_resource_set->srs_resource_set_id = 1;
+    srs_resource_id_list_length = 5;
+    srs_resource_set->srs_resource_id_list.srs_resource_id_list_length = srs_resource_id_list_length;
+    srs_resource_set->srs_resource_id_list.srs_resource_id =
+        calloc_or_fail(srs_resource_id_list_length, sizeof(srs_resource_set->srs_resource_id_list.srs_resource_id));
+    for (int k = 0; k < srs_resource_id_list_length; k++) {
+      srs_resource_set->srs_resource_id_list.srs_resource_id[k] = k;
+    }
+    srs_resource_set->resource_set_type.present = F1AP_RESOURCE_SET_TYPE_PR_SEMI_PERSISTENT;
+    // set semi_persistent = 0 to enable
+    srs_resource_set->resource_set_type.choice.semi_persistent = 0;
+
+    // aperiodic
+    srs_resource_set = &srs_resource_set_list->srs_resource_set[2];
+    srs_resource_set->srs_resource_set_id = 2;
+    srs_resource_id_list_length = 5;
+    srs_resource_set->srs_resource_id_list.srs_resource_id_list_length = srs_resource_id_list_length;
+    srs_resource_set->srs_resource_id_list.srs_resource_id =
+        calloc_or_fail(srs_resource_id_list_length, sizeof(*srs_resource_set->srs_resource_id_list.srs_resource_id));
+    for (int k = 0; k < srs_resource_id_list_length; k++) {
+      srs_resource_set->srs_resource_id_list.srs_resource_id[k] = k;
+    }
+
+    srs_resource_set->resource_set_type.present = F1AP_RESOURCE_SET_TYPE_PR_APERIODIC;
+    srs_resource_set->resource_set_type.choice.aperiodic.srs_resource_trigger = 2;
+    srs_resource_set->resource_set_type.choice.aperiodic.slot_offset = 20;
+
+    // optional: pos_srs_resource_set_list
+    sRSConfig->pos_srs_resource_set_list = calloc_or_fail(1, sizeof(*sRSConfig->pos_srs_resource_set_list));
+    f1ap_pos_srs_resource_set_list_t *pos_srs_resource_set_list = sRSConfig->pos_srs_resource_set_list;
+    uint32_t pos_srs_resource_set_list_length = 3;
+    pos_srs_resource_set_list->pos_srs_resource_set_list_length = pos_srs_resource_set_list_length;
+    pos_srs_resource_set_list->pos_srs_resource_set_item =
+        calloc_or_fail(pos_srs_resource_set_list_length, sizeof(*pos_srs_resource_set_list->pos_srs_resource_set_item));
+
+    // periodic
+    f1ap_pos_srs_resource_set_item_t *pos_srs_resource_set = &pos_srs_resource_set_list->pos_srs_resource_set_item[0];
+    pos_srs_resource_set->pos_srs_resource_set_id = 0;
+    uint8_t pos_srs_resource_id_list_length = 5;
+    pos_srs_resource_set->pos_srs_resource_id_list.pos_srs_resource_id_list_length = pos_srs_resource_id_list_length;
+    pos_srs_resource_set->pos_srs_resource_id_list.srs_pos_resource_id =
+        calloc_or_fail(pos_srs_resource_id_list_length,
+                       sizeof(*pos_srs_resource_set->pos_srs_resource_id_list.srs_pos_resource_id));
+    for (int k = 0; k < pos_srs_resource_id_list_length; k++) {
+      pos_srs_resource_set->pos_srs_resource_id_list.srs_pos_resource_id[k] = k;
+    }
+    pos_srs_resource_set->pos_resource_set_type.present = F1AP_POS_RESOURCE_SET_TYPE_PR_PERIODIC;
+    // set periodic = 0 to enable
+    pos_srs_resource_set->pos_resource_set_type.choice.periodic = 0;
+
+    // semi-persistent
+    pos_srs_resource_set = &pos_srs_resource_set_list->pos_srs_resource_set_item[1];
+    pos_srs_resource_set->pos_srs_resource_set_id = 1;
+    pos_srs_resource_id_list_length = 5;
+    pos_srs_resource_set->pos_srs_resource_id_list.pos_srs_resource_id_list_length = pos_srs_resource_id_list_length;
+    pos_srs_resource_set->pos_srs_resource_id_list.srs_pos_resource_id =
+        calloc_or_fail(pos_srs_resource_id_list_length,
+                       sizeof(*pos_srs_resource_set->pos_srs_resource_id_list.srs_pos_resource_id));
+    for (int k = 0; k < pos_srs_resource_id_list_length; k++) {
+      pos_srs_resource_set->pos_srs_resource_id_list.srs_pos_resource_id[k] = k;
+    }
+    pos_srs_resource_set->pos_resource_set_type.present = F1AP_POS_RESOURCE_SET_TYPE_PR_SEMI_PERSISTENT;
+    // set semi_persistent = 0 to enable
+    pos_srs_resource_set->pos_resource_set_type.choice.semi_persistent = 0;
+
+    // aperiodic
+    pos_srs_resource_set = &pos_srs_resource_set_list->pos_srs_resource_set_item[2];
+    pos_srs_resource_set->pos_srs_resource_set_id = 2;
+    pos_srs_resource_id_list_length = 5;
+    pos_srs_resource_set->pos_srs_resource_id_list.pos_srs_resource_id_list_length = pos_srs_resource_id_list_length;
+    pos_srs_resource_set->pos_srs_resource_id_list.srs_pos_resource_id =
+        calloc_or_fail(pos_srs_resource_id_list_length,
+                       sizeof(*pos_srs_resource_set->pos_srs_resource_id_list.srs_pos_resource_id));
+    for (int k = 0; k < pos_srs_resource_id_list_length; k++) {
+      pos_srs_resource_set->pos_srs_resource_id_list.srs_pos_resource_id[k] = k;
+    }
+    pos_srs_resource_set->pos_resource_set_type.present = F1AP_POS_RESOURCE_SET_TYPE_PR_APERIODIC;
+    pos_srs_resource_set->pos_resource_set_type.choice.srs_resource = 3;
+  }
+}
+
+static void test_f1ap_positioning_information_response()
+{
+  f1ap_positioning_information_resp_t orig = {
+      .gNB_CU_ue_id = 12,
+      .gNB_DU_ue_id = 19,
+  };
+
+  // SRS configuration
+  orig.srs_configuration = calloc_or_fail(1, sizeof(*orig.srs_configuration));
+  f1ap_srs_carrier_list_t *srs_carrier_list = &orig.srs_configuration->srs_carrier_list;
+  fill_srs_carrier_list(srs_carrier_list);
+
+  F1AP_F1AP_PDU_t *f1enc = encode_positioning_information_resp(&orig);
+  F1AP_F1AP_PDU_t *f1dec = f1ap_encode_decode(f1enc);
+  f1ap_msg_free(f1enc);
+
+  f1ap_positioning_information_resp_t decoded = {0};
+  bool ret = decode_positioning_information_resp(f1dec, &decoded);
+  AssertFatal(ret, "decode_positioning_information_resp(): could not decode message\n");
+  f1ap_msg_free(f1dec);
+
+  ret = eq_positioning_information_resp(&orig, &decoded);
+  AssertFatal(ret, "eq_positioning_information_resp(): decoded message doesn't match\n");
+  free_positioning_information_resp(&decoded);
+
+  f1ap_positioning_information_resp_t cp = cp_positioning_information_resp(&orig);
+  ret = eq_positioning_information_resp(&orig, &cp);
+  AssertFatal(ret, "eq_positioning_information_resp(): copied message doesn't match\n");
+  free_positioning_information_resp(&orig);
+  free_positioning_information_resp(&cp);
+
+  printf("%s() successful\n", __func__);
+}
+
+static void test_f1ap_positioning_information_failure()
+{
+  f1ap_positioning_information_failure_t orig = {
+      .gNB_CU_ue_id = 12,
+      .gNB_DU_ue_id = 19,
+      .cause = F1AP_CAUSE_MISC,
+      .cause_value = 3,
+  };
+
+  F1AP_F1AP_PDU_t *f1enc = encode_positioning_information_failure(&orig);
+  F1AP_F1AP_PDU_t *f1dec = f1ap_encode_decode(f1enc);
+  f1ap_msg_free(f1enc);
+
+  f1ap_positioning_information_failure_t decoded = {0};
+  bool ret = decode_positioning_information_failure(f1dec, &decoded);
+  AssertFatal(ret, "decode_positioning_information_failure(): could not decode message\n");
+  f1ap_msg_free(f1dec);
+
+  ret = eq_positioning_information_failure(&orig, &decoded);
+  AssertFatal(ret, "eq_positioning_information_failure(): decoded message doesn't match\n");
+  free_positioning_information_failure(&decoded);
+
+  f1ap_positioning_information_failure_t cp = cp_positioning_information_failure(&orig);
+  ret = eq_positioning_information_failure(&orig, &cp);
+  AssertFatal(ret, "eq_positioning_information_failure(): copied message doesn't match\n");
+  free_positioning_information_failure(&orig);
+  free_positioning_information_failure(&cp);
+
+  printf("%s() successful\n", __func__);
+}
+
+static void test_f1ap_positioning_activation_request_msg(f1ap_positioning_activation_req_t *orig)
+{
+  F1AP_F1AP_PDU_t *f1enc = encode_positioning_activation_req(orig);
+  F1AP_F1AP_PDU_t *f1dec = f1ap_encode_decode(f1enc);
+  f1ap_msg_free(f1enc);
+
+  f1ap_positioning_activation_req_t decoded = {0};
+  bool ret = decode_positioning_activation_req(f1dec, &decoded);
+  AssertFatal(ret, "decode_positioning_activation_request(): could not decode message\n");
+  f1ap_msg_free(f1dec);
+
+  ret = eq_positioning_activation_req(orig, &decoded);
+  AssertFatal(ret, "eq_positioning_activation_request(): decoded message doesn't match\n");
+  free_positioning_activation_req(&decoded);
+
+  f1ap_positioning_activation_req_t cp = cp_positioning_activation_req(orig);
+  ret = eq_positioning_activation_req(orig, &cp);
+  AssertFatal(ret, "eq_positioning_activation_request(): copied message doesn't match\n");
+  free_positioning_activation_req(&cp);
+  free_positioning_activation_req(orig);
+}
+
+static void test_f1ap_positioning_activation_request()
+{
+  /* semipersistent srs test*/
+  f1ap_positioning_activation_req_t orig = {
+      .gNB_CU_ue_id = 12,
+      .gNB_DU_ue_id = 19,
+      .srs_type.present = F1AP_SRS_TYPE_PR_SEMIPERSISTENTSRS,
+  };
+
+  orig.srs_type.choice.srs_resource_set_id = calloc_or_fail(1, sizeof(*orig.srs_type.choice.srs_resource_set_id));
+  *orig.srs_type.choice.srs_resource_set_id = 1;
+  test_f1ap_positioning_activation_request_msg(&orig);
+
+  /* aperiodic srs test*/
+  orig.gNB_CU_ue_id = 12;
+  orig.gNB_DU_ue_id = 19;
+  orig.srs_type.present = F1AP_SRS_TYPE_PR_APERIODICSRS;
+  orig.srs_type.choice.aperiodic = calloc_or_fail(1, sizeof(*orig.srs_type.choice.aperiodic));
+  // set aperiodic = 0 to enable
+  *orig.srs_type.choice.aperiodic = 0;
+  test_f1ap_positioning_activation_request_msg(&orig);
+
+  printf("%s() successful\n", __func__);
+}
+
+static void test_f1ap_positioning_activation_response()
+{
+  f1ap_positioning_activation_resp_t orig = {
+      .gNB_CU_ue_id = 12,
+      .gNB_DU_ue_id = 19,
+      // rest is optional and intentionally left empty
+  };
+  F1AP_F1AP_PDU_t *f1enc = encode_positioning_activation_resp(&orig);
+  F1AP_F1AP_PDU_t *f1dec = f1ap_encode_decode(f1enc);
+  f1ap_msg_free(f1enc);
+
+  f1ap_positioning_activation_resp_t decoded = {0};
+  bool ret = decode_positioning_activation_resp(f1dec, &decoded);
+  AssertFatal(ret, "decode_positioning_activation_resp(): could not decode message\n");
+  f1ap_msg_free(f1dec);
+
+  ret = eq_positioning_activation_resp(&orig, &decoded);
+  AssertFatal(ret, "eq_positioning_activation_resp(): decoded message doesn't match\n");
+  free_positioning_activation_resp(&decoded);
+
+  f1ap_positioning_activation_resp_t cp = cp_positioning_activation_resp(&orig);
+  ret = eq_positioning_activation_resp(&orig, &cp);
+  AssertFatal(ret, "eq_positioning_activation_resp(): copied message doesn't match\n");
+  free_positioning_activation_resp(&orig);
+  free_positioning_activation_resp(&cp);
+
+  printf("%s() successful\n", __func__);
+}
+
+static void test_f1ap_positioning_activation_failure()
+{
+  f1ap_positioning_activation_failure_t orig = {
+      .gNB_CU_ue_id = 12,
+      .gNB_DU_ue_id = 19,
+      .cause = F1AP_CAUSE_MISC,
+      .cause_value = 3,
+  };
+  F1AP_F1AP_PDU_t *f1enc = encode_positioning_activation_failure(&orig);
+  F1AP_F1AP_PDU_t *f1dec = f1ap_encode_decode(f1enc);
+  f1ap_msg_free(f1enc);
+
+  f1ap_positioning_activation_failure_t decoded = {0};
+  bool ret = decode_positioning_activation_failure(f1dec, &decoded);
+  AssertFatal(ret, "decode_positioning_activation_failure(): could not decode message\n");
+  f1ap_msg_free(f1dec);
+
+  ret = eq_positioning_activation_failure(&orig, &decoded);
+  AssertFatal(ret, "eq_positioning_activation_failure(): decoded message doesn't match\n");
+  free_positioning_activation_failure(&decoded);
+
+  f1ap_positioning_activation_failure_t cp = cp_positioning_activation_failure(&orig);
+  ret = eq_positioning_activation_failure(&orig, &cp);
+  AssertFatal(ret, "eq_positioning_activation_failure(): copied message doesn't match\n");
+  free_positioning_activation_failure(&orig);
+  free_positioning_activation_failure(&cp);
+
+  printf("%s() successful\n", __func__);
+}
+
+static void test_f1ap_positioning_deactivation_msg(f1ap_positioning_deactivation_t *orig)
+{
+  F1AP_F1AP_PDU_t *f1enc = encode_positioning_deactivation(orig);
+  F1AP_F1AP_PDU_t *f1dec = f1ap_encode_decode(f1enc);
+  f1ap_msg_free(f1enc);
+
+  f1ap_positioning_deactivation_t decoded = {0};
+  bool ret = decode_positioning_deactivation(f1dec, &decoded);
+  AssertFatal(ret, "decode_positioning_deactivation(): could not decode message\n");
+  f1ap_msg_free(f1dec);
+
+  ret = eq_positioning_deactivation(orig, &decoded);
+  AssertFatal(ret, "eq_positioning_deactivation(): decoded message doesn't match\n");
+  free_positioning_deactivation(&decoded);
+
+  f1ap_positioning_deactivation_t cp = cp_positioning_deactivation(orig);
+  ret = eq_positioning_deactivation(orig, &cp);
+  AssertFatal(ret, "eq_positioning_deactivation(): copied message doesn't match\n");
+  free_positioning_deactivation(orig);
+  free_positioning_deactivation(&cp);
+}
+
+static void test_f1ap_positioning_deactivation()
+{
+  /* Abort Transmission SRS Resource Set ID test*/
+  f1ap_positioning_deactivation_t orig = {
+      .gNB_CU_ue_id = 12,
+      .gNB_DU_ue_id = 19,
+      .abort_transmission.present = F1AP_ABORT_TRANSMISSION_PR_SRSRESOURCESETID,
+      .abort_transmission.choice.srs_resource_set_id = 10,
+  };
+  test_f1ap_positioning_deactivation_msg(&orig);
+
+  /* Abort Transmission release ALL test*/
+  orig.gNB_CU_ue_id = 12;
+  orig.gNB_DU_ue_id = 19;
+  orig.abort_transmission.present = F1AP_ABORT_TRANSMISSION_PR_RELEASEALL;
+  orig.abort_transmission.choice.release_all = true;
+  test_f1ap_positioning_deactivation_msg(&orig);
+
+  printf("%s() successful\n", __func__);
+}
+
+static void test_f1ap_positioning_information_update()
+{
+  f1ap_positioning_information_update_t orig = {
+      .gNB_CU_ue_id = 12,
+      .gNB_DU_ue_id = 19,
+  };
+
+  // SRS configuration
+  orig.srs_configuration = calloc_or_fail(1, sizeof(*orig.srs_configuration));
+  f1ap_srs_carrier_list_t *srs_carrier_list = &orig.srs_configuration->srs_carrier_list;
+  fill_srs_carrier_list(srs_carrier_list);
+
+  F1AP_F1AP_PDU_t *f1enc = encode_positioning_information_update(&orig);
+  F1AP_F1AP_PDU_t *f1dec = f1ap_encode_decode(f1enc);
+  f1ap_msg_free(f1enc);
+
+  f1ap_positioning_information_update_t decoded = {0};
+  bool ret = decode_positioning_information_update(f1dec, &decoded);
+  AssertFatal(ret, "decode_positioning_information_update(): could not decode message\n");
+  f1ap_msg_free(f1dec);
+
+  ret = eq_positioning_information_update(&orig, &decoded);
+  AssertFatal(ret, "eq_positioning_information_update(): decoded message doesn't match\n");
+  free_positioning_information_update(&decoded);
+
+  f1ap_positioning_information_update_t cp = cp_positioning_information_update(&orig);
+  ret = eq_positioning_information_update(&orig, &cp);
+  AssertFatal(ret, "eq_positioning_information_update(): copied message doesn't match\n");
+  free_positioning_information_update(&orig);
+  free_positioning_information_update(&cp);
+
+  printf("%s() successful\n", __func__);
+}
+
+static void test_f1ap_trp_information_request()
+{
+  f1ap_trp_information_req_t orig = {
+      .transaction_id = 12,
+      .has_trp_list = true,
+  };
+
+  uint32_t trp_list_length = 4;
+  orig.trp_list.trp_list_length = trp_list_length;
+  orig.trp_list.trp_list_item = calloc_or_fail(trp_list_length, sizeof(*orig.trp_list.trp_list_item));
+  for (int i = 0; i < trp_list_length; i++) {
+    orig.trp_list.trp_list_item[i].trp_id = i + 1;
+  }
+  uint8_t trp_info_type_list_length = 2;
+  f1ap_trp_information_type_list_t *trp_information_type_list = &orig.trp_information_type_list;
+  trp_information_type_list->trp_information_type_list_length = trp_info_type_list_length;
+  trp_information_type_list->trp_information_type_item =
+      calloc_or_fail(trp_info_type_list_length, sizeof(*trp_information_type_list->trp_information_type_item));
+  trp_information_type_list->trp_information_type_item[0] = F1AP_TRP_INFORMATION_TYPE_ITEM_NR_ARFCN;
+  trp_information_type_list->trp_information_type_item[1] = F1AP_TRP_INFORMATION_TYPE_ITEM_PRS_CONFIG;
+
+  F1AP_F1AP_PDU_t *f1enc = encode_trp_information_req(&orig);
+  F1AP_F1AP_PDU_t *f1dec = f1ap_encode_decode(f1enc);
+  f1ap_msg_free(f1enc);
+
+  f1ap_trp_information_req_t decoded = {0};
+  bool ret = decode_trp_information_req(f1dec, &decoded);
+  AssertFatal(ret, "decode_trp_information_req(): could not decode message\n");
+  f1ap_msg_free(f1dec);
+
+  ret = eq_trp_information_req(&orig, &decoded);
+  AssertFatal(ret, "eq_trp_information_req(): decoded message doesn't match\n");
+  free_trp_information_req(&decoded);
+
+  f1ap_trp_information_req_t cp = cp_trp_information_req(&orig);
+  ret = eq_trp_information_req(&orig, &cp);
+  AssertFatal(ret, "eq_trp_information_req(): copied message doesn't match\n");
+  free_trp_information_req(&orig);
+  free_trp_information_req(&cp);
+
+  printf("%s() successful\n", __func__);
+}
+
+static void test_f1ap_trp_information_response()
+{
+  f1ap_trp_information_resp_t orig = {
+      .transaction_id = 12,
+  };
+
+  orig.trp_information_list.trp_information_item_length = 3;
+  uint32_t trp_info_item_len = orig.trp_information_list.trp_information_item_length;
+  orig.trp_information_list.trp_information_item =
+      calloc_or_fail(trp_info_item_len, sizeof(*orig.trp_information_list.trp_information_item));
+
+  uint8_t trp_info_type_resp_item_len = 3;
+  for (int i = 0; i < trp_info_item_len; i++) {
+    f1ap_trp_information_t *tRPInformation = &orig.trp_information_list.trp_information_item[i];
+    tRPInformation->trp_information_type_response_list.trp_information_type_response_item_length = trp_info_type_resp_item_len;
+    tRPInformation->trp_id = 11 + i;
+    f1ap_trp_information_type_response_item_t *trp_info_type_resp_item =
+        calloc_or_fail(trp_info_type_resp_item_len, sizeof(*trp_info_type_resp_item));
+    tRPInformation->trp_information_type_response_list.trp_information_type_response_item = trp_info_type_resp_item;
+
+    // nrPCI
+    trp_info_type_resp_item[0].present = F1AP_TRP_INFORMATION_TYPE_RESPONSE_ITEM_PR_PCI_NR;
+    trp_info_type_resp_item[0].choice.pci_nr = 123 + i;
+
+    // nG_RAN_CGI
+    trp_info_type_resp_item[1].present = F1AP_TRP_INFORMATION_TYPE_RESPONSE_ITEM_PR_NG_RAN_CGI;
+    trp_info_type_resp_item[1].choice.ng_ran_cgi.plmn.mcc = 208;
+    trp_info_type_resp_item[1].choice.ng_ran_cgi.plmn.mnc = 92 + i;
+    trp_info_type_resp_item[1].choice.ng_ran_cgi.plmn.mnc_digit_length = 2;
+    trp_info_type_resp_item[1].choice.ng_ran_cgi.nr_cellid = 117 + i;
+
+    // geographicalCoordinates
+    trp_info_type_resp_item[2].present = F1AP_TRP_INFORMATION_TYPE_RESPONSE_ITEM_PR_GEOGRAPHICALCOORDINATES;
+    f1ap_geographical_coordinates_t *geographical_coordinates = &trp_info_type_resp_item[2].choice.geographical_coordinates;
+    f1ap_trp_position_definition_type_t *tRPPositionDefinitionType = &geographical_coordinates->trp_position_definition_type;
+    // referenced
+    tRPPositionDefinitionType->present = F1AP_TRP_POSITION_DEFINITION_TYPE_PR_REFERENCED;
+    f1ap_trp_position_referenced_t *referenced = &tRPPositionDefinitionType->choice.referenced;
+    // coordinate ID
+    referenced->reference_point.present = F1AP_REFERENCE_POINT_PR_COORDINATEID;
+    referenced->reference_point.choice.coordinate_id = 2;
+    f1ap_trp_reference_point_type_t *referencePointType = &referenced->reference_point_type;
+    // relative cartesian
+    referencePointType->present = F1AP_TRP_REFERENCE_POINT_TYPE_PR_TRPPOSITION_RELATIVE_CARTESIAN;
+    f1ap_relative_cartesian_location_t *trp_pos_cart = &referencePointType->choice.trp_position_relative_cartesian;
+    // 0 = millimeter
+    trp_pos_cart->xyz_unit = 0;
+    // random reference cartesian coordinates in millimeter
+    trp_pos_cart->xvalue = 7100 + i * 2;
+    trp_pos_cart->yvalue = 1100 + i * 2;
+    trp_pos_cart->zvalue = -4100 + i * 2;
+    // testing random values for uncertainity and confidence
+    trp_pos_cart->location_uncertainty.horizontal_uncertainty = i + 1;
+    trp_pos_cart->location_uncertainty.horizontal_confidence = i + 2;
+    trp_pos_cart->location_uncertainty.vertical_uncertainty = i + 3;
+    trp_pos_cart->location_uncertainty.vertical_confidence = i + 4;
+  }
+
+  F1AP_F1AP_PDU_t *f1enc = encode_trp_information_resp(&orig);
+  F1AP_F1AP_PDU_t *f1dec = f1ap_encode_decode(f1enc);
+  f1ap_msg_free(f1enc);
+
+  f1ap_trp_information_resp_t decoded = {0};
+  bool ret = decode_trp_information_resp(f1dec, &decoded);
+  AssertFatal(ret, "decode_trp_information_resp(): could not decode message\n");
+  f1ap_msg_free(f1dec);
+
+  ret = eq_trp_information_resp(&orig, &decoded);
+  AssertFatal(ret, "eq_trp_information_resp(): decoded message doesn't match\n");
+  free_trp_information_resp(&decoded);
+
+  f1ap_trp_information_resp_t cp = cp_trp_information_resp(&orig);
+  ret = eq_trp_information_resp(&orig, &cp);
+  AssertFatal(ret, "eq_trp_information_resp(): copied message doesn't match\n");
+  free_trp_information_resp(&orig);
+  free_trp_information_resp(&cp);
+
+  printf("%s() successful\n", __func__);
+}
+
+static void test_f1ap_trp_information_failure()
+{
+  f1ap_trp_information_failure_t orig = {
+      .transaction_id = 12,
+      .cause = F1AP_CAUSE_MISC,
+      .cause_value = 3,
+  };
+  F1AP_F1AP_PDU_t *f1enc = encode_trp_information_failure(&orig);
+  F1AP_F1AP_PDU_t *f1dec = f1ap_encode_decode(f1enc);
+  f1ap_msg_free(f1enc);
+
+  f1ap_trp_information_failure_t decoded = {0};
+  bool ret = decode_trp_information_failure(f1dec, &decoded);
+  AssertFatal(ret, "decode_trp_information_failure(): could not decode message\n");
+  f1ap_msg_free(f1dec);
+
+  ret = eq_trp_information_failure(&orig, &decoded);
+  AssertFatal(ret, "eq_trp_information_failure(): decoded message doesn't match\n");
+  free_trp_information_failure(&decoded);
+
+  f1ap_trp_information_failure_t cp = cp_trp_information_failure(&orig);
+  ret = eq_trp_information_failure(&orig, &cp);
+  AssertFatal(ret, "eq_trp_information_failure(): copied message doesn't match\n");
+  free_trp_information_failure(&orig);
+  free_trp_information_failure(&cp);
+
+  printf("%s() successful\n", __func__);
+}
+
+static void test_f1ap_positioning_measurement_request()
+{
+  f1ap_positioning_measurement_req_t orig = {
+      .transaction_id = 12,
+      .lmf_measurement_id = 1999,
+      .ran_measurement_id = 2225,
+  };
+
+  uint32_t trp_meas_req_list_len = 3;
+  orig.trp_measurement_request_list.trp_measurement_request_list_length = trp_meas_req_list_len;
+  orig.trp_measurement_request_list.trp_measurement_request_item =
+      calloc_or_fail(trp_meas_req_list_len, sizeof(*orig.trp_measurement_request_list.trp_measurement_request_item));
+  for (int i = 0; i < trp_meas_req_list_len; i++) {
+    orig.trp_measurement_request_list.trp_measurement_request_item[i].tRPID = 115 + i;
+  }
+
+  orig.pos_report_characteristics = F1AP_POSREPORTCHARACTERISTICS_PERIODIC;
+  orig.measurement_periodicity = F1AP_POSMEASUREMENTPERIODICITY_MS480;
+
+  uint32_t pos_meas_quantities_len = 4;
+  orig.pos_measurement_quantities.pos_measurement_quantities_length = pos_meas_quantities_len;
+
+  f1ap_pos_measurement_quantities_item_t *pos_meas_quantities_item =
+      calloc_or_fail(pos_meas_quantities_len, sizeof(*pos_meas_quantities_item));
+  orig.pos_measurement_quantities.pos_measurement_quantities_item = pos_meas_quantities_item;
+
+  pos_meas_quantities_item[0].pos_measurement_type = F1AP_POSMEASUREMENTTYPE_GNB_RX_TX;
+  pos_meas_quantities_item[1].pos_measurement_type = F1AP_POSMEASUREMENTTYPE_UL_SRS_RSRP;
+  pos_meas_quantities_item[2].pos_measurement_type = F1AP_POSMEASUREMENTTYPE_UL_AOA;
+  pos_meas_quantities_item[3].pos_measurement_type = F1AP_POSMEASUREMENTTYPE_UL_RTOA;
+
+  // SRS configuration
+  orig.srs_configuration = calloc_or_fail(1, sizeof(*orig.srs_configuration));
+  f1ap_srs_carrier_list_t *srs_carrier_list = &orig.srs_configuration->srs_carrier_list;
+  fill_srs_carrier_list(srs_carrier_list);
+
+  F1AP_F1AP_PDU_t *f1enc = encode_positioning_measurement_req(&orig);
+  F1AP_F1AP_PDU_t *f1dec = f1ap_encode_decode(f1enc);
+  f1ap_msg_free(f1enc);
+
+  f1ap_positioning_measurement_req_t decoded = {0};
+  bool ret = decode_positioning_measurement_req(f1dec, &decoded);
+  AssertFatal(ret, "decode_positioning_measurement_req(): could not decode message\n");
+  f1ap_msg_free(f1dec);
+
+  ret = eq_positioning_measurement_req(&orig, &decoded);
+  AssertFatal(ret, "eq_positioning_measurement_req(): decoded message doesn't match\n");
+  free_positioning_measurement_req(&decoded);
+
+  f1ap_positioning_measurement_req_t cp = cp_positioning_measurement_req(&orig);
+  ret = eq_positioning_measurement_req(&orig, &cp);
+  AssertFatal(ret, "eq_positioning_measurement_req(): copied message doesn't match\n");
+  free_positioning_measurement_req(&orig);
+  free_positioning_measurement_req(&cp);
+
+  printf("%s() successful\n", __func__);
+}
+
+static void test_f1ap_positioning_measurement_response()
+{
+  f1ap_positioning_measurement_resp_t orig = {
+      .transaction_id = 12,
+      .lmf_measurement_id = 1999,
+      .ran_measurement_id = 2225,
+  };
+
+  orig.pos_measurement_result_list = calloc_or_fail(1, sizeof(*orig.pos_measurement_result_list));
+  uint32_t pos_meas_result_list_len = 2;
+  orig.pos_measurement_result_list->pos_measurement_result_list_length = pos_meas_result_list_len;
+  orig.pos_measurement_result_list->pos_measurement_result_list_item =
+      calloc_or_fail(pos_meas_result_list_len, sizeof(*orig.pos_measurement_result_list->pos_measurement_result_list_item));
+  for (int i = 0; i < pos_meas_result_list_len; i++) {
+    f1ap_pos_measurement_result_list_item_t *pos_meas_result_list_item =
+        &orig.pos_measurement_result_list->pos_measurement_result_list_item[i];
+    pos_meas_result_list_item->trp_id = 10 + i;
+
+    f1ap_pos_measurement_result_t *posMeasurementResult = &pos_meas_result_list_item->pos_measurement_result;
+    uint32_t pos_meas_result_length = 4;
+    posMeasurementResult->pos_measurement_result_item_length = pos_meas_result_length;
+    posMeasurementResult->pos_measurement_result_item =
+        calloc_or_fail(pos_meas_result_length, sizeof(*posMeasurementResult->pos_measurement_result_item));
+
+    // Angle of arrival
+    f1ap_pos_measurement_result_item_t *pos_measurement_result_item = &posMeasurementResult->pos_measurement_result_item[0];
+    f1ap_measured_results_value_t *measuredResultsValue = &pos_measurement_result_item->measured_results_value;
+    measuredResultsValue->present = F1AP_MEASURED_RESULTS_VALUE_PR_UL_ANGLEOFARRIVAL;
+    f1ap_ul_aoa_t *uL_AngleOfArrival = &measuredResultsValue->choice.ul_angle_of_arrival;
+    uL_AngleOfArrival->azimuth_aoa = 700 + i;
+    uL_AngleOfArrival->zenith_aoa = calloc_or_fail(1, sizeof(*uL_AngleOfArrival->zenith_aoa));
+    *uL_AngleOfArrival->zenith_aoa = 450 + i;
+    uL_AngleOfArrival->lcs_to_gcs_translation_aoa = calloc_or_fail(1, sizeof(*uL_AngleOfArrival->lcs_to_gcs_translation_aoa));
+    uL_AngleOfArrival->lcs_to_gcs_translation_aoa->alpha = 200;
+    uL_AngleOfArrival->lcs_to_gcs_translation_aoa->beta = 220;
+    uL_AngleOfArrival->lcs_to_gcs_translation_aoa->gamma = 280;
+
+    f1ap_time_stamp_t *timeStamp = &pos_measurement_result_item->time_stamp;
+    timeStamp->system_frame_number = 100;
+    timeStamp->slot_index.present = F1AP_TIME_STAMP_SLOT_INDEX_PR_SCS_30;
+    timeStamp->slot_index.choice.scs_30 = 15;
+
+    // UL SRS RSRP
+    pos_measurement_result_item = &posMeasurementResult->pos_measurement_result_item[1];
+    measuredResultsValue = &pos_measurement_result_item->measured_results_value;
+    measuredResultsValue->present = F1AP_MEASURED_RESULTS_VALUE_PR_UL_SRS_RSRP;
+    measuredResultsValue->choice.ul_srs_rsrp = 100 + i;
+
+    timeStamp = &pos_measurement_result_item->time_stamp;
+    timeStamp->system_frame_number = 101;
+    timeStamp->slot_index.present = F1AP_TIME_STAMP_SLOT_INDEX_PR_SCS_15;
+    timeStamp->slot_index.choice.scs_15 = 8;
+
+    // UL RToA
+    pos_measurement_result_item = &posMeasurementResult->pos_measurement_result_item[2];
+    measuredResultsValue = &pos_measurement_result_item->measured_results_value;
+    measuredResultsValue->present = F1AP_MEASURED_RESULTS_VALUE_PR_UL_RTOA;
+    f1ap_ul_rtoa_measurement_t *uL_RTOA = &measuredResultsValue->choice.ul_rtoa;
+    uL_RTOA->ul_rtoa_measurement_item.present = F1AP_ULRTOAMEAS_PR_K1;
+    uL_RTOA->ul_rtoa_measurement_item.choice.k1 = 98500 + i;
+
+    timeStamp = &pos_measurement_result_item->time_stamp;
+    timeStamp->system_frame_number = 102;
+    timeStamp->slot_index.present = F1AP_TIME_STAMP_SLOT_INDEX_PR_SCS_60;
+    timeStamp->slot_index.choice.scs_60 = 31;
+
+    // gNB RX-TX Time Diff
+    pos_measurement_result_item = &posMeasurementResult->pos_measurement_result_item[3];
+    measuredResultsValue = &pos_measurement_result_item->measured_results_value;
+    measuredResultsValue->present = F1AP_MEASURED_RESULTS_VALUE_PR_GNB_RXTXTIMEDIFF;
+    f1ap_gnb_rx_tx_time_diff_t *gNB_RxTxTimeDiff = &measuredResultsValue->choice.gnb_rx_tx_time_diff;
+    gNB_RxTxTimeDiff->rx_tx_time_diff.present = F1AP_GNBRXTXTIMEDIFFMEAS_PR_K3;
+    gNB_RxTxTimeDiff->rx_tx_time_diff.choice.k3 = 98412 + i;
+
+    timeStamp = &pos_measurement_result_item->time_stamp;
+    timeStamp->system_frame_number = 103;
+    timeStamp->slot_index.present = F1AP_TIME_STAMP_SLOT_INDEX_PR_SCS_120;
+    timeStamp->slot_index.choice.scs_120 = 70;
+  }
+
+  F1AP_F1AP_PDU_t *f1enc = encode_positioning_measurement_resp(&orig);
+  F1AP_F1AP_PDU_t *f1dec = f1ap_encode_decode(f1enc);
+  f1ap_msg_free(f1enc);
+
+  f1ap_positioning_measurement_resp_t decoded = {0};
+  bool ret = decode_positioning_measurement_resp(f1dec, &decoded);
+  AssertFatal(ret, "decode_positioning_measurement_resp(): could not decode message\n");
+  f1ap_msg_free(f1dec);
+
+  ret = eq_positioning_measurement_resp(&orig, &decoded);
+  AssertFatal(ret, "eq_positioning_measurement_resp(): decoded message doesn't match\n");
+  free_positioning_measurement_resp(&decoded);
+
+  f1ap_positioning_measurement_resp_t cp = cp_positioning_measurement_resp(&orig);
+  ret = eq_positioning_measurement_resp(&orig, &cp);
+  AssertFatal(ret, "eq_positioning_measurement_resp(): copied message doesn't match\n");
+  free_positioning_measurement_resp(&orig);
+  free_positioning_measurement_resp(&cp);
+
+  printf("%s() successful\n", __func__);
+}
+
+static void test_f1ap_positioning_measurement_failure()
+{
+  f1ap_positioning_measurement_failure_t orig = {
+      .transaction_id = 12,
+      .lmf_measurement_id = 1999,
+      .ran_measurement_id = 2225,
+      .cause = F1AP_CAUSE_MISC,
+      .cause_value = 3,
+  };
+  F1AP_F1AP_PDU_t *f1enc = encode_positioning_measurement_failure(&orig);
+  F1AP_F1AP_PDU_t *f1dec = f1ap_encode_decode(f1enc);
+  f1ap_msg_free(f1enc);
+
+  f1ap_positioning_measurement_failure_t decoded = {0};
+  bool ret = decode_positioning_measurement_failure(f1dec, &decoded);
+  AssertFatal(ret, "decode_positioning_measurement_failure(): could not decode message\n");
+  f1ap_msg_free(f1dec);
+
+  ret = eq_positioning_measurement_failure(&orig, &decoded);
+  AssertFatal(ret, "eq_positioning_measurement_failure(): decoded message doesn't match\n");
+  free_positioning_measurement_failure(&decoded);
+
+  f1ap_positioning_measurement_failure_t cp = cp_positioning_measurement_failure(&orig);
+  ret = eq_positioning_measurement_failure(&orig, &cp);
+  AssertFatal(ret, "eq_positioning_measurement_failure(): copied message doesn't match\n");
+  free_positioning_measurement_failure(&orig);
+  free_positioning_measurement_failure(&cp);
+
+  printf("%s() successful\n", __func__);
+}
+
+static void test_f1ap_positioning_measurement_report()
+{
+  f1ap_positioning_measurement_report_t orig = {
+      .transaction_id = 12,
+      .lmf_measurement_id = 1999,
+      .ran_measurement_id = 2225,
+  };
+
+  orig.pos_measurement_result_list = calloc_or_fail(1, sizeof(*orig.pos_measurement_result_list));
+  uint32_t pos_meas_result_list_len = 2;
+  orig.pos_measurement_result_list->pos_measurement_result_list_length = pos_meas_result_list_len;
+  orig.pos_measurement_result_list->pos_measurement_result_list_item =
+      calloc_or_fail(pos_meas_result_list_len, sizeof(*orig.pos_measurement_result_list->pos_measurement_result_list_item));
+  for (int i = 0; i < pos_meas_result_list_len; i++) {
+    f1ap_pos_measurement_result_list_item_t *pos_meas_result_list_item =
+        &orig.pos_measurement_result_list->pos_measurement_result_list_item[i];
+    pos_meas_result_list_item->trp_id = 10 + i;
+
+    f1ap_pos_measurement_result_t *posMeasurementResult = &pos_meas_result_list_item->pos_measurement_result;
+    uint32_t pos_meas_result_length = 4;
+    posMeasurementResult->pos_measurement_result_item_length = pos_meas_result_length;
+    posMeasurementResult->pos_measurement_result_item =
+        calloc_or_fail(pos_meas_result_length, sizeof(*posMeasurementResult->pos_measurement_result_item));
+
+    // Angle of arrival
+    f1ap_pos_measurement_result_item_t *pos_measurement_result_item = &posMeasurementResult->pos_measurement_result_item[0];
+    f1ap_measured_results_value_t *measuredResultsValue = &pos_measurement_result_item->measured_results_value;
+    measuredResultsValue->present = F1AP_MEASURED_RESULTS_VALUE_PR_UL_ANGLEOFARRIVAL;
+    f1ap_ul_aoa_t *uL_AngleOfArrival = &measuredResultsValue->choice.ul_angle_of_arrival;
+    uL_AngleOfArrival->azimuth_aoa = 700 + i;
+    uL_AngleOfArrival->zenith_aoa = calloc_or_fail(1, sizeof(*uL_AngleOfArrival->zenith_aoa));
+    *uL_AngleOfArrival->zenith_aoa = 450 + i;
+    uL_AngleOfArrival->lcs_to_gcs_translation_aoa = calloc_or_fail(1, sizeof(*uL_AngleOfArrival->lcs_to_gcs_translation_aoa));
+    uL_AngleOfArrival->lcs_to_gcs_translation_aoa->alpha = 200;
+    uL_AngleOfArrival->lcs_to_gcs_translation_aoa->beta = 220;
+    uL_AngleOfArrival->lcs_to_gcs_translation_aoa->gamma = 280;
+
+    f1ap_time_stamp_t *timeStamp = &pos_measurement_result_item->time_stamp;
+    timeStamp->system_frame_number = 100;
+    timeStamp->slot_index.present = F1AP_TIME_STAMP_SLOT_INDEX_PR_SCS_30;
+    timeStamp->slot_index.choice.scs_30 = 15;
+
+    // UL SRS RSRP
+    pos_measurement_result_item = &posMeasurementResult->pos_measurement_result_item[1];
+    measuredResultsValue = &pos_measurement_result_item->measured_results_value;
+    measuredResultsValue->present = F1AP_MEASURED_RESULTS_VALUE_PR_UL_SRS_RSRP;
+    measuredResultsValue->choice.ul_srs_rsrp = 100 + i;
+
+    timeStamp = &pos_measurement_result_item->time_stamp;
+    timeStamp->system_frame_number = 101;
+    timeStamp->slot_index.present = F1AP_TIME_STAMP_SLOT_INDEX_PR_SCS_15;
+    timeStamp->slot_index.choice.scs_15 = 8;
+
+    // UL RToA
+    pos_measurement_result_item = &posMeasurementResult->pos_measurement_result_item[2];
+    measuredResultsValue = &pos_measurement_result_item->measured_results_value;
+    measuredResultsValue->present = F1AP_MEASURED_RESULTS_VALUE_PR_UL_RTOA;
+    f1ap_ul_rtoa_measurement_t *uL_RTOA = &measuredResultsValue->choice.ul_rtoa;
+    uL_RTOA->ul_rtoa_measurement_item.present = F1AP_ULRTOAMEAS_PR_K1;
+    uL_RTOA->ul_rtoa_measurement_item.choice.k1 = 98500 + i;
+
+    timeStamp = &pos_measurement_result_item->time_stamp;
+    timeStamp->system_frame_number = 102;
+    timeStamp->slot_index.present = F1AP_TIME_STAMP_SLOT_INDEX_PR_SCS_60;
+    timeStamp->slot_index.choice.scs_60 = 31;
+
+    // gNB RX-TX Time Diff
+    pos_measurement_result_item = &posMeasurementResult->pos_measurement_result_item[3];
+    measuredResultsValue = &pos_measurement_result_item->measured_results_value;
+    measuredResultsValue->present = F1AP_MEASURED_RESULTS_VALUE_PR_GNB_RXTXTIMEDIFF;
+    f1ap_gnb_rx_tx_time_diff_t *gNB_RxTxTimeDiff = &measuredResultsValue->choice.gnb_rx_tx_time_diff;
+    gNB_RxTxTimeDiff->rx_tx_time_diff.present = F1AP_GNBRXTXTIMEDIFFMEAS_PR_K3;
+    gNB_RxTxTimeDiff->rx_tx_time_diff.choice.k3 = 98412 + i;
+
+    timeStamp = &pos_measurement_result_item->time_stamp;
+    timeStamp->system_frame_number = 103;
+    timeStamp->slot_index.present = F1AP_TIME_STAMP_SLOT_INDEX_PR_SCS_120;
+    timeStamp->slot_index.choice.scs_120 = 70;
+  }
+
+  F1AP_F1AP_PDU_t *f1enc = encode_positioning_measurement_report(&orig);
+  F1AP_F1AP_PDU_t *f1dec = f1ap_encode_decode(f1enc);
+  f1ap_msg_free(f1enc);
+
+  f1ap_positioning_measurement_report_t decoded = {0};
+  bool ret = decode_positioning_measurement_report(f1dec, &decoded);
+  AssertFatal(ret, "decode_positioning_measurement_report(): could not decode message\n");
+  f1ap_msg_free(f1dec);
+
+  ret = eq_positioning_measurement_report(&orig, &decoded);
+  AssertFatal(ret, "eq_positioning_measurement_report(): decoded message doesn't match\n");
+  free_positioning_measurement_report(&decoded);
+
+  f1ap_positioning_measurement_report_t cp = cp_positioning_measurement_report(&orig);
+  ret = eq_positioning_measurement_report(&orig, &cp);
+  AssertFatal(ret, "eq_positioning_measurement_report(): copied message doesn't match\n");
+  free_positioning_measurement_report(&orig);
+  free_positioning_measurement_report(&cp);
+
+  printf("%s() successful\n", __func__);
+}
+
+static void test_f1ap_positioning_measurement_abort()
+{
+  f1ap_positioning_measurement_abort_t orig = {
+      .transaction_id = 12,
+      .lmf_measurement_id = 1999,
+      .ran_measurement_id = 2225,
+  };
+  F1AP_F1AP_PDU_t *f1enc = encode_positioning_measurement_abort(&orig);
+  F1AP_F1AP_PDU_t *f1dec = f1ap_encode_decode(f1enc);
+  f1ap_msg_free(f1enc);
+
+  f1ap_positioning_measurement_abort_t decoded = {0};
+  bool ret = decode_positioning_measurement_abort(f1dec, &decoded);
+  AssertFatal(ret, "decode_positioning_measurement_abort(): could not decode message\n");
+  f1ap_msg_free(f1dec);
+
+  ret = eq_positioning_measurement_abort(&orig, &decoded);
+  AssertFatal(ret, "eq_positioning_measurement_abort(): decoded message doesn't match\n");
+  free_positioning_measurement_abort(&decoded);
+
+  f1ap_positioning_measurement_abort_t cp = cp_positioning_measurement_abort(&orig);
+  ret = eq_positioning_measurement_abort(&orig, &cp);
+  AssertFatal(ret, "eq_positioning_measurement_abort(): copied message doesn't match\n");
+  free_positioning_measurement_abort(&orig);
+  free_positioning_measurement_abort(&cp);
+
+  printf("%s() successful\n", __func__);
+}
+
+static void test_f1ap_positioning_measurement_failure_indication()
+{
+  f1ap_positioning_measurement_failure_indication_t orig = {
+      .transaction_id = 12,
+      .lmf_measurement_id = 1999,
+      .ran_measurement_id = 2225,
+      .cause = F1AP_CAUSE_MISC,
+      .cause_value = 3,
+  };
+  F1AP_F1AP_PDU_t *f1enc = encode_positioning_measurement_failure_indication(&orig);
+  F1AP_F1AP_PDU_t *f1dec = f1ap_encode_decode(f1enc);
+  f1ap_msg_free(f1enc);
+
+  f1ap_positioning_measurement_failure_indication_t decoded = {0};
+  bool ret = decode_positioning_measurement_failure_indication(f1dec, &decoded);
+  AssertFatal(ret, "decode_positioning_measurement_failure_indication(): could not decode message\n");
+  f1ap_msg_free(f1dec);
+
+  ret = eq_positioning_measurement_failure_indication(&orig, &decoded);
+  AssertFatal(ret, "eq_positioning_measurement_failure_indication(): decoded message doesn't match\n");
+  free_positioning_measurement_failure_indication(&decoded);
+
+  f1ap_positioning_measurement_failure_indication_t cp = cp_positioning_measurement_failure_indication(&orig);
+  ret = eq_positioning_measurement_failure_indication(&orig, &cp);
+  AssertFatal(ret, "eq_positioning_measurement_failure_indication(): copied message doesn't match\n");
+  free_positioning_measurement_failure_indication(&orig);
+  free_positioning_measurement_failure_indication(&cp);
+
+  printf("%s() successful\n", __func__);
+}
+
+static void test_f1ap_positioning_measurement_update()
+{
+  f1ap_positioning_measurement_update_t orig = {
+      .transaction_id = 12,
+      .lmf_measurement_id = 1999,
+      .ran_measurement_id = 2225,
+  };
+
+  // SRS configuration
+  orig.srs_configuration = calloc_or_fail(1, sizeof(*orig.srs_configuration));
+  f1ap_srs_carrier_list_t *srs_carrier_list = &orig.srs_configuration->srs_carrier_list;
+  fill_srs_carrier_list(srs_carrier_list);
+
+  F1AP_F1AP_PDU_t *f1enc = encode_positioning_measurement_update(&orig);
+  F1AP_F1AP_PDU_t *f1dec = f1ap_encode_decode(f1enc);
+  f1ap_msg_free(f1enc);
+
+  f1ap_positioning_measurement_update_t decoded = {0};
+  bool ret = decode_positioning_measurement_update(f1dec, &decoded);
+  AssertFatal(ret, "decode_positioning_measurement_update(): could not decode message\n");
+  f1ap_msg_free(f1dec);
+
+  ret = eq_positioning_measurement_update(&orig, &decoded);
+  AssertFatal(ret, "eq_positioning_measurement_update(): decoded message doesn't match\n");
+  free_positioning_measurement_update(&decoded);
+
+  f1ap_positioning_measurement_update_t cp = cp_positioning_measurement_update(&orig);
+  ret = eq_positioning_measurement_update(&orig, &cp);
+  AssertFatal(ret, "eq_positioning_measurement_update(): copied message doesn't match\n");
+  free_positioning_measurement_update(&orig);
+  free_positioning_measurement_update(&cp);
+
+  printf("%s() successful\n", __func__);
+}
+
 int main()
 {
   test_initial_ul_rrc_message_transfer();
@@ -1294,5 +2389,23 @@ int main()
   test_f1ap_ue_context_release_request();
   test_f1ap_ue_context_release_command();
   test_f1ap_ue_context_release_complete();
+  test_f1ap_positioning_information_request();
+  test_f1ap_positioning_information_response();
+  test_f1ap_positioning_information_failure();
+  test_f1ap_positioning_activation_request();
+  test_f1ap_positioning_activation_response();
+  test_f1ap_positioning_activation_failure();
+  test_f1ap_positioning_deactivation();
+  test_f1ap_positioning_information_update();
+  test_f1ap_trp_information_request();
+  test_f1ap_trp_information_response();
+  test_f1ap_trp_information_failure();
+  test_f1ap_positioning_measurement_request();
+  test_f1ap_positioning_measurement_response();
+  test_f1ap_positioning_measurement_failure();
+  test_f1ap_positioning_measurement_report();
+  test_f1ap_positioning_measurement_abort();
+  test_f1ap_positioning_measurement_failure_indication();
+  test_f1ap_positioning_measurement_update();
   return 0;
 }

@@ -295,8 +295,8 @@ void nr_phy_config_request_sim(PHY_VARS_gNB *gNB,
 {
   NR_DL_FRAME_PARMS *fp                                   = &gNB->frame_parms;
   nfapi_nr_config_request_scf_t *gNB_config               = &gNB->gNB_config;
-  //overwrite for new NR parameters
 
+  // overwrite with new NR parameters
   uint64_t rev_burst=0;
   for (int i=0; i<64; i++)
     rev_burst |= (((position_in_burst>>(63-i))&0x01)<<i);
@@ -314,27 +314,30 @@ void nr_phy_config_request_sim(PHY_VARS_gNB *gNB,
   gNB_config->carrier_config.num_tx_ant.value           = fp->nb_antennas_tx;
   gNB_config->carrier_config.num_rx_ant.value           = fp->nb_antennas_rx;
 
-  gNB_config->tdd_table.tdd_period.value = 0;
-  //gNB_config->subframe_config.dl_cyclic_prefix_type.value = (fp->Ncp == NORMAL) ? NFAPI_CP_NORMAL : NFAPI_CP_EXTENDED;
-
-  if (mu==0) {
-    fp->dl_CarrierFreq = 2600000000;//from_nrarfcn(gNB_config->nfapi_config.rf_bands.rf_band[0],gNB_config->nfapi_config.nrarfcn.value);
-    fp->ul_CarrierFreq = 2600000000;//fp->dl_CarrierFreq - (get_uldl_offset(gNB_config->nfapi_config.rf_bands.rf_band[0])*100000);
-    fp->nr_band = 38;
-    //  fp->threequarter_fs= 0;
-  } else if (mu==1) {
-    fp->dl_CarrierFreq = 3600000000;//from_nrarfcn(gNB_config->nfapi_config.rf_bands.rf_band[0],gNB_config->nfapi_config.nrarfcn.value);
-    fp->ul_CarrierFreq = 3600000000;//fp->dl_CarrierFreq - (get_uldl_offset(gNB_config->nfapi_config.rf_bands.rf_band[0])*100000);
-    fp->nr_band = 78;
-    //  fp->threequarter_fs= 0;
-  } else if (mu==3) {
-    fp->dl_CarrierFreq = 27524520000;//from_nrarfcn(gNB_config->nfapi_config.rf_bands.rf_band[0],gNB_config->nfapi_config.nrarfcn.value);
-    fp->ul_CarrierFreq = 27524520000;//fp->dl_CarrierFreq - (get_uldl_offset(gNB_config->nfapi_config.rf_bands.rf_band[0])*100000);
-    fp->nr_band = 261;
-    //  fp->threequarter_fs= 0;
+  switch (mu) {
+    case 0:
+      gNB->gNB_config.tdd_table.tdd_period.value = 7;
+      fp->dl_CarrierFreq = 2600000000;
+      fp->ul_CarrierFreq = 2600000000;
+      fp->nr_band = 38;
+      break;
+    case 1:
+      gNB->gNB_config.tdd_table.tdd_period.value = 6;
+      fp->dl_CarrierFreq = 3600000000;
+      fp->ul_CarrierFreq = 3600000000;
+      fp->nr_band = 78;
+      break;
+    case 3:
+      gNB->gNB_config.tdd_table.tdd_period.value = 3;
+      fp->dl_CarrierFreq = 27524520000;
+      fp->ul_CarrierFreq = 27524520000;
+      fp->nr_band = 261;
+      break;
+    default:
+      printf("unsupported numerology %d\n", mu);
+      exit(-1);
   }
 
-  fp->threequarter_fs = 0;
   frequency_range_t frequency_range = get_freq_range_from_band(fp->nr_band);
   int bw_index = get_supported_band_index(mu, frequency_range, N_RB_DL);
   gNB_config->carrier_config.dl_bandwidth.value = get_supported_bw_mhz(frequency_range, bw_index);

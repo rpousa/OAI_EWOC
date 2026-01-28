@@ -138,11 +138,11 @@ ID = GNB_PHY_UL_PAYLOAD_RX_BITS
 ID = GNB_PHY_UL_FREQ_CHANNEL_ESTIMATE
     DESC = gNodeB channel estimation in the frequency domain
     GROUP = ALL:PHY:GRAPHIC:HEAVY:GNB
-    FORMAT = int,gNB_ID : int,rnti : int,frame : int,subframe : int,antenna : buffer,chest_t
+    FORMAT = int,gNB_ID : int,rnti : int,frame : int,subframe : int,antenna : int,port : buffer,chest_f
 ID = GNB_PHY_UL_TIME_CHANNEL_ESTIMATE
     DESC = gNodeB channel estimation in the time domain
     GROUP = ALL:PHY:GRAPHIC:HEAVY:GNB
-    FORMAT = int,gNB_ID : int,rnti : int,frame : int,subframe : int,antenna : buffer,chest_t
+    FORMAT = int,gNB_ID : int,rnti : int,frame : int,subframe : int,antenna : int,port : buffer,chest_t
 ID = GNB_PHY_UL_SNR_ESTIMATE
     DESC = gNodeB SNR estimation based on SRS
     GROUP = ALL:PHY:GRAPHIC:HEAVY:GNB
@@ -155,6 +155,10 @@ ID = GNB_PHY_DL_OUTPUT_SIGNAL
     DESC = gNodeB output data in the freq domain for slots
     GROUP = ALL:PHY:GRAPHIC:HEAVY:GNB
     FORMAT = int,gNB_ID : int,frame : int,slot : int,antenna : buffer,txdata
+ID = GNB_PHY_UL_SRS_TOA_NS
+    DESC = gNB ToA estimate from SRS (in ns)
+    GROUP = ALL:PHY:GNB
+    FORMAT = int,gNB_ID : int,rnti : int,frame : int,subframe : buffer,toa_ns
 
 #MAC logs
 ID = ENB_MAC_UE_DL_SDU

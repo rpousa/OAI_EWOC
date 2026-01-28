@@ -50,16 +50,18 @@
 
 //#define DBG_PSS_NR
 static time_stats_t generic_time[TIME_LAST];
-static int pss_search_time_nr(const c16_t **rxdata,
-                              const NR_DL_FRAME_PARMS *frame_parms,
-                              const c16_t pssTime[NUMBER_PSS_SEQUENCE][frame_parms->ofdm_symbol_size],
-                              bool fo_flag,
-                              int is,
-                              int target_Nid_cell,
-                              int *nid2,
-                              int *f_off,
-                              int *pssPeak,
-                              int *pssAvg);
+int pss_search_time_nr(const c16_t **rxdata,
+                       const NR_DL_FRAME_PARMS *frame_parms,
+                       const c16_t pssTime[NUMBER_PSS_SEQUENCE][frame_parms->ofdm_symbol_size],
+                       bool fo_flag,
+                       int is,
+                       int target_Nid_cell,
+                       int *nid2,
+                       int *f_off,
+                       int *pssPeak,
+                       int *pssAvg,
+                       int search_start,
+                       int search_length);
 
 static int16_t primary_synchro_nr2[NUMBER_PSS_SEQUENCE][LENGTH_PSS_NR] = {0};
 static c16_t primary_synchro[NUMBER_PSS_SEQUENCE][LENGTH_PSS_NR] = {0};
@@ -407,7 +409,7 @@ int pss_synchro_nr(const c16_t **rxdata,
   VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME(VCD_SIGNAL_DUMPER_FUNCTIONS_PSS_SEARCH_TIME_NR, VCD_FUNCTION_IN);
 
   int synchro_position =
-      pss_search_time_nr(rxdata, frame_parms, pssTime, fo_flag, is, target_Nid_cell, nid2, f_off, pssPeak, pssAvg);
+      pss_search_time_nr(rxdata, frame_parms, pssTime, fo_flag, is, target_Nid_cell, nid2, f_off, pssPeak, pssAvg, -1, -1);
 
   VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME(VCD_SIGNAL_DUMPER_FUNCTIONS_PSS_SEARCH_TIME_NR, VCD_FUNCTION_OUT);
 
@@ -496,30 +498,38 @@ int pss_synchro_nr(const c16_t **rxdata,
 *
 *********************************************************************/
 
-static int pss_search_time_nr(const c16_t **rxdata,
-                              const NR_DL_FRAME_PARMS *frame_parms,
-                              const c16_t pssTime[NUMBER_PSS_SEQUENCE][frame_parms->ofdm_symbol_size],
-                              bool fo_flag,
-                              int is,
-                              int target_Nid_cell,
-                              int *nid2,
-                              int *f_off,
-                              int *pssPeak,
-                              int *pssAvg)
+int pss_search_time_nr(const c16_t **rxdata,
+                       const NR_DL_FRAME_PARMS *frame_parms,
+                       const c16_t pssTime[NUMBER_PSS_SEQUENCE][frame_parms->ofdm_symbol_size],
+                       bool fo_flag,
+                       int is,
+                       int target_Nid_cell,
+                       int *nid2,
+                       int *f_off,
+                       int *pssPeak,
+                       int *pssAvg,
+                       int search_start,
+                       int search_length)
 {
   unsigned int n, ar, peak_position, pss_source;
   int64_t peak_value;
   int64_t avg[NUMBER_PSS_SEQUENCE] = {0};
   double ffo_est = 0;
 
-  // performing the correlation on a frame length plus one symbol for the first of the two frame
-  // to take into account the possibility of PSS in between the two frames 
-  unsigned int length;
-  if (is==0)
-    length = frame_parms->samples_per_frame + (2*frame_parms->ofdm_symbol_size);
-  else
-    length = frame_parms->samples_per_frame;
-
+  // Determine search window
+  unsigned int start, length;
+  if (search_start >= 0 && search_length > 0) {
+    // Use provided search window for known neighboring cells
+    start = search_start;
+    length = search_length;
+  } else {
+    // For initial cell search
+    start = 0;
+    if (is == 0)
+      length = frame_parms->samples_per_frame + (2 * frame_parms->ofdm_symbol_size);
+    else
+      length = frame_parms->samples_per_frame;
+  }
 
   AssertFatal(length>0,"illegal length %d\n",length);
   peak_value = 0;
@@ -547,7 +557,7 @@ static int pss_search_time_nr(const c16_t **rxdata,
   }
 
   for (int pss_index = pss_index_start; pss_index < pss_index_end; pss_index++) {
-    for (n = 0; n < length; n += 4) { //
+    for (n = start; n < start + length; n += 4) { //
 
       int64_t pss_corr_ue=0;
       /* calculate dot product of primary_synchro_time_nr and rxdata[ar][n]
@@ -627,7 +637,7 @@ static int pss_search_time_nr(const c16_t **rxdata,
         dB_fixed64(avg[pss_source]),
         ffo_est);
 
-  if (peak_value < 5*avg[pss_source])
+  if ((search_start < 0 || search_length == 0) && peak_value < 5 * avg[pss_source])
     return(-1);
 
 

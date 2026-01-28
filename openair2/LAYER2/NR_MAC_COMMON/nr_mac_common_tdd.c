@@ -24,6 +24,15 @@
 #include "common/utils/nr/nr_common.h"
 #include "nfapi/open-nFAPI/nfapi/public_inc/nfapi_nr_interface_scf.h"
 
+uint16_t get_ul_bitmap(const frame_structure_t *fs, int slot)
+{
+  const int slot_period = slot % fs->numb_slots_period;
+  const tdd_bitmap_t *bm = &fs->period_cfg.tdd_slot_bitmap[slot_period];
+  /* For some reason, we only store the number of symbols if it's mixed */
+  const int num_ul_symbols = bm->slot_type == TDD_NR_MIXED_SLOT ? bm->num_ul_symbols : 14;
+  return SL_to_bitmap(14 - num_ul_symbols, num_ul_symbols);
+}
+
 int get_slots_per_frame_from_scs(int scs)
 {
   const int nr_slots_per_frame[5] = {10, 20, 40, 80, 160};

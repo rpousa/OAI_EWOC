@@ -21,19 +21,14 @@
 
 -->
 <testCaseList>
-        <htmlTabRef>cn5g-stop-tab</htmlTabRef>
-        <htmlTabName>CN5G-Stop</htmlTabName>
-        <htmlTabIcon>log-in</htmlTabIcon>
-        <TestCaseRequestedList>
-                000300
-        </TestCaseRequestedList>
-        <TestCaseExclusionList>
-        </TestCaseExclusionList>
+  <htmlTabRef>cn5g-stop-tab</htmlTabRef>
+  <htmlTabName>CN5G-Stop</htmlTabName>
+  <htmlTabIcon>log-in</htmlTabIcon>
 
-        <testCase id="000300">
-                <class>UndeployCoreNetwork</class>
-                <desc>Terminate 5G Core</desc>
-                <cn_id>matix-cn5g</cn_id>
-        </testCase>
+  <testCase>
+    <class>UndeployCoreNetwork</class>
+    <desc>Terminate 5G Core</desc>
+    <cn_id>matix-cn5g</cn_id>
+  </testCase>
+
 </testCaseList>
-

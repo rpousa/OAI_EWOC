@@ -874,6 +874,7 @@ void get_samplerate_and_bw(int mu,
     switch(n_rb) {
     case 270:
       if (threequarter_fs) {
+        warn_higher_threequarter_fs(n_rb, mu);
         *sample_rate=92.16e6;
         *samples_per_frame = 921600;
         *tx_bw = 50e6;
@@ -973,6 +974,7 @@ void get_samplerate_and_bw(int mu,
 
     case 273:
       if (threequarter_fs) {
+        warn_higher_threequarter_fs(n_rb, mu);
         *sample_rate=184.32e6;
         *samples_per_frame = 1843200;
         *tx_bw = 100e6;

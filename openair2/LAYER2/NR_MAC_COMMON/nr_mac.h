@@ -472,8 +472,7 @@ typedef struct Type0_PDCCH_CSS_config_s {
   uint32_t type0_pdcch_ss_mux_pattern;
   uint16_t frame;
   int sfn_c;
-  uint32_t n_c;
-  uint32_t n_0;
+  uint32_t slot;
   uint32_t first_symbol_index;
   uint32_t search_space_duration;
   uint32_t search_space_frame_period;  // in slots

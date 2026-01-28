@@ -72,14 +72,6 @@ static void ly_print_clb(LY_LOG_LEVEL level, const char *msg, const char *path)
   }
 }
 
-static const paramdef_t *gpd(const paramdef_t *pd, int num, const char *name)
-{
-  /* the config module does not know const-correctness... */
-  int idx = config_paramidx_fromname((paramdef_t *)pd, num, (char *)name);
-  DevAssert(idx >= 0);
-  return &pd[idx];
-}
-
 bool init_mplane(ru_session_list_t *ru_session_list)
 {
   paramdef_t fhip[] = ORAN_GLOBALPARAMS_DESC;

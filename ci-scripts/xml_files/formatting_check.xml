@@ -21,18 +21,14 @@
 
 -->
 <testCaseList>
-	<htmlTabRef>formatting-tab</htmlTabRef>
-	<htmlTabName>License and Formatting Checks</htmlTabName>
-	<htmlTabIcon>wrench</htmlTabIcon>
-	<TestCaseRequestedList>
- 000002
-	</TestCaseRequestedList>
-	<TestCaseExclusionList></TestCaseExclusionList>
+  <htmlTabRef>formatting-tab</htmlTabRef>
+  <htmlTabName>License and Formatting Checks</htmlTabName>
+  <htmlTabIcon>wrench</htmlTabIcon>
 
-	<testCase id="000002">
-		<class>LicenceAndFormattingCheck</class>
-		<desc>License and Formatting Checks</desc>
-		<node>obelix</node>
-	</testCase>
+  <testCase>
+    <class>LicenceAndFormattingCheck</class>
+    <desc>License and Formatting Checks</desc>
+    <node>obelix</node>
+  </testCase>
 
 </testCaseList>

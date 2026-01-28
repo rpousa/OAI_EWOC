@@ -21,19 +21,14 @@
 
 -->
 <testCaseList>
-	<htmlTabRef>epc-undeploy-tab</htmlTabRef>
-	<htmlTabName>EPC-Undeploy</htmlTabName>
-	<htmlTabIcon>log-out</htmlTabIcon>
-	<TestCaseRequestedList>
- 000200
-	</TestCaseRequestedList>
-	<TestCaseExclusionList>
-	</TestCaseExclusionList>
+  <htmlTabRef>epc-undeploy-tab</htmlTabRef>
+  <htmlTabName>EPC-Undeploy</htmlTabName>
+  <htmlTabIcon>log-out</htmlTabIcon>
 
-	<testCase id="000200">
-		<class>UndeployCoreNetwork</class>
-		<desc>Undeploy EPC</desc>
-		<cn_id>nano-cn4g</cn_id>
-	</testCase>
+  <testCase>
+    <class>UndeployCoreNetwork</class>
+    <desc>Undeploy EPC</desc>
+    <cn_id>nano-cn4g</cn_id>
+  </testCase>
 
 </testCaseList>

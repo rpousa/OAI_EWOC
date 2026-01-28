@@ -1,22 +1,10 @@
-<table style="border-collapse: collapse; border: none;">
-  <tr style="border-collapse: collapse; border: none;">
-    <td style="border-collapse: collapse; border: none;">
-      <a href="http://www.openairinterface.org/">
-         <img src="./images/oai_final_logo.png" alt="" border=3 height=50 width=150>
-         </img>
-      </a>
-    </td>
-    <td style="border-collapse: collapse; border: none; vertical-align: center;">
-      <b><font size = "5">OAI Build Procedures</font></b>
-    </td>
-  </tr>
-</table>
+# OAI Build Procedures
 
 [[_TOC_]]
 
 This page is valid on tags starting from **`2019.w09`**.
 
-# Overview
+## Overview
 
 The [OAI EPC](https://github.com/OPENAIRINTERFACE/openair-epc-fed/blob/master/docs/DEPLOY_HOME_MAGMA_MME.md) and [OAI 5GC](https://gitlab.eurecom.fr/oai/cn5g/oai-cn5g-fed/-/blob/master/docs/DEPLOY_HOME.md) are developed in distinct projects with their own documentation and are not further described here.
 
@@ -32,7 +20,7 @@ The main oai binaries, which are tested by the Continuous Integration process ar
 -  The 5G gNodeB: `nr-softmodem`
 -  The 5G CU-UP: `nr-cuup`
 -  The LTE PHY simulators: `dlsim` and `ulsim`
--  The 5G PHY simulators: `nr_dlschsim`, `nr_dlsim`, `nr_pbchsim`, `nr_pucchsim`, `nr_ulschsim`, `nr_ulsim`, `polartest`, `smallblocktest`, `nr _ulsim`, `ldpctest`
+-  The 5G PHY simulators: `nr_dlschsim`, `nr_dlsim`, `nr_pbchsim`, `nr_pucchsim`, `nr_ulschsim`, `nr_ulsim`, `polartest`, `smallblocktest`, `nr _ulsim`, `ldpctest`, `nr_srssim`
 
 Running the  [build_oai](../cmake_targets/build_oai) script also generates some utilities required to build and/or run the oai softmodem binaries:
 
@@ -49,9 +37,9 @@ The oai softmodem supports many use cases, and new ones are regularly added. Mos
 - s1, noS1
 - all simulators as the rfsimulator, the L2 simulator, with exception of PHY simulators, which are distinct executables. 
 
-# Running `build_oai`
+## Running `build_oai`
 
-## List of options
+### List of options
 
 Calling the `build_oai` script with the `-h` option gives the list of all available options. A number of important ones:
 
@@ -66,7 +54,7 @@ Calling the `build_oai` script with the `-h` option gives the list of all availa
 
 `build_oai` also provides various options to enable runtime error checkers, i.e. sanitizers in order to find various types of bugs in the codebase and eventually enhance the stability of the OAI softmodems. Refer to [sanitizers.md](./dev_tools/sanitizers.md) for more details.
 
-## Installing dependencies
+### Installing dependencies
 
 Install all dependencies by issuing the `-I` option. To install furthermore libraries for optional libraries, use the `--install-optional-packages` option. The `-I` option will also install dependencies for an SDR when paired with `-w`. For instance, in order to install all dependencies and the ones for USRP, run:
 
@@ -77,7 +65,7 @@ cd openairinterface5g/cmake_targets/
 
 Note the section on installing UHD further down for more information.
 
-## Installing (new) asn1c from source
+### Installing (new) asn1c from source
 
 With tag 2023.w22, we switch from our [own
 `asn1c`](https://gitlab.eurecom.fr/oai/asn1c.git) to a [community-maintained
@@ -107,7 +95,7 @@ install elsewhere, using one of these two methods:
 cmake .. -GNinja -DASN1C_EXEC=/opt/asn1c/bin/asn1c
 ```
 
-## Installing UHD from source
+### Installing UHD from source
 
 Previously for Ubuntu distributions, when installing the pre-requisites, most of the packages are installed from PPA.
 
@@ -139,7 +127,7 @@ See:
 * `cmake_targets/tools/uhd-4.x-tdd-patch.diff`
 * `cmake_targets/tools/build_helper` --> function `install_usrp_uhd_driver_from_source`
 
-## Building PHY Simulators
+### Building PHY Simulators
 
 The PHY layer simulators (LTE and NR) can be built as follows:
 
@@ -152,7 +140,7 @@ After completing the build, the binaries are available in the `cmake_targets/ran
 
 Detailed information about these simulators can be found [in the dedicated page](./physical-simulators.md)
 
-## Building UEs, eNodeB and gNodeB Executables
+### Building UEs, eNodeB and gNodeB Executables
 
 After downloading the source files, a single build command can be used to get the binaries supporting all the oai softmodem use cases (UE and [eg]NodeB):
 
@@ -165,7 +153,7 @@ You can build any oai softmodem executable separately, you may not need all of t
 
 After completing the build, the binaries are available in the `cmake_targets/ran_build/build` directory.
 
-## Building Optional Binaries
+### Building Optional Binaries
 
 There are a number of optional libraries that can be built in support of the
 RAN, such as telnetsrv, scopes, offloading libraries, etc.
@@ -187,7 +175,7 @@ Some libraries have further dependencies and might not build on every system:
 - `websrv`: npm and others
 - `ldpc_aal`: DPDK with patch
 
-# Running `cmake` directly
+## Running `cmake` directly
 
 `build_oai` is a wrapper on top of `cmake`. It is therefore possible to run `cmake` directly. An example using `ninja`: to build all "main targets" for 5G, excluding additional libraries:
 ```
@@ -217,9 +205,9 @@ cmake-gui ../../..
 ```
 You can of course use all standard cmake/ninja/make commands in this directory.
 
-## cmake presets
+### cmake presets
 
-CMake presets are common project configure options. See https://cmake.org/cmake/help/latest/manual/cmake-presets.7.html
+CMake presets are common project configure options. See [here](https://cmake.org/cmake/help/latest/manual/cmake-presets.7.html).
 
 Configure presets:
 
@@ -241,7 +229,7 @@ To build using a build preset:
 
     cmake --build --preset <preset_name>
 
-# Cross Compile
+## Cross Compile
 
 If you want to use cross-compiler on x86 platform for aarch64 version, please refer the [cross-compile.md](./cross-compile.md) for more information.
 

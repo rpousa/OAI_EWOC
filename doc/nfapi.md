@@ -72,7 +72,7 @@ If the type is `VNF`, you have to modify the `MACRLCs.tr_s_preference`
 - `MACRLCs.local_s_portd` (local south port for control): VNF's P5 local port
 - `MACRLCs.remote_s_portd` (remote south port for data): PNF's P7 remote port
 
-Note that any L1-specific section (`L1s`, `RUs`,
+> Note that any L1-specific section (`L1s`, `RUs`,
 RFsimulator-specific/IF7.2-specific configuration or other radios, if
 necessary) will be ignored and can be deleted.
 
@@ -86,7 +86,7 @@ If the type is `PNF`, you have to modify modify the `L1s.tr_n_preference`
 - `L1s.local_n_portd` (local north port for data): PNF's P7 local port
 - `L1s.remote_n_portd` (remote north port for data): VNF's P7 remote port
 
-Note that this file should contain additional, L1-specific sections (`L1s`,
+> Note that this file should contain additional, L1-specific sections (`L1s`,
 `RUs` RFsimulator-specific/IF7.2-specific configuration or other radios, if
 necessary).
 
@@ -111,10 +111,10 @@ can proceed as follows:
   `pnf.conf`, or provide them on the command line for the PNF.
 - to run, proceed as described in the quick start above.
 
-Note: all L1-specific options have to be passed to the PNF, and remaining
+> **Note:** all L1-specific options have to be passed to the PNF, and remaining
 options to the VNF.
 
-## Transport mechanisms between VNF and PNF
+### Transport mechanisms between VNF and PNF
 
 Currently, the VNF/PNF split supports three transport mechanisms between each
 other:
@@ -123,8 +123,8 @@ other:
 
    The socket type may be changed by editing `nfapi_pnf_config_create()` and
    `nfapi_vnf_config_create()`, in both of which `_this->sctp = <value, 0 or
-   1>;` indicate whether SCTP or regular sockets are to be used.  Note: The
-   value of `_this->sctp` **must** be the same on the VNF and PNF.
+   1>;` indicate whether SCTP or regular sockets are to be used.
+   > **Note:** The value of `_this->sctp` **must** be the same on the VNF and PNF.
 2. Intel WLS Lib, which uses DPDK to achieve a shared memory communication between components.
 3. nvIPC, which is used exclusively for the NVIDIA Aerial L1. Thus, it is only
    applicable for the VNF.
@@ -133,15 +133,15 @@ The change between transport mechanisms is done at compilation time:
 - No changes to the `build_oai` call are required in order to select socket communication, as it is the default.
 - In order to select WLS as the transport mechanism between VNF and PNF, first install the WLS library, and afterwards use `-t WLS` as a parameter of `build_oai`:
 
-### How to use nFAPI
+#### How to use nFAPI
 
 nFAPI is used by default. Compile and configure as indicated above.
 
-### How to use Aerial
+#### How to use Aerial
 
 Refer to [this document](./Aerial_FAPI_Split_Tutorial.md) for more information.
 
-### How to use WLS lib
+#### How to use WLS lib
 
 Before the first compilation with WLS support, the [WLS
 library](https://docs.o-ran-sc.org/projects/o-ran-sc-o-du-phy/en/latest/wls-lib.html)
@@ -171,7 +171,7 @@ After installing WLS, you can run the build command as shown below:
 
     ./build_oai -t WLS -w USRP --gNB --nrUE --ninja -C
 
-#### How to run OAI PNF with OAI VNF
+##### How to run OAI PNF with OAI VNF
 
 Refer to the above steps in [Quickstart](#quickstart), but run the PNF first as it is the WLS "master".
 
@@ -195,7 +195,7 @@ Run VNF
 
     sudo NFAPI_TRACE_LEVEL=info ./nr-softmodem -O ../../../targets/PROJECTS/GENERIC-NR-5GC/CONF/gnb-vnf.sa.band78.106prb.nfapi.conf --nfapi VNF
 
-#### How to run OAI PNF with OSC/Radisys O-DU
+##### How to run OAI PNF with OSC/Radisys O-DU
 
 Set up the hugepages for DPDK (1GB page size, 6 pages; this only needs to be
 done once):
@@ -244,7 +244,7 @@ Run the O-DU over GDB
 
     sudo -E gdb -ex run --readnever --args  ./odu/odu
 
-Note: If you see the following prompt in GDB
+> **Note:** If you see the following prompt in GDB
 
     This GDB supports auto-downloading debuginfo from the following URLs:
       <https://debuginfod.ubuntu.com>

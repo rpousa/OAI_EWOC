@@ -1,4 +1,4 @@
-# PHY and MAC Interface
+## PHY and MAC Interface
 The PHY sends scheduling requests and data indication to MAC via `nr_ue_dl_indication` for DL path and `nr_ue_ul_indication()` for UL path and the MAC sends scheduling configuration to PHY via `nr_ue_scheduled_response()`. The following diagram shows the interaction for PDCCH and PDSCH reception.
 ```mermaid
 sequenceDiagram
@@ -8,7 +8,7 @@ sequenceDiagram
     MAC->>+PHY: Schedules PDSCH reception (via nr_ue_scheduled_response)
 ```
 
-# Multi-threading Design
+## Multi-threading Design
 The `UE_thread` function in `nr-ue.c` is the main top level thread that interacts with the radio unit. Once the thread spawns, it starts the 'Initial Synchronization'. Once its complete, the regular processing of slots commences.
 
 The UE exits when at any point in operation it gets out of synchronization. When the command line option `--non-stop` is used, the UE goes to 'Initial Synchronization' mode when it loses synchronization with gNB. However, this feature is not fully implemented and it is a work in progress at the time of writing this documentation. This will be the default behavior (not a command line option) when the feature is fully implemented.
@@ -17,7 +17,7 @@ UE uses actors which are threads dedicated to particular activity. Sync Actor ha
 
 ![design](images/nr-ue-threads.svg)
 
-## Initial Synchronization Block
+### Initial Synchronization Block
 ```mermaid
 graph TD
     start(Start) -->|UE_thread| rxRu["RU read<br/>(Reads two frames)"]
@@ -26,7 +26,7 @@ graph TD
     sync --> |UE_thread| frameSync["Frame synchronization<br/>(Shift received samples to align with frame)"]
     rxRuDummy --> |UE_thread| frameSync
 ```
-## Regular Slot Processing
+#### Regular Slot Processing
 ```mermaid
 graph TD
     sync["Frame synchronization<br/>(Shift received samples to align with frame)"] -->|UE_thread| hw_read["RU read (slot n)"]

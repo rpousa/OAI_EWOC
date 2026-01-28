@@ -19,15 +19,17 @@ cd phy_simulators/build/
 On UpLink Shared CHannel(ULSCH), multiple users share the same radio resources (time and frequency slots), the base station schedules and assigns the resources dynamically. The goal here is to simulate the sending of data from an UE to a base station. 
 
 Example:
-| Parameter | Value | Description |
-|--- |:-: |--: |
-| R | 106 | R_NB_UL=106|
-| m | 9 | MCS=9 |
-| s | 13 | Start SNR |
-| n | 100 | Will simulate 100 frames |
-| y | 4 | 4 antennas used in eNB |
-| z | 4 | 4 antennas used in UE |
-| W | 4 | Will use 4 layers |
+
+| Parameter | Value | Description              |
+|-----------|:-----:|--------------------------|
+| R         |  106  | R_NB_UL = 106            |
+| m         |   9   | MCS = 9                  |
+| s         |  13   | Start SNR                |
+| n         | 100   | Will simulate 100 frames |
+| y         |   4   | 4 antennas used in eNB   |
+| z         |   4   | 4 antennas used in UE    |
+| W         |   4   | Will use 4 layers        |
+
 
 
 ```bash
@@ -38,6 +40,7 @@ sudo ./nr_ulschsim -R 106 -m9 -s13 -n100 -y4 -z4 -W4
 On UpLink Channel, a single user is dealing with a single base station. The goal is here to simulate the sending of the data from an UE to a base station.
 
 It's focusing on: 
+
 - UpLink chain validation  
 - PUSCH (whole chain) on UE side and gNB side
 - No channel model on data domain signal, which means an ideal scenario is used
@@ -63,13 +66,15 @@ sudo ./build_oai -c --gNB --nrUE -w SIMU
 ##### 4x4 RANK 4
 
 Example:
-| Parameter | Value | Description |
-|--- |:-: |--: |
-| O | [...] | Use a configuration file |
-| l | 2 | Set the number of layers for downlink to 2 for PHY test mode |
-| L | 4 | Set the number of layers for uplink to 4 for PHY test mode |
-| ue-nb-ant-rx | 4 | Set UE number of rx antennas to 4 |
-| ue-nb-ant-tx | 4 | Set UE number of tx antennas to 4 |
+
+| Parameter     | Value | Description                                              |
+|---------------|:-----:|----------------------------------------------------------|
+| O             | [...] | Use a configuration file                                 |
+| l             |   2   | Set the number of layers for downlink to 2 for PHY test mode |
+| L             |   4   | Set the number of layers for uplink to 4 for PHY test mode   |
+| ue-nb-ant-rx  |   4   | Set UE number of rx antennas to 4                         |
+| ue-nb-ant-tx  |   4   | Set UE number of tx antennas to 4                         |
+
 
 ```bash
 sudo ./nr-softmodem -O ../../../targets/PROJECTS/GENERIC-NR-5GC/CONF/gnb.sa.band78.fr1.106PRB.usrpb210.4layer.conf --rfsim --phy-test --l 2  --L 4

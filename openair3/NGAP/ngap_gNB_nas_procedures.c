@@ -361,7 +361,11 @@ int ngap_gNB_handle_nas_downlink(sctp_assoc_t assoc_id, uint32_t stream, NGAP_NG
   NGAP_FIND_PROTOCOLIE_BY_ID(NGAP_DownlinkNASTransport_IEs_t, ie, container,
                              NGAP_ProtocolIE_ID_id_NAS_PDU, true);
   /* Forward the NAS PDU to NR-RRC */
-  ngap_gNB_itti_send_nas_downlink_ind(ngap_gNB_instance->instance, ue_desc_p->gNB_ue_ngap_id, ie->value.choice.NAS_PDU.buf, ie->value.choice.NAS_PDU.size);
+  ngap_gNB_itti_send_nas_downlink_ind(ngap_gNB_instance->instance,
+                                      ue_desc_p->gNB_ue_ngap_id,
+                                      ue_desc_p->amf_ue_ngap_id,
+                                      ie->value.choice.NAS_PDU.buf,
+                                      ie->value.choice.NAS_PDU.size);
 
   return 0;
 }

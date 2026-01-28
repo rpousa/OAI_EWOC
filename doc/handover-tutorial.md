@@ -1,3 +1,5 @@
+# Handover Tutorial for OAI
+
 This tutorial explains how to perform handovers. It covers both F1 handovers
 (intra-gNB, within a single gNB between DUs) and N2 handovers (inter-gNB).
 
@@ -12,7 +14,7 @@ the CU and the associated DUs.
 
 [[_TOC_]]
 
-# Considered setup for F1 handover
+## Considered setup for F1 handover
 
 We consider one CU and two DUs, connected over F1. The UE is initially
 connected over the radio interface ("Uu") to DU0. Via movement to a new
@@ -22,7 +24,7 @@ same.
 
 ![F1 Handover setup](./RRC/ho.png)
 
-# gNB neighbour definition
+## What is a gNB neighbor?
 
 Network continuity is a key aspect of 5G. In the 5G architecture, gNB neighbours
 play a central role in maintaining service continuity through mechanisms such
@@ -39,13 +41,13 @@ Neighbour types include:
 - **Inter-gNB neighbours** - cells belonging to different gNBs
 - **Inter-RAT neighbours** - cells belonging to another RAT (e.g., LTE)
 
-# Steps to run F1 handover with OAI UE
+## Steps to run F1 handover with OAI UE
 
 Measurement reporting and processing of RRC Reconfiguration for Mobility are
 not completed at the UE. Nevertheless, it is possible to make simple handover
 tests without any radio setup, on a single PC, with the OAI UE, in RFsimulator.
 
-## Build with telnet support
+### Build with telnet support
 
 Since the UE does not support any measurement reporting, it cannot trigger a
 handover on its own; it has to be triggered manually through telnet. Thus,
@@ -53,7 +55,7 @@ build both gNB and UE as well as activate the build of telnet to that purpose:
 
     ./build_oai --ninja --nrUE --gNB --build-lib telnetsrv
 
-## Run the setup
+### Run the setup
 
 We will use the TDD configuration files in the repository for the
 [CU](../targets/PROJECTS/GENERIC-NR-5GC/CONF/gnb-cu.sa.f1.conf) as well for
@@ -116,7 +118,7 @@ A number of remarks:
 1. In some cases, if the RFsim server is at the UE, the whole system can block;
    in this case, stop UE and all DUs and restart (the CU can keep running).
 
-## Additional information to the manual HO trigger
+### Additional information to the manual HO trigger
 
 You can trigger the handover manually by logging in through telnet:
 
@@ -139,7 +141,7 @@ and you have to manually type the CU UE ID. You can see a list of all UEs in
 the file `nrRRC_stats.log` that is printed periodically in the working
 directory of the CU.
 
-# Steps to run F1 handover with COTS UE
+## Steps to run F1 handover with COTS UE
 
 You can do handover across DUs with a COTS UE. Note that these DUs should be
 separated by at least multiple meters to ensure that the UE will receive
@@ -156,7 +158,7 @@ For UEs, we verified Quectel modules, iPhones and Samsung S23 Ultra. Note,
 though, that not all phones might work; for instance, we did not achieve
 handovers with a OnePlus Nord, yet.
 
-## Steps
+### Steps
 
 First, make sure that you can run both DUs with the CU independently.
 Use the same radio hardware for both radios to ensure that both cells can be
@@ -209,15 +211,15 @@ instead of waiting for UE measurement report.)
 Our CI setup consists of:
 - 2 USRPs B210 that are synchronized by connecting them to an Octoclock over
   10MHz refrence and a PPS signal. The RU hosts are synchronized via NTP.
-- Mini-Circuits RC4DAT-6G-60 programmable attenuator. To control the digital attenuator,
-  a Python script was developed `ci-scripts/attenuatorctl.py`.
+- Mini-Circuits RC4DAT-6G-60 programmable attenuator. To control the digital
+  attenuator, a Python script was developed `ci-scripts/attenuatorctl.py`.
 - Quectel RM520 as a UE.
 - The setup is run using Docker `ci-scripts/yaml_files/5g_sa_f1_b210_ho`.
 
 To run the setup using Docker:
 - We consider 2 synchronized servers. One for each DU.
 
-## Example neighbour configuration
+### Example neighbour configuration
 
 Below is an example neighbour configuration. It is based on this DU information
 gathered from `nrRRC_stats.log` at the CU:
@@ -241,14 +243,14 @@ The below configuration further enables periodic measurements, A2 event
 Better than Serving").
 The A2 event can be disabled by setting `enable = 0`.
 The A3 event cannot be disabled as of now. It can be made
-specific to cells or set to `cell_id = -1` which means "any cell".
+specific to cells or set to `physCellId = -1` which means "any cell".
 
 `hysteresis` is a margin added to the serving cell measurements to
 prevent unnecessary or frequent handovers. It ensures that the neighbouring
 cell must show sufficiently better signal quality before a handover is
 triggered. It is an integer between 0 and 30.
 
-`timeToTrigger` the time during which specific criteria for the event
+`time_to_trigger` the time during which specific criteria for the event
 needs to be met in order to trigger a measurement report. It is an enumerated
 parameter and in the configuration below it is set to 1 which corresponds to
 `ms40` or 40 milliseconds.
@@ -312,23 +314,24 @@ nr_measurement_configuration = {
   };
 
   A2 = {
-    enable        = 1;
-    threshold     = 60;
-    timeToTrigger = 1;
+    enable          = 1;
+    threshold       = 60;
+    time_to_trigger = 1;
   };
 
   A3 = (
     {
-      cell_id        = -1;
-      offset         = 10;
-      hysteresis     = 0;
-      timeToTrigger  = 1;
+      physCellId      = -1;
+      offset          = 10;
+      hysteresis      = 0;
+      time_to_trigger = 1;
     }
   )
 };
 ```
 
-`@include` this configuration file inside the gNB section of CU file as shown below.
+`@include` this configuration file inside the gNB section of CU file as shown
+below.
 
 ```
     plmn_list = ({ mcc = 001; mnc = 01; mnc_length = 2; snssaiList = ({ sst = 1, sd = 0xffffff })});
@@ -338,13 +341,13 @@ nr_measurement_configuration = {
 
 ```
 
-# Handovers triggers and NTN
+## Handovers triggers and NTN
 
 Typically, in terrestrial networks, channel measurements as well as criteria
 such as load in base stations, is used to determine when and where to handover
 a UE.
 
-## NTN
+### NTN
 
 Doppler spreading and time selectivity of the channel are already a challenge
 for conventional terrestrial networks. However, in the context of
@@ -390,7 +393,7 @@ are as follows:
   on UTC time or a timer-based solution, which can also be applied jointly (or
   not) with another trigger as the measurement-based trigger. The timer-based
   handover trigger considers the deterministic satellite movement to predict
-  the time duration for which the satellite’s footprint covers a certain zone.
+  the time duration for which the satellite's footprint covers a certain zone.
 
 - **Timing advance value-based triggering**: This method uses the timing
   advance value (independently or jointly with another trigger) to trigger a
@@ -399,7 +402,7 @@ are as follows:
   which sends the preamble. However, UEs with GNSS support are required to
   perform this method.
 
-## Simple location/time-based trigger
+### Simple location/time-based trigger
 
 A location-based handover trigger, somewhat aligned with 3GPP Rel.17, taking
 advantage of deterministic satellite movement, can be implemented whereby it is
@@ -419,9 +422,9 @@ while true; do
 done
 ```
 
-# N2 Handover
+## N2 Handover
 
-## Run the setup
+### Run the setup
 
 An N2 handover involves the transfer of a UE from one gNB to another via the
 5G core network. Unlike F1 handover, where the CU handles the process internally
@@ -432,14 +435,14 @@ We assume:
 
 * Two independent gNBs connected to the same 5GC via N2 interface.
 * A UE initially connected to gNB-PCI0, which will be handed over to gNB-PCI1.
-* Handover is triggered by either a decision based measurement event (e.g. A3) or
-telnet command.
+* Handover is triggered by either a decision based measurement event (e.g. A3)
+or telnet command.
 
-## Steps to run N2 handover with OAI UE
+### Steps to run N2 handover with OAI UE
 
 **Note for same-machine setup:** When running both gNBs on the same machine,
-you need to assign a unique IP address to the second gNB to avoid network conflicts.
-For example:
+you need to assign a unique IP address to the second gNB to avoid network
+conflicts. For example:
 
 ```sh
 sudo ip addr add 192.168.71.180/24 dev rfsim5g-public
@@ -490,15 +493,20 @@ From gNB-PCI0, trigger handover on target gNB with PCI 1 for UE ID 1:
 ```sh
 echo ci trigger_n2_ho 1,1 | nc 127.0.0.1 9090 && echo
 ```
-where the input parameters correspond to the PCI of the neighbour cell and the RRC ID of the UE.
+where the input parameters correspond to the PCI of the neighbor cell and the
+RRC ID of the UE.
 
 This will initiate the N2 handover on the source gNB.
 
-## Neighbour list and measurement configuration
+### Neighbour list and measurement configuration
 
-Make sure the configuration file contains a neighbour list and measurement configuration, e.g. [neighbour-config-rfsim.conf](../../ci-scripts/conf_files/neighbour-config.conf).
-This configuration can also be present in a different file and included in the gNB configuration file with `@include "neighbour-config-rfsim.conf"`.
+Make sure the configuration file contains a neighbour list and measurement
+configuration, e.g. [neighbour-config-rfsim.conf](../../ci-scripts/conf_files/neighbour-config.conf).
+This configuration can also be present in a different file and included in the
+gNB configuration file with `@include "neighbour-config-rfsim.conf"`.
 
-For each gNB there is a `neighbour_cell_configuration` linked to its serving cell ID.
+For each gNB there is a `neighbour_cell_configuration` linked to its serving
+cell ID.
 
-See the example above for `neighbour-config-ho.conf`. The same configuration is for both F1 and N2 handover.
+See the example above for `neighbour-config-ho.conf`. The same configuration
+is for both F1 and N2 handover.

@@ -50,6 +50,7 @@ typedef struct {
   void* q_arr;
 
   pthread_barrier_t barrier;
+  _Atomic(uint64_t) dead_mask;
 } tpool_t;
 
 /// @brief Push job to threadpool. May run task inline in case there are no worker threads
@@ -82,4 +83,8 @@ void initFloatingCoresTpool(int nbThreads,tpool_t *pool, bool performanceMeas, c
 
 /// Convenience macro
 #define  initTpool(PARAMPTR,TPOOLPTR, MEASURFLAG) initNamedTpool(PARAMPTR,TPOOLPTR, MEASURFLAG, NULL)
+
+/// Returns the index of the worker thread in the thread pool
+/// @return index of the worker thread in a thread pool or -1 if not called from a thread pool worker thread
+int get_tpool_worker_index(void);
 #endif

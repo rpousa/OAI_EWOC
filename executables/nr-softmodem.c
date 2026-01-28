@@ -637,8 +637,8 @@ int main( int argc, char **argv ) {
     
   }
 
-  config_sync_var=0;
-
+  if (NFAPI_MODE != NFAPI_MODE_PNF)
+    config_sync_var = 0;
 
 #ifdef E2_AGENT
 
@@ -661,6 +661,11 @@ int main( int argc, char **argv ) {
 
   if (RC.nb_RU > 0)
     start_NR_RU();
+
+  if (NFAPI_MODE == NFAPI_MODE_PNF) {
+    wait_RUs();
+    config_sync_var = 0;
+  }
 
 #ifdef ENABLE_AERIAL
   gNB_MAC_INST *nrmac = RC.nrmac[0];

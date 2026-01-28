@@ -171,12 +171,13 @@ typedef struct RU_prec_t_s{
 } RU_prec_t;
 
 typedef struct {
- int aid;
- int beam;
- struct RU_t_s *ru;
  int startSymbol;
  int endSymbol;
  int slot;
+ const c16_t *rxdata;
+ c16_t *rxdataF;
+ const struct NR_DL_FRAME_PARMS *fp;
+ int32_t sample_offet;
  task_ans_t *ans;
 } feprx_cmd_t;
 

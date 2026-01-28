@@ -51,7 +51,10 @@ RUN apt-get update && \
        m4 \
        # python3-pip for conf template generation
        python3-pip \
-       wget && \
+       wget \
+       flatbuffers-compiler \
+       libflatbuffers-dev \
+       libnanomsg-dev && \
     # --break-system-packages allows externally managed environment in pip 
     pip3 install --ignore-installed pyyaml --break-system-packages
 

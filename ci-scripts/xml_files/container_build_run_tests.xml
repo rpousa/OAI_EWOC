@@ -21,19 +21,14 @@
 
 -->
 <testCaseList>
-	<htmlTabRef>build-run-test-tab</htmlTabRef>
-	<htmlTabName>Build and Run Unit Tests</htmlTabName>
-	<htmlTabIcon>wrench</htmlTabIcon>
-	<TestCaseRequestedList>
- 030201
-	</TestCaseRequestedList>
-	<TestCaseExclusionList></TestCaseExclusionList>
+  <htmlTabRef>build-run-test-tab</htmlTabRef>
+  <htmlTabName>Build and Run Unit Tests</htmlTabName>
+  <htmlTabIcon>wrench</htmlTabIcon>
 
-	<testCase id="030201">
-		<class>Build_Run_Tests</class>
-		<desc>Build and Run UnitTests</desc>
-		<node>obelix</node>
-		<kind>all</kind>
-	</testCase>
+  <testCase>
+    <class>Build_Run_Tests</class>
+    <desc>Build and Run UnitTests</desc>
+    <node>obelix</node>
+  </testCase>
 
 </testCaseList>

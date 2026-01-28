@@ -199,13 +199,25 @@ void set_scs_parameters (NR_DL_FRAME_PARMS *fp, int mu, int N_RB_DL)
       AssertFatal(1==0,"Invalid numerology index %d", mu);
   }
 
-  if(fp->threequarter_fs)
-    fp->ofdm_symbol_size = 3 * 128;
-  else
-    fp->ofdm_symbol_size = 4 * 128;
+  // Start with FFT size 512
+  fp->ofdm_symbol_size = 512;
 
-  while(fp->ofdm_symbol_size < N_RB_DL * 12)
+  // Choose the right FFT size for the BW
+  while(fp->ofdm_symbol_size < N_RB_DL * NR_NB_SC_PER_RB)
     fp->ofdm_symbol_size <<= 1;
+
+  // Do 3/4 sampling
+  if (fp->threequarter_fs) {
+    const uint16_t threeq_fft_size = fp->ofdm_symbol_size * 3 / 4;
+    if (threeq_fft_size < (N_RB_DL * NR_NB_SC_PER_RB)) {
+      // 3/4 sampling FFT size not enough
+      warn_higher_threequarter_fs(N_RB_DL, fp->numerology_index);
+      // Choose 2 times 3/4 sampling
+      fp->ofdm_symbol_size = threeq_fft_size << 1;
+    } else {
+      fp->ofdm_symbol_size = threeq_fft_size;
+    }
+  }
 
   fp->first_carrier_offset = fp->ofdm_symbol_size - (N_RB_DL * 12 / 2);
   fp->nb_prefix_samples    = fp->ofdm_symbol_size / 128 * 9;

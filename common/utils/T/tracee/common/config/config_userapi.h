@@ -8,7 +8,7 @@ typedef int paramdef_t;
 #endif
 #define CMDLINE_TTRACEPARAMS_DESC {}
 
-#define config_get(dummy, ...) (void)(dummy)
+#define config_get(...) /**/
 #define config_process_cmdline(...) /**/
 
 #endif /* _CONFIG_USERAPI_H_ */

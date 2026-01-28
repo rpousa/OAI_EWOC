@@ -14,6 +14,7 @@ OAI uses/supports a number of environment variables, documented in the following
 - `USIM_DIR`: directory to read/write USIM data in (4G) `usim` tool; if not defined, will use `PWD` (working directory)
 
 Furthermore, these variables appear in code that is not maintained and maybe not even compiled anywhere:
+
 - `HOST`: alternative host to connect to, for CLI, if neither `REMADDR` nor `SSH_CLIENT` are defined
 - `REMADDR`: host to connect to, for CLI client
 - `SSH_CLIENT`: alternative host to connect to, for CLI, if `REMADDR` is not defined

@@ -462,8 +462,7 @@ void get_cexp_doppler(struct complexd *cexp_doppler, channel_desc_t *chan_desc, 
   // TS 38.104 - Table G.3-1
   uint16_t Dmin = 2;
   uint16_t Ds = 300;
-  double c = 299792458;
-  double v = chan_desc->max_Doppler * (c / (double)chan_desc->center_freq);
+  double v = chan_desc->max_Doppler * ((double) SPEED_OF_LIGHT / (double)chan_desc->center_freq);
 
 #ifdef DOPPLER_DEBUG
   printf("v = %f\n", v);

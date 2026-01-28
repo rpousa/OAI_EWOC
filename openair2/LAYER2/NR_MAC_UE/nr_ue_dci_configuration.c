@@ -44,11 +44,8 @@ static void fill_dci_search_candidates(const NR_SearchSpace_t *ss, fapi_nr_dl_co
 
   int i = 0;
   for (int maxL = 16; maxL > 0; maxL >>= 1) {
-    uint8_t aggregation, max_number_of_candidates;
-    find_aggregation_candidates(&aggregation,
-                                &max_number_of_candidates,
-                                ss,
-                                maxL);
+    int aggregation, max_number_of_candidates;
+    find_aggregation_candidates(&aggregation, &max_number_of_candidates, ss, maxL);
     if (max_number_of_candidates == 0)
       continue;
     LOG_T(NR_MAC_DCI, "L %d, max number of candidates %d, aggregation %d\n", maxL, max_number_of_candidates, aggregation);
@@ -449,6 +446,7 @@ void ue_dci_configuration(NR_UE_MAC_INST_t *mac, fapi_nr_dl_config_request_t *dl
                                           scs,
                                           mac->frequency_range,
                                           mac->nr_band,
+                                          273,  // at this point UE in principle doesn't know the grid size (we assume the largest)
                                           mac->mib_ssb,
                                           1, // If the UE is not configured with a periodicity, the UE assumes a periodicity of a half frame
                                           ssb_offset_point_a);

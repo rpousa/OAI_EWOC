@@ -110,4 +110,6 @@ void nr_rrc_trigger_n2_ho_target(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue);
 
 byte_array_t *get_meas_timing_config(const NR_MeasurementTimingConfiguration_t *mtc, const NR_MeasConfig_t *measConfig);
 
+void nr_rrc_apply_target_context(gNB_RRC_UE_t *UE);
+
 #endif /* RRC_GNB_MOBILITY_H_ */

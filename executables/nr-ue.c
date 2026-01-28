@@ -514,6 +514,15 @@ static int handle_sync_req_from_mac(PHY_VARS_NR_UE *UE)
     uint64_t dl_CarrierFreq = get_carrier_frequency(fp->N_RB_DL, fp->numerology_index, cfg->dl_frequency);
     uint64_t ul_CarrierFreq = get_carrier_frequency(fp->N_RB_UL, fp->numerology_index, cfg->uplink_frequency);
     if (dl_CarrierFreq != fp->dl_CarrierFreq || ul_CarrierFreq != fp->ul_CarrierFreq) {
+      LOG_I(NR_PHY,
+            "[UE %d] RF frequency change: dl %lu->%lu Hz, ul %lu->%lu Hz (from dl_frequency=%u kHz, target_Nid_cell=%d)\n",
+            UE->Mod_id,
+            fp->dl_CarrierFreq,
+            dl_CarrierFreq,
+            fp->ul_CarrierFreq,
+            ul_CarrierFreq,
+            cfg->dl_frequency,
+            UE->target_Nid_cell);
       fp->dl_CarrierFreq = dl_CarrierFreq;
       fp->ul_CarrierFreq = ul_CarrierFreq;
       nr_rf_card_config_freq(&UE->openair0_cfg[UE->rf_map.card], ul_CarrierFreq, dl_CarrierFreq, 0);

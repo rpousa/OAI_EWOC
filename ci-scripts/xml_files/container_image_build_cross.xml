@@ -21,24 +21,21 @@
 
 -->
 <testCaseList>
-	<htmlTabRef>build-tab</htmlTabRef>
-	<htmlTabName>Build Container Images</htmlTabName>
-	<htmlTabIcon>wrench</htmlTabIcon>
-	<TestCaseRequestedList>
- 100001
- 000001
-	</TestCaseRequestedList>
-	<TestCaseExclusionList></TestCaseExclusionList>
-	<testCase id="100001">
-		<class>Create_Workspace</class>
-		<desc>Create new Workspace</desc>
-		<node>alambix</node>
-	</testCase>
-	<testCase id="000001">
-		<class>Build_Image</class>
-		<desc>Cross-Compile for ARM64</desc>
-		<kind>build_cross_arm64</kind>
-		<node>alambix</node>
-	</testCase>
+  <htmlTabRef>build-tab</htmlTabRef>
+  <htmlTabName>Build Container Images</htmlTabName>
+  <htmlTabIcon>wrench</htmlTabIcon>
+
+  <testCase>
+    <class>Create_Workspace</class>
+    <desc>Create new Workspace</desc>
+    <node>alambix</node>
+  </testCase>
+
+  <testCase>
+    <class>Build_Image</class>
+    <desc>Cross-Compile for ARM64</desc>
+    <kind>build_cross_arm64</kind>
+    <node>alambix</node>
+  </testCase>
 
 </testCaseList>

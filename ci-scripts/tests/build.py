@@ -17,7 +17,7 @@ import cls_cmd
 class TestBuild(unittest.TestCase):
 	def setUp(self):
 		self.html = cls_oai_html.HTMLManagement()
-		self.html.testCase_id = "000000"
+		self.html.testCaseIdx = "000000"
 		self.cont = cls_containerize.Containerize()
 		self._d = tempfile.mkdtemp()
 		logging.warning(f"temporary directory: {self._d}")

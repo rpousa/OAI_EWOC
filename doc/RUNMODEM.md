@@ -1,16 +1,4 @@
-<table style="border-collapse: collapse; border: none;">
-  <tr style="border-collapse: collapse; border: none;">
-    <td style="border-collapse: collapse; border: none;">
-      <a href="http://www.openairinterface.org/">
-         <img src="./images/oai_final_logo.png" alt="" border=3 height=50 width=150>
-         </img>
-      </a>
-    </td>
-    <td style="border-collapse: collapse; border: none; vertical-align: center;">
-      <b><font size = "5">Running OAI 5G Softmodems</font></b>
-    </td>
-  </tr>
-</table>
+# Running OAI 5G Softmodems
 
 This document explains some options for running 5G executables.
 
@@ -22,9 +10,9 @@ need.
 
 [[_TOC_]]
 
-# Simulators
+## Simulators
 
-## RFsimulator
+### RFsimulator
 
 The RFsimulator is an OAI device replacing the radio heads (for example the
 USRP device). It allows connecting the oai UE (LTE or 5G) and respectively the
@@ -39,7 +27,7 @@ It is planned to enhance this simulator with the following functionalities:
 
 This is an easy use-case to setup and test, as no specific hardware is required. The [rfsimulator page](../radio/rfsimulator/README.md) contains the detailed documentation.
 
-## L2 nFAPI Simulator
+### L2 nFAPI Simulator
 
 This simulator connects an eNodeB and UEs through an nFAPI interface,
 short-cutting the L1 layer. The objective of this simulator is to allow multi
@@ -48,7 +36,7 @@ UEs simulation, with a large number of UEs (ideally up to 255).
 As for the RFsimulator, no specific hardware is required. The [L2 nfapi
 simulator page](./L2NFAPI.md) contains the detailed documentation.
 
-# Running with a true radio head
+## Running with a true radio head
 
 OAI supports different radio heads, the following are tested in the CI:
 
@@ -57,21 +45,21 @@ OAI supports different radio heads, the following are tested in the CI:
 3. Monolithic gNodeB: see next section, or the [standalone tutorial](NR_SA_Tutorial_COTS_UE.md)
 
 
-# 5G NR
+## 5G NR
 
-## NSA setup with COTS UE
+### NSA setup with COTS UE
 
 This setup requires an EPC, an OAI eNB and gNB, and a COTS Phone. A dedicated page describe the setup can be found [here](https://gitlab.eurecom.fr/oai/openairinterface5g/wikis/home/gNB-COTS-UE-testing).
 The `--nsa` flag must be used to run gNB in non-standalone mode.
 
 
-### Launch eNB
+#### Launch eNB
 
 ```bash
 sudo ./lte-softmodem -O ../../../targets/PROJECTS/GENERIC-LTE-EPC/CONF/enb.band7.tm1.50prb.usrpb210.conf
 ```
 
-### Launch gNB
+#### Launch gNB
 
 ```bash
 sudo ./nr-softmodem -O ../../../targets/PROJECTS/GENERIC-LTE-EPC/CONF/gnb.band78.tm1.106PRB.usrpn300.conf --nsa
@@ -79,7 +67,7 @@ sudo ./nr-softmodem -O ../../../targets/PROJECTS/GENERIC-LTE-EPC/CONF/gnb.band78
 
 You should see the X2 messages in Wireshark and at the eNB.
 
-## SA setup with OAI NR-UE
+### SA setup with OAI NR-UE
 
 The standalone mode is the default mode. 
 
@@ -127,7 +115,7 @@ UE capabilities can be passed according to the [UE Capabilities](#UE-Capabilitie
 
 A detailed tutorial is provided at this page [NR_SA_Tutorial_OAI_nrUE.md](./NR_SA_Tutorial_OAI_nrUE.md).
 
-## Optional NR-UE command line options
+### Optional NR-UE command line options
 
 Here are some useful command line options for the NR UE:
 
@@ -152,13 +140,13 @@ You can view all available options by typing:
 ```shell
 ./nr-uesoftmodem --help
 ```
-## Common gNB and NR UE command line options
+### Common gNB and NR UE command line options
 
-### Three-quarter sampling
+#### Three-quarter sampling
 
 The command line option `-E` can be used to enable three-quarter sampling for split 8 sample rate. Required for certain radios (e.g., 40MHz with B210). If used on the gNB, it is a good idea to use for the UE as well (and vice versa).
 
-### UE Capabilities
+#### UE Capabilities
 
 The `--uecap_file` option can be used to pass the UE Capabilities input file (path location + filename), e.g.`--uecap_file ../../../targets/PROJECTS/GENERIC-NR-5GC/CONF/uecap_ports1.xml` for 1 layer or e.g. `--uecap_file ../../../targets/PROJECTS/GENERIC-NR-5GC/CONF/uecap_ports2.xml` for 2 layers.
 
@@ -176,9 +164,9 @@ e.g.
 sudo ./nr-uesoftmodem -r 106 --numerology 1 --band 78 -C 3319680000 --ue-nb-ant-tx 2 --ue-nb-ant-rx 2 --uecap_file /opt/oai-nr-ue/etc/uecap.xml
 ```
 
-## How to run a NTN configuration
+### How to run a NTN configuration
 
-### NTN channel
+#### NTN channel
 
 A 5G NR NTN configuration only works in a non-terrestrial setup.
 Therefore either SDR boards and a dedicated NTN channel emulator are required, or RFsimulator has to be configured to simulate a NTN channel.
@@ -225,7 +213,7 @@ Or by providing this the the command line parameters:
 --rfsimulator.options chanmod
 ```
 
-### gNB
+#### gNB
 
 The main parameters to cope with the large NTN propagation delay are cellSpecificKoffset, ta-Common, ta-CommonDrift and the ephemeris data (satellite position and velocity vectors).
 
@@ -331,7 +319,7 @@ cd cmake_targets
 sudo ./ran_build/build/nr-softmodem -O ../ci-scripts/conf_files/gnb.sa.band254.u0.25prb.rfsim.ntn-leo.conf --rfsim
 ```
 
-### NR UE
+#### NR UE
 
 At UE side, only few parameters have to be provided, as the UE receives most relevant parameters via SIB19 from the gNB.
 But to calculate the UE specific TA, the UE position has to be provided in the `ue.conf` file.
@@ -371,9 +359,9 @@ cd cmake_targets
 sudo ./ran_build/build/nr-uesoftmodem -O ../targets/PROJECTS/GENERIC-NR-5GC/CONF/ue.conf --band 254 -C 2488400000 --CO -873500000 -r 25 --numerology 0 --ssb 60 --rfsim --rfsimulator.prop_delay 20 --rfsimulator.options chanmod --time-sync-I 0.1 --ntn-initial-time-drift -46 --initial-fo 57340 --cont-fo-comp 2
 ```
 
-# Specific OAI modes
+## Specific OAI modes
 
-## phy-test setup with OAI UE
+### phy-test setup with OAI UE
 
 The OAI UE can also be used in front of a OAI gNB without the support of eNB or EPC and circumventing random access. In this case both gNB and eNB need to be run with the `--phy-test` flag. At the gNB this flag does the following
  - it reads the RRC configuration from the configuration file
@@ -400,7 +388,7 @@ In summary:
 
 In phy-test mode it is possible to mimic the reception of UE Capabilities at gNB through the command line parameter `--uecap_file`. Refer to the [UE Capabilities](#UE-Capabilities) section for more details.
 
-## noS1 setup with OAI UE
+### noS1 setup with OAI UE
 
 Instead of randomly generated payload, in the phy-test mode we can also
 inject/receive user-plane traffic over a TUN interface. This is the so-called
@@ -419,7 +407,7 @@ iperf -uc 10.0.1.2 -B 10.0.1.1 -i1 -t10 -b1M
 ```
 to send data from the gNB down to the UE.
 
-Note that this does not work if both interfaces are on the same host. We
+> Note that this does not work if both interfaces are on the same host. We
 recommend to use two different hosts, or at least network namespaces, to route
 traffic through the gNB/UE tunnel.
 
@@ -428,7 +416,7 @@ which the UE does not connect to a core network. If the UE connects to a core
 network, it receives an IP address for which it automatically opens a network
 interface.
 
-## do-ra setup with OAI
+### do-ra setup with OAI
 
 The do-ra flag is used to ran the NR Random Access procedures in contention-free mode. Currently OAI implements the RACH process from Msg1 to Msg3. 
 
@@ -456,7 +444,7 @@ sudo ./nr-uesoftmodem --do-ra
 ```
 
 
-### Run OAI with SDAP & Custom DRBs
+#### Run OAI with SDAP & Custom DRBs
 
 To run OAI gNB with SDAP, simply include `--gNBs.[0].enable_sdap 1` to the binary's arguments.
 
@@ -467,7 +455,7 @@ The Non-GBR flows use a shared data radio bearer.
 To hardcode the DRBs for testing purposes, simply add `--gNBs.[0].drbs x` to the binary's arguements, where `x` is the number of DRBs, along with SDAP.
 The hardcoded DRBs will be treated like GBR Flows. Due to code limitations at this point the max. number of DRBs is 4. 
 
-## IF setup with OAI
+### IF setup with OAI
 
 OAI is also compatible with Intermediate Frequency (IF) equipment, allowing the
 use of RF front-ends operating on arbitrary frequency bands that do not conform
@@ -489,7 +477,7 @@ the configuration file:
 > `if_freq` numeric value is suffixed with "L" so it is correctly parsed as
 > 64-bit integer.
 
-### Run OAI with custom DL/UL arbitrary frequencies
+#### Run OAI with custom DL/UL arbitrary frequencies
 
 The following example uses DL frequency 2169.080 MHz and UL frequency offset
 -400 MHz, with a configuration file for band 66 (FDD) at gNB side.
@@ -501,20 +489,13 @@ sudo ./nr-softmodem -O ../../../targets/PROJECTS/GENERIC-LTE-EPC/CONF/gnb.band66
 sudo ./nr-uesoftmodem --if_freq 2169080000 --if_freq_off -400000000
 ```
 
-# 5G gNB MIMO configuration
+## 5G gNB MIMO configuration
 
 In order to enable DL-MIMO in OAI 5G softmodem, the prerequisite is to have `do_CSIRS = 1` in the configuration file. This allows the gNB to schedule CSI reference signal and to acquire from the UE CSI measurements to be able to schedule DLSCH with MIMO.
 
 The following step is to set the number of PDSCH logical antenna ports. These needs to be larger or equal to the maximum number of MIMO layers requested (for 2-layer MIMO it is necessary to have at least two logical antenna ports).
 
-<table style="border-collapse: collapse; border: none;">
-  <tr style="border-collapse: collapse; border: none;">
-    <td style="border-collapse: collapse; border: none;">
-         <img src="./images/mimo_antenna_ports.png" alt="" border=3 height=100 width=300>
-         </img>
-    </td>
-  </tr>
-</table>
+![mimo_antenna_ports](./images/mimo_antenna_ports.png)
 
 This image shows an example of gNB 5G MIMO logical antenna port configuration. It has to be noted that logical antenna ports might not directly correspond to physical antenna ports and each logical antenna port might consist of a sub-array of antennas.
 

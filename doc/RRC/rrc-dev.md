@@ -8,7 +8,7 @@ separate page](./rrc-usage.md).
 
 [[_TOC_]]
 
-# General
+## General
 
 5G RRC is basically an ITTI message queue with associated handlers. It
 sequentially reads received ITTI messages and handles them through the function
@@ -26,7 +26,7 @@ possible to find the message in the switch based on a message name in the spec.
 Note that RRC is inherently single-threaded, and processes messages in a FIFO
 order.
 
-# Sequence Diagrams of UE procedures
+## Sequence Diagrams of UE procedures
 
 The following section presents a number of common UE procedures for connection
 establishment&control, bearer establishment, etc. The intention is to help
@@ -66,7 +66,7 @@ sequenceDiagram
   ue->>cucp: F1AP UL RRC Msg Transfer (RRC Message Answer)
 ```
 
-## Initial connection setup/Registration
+### Initial connection setup/Registration
 
 This sequence diagram shows the principal steps for an initial UE connection.
 This can either happen through a _Registration Request_ (e.g., UE connects
@@ -164,7 +164,7 @@ sequenceDiagram
   cucp->>amf: NGAP PDU Session Resource Setup Resp
 ```
 
-## Reestablishment
+### Reestablishment
 
 The following sequence diagram shows the principal steps during a
 reestablishment request. When handling the RRC Reestablishment Request at the
@@ -210,7 +210,7 @@ sequenceDiagram
   end
 ```
 
-## Inter-DU Handover (F1)
+### Inter-DU Handover (F1)
 
 The basic handover (HO) structure is as follows. In order to support various
 handover "message passing implementation" (F1AP, NGAP, XnAP), RRC employs
@@ -264,7 +264,7 @@ sequenceDiagram
   sdu->>cucp: F1AP UE Context Release Complete
   Note over ue,tdu: UE active on target DU
 ```
-## Inter-gNB Handover (N2)
+### Inter-gNB Handover (N2)
 
 This is an inter-NG-RAN procedure. The N2 handover specification is defined in the following documents:
 
@@ -278,7 +278,7 @@ This is an inter-NG-RAN procedure. The N2 handover specification is defined in t
   - Includes messages like Handover Request, Handover Command, and Handover Preparation.
 * 3GPP TS 38.331 (RRC): details the UE-level RRC procedures involved during handovers
 
-### End-to-end flow
+#### End-to-end flow
 
 ```mermaid
 sequenceDiagram
@@ -353,9 +353,9 @@ sequenceDiagram
   Note over ue,tdu: UE active on target DU
 ```
 
-# Structures
+## Structures
 
-## Cells
+### Cells
 
 OAI 5G RRC does not actually handle multiple cells as of now, but multiple DUs,
 each being limited to one cell.
@@ -363,12 +363,12 @@ each being limited to one cell.
 Cell-related data is stored in `nr_rrc_du_container_t`, and kept in a tree
 indexed by the SCTP association ID.
 
-## CU-UPs
+### CU-UPs
 
 CU-UP information is stored in `nr_rrc_cuup_container_t`, and kept in a tree
 indexed by the SCTP association ID.
 
-## Transactions
+### Transactions
 
 The RRC keeps track of ongoing transaction (RRC procedures) through a per-UE
 array `xids`, which is indexed with a transaction ID `xid` in `[0,3]` to keep
@@ -385,7 +385,7 @@ However, it might be possible to trigger a procedure while another is ongoing.
 As of now, no queueing mechanims exists to ensure only one operation is
 ongoing, which would likely also simplify the code.
 
-## Handover
+### Handover
 
 Handover-related data is stored in a per-UE structure of type
 `nr_handover_context_t`. It is a pointer and only set during handover
@@ -394,14 +394,17 @@ operation. This data structure has in turn two pointers, one to the source CU
 both are present. In N2 and Xn, only one pointer is supposed to be set at the
 corresponding CU.
 
-`nr_ho_source_cu_t` contains notably a function pointer `ho_cancel` for
-handover cancel.  `nr_ho_target_cu_t` contains function pointers `ho_req_ack`
+- `nr_ho_source_cu_t` contains notably a function pointer `ho_cancel` for
+handover cancel.  
+- `nr_ho_target_cu_t` contains function pointers `ho_req_ack`
 for handover request acknowledge, `ho_success` for handover success,
 `ho_failure` for handover failure (N2 only).
 be seen in the sequence diagram above, either the "target CU" or "source CU"
 needs to do an operation, and a "switch" from target to source CU is done using
-these function pointers. For instance, in F1, the handover request acknowledge
+these function pointers. 
+- For instance, in F1, the handover request acknowledge
 function pointers merely calls another (RRC) function which triggers a
-reconfiguration. In the case of N2, the handover request acknowledge function
+reconfiguration. 
+- In the case of N2, the handover request acknowledge function
 pointer should trigger the NGAP Handover Request Acknowledge, and the handover
 success function pointer should trigger the NGAP Handover Success message.

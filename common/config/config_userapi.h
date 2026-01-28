@@ -49,7 +49,9 @@ extern configmodule_interface_t *uniqCfg;
 #define CONFIG_SETRTFLAG(P)   if (config_get_if()) { config_get_if()->rtflags |= P; }
 #define CONFIG_CLEARRTFLAG(P) if (config_get_if()) { config_get_if()->rtflags &= (~P); }
 #define CONFIG_ISPARAMFLAGSET(P,F) ( !!(P.paramflags & F))
-int config_paramidx_fromname(paramdef_t *params, int numparams, const char *name);
+#define gpd(pd_array, nump, name) config_get_paramdef_from_name(pd_array, nump, name)
+
+int config_paramidx_fromname(const paramdef_t *params, int numparams, const char *name);
 
 /* utility functions, to be used by configuration module and/or configuration libraries */
 void config_printhelp(paramdef_t *, int numparams, const char *prefix);
@@ -75,6 +77,7 @@ int config_check_modify_integer(configmodule_interface_t *cfg, paramdef_t *param
 int config_check_intrange(configmodule_interface_t *cfg, paramdef_t *param);
 int config_check_strval(configmodule_interface_t *cfg, paramdef_t *param);
 int config_checkstr_assign_integer(configmodule_interface_t *cfg, paramdef_t *param);
+const paramdef_t *config_get_paramdef_from_name(const paramdef_t *pd, int num, const char *name);
 
 #define CONFIG_GETCONFFILE (config_get_if()->cfgP[0])
 

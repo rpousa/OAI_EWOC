@@ -96,8 +96,8 @@ time_management = {
 ```
 ### RF simulator CU/DU "IQ samples time"
 
-Let's suppose the CU runs on a machine with IP address 1.2.3.4 and the DU
-runs on a machine with IP address 10.11.12.13.
+Let's suppose the CU runs on a machine with IP address `1.2.3.4` and the DU
+runs on a machine with IP address `10.11.12.13`.
 
 The DU has the time source and so is the server. The CU acts as a client.
 
@@ -153,11 +153,11 @@ time_management = {
 }
 ```
 
-Note that the time management module is flexible. It's possible to
+> Note that the time management module is flexible. It's possible to
 configure more complex setups. For example the time source can be a gNB
 and several UEs can be connected as client.
 
-One could also write a simple program acting as a time source and distributing
+> One could also write a simple program acting as a time source and distributing
 time to everyone (one or several gNB, several UEs).
 
 ## Programming API

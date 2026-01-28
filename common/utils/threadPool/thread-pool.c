@@ -55,12 +55,47 @@ void pushTpool(tpool_t* tpool, task_t task)
   push_not_q(&q_arr[index % len_thr], task);
 }
 
+// Same as above, but avoid certain tpool workers based on the mask
+void pushTpool_mask(tpool_t* tpool, task_t task, uint64_t mask)
+{
+  DevAssert(tpool != NULL);
+  if (tpool->len_thr == 0) {
+    task.func(task.args);
+    return;
+  }
+
+  size_t index = tpool->index++;
+  size_t const len_thr = tpool->len_thr;
+
+  not_q_t* q_arr = (not_q_t*)tpool->q_arr;
+
+  for (size_t i = 0; i < len_thr; ++i) {
+    int index = (i + tpool->index) % len_thr;
+    if ((1UL << index) & mask)
+      continue;
+    if (try_push_not_q(&q_arr[index], task)) {
+      return;
+    }
+  }
+
+  while ((1ULL << (index % len_thr)) & mask)
+    index++;
+  push_not_q(&q_arr[index % len_thr], task);
+}
+
+__thread int tpool_worker_index = -1;
+int get_tpool_worker_index(void)
+{
+  return tpool_worker_index;
+}
+
 static void* worker_thread(void* arg)
 {
   DevAssert(arg != NULL);
 
   task_thread_args_t* args = (task_thread_args_t*)arg;
   int const idx = args->idx;
+  tpool_worker_index = idx;
   tpool_t* tpool = args->tpool;
 
   uint32_t const len = tpool->len_thr;
@@ -87,7 +122,10 @@ static void* worker_thread(void* arg)
     }
 
     if (ret.t.func == NULL && ret.t.args == NULL) {
-      pushTpool(tpool, (task_t){.args = NULL, .func = NULL});
+      tpool->dead_mask |= 1ULL << idx;
+      if (__builtin_popcountll(tpool->dead_mask) == tpool->len_thr)
+        break;
+      pushTpool_mask(tpool, (task_t){.args = NULL, .func = NULL}, tpool->dead_mask);
       break;
     }
     ret.t.func(ret.t.args);

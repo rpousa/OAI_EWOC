@@ -131,7 +131,7 @@ int main(int argc, char **argv){
   sigaction(SIGINT, &sigint_action, &oldaction);
 
   get_softmodem_params()->sl_mode = 0;
-  double sigma2, sigma2_dB = 0, SNR, snr0 = -2.0, snr1 = 0.0, ue_speed0 = 0.0, ue_speed1 = 0.0;
+  double SNR, snr0 = -2.0, snr1 = 0.0, ue_speed0 = 0.0, ue_speed1 = 0.0;
   double **s_re, **s_im, **r_re, **r_im, iqim = 0.0, delay_avg = 0, ue_speed = 0, fs=-1, bw;
   int i, l, aa, aarx, trial, n_frames = 1, rx_prach_start; //, ntrials=1;
   c16_t **txdata;
@@ -728,14 +728,7 @@ int main(int argc, char **argv){
 
       for (trial = 0; trial < n_frames && !stop; trial++) {
         if (input_fd == NULL) {
-          sigma2_dB = 10*log10((double)tx_lev) - SNR - 10*log10(N_RB_UL*12/N_ZC);
-
-          if (n_frames==1)
-            printf("sigma2_dB %f (SNR %f dB) tx_lev_dB %f\n",sigma2_dB,SNR,10*log10((double)tx_lev));
-
-          //AWGN
-          sigma2 = pow(10,sigma2_dB/10);
-          //  printf("Sigma2 %f (sigma2_dB %f)\n",sigma2,sigma2_dB);
+          double sigma2 = compute_noise_variance(tx_lev, N_ZC, N_RB_UL, 1, SNR, n_frames);
 
           if (awgn_flag == 0) {
             multipath_tv_channel(UE2gNB, s_re, s_im, r_re, r_im, frame_parms->samples_per_frame, 0);
@@ -765,7 +758,12 @@ int main(int argc, char **argv){
 
         for (l = 0; l < frame_parms->symbols_per_slot; l++) {
           for (aa = 0; aa < frame_parms->nb_antennas_rx; aa++) {
-            nr_slot_fep_ul(frame_parms, ru->common.rxdata[aa], ru->common.rxdataF[aa], l, slot, ru->N_TA_offset);
+            nr_symbol_fep_ul(frame_parms,
+                             (c16_t *)ru->common.rxdata[aa],
+                             (c16_t *)&ru->common.rxdataF[aa][frame_parms->ofdm_symbol_size * l],
+                             l,
+                             slot,
+                             ru->N_TA_offset);
           }
         }
 

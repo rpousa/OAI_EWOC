@@ -1,5 +1,5 @@
 diff --git a/fhi_lib/app/src/common.h b/fhi_lib/app/src/common.h
-index ac5f471..b0f7ed1 100644
+index ac5f471..94c2d7c 100644
 --- a/fhi_lib/app/src/common.h
 +++ b/fhi_lib/app/src/common.h
 @@ -28,7 +28,7 @@
@@ -7,7 +7,7 @@ index ac5f471..b0f7ed1 100644
  #include <rte_mbuf.h>
  
 -#define VERSIONX                "oran_f_release_v1.0"
-+#define VERSIONX                "oran_f_release_v1.5"
++#define VERSIONX                "oran_f_release_v1.6"
  
  #define APP_O_DU  0
  #define APP_O_RU  1
@@ -173,18 +173,20 @@ index eccc4ae..a97fdc6 100644
  CPP_FLAGS_FULL := $(CPP_FLAGS) $(CPP_COMP) $(INC) $(DEF)
  CPP_FLAGS_FULL_SNC := $(CPP_FLAGS) $(CPP_COMP_SNC) $(INC) $(DEF)
 diff --git a/fhi_lib/lib/api/xran_fh_o_du.h b/fhi_lib/lib/api/xran_fh_o_du.h
-index bacf597..1dd6d66 100644
+index bacf597..2aeaaae 100644
 --- a/fhi_lib/lib/api/xran_fh_o_du.h
 +++ b/fhi_lib/lib/api/xran_fh_o_du.h
-@@ -141,7 +141,7 @@ extern "C" {
+@@ -141,8 +141,8 @@ extern "C" {
  #define XRAN_MAX_SECTIONS_PER_SYM    (XRAN_MAX_SECTIONS_PER_SLOT)  /**< Max number of different sections in single slot (section may be equal to RB allocation for UE) */
  #define XRAN_MIN_SECTIONS_PER_SYM    (XRAN_MIN_SECTIONS_PER_SLOT)  /**< Min number of different sections in single slot (section may be equal to RB allocation for UE) */
  
 -#define XRAN_MAX_FRAGMENT            (4)   /**< Max number of fragmentations in single symbol */
+-#define XRAN_MAX_SET_BFWS            (64)  /**< Assumed 64Ant, BFP 9bit with 9K jumbo frame */
 +#define XRAN_MAX_FRAGMENT            (6)   /**< Max number of fragmentations in single symbol */
- #define XRAN_MAX_SET_BFWS            (64)  /**< Assumed 64Ant, BFP 9bit with 9K jumbo frame */
++#define XRAN_MAX_SET_BFWS            (1) //(64)  /**< Assumed 64Ant, BFP 9bit with 9K jumbo frame */
  
  #define XRAN_MAX_PKT_BURST (448+4) /**< 4x14x8 symbols per ms */
+ #define XRAN_N_MAX_BUFFER_SEGMENT XRAN_MAX_PKT_BURST /**< Max number of segments per ms */
 @@ -419,6 +419,7 @@ struct xran_io_cfg {
      uint16_t num_rxq;             /**< number of RX queues per VF */
      char *dpdk_dev[XRAN_VF_MAX]; /**< VFs devices  */
@@ -193,7 +195,15 @@ index bacf597..1dd6d66 100644
      int32_t bbdev_mode;      /**< DPDK for BBDev */
      uint32_t dpdkIoVaMode;   /**< IOVA Mode */
      uint32_t dpdkMemorySize; /**< DPDK max memory allocation */
-@@ -1193,6 +1194,31 @@ int32_t xran_reg_physide_cb_by_dev_id(void *pHandle, xran_fh_tti_callback_fn Cb,
+@@ -713,6 +714,7 @@ struct xran_fh_config {
+     uint16_t max_sections_per_slot; /**< M-Plane settings for section */
+     uint16_t max_sections_per_symbol; /**< M-Plane settings for section */
+     int32_t RunSlotPrbMapBySymbolEnable; /**< enable prb mapping by symbol with multisection*/
++    uint8_t LiteOnIgnoreUPSectionIdEnable; /**< handle LiteOn issue where section id on UP packet is wrongly set to 13. */
+ 
+     uint8_t dssEnable;  /**< enable DSS (extension-9) */
+     uint8_t dssPeriod;  /**< DSS pattern period for LTE/NR */
+@@ -1193,6 +1195,31 @@ int32_t xran_reg_physide_cb_by_dev_id(void *pHandle, xran_fh_tti_callback_fn Cb,
   */
  int32_t xran_get_slot_idx (uint32_t PortId, uint32_t *nFrameIdx, uint32_t *nSubframeIdx,  uint32_t *nSlotIdx, uint64_t *nSecond);
  
@@ -535,7 +545,7 @@ index 08660f3..2bb5187 100644
  #include <rte_eal.h>
  #include <rte_errno.h>
 diff --git a/fhi_lib/lib/src/xran_common.c b/fhi_lib/lib/src/xran_common.c
-index dc40ad9..5968d01 100644
+index dc40ad9..1b88013 100644
 --- a/fhi_lib/lib/src/xran_common.c
 +++ b/fhi_lib/lib/src/xran_common.c
 @@ -31,7 +31,10 @@
@@ -549,7 +559,110 @@ index dc40ad9..5968d01 100644
  #include <rte_mbuf.h>
  #include <stdio.h>
  #include <stdbool.h>
-@@ -714,11 +717,14 @@ process_mbuf(struct rte_mbuf *pkt, void* handle, struct xran_eaxc_info *p_cid)
+@@ -49,6 +52,8 @@
+ #include "xran_printf.h"
+ #include "xran_mlog_lnx.h"
+ 
++#include "xran_frame_struct.h"
++
+ static struct timespec sleeptime = {.tv_nsec = 1E3 }; /* 1 us */
+ 
+ extern int32_t first_call;
+@@ -529,13 +534,30 @@ int process_mbuf_batch(struct rte_mbuf* pkt_q[], void* handle, int16_t num, stru
+             if (pRbMap)
+             {
+                 /** Get the prb_elem_id */
++                u_int8_t section_id_tmp;    // hack for LiteON FR2 : receive UP section ID = 13
++                u_int8_t prb_elem_id_tmp;   // hack for LiteON FR2 : receive UP section ID = 13
++                if(0 == p_dev_ctx->LiteOnIgnoreUPSectionIdEnable) {
++                    section_id_tmp = prb_elem_id_tmp = sect_id[i];
++                } else {
++                    u_int8_t mixed_ul_sym_start = 0;
++                    if (xran_fs_get_slot_type(xran_port, CC_ID[i], tti, XRAN_SLOT_TYPE_SP)) {
++                        mixed_ul_sym_start = XRAN_NUM_OF_SYMBOL_PER_SLOT - xran_fs_get_num_ul_sym_sp(xran_port, CC_ID[i], tti);
++                    }
++                    u_int8_t section_id_tmp = symb_id[i] - mixed_ul_sym_start;  // hack for LiteON FR2 : receive UP section ID = 13, MTU 9000
++                    prb_elem_id_tmp = section_id_tmp;                           // hack for LiteON FR2 : receive UP section ID = 13, MTU 9000
++                    //Note for future reference when using MTU 1500
++                    //prb_elem_id_tmp = 2*section_id_tmp;                       // For LiteON FR2 : receive UP section ID = 13, MTU 1500
++                    //if (start_prbu !=0)                                       // For LiteON FR2 : receive UP section ID = 13, MTU 1500
++                    //    prb_elem_id_tmp++;                                    // For LiteON FR2 : receive UP section ID = 13, MTU 1500
++                }
++
+                 total_sections=0;
+                 if(pRbMap->prbMap[0].bf_weight.extType == 1)
+                 {
+                     for(idxElm=0 ; idxElm < pRbMap->nPrbElm ; idxElm++)
+                     {
+                         total_sections += pRbMap->prbMap[idxElm].bf_weight.numSetBFWs;
+-                        if(total_sections >= (sect_id[i] + 1))
++                        if(total_sections >= (/*sect_id[i]*/ prb_elem_id_tmp + 1))
+                 {
+                             prb_elem_id[i] = idxElm;
+                             break;
+@@ -544,12 +566,12 @@ int process_mbuf_batch(struct rte_mbuf* pkt_q[], void* handle, int16_t num, stru
+                 }
+                 else
+                 {
+-                    prb_elem_id[i] = sect_id[i];
++                    prb_elem_id[i] = prb_elem_id_tmp; /*sect_id[i];*/
+                 }
+ 
+                 if (prb_elem_id[i] >= pRbMap->nPrbElm)
+                 {
+-                    print_err("sect_id %d, prb_elem_id %d !=pRbMap->nPrbElm %d\n", sect_id[i], prb_elem_id[i], pRbMap->nPrbElm);
++                    print_err("sect_id %d, prb_elem_id %d !=pRbMap->nPrbElm %d\n", /*sect_id[i]*/ section_id_tmp, prb_elem_id[i], pRbMap->nPrbElm);
+                     ret_data[i] = MBUF_FREE;
+                     continue;
+                 }
+@@ -615,13 +637,30 @@ int process_mbuf_batch(struct rte_mbuf* pkt_q[], void* handle, int16_t num, stru
+             if (pRbMap)
+             {
+                 /** Get the prb_elem_id */
++                u_int8_t section_id_tmp;    // hack for LiteON FR2 : receive UP section ID = 13
++                u_int8_t prb_elem_id_tmp;   // hack for LiteON FR2 : receive UP section ID = 13
++                if(0 == p_dev_ctx->LiteOnIgnoreUPSectionIdEnable) {
++                    section_id_tmp = prb_elem_id_tmp = sect_id[i];
++                } else {
++                    u_int8_t mixed_ul_sym_start = 0;
++                    if (xran_fs_get_slot_type(xran_port, CC_ID[i], tti, XRAN_SLOT_TYPE_SP)) {
++                        mixed_ul_sym_start = XRAN_NUM_OF_SYMBOL_PER_SLOT - xran_fs_get_num_ul_sym_sp(xran_port, CC_ID[i], tti);
++                    }
++                    u_int8_t section_id_tmp = symb_id[i] - mixed_ul_sym_start;  // hack for LiteON FR2 : receive UP section ID = 13, MTU 9000
++                    prb_elem_id_tmp = section_id_tmp;                           // hack for LiteON FR2 : receive UP section ID = 13, MTU 9000
++                    //Note for future reference when using MTU 1500
++                    //prb_elem_id_tmp = 2*section_id_tmp;                       // For LiteON FR2 : receive UP section ID = 13, MTU 1500
++                    //if (start_prbu !=0)                                       // For LiteON FR2 : receive UP section ID = 13, MTU 1500
++                    //    prb_elem_id_tmp++;                                    // For LiteON FR2 : receive UP section ID = 13, MTU 1500
++                }
++
+                 total_sections=0;
+                 if(pRbMap->prbMap[0].bf_weight.extType == 1)
+                 {
+                     for(idxElm=0 ; idxElm < pRbMap->nPrbElm ; idxElm++)
+                     {
+                         total_sections += pRbMap->prbMap[idxElm].bf_weight.numSetBFWs;
+-                        if(total_sections >= (sect_id[i] + 1))
++                        if(total_sections >= (/*sect_id[i]*/ prb_elem_id_tmp + 1))
+                         {
+                             prb_elem_id[i] = idxElm;
+                             break;
+@@ -630,12 +669,12 @@ int process_mbuf_batch(struct rte_mbuf* pkt_q[], void* handle, int16_t num, stru
+                 }
+                 else
+                 {
+-                    prb_elem_id[i] = sect_id[i];
++                    prb_elem_id[i] = prb_elem_id_tmp; /*sect_id[i];*/
+                 }
+ 
+                 if (prb_elem_id[i] >= pRbMap->nPrbElm)
+                 {
+-                    print_err("sect_id %d, prb_elem_id %d !=pRbMap->nPrbElm %d\n", sect_id[i], prb_elem_id[i], pRbMap->nPrbElm);
++                    print_err("sect_id %d, prb_elem_id %d !=pRbMap->nPrbElm %d\n", /*sect_id[i]*/ section_id_tmp, prb_elem_id[i], pRbMap->nPrbElm);
+                     ret_data[i] = MBUF_FREE;
+                     continue;
+                 }
+@@ -714,11 +753,14 @@ process_mbuf(struct rte_mbuf *pkt, void* handle, struct xran_eaxc_info *p_cid)
      uint8_t compMeth = 0;
      uint8_t iqWidth = 0;
  
@@ -564,7 +677,7 @@ index dc40ad9..5968d01 100644
  
      if(first_call == 0)
          return ret;
-@@ -733,9 +739,9 @@ process_mbuf(struct rte_mbuf *pkt, void* handle, struct xran_eaxc_info *p_cid)
+@@ -733,9 +775,9 @@ process_mbuf(struct rte_mbuf *pkt, void* handle, struct xran_eaxc_info *p_cid)
          return MBUF_FREE;
  
      num_bytes = xran_extract_iq_samples(pkt, &iq_samp_buf,
@@ -576,7 +689,7 @@ index dc40ad9..5968d01 100644
      if (num_bytes <= 0)
      {
          print_err("num_bytes is wrong [%d]\n", num_bytes);
-@@ -781,10 +787,9 @@ process_mbuf(struct rte_mbuf *pkt, void* handle, struct xran_eaxc_info *p_cid)
+@@ -781,10 +823,9 @@ process_mbuf(struct rte_mbuf *pkt, void* handle, struct xran_eaxc_info *p_cid)
  
      else
      {
@@ -590,7 +703,7 @@ index dc40ad9..5968d01 100644
  #ifndef FCN_ADAPT
          if(valid_res != 0)
          {
-@@ -807,8 +812,7 @@ process_mbuf(struct rte_mbuf *pkt, void* handle, struct xran_eaxc_info *p_cid)
+@@ -807,8 +848,7 @@ process_mbuf(struct rte_mbuf *pkt, void* handle, struct xran_eaxc_info *p_cid)
              PrachCfg = &(p_dev_ctx->PrachCPConfig);
          }
  
@@ -600,7 +713,7 @@ index dc40ad9..5968d01 100644
          /* PRACH packet has ruportid = num_eAxc + ant_id */
              Ant_ID -= PrachCfg->eAxC_offset;
          symbol_total_bytes[p_dev_ctx->xran_port_id][CC_ID][Ant_ID] += num_bytes;
-@@ -1412,7 +1416,7 @@ int generate_cpmsg_prach(void *pHandle, struct xran_cp_gen_params *params, struc
+@@ -1412,7 +1452,7 @@ int generate_cpmsg_prach(void *pHandle, struct xran_cp_gen_params *params, struc
      if(XRAN_FILTERINDEX_PRACH_ABC == pPrachCPConfig->filterIdx)
      {
      timeOffset = timeOffset >> nNumerology; //original number is Tc, convert to Ts based on mu
@@ -609,7 +722,7 @@ index dc40ad9..5968d01 100644
          timeOffset += 16;
      }
      else
-@@ -1547,8 +1551,7 @@ int32_t ring_processing_func(void* args)
+@@ -1547,8 +1587,7 @@ int32_t ring_processing_func(void* args)
  
      for (i = 0; i < ctx->io_cfg.num_vfs && i < XRAN_VF_MAX; i++){
          for(qi = 0; qi < ctx->rxq_per_port[i]; qi++) {
@@ -918,8 +1031,58 @@ index 4acade1..c939edc 100644
      if(pCtx){
          for(i = 0; i < xran_ports_num; i++){
              g_xran_dev_ctx[i] = pCtx;
+diff --git a/fhi_lib/lib/src/xran_dev.h b/fhi_lib/lib/src/xran_dev.h
+index 0371a53..dd76b49 100644
+--- a/fhi_lib/lib/src/xran_dev.h
++++ b/fhi_lib/lib/src/xran_dev.h
+@@ -201,6 +201,7 @@ struct __rte_cache_aligned xran_device_ctx
+ 
+     int32_t DynamicSectionEna;
+     int32_t RunSlotPrbMapBySymbolEnable;
++    uint8_t LiteOnIgnoreUPSectionIdEnable; /**< handle LiteOn issue where section id on UP packet is wrongly set to 13. */
+     int64_t offset_sec;
+     int64_t offset_nsec;    //offset to GPS time calcuated based on alpha and beta
+     uint32_t interval_us_local;
+diff --git a/fhi_lib/lib/src/xran_frame_struct.c b/fhi_lib/lib/src/xran_frame_struct.c
+index fbb1298..44aaf92 100644
+--- a/fhi_lib/lib/src/xran_frame_struct.c
++++ b/fhi_lib/lib/src/xran_frame_struct.c
+@@ -519,4 +519,20 @@ int32_t xran_fs_get_symbol_type(uint32_t PortId, int32_t nCellIdx, int32_t nSlot
+     return xran_fs_slot_symb_type[PortId][nCellIdx][nSfIdxMod][nSymbIdx];
+ }
+ 
++uint32_t xran_fs_get_num_dl_sym_sp(uint32_t PortId, int32_t nCellIdx, int32_t nSlotdx)
++{
++    int32_t nSfIdxMod;
++
++    nSfIdxMod = xran_fs_slot_limit(PortId, nSlotdx) % ((xran_fs_num_slot_tdd_loop[PortId][nCellIdx] > 0) ? xran_fs_num_slot_tdd_loop[PortId][nCellIdx]: 1);
++
++    return xran_fs_num_dl_sym_sp[PortId][nCellIdx][nSfIdxMod];
++}
+ 
++uint32_t xran_fs_get_num_ul_sym_sp(uint32_t PortId, int32_t nCellIdx, int32_t nSlotdx)
++{
++    int32_t nSfIdxMod;
++
++    nSfIdxMod = xran_fs_slot_limit(PortId, nSlotdx) % ((xran_fs_num_slot_tdd_loop[PortId][nCellIdx] > 0) ? xran_fs_num_slot_tdd_loop[PortId][nCellIdx]: 1);
++
++    return xran_fs_num_ul_sym_sp[PortId][nCellIdx][nSfIdxMod];
++}
+diff --git a/fhi_lib/lib/src/xran_frame_struct.h b/fhi_lib/lib/src/xran_frame_struct.h
+index 7ed0a3a..8e66945 100644
+--- a/fhi_lib/lib/src/xran_frame_struct.h
++++ b/fhi_lib/lib/src/xran_frame_struct.h
+@@ -75,6 +75,8 @@ uint32_t xran_fs_slot_limit_init(uint32_t PortId, int32_t tti_interval_us);
+ uint32_t xran_fs_get_max_slot(uint32_t PortId);
+ uint32_t xran_fs_get_max_slot_SFN(uint32_t PortId);
+ int32_t xran_fs_get_symbol_type(uint32_t PortId, int32_t nCellIdx, int32_t nSlotdx,  int32_t nSymbIdx);
++uint32_t xran_fs_get_num_dl_sym_sp(uint32_t PortId, int32_t nCellIdx, int32_t nSlotdx);
++uint32_t xran_fs_get_num_ul_sym_sp(uint32_t PortId, int32_t nCellIdx, int32_t nSlotdx);
+ 
+ #ifdef __cplusplus
+ }
 diff --git a/fhi_lib/lib/src/xran_main.c b/fhi_lib/lib/src/xran_main.c
-index 7c472d7..9da3621 100644
+index 7c472d7..7c7cf91 100644
 --- a/fhi_lib/lib/src/xran_main.c
 +++ b/fhi_lib/lib/src/xran_main.c
 @@ -35,7 +35,11 @@
@@ -974,7 +1137,7 @@ index 7c472d7..9da3621 100644
  
                              beam_id = xran_get_beamid(pHandle, XRAN_DIR_UL, cc_id, port_id, slot_id);
 +                            pBufList = &(p_xran_dev_ctx->sFrontHaulRxPrbMapBbuIoBufCtrl[buf_id][cc_id][ant_id].sBufferList);
-+                            struct xran_prb_map *prbMap = pBufList->pBuffers->pData;
++                            struct xran_prb_map *prbMap = (struct xran_prb_map *)pBufList->pBuffers->pData;
 +                            struct xran_prb_elm *pPrbElm = &prbMap->prbMap[0]; //mjoang
 +                            beam_id = pPrbElm->nBeamIndex;
                              ret = generate_cpmsg_prach(pHandle, &params, sect_geninfo, mbuf, p_xran_dev_ctx,
@@ -985,7 +1148,7 @@ index 7c472d7..9da3621 100644
  
                              beam_id = xran_get_beamid(pHandle, XRAN_DIR_UL, cc_id, port_id, slot_id);
 +                            pBufList = &(p_xran_dev_ctx->sFrontHaulRxPrbMapBbuIoBufCtrl[buf_id][cc_id][ant_id].sBufferList);
-+                            struct xran_prb_map *prbMap = pBufList->pBuffers->pData;
++                            struct xran_prb_map *prbMap = (struct xran_prb_map *)pBufList->pBuffers->pData;
 +                            struct xran_prb_elm *pPrbElm = &prbMap->prbMap[0]; //mjoang
 +                            beam_id = pPrbElm->nBeamIndex;
                          ret = generate_cpmsg_prach(pHandle, &params, sect_geninfo, mbuf, p_xran_dev_ctx,
@@ -1550,7 +1713,15 @@ index 7c472d7..9da3621 100644
                  if(pThCtx == NULL){
                      print_err("pThCtx allocation error\n");
                      return XRAN_STATUS_FAIL;
-@@ -4034,6 +4062,24 @@ xran_get_slot_idx (uint32_t PortId, uint32_t *nFrameIdx, uint32_t *nSubframeIdx,
+@@ -3754,6 +3782,7 @@ xran_open(void *pHandle, struct xran_fh_config* pConf)
+     p_xran_dev_ctx->puschMaskSlot = pConf->puschMaskSlot;
+     p_xran_dev_ctx->DynamicSectionEna = pConf->DynamicSectionEna;
+     p_xran_dev_ctx->RunSlotPrbMapBySymbolEnable = pConf->RunSlotPrbMapBySymbolEnable;
++    p_xran_dev_ctx->LiteOnIgnoreUPSectionIdEnable = pConf->LiteOnIgnoreUPSectionIdEnable;
+     p_xran_dev_ctx->dssEnable = pConf->dssEnable;
+     p_xran_dev_ctx->dssPeriod = pConf->dssPeriod;
+     for(i=0; i<pConf->dssPeriod; i++) {
+@@ -4034,6 +4063,24 @@ xran_get_slot_idx (uint32_t PortId, uint32_t *nFrameIdx, uint32_t *nSubframeIdx,
      return tti;
  }
  
@@ -1575,6 +1746,73 @@ index 7c472d7..9da3621 100644
  int32_t
  xran_set_debug_stop(int32_t value, int32_t count)
  {
+@@ -4208,7 +4255,7 @@ int32_t xran_init_PrbMap_by_symbol_from_cfg(struct xran_prb_map* p_PrbMapIn, str
+     int32_t i = 0, j = 0, nPrbElm = 0;
+     int16_t iqwidth = p_PrbMapIn->prbMap[0].iqWidth;
+     struct xran_prb_elm *p_prb_elm_src, *p_prb_elm_dst;
+-    struct xran_prb_elm prbMapTemp[XRAN_NUM_OF_SYMBOL_PER_SLOT];
++    struct xran_prb_elm prbMapTemp[XRAN_NUM_OF_SYMBOL_PER_SLOT] = {0} ;  // Need to initialize to zero for field sec_desc.
+     int32_t nRBStart_tmp, nRBremain, nStartSymb, nEndSymb, nRBStart, nRBEnd, nRBSize;
+     // int32_t eth_xran_up_headers_sz = sizeof(struct eth_xran_up_pkt_hdr);
+     // int32_t nmaxRB = (mtu - eth_xran_up_headers_sz - RTE_PKTMBUF_HEADROOM)/XRAN_PAYLOAD_1_RB_SZ(iqwidth);
+@@ -4217,7 +4264,6 @@ int32_t xran_init_PrbMap_by_symbol_from_cfg(struct xran_prb_map* p_PrbMapIn, str
+     if (mtu==9600)
+         nmaxRB--;   //for some reason when mtu is 9600, only 195 RB can be sent, not 196
+ 
+-
+     memcpy(p_PrbMapOut, p_PrbMapIn, sizeof(struct xran_prb_map));
+     for(i = 0; i < XRAN_NUM_OF_SYMBOL_PER_SLOT; i++)
+     {
+@@ -4292,26 +4338,30 @@ int32_t xran_init_PrbMap_by_symbol_from_cfg(struct xran_prb_map* p_PrbMapIn, str
+ 
+     for(; i < XRAN_NUM_OF_SYMBOL_PER_SLOT; i++)
+     {
+-        if((nRBStart == prbMapTemp[i].nRBStart) && (nRBSize == prbMapTemp[i].nRBSize))
+-        {
+-                prbMapTemp[nPrbElm].numSymb++;
+-        }
+-        else
++        if((prbMapTemp[i].nRBSize != 0))
+         {
+-            nPrbElm++;
+-            prbMapTemp[nPrbElm].nStartSymb = prbMapTemp[i].nStartSymb;
+-            prbMapTemp[nPrbElm].nRBStart = prbMapTemp[i].nRBStart;
+-            prbMapTemp[nPrbElm].nRBSize = prbMapTemp[i].nRBSize;
+-            prbMapTemp[nPrbElm].nBeamIndex = prbMapTemp[i].nBeamIndex;
+-            prbMapTemp[nPrbElm].bf_weight_update = prbMapTemp[i].bf_weight_update;
+-            prbMapTemp[nPrbElm].compMethod = prbMapTemp[i].compMethod;
+-            prbMapTemp[nPrbElm].iqWidth = prbMapTemp[i].iqWidth;
+-            prbMapTemp[nPrbElm].ScaleFactor = prbMapTemp[i].ScaleFactor;
+-            prbMapTemp[nPrbElm].reMask = prbMapTemp[i].reMask;
+-            prbMapTemp[nPrbElm].BeamFormingType = prbMapTemp[i].BeamFormingType;
+-
+-            nRBStart = prbMapTemp[i].nRBStart;
+-            nRBSize = prbMapTemp[i].nRBSize;
++            if (false) // Force it to generate multiple prbMapElm, one for each symbol even if they are of the same RBs
++            //if((nRBStart == prbMapTemp[i].nRBStart) && (nRBSize == prbMapTemp[i].nRBSize))
++            {
++                    prbMapTemp[nPrbElm].numSymb++;
++            }
++            else
++            {
++                nPrbElm++;
++                prbMapTemp[nPrbElm].nStartSymb = prbMapTemp[i].nStartSymb;
++                prbMapTemp[nPrbElm].nRBStart = prbMapTemp[i].nRBStart;
++                prbMapTemp[nPrbElm].nRBSize = prbMapTemp[i].nRBSize;
++                prbMapTemp[nPrbElm].nBeamIndex = prbMapTemp[i].nBeamIndex;
++                prbMapTemp[nPrbElm].bf_weight_update = prbMapTemp[i].bf_weight_update;
++                prbMapTemp[nPrbElm].compMethod = prbMapTemp[i].compMethod;
++                prbMapTemp[nPrbElm].iqWidth = prbMapTemp[i].iqWidth;
++                prbMapTemp[nPrbElm].ScaleFactor = prbMapTemp[i].ScaleFactor;
++                prbMapTemp[nPrbElm].reMask = prbMapTemp[i].reMask;
++                prbMapTemp[nPrbElm].BeamFormingType = prbMapTemp[i].BeamFormingType;
++
++                nRBStart = prbMapTemp[i].nRBStart;
++                nRBSize = prbMapTemp[i].nRBSize;
++            }
+         }
+     }
+ 
 diff --git a/fhi_lib/lib/src/xran_mem_mgr.c b/fhi_lib/lib/src/xran_mem_mgr.c
 index e1dcb6c..b3c3fae 100644
 --- a/fhi_lib/lib/src/xran_mem_mgr.c
@@ -1608,7 +1846,7 @@ index 7d4a5d0..b9b44ac 100644
  #endif
  }
 diff --git a/fhi_lib/lib/src/xran_rx_proc.c b/fhi_lib/lib/src/xran_rx_proc.c
-index e7056f4..0d3d8ac 100644
+index e7056f4..34b6d3b 100644
 --- a/fhi_lib/lib/src/xran_rx_proc.c
 +++ b/fhi_lib/lib/src/xran_rx_proc.c
 @@ -35,7 +35,11 @@
@@ -1623,6 +1861,127 @@ index e7056f4..0d3d8ac 100644
  
  #include <rte_common.h>
  #include <rte_eal.h>
+@@ -339,13 +343,33 @@ int32_t xran_process_srs_sym(void *arg,
+             pRbMap = (struct xran_prb_map *) p_xran_dev_ctx->sFHSrsRxPrbMapBbuIoBufCtrl[tti % XRAN_N_FE_BUF_LEN][CC_ID][Ant_ID].sBufferList.pBuffers->pData;
+             if(pRbMap)
+             {
+-            prbMapElm = &pRbMap->prbMap[sect_id];
+-                if(sect_id >= pRbMap->nPrbElm)
++                u_int8_t section_id_tmp;    // hack for LiteON FR2 : receive UP section ID = 13
++                u_int8_t prb_elem_id_tmp;   // hack for LiteON FR2 : receive UP section ID = 13
++                if(0 == p_xran_dev_ctx->LiteOnIgnoreUPSectionIdEnable) {
++                    section_id_tmp = prb_elem_id_tmp = sect_id;
++                } else {
++                    /** Get the prb_elem_id */
++                    int8_t xran_port = xran_dev_ctx_get_port_id(p_xran_dev_ctx);
++                    u_int8_t mixed_ul_sym_start = 0;
++                    if (xran_fs_get_slot_type(xran_port, CC_ID, tti, XRAN_SLOT_TYPE_SP)) {
++                        mixed_ul_sym_start = XRAN_NUM_OF_SYMBOL_PER_SLOT - xran_fs_get_num_ul_sym_sp(xran_port, CC_ID, tti);
++                    }
++
++                    section_id_tmp = symb_id - mixed_ul_sym_start;     // hack for LiteON FR2 : receive UP section ID = 13, MTU 9000
++                    prb_elem_id_tmp = section_id_tmp;                  // hack for LiteON FR2 : receive UP section ID = 13, MTU 9000
++                    //Note for future reference when using MTU 1500
++                    //prb_elem_id_tmp = 2*section_id_tmp;              // For LiteON FR2 : receive UP section ID = 13, MTU 1500
++                    //if (start_prbu !=0)                              // For LiteON FR2 : receive UP section ID = 13, MTU 1500
++                    //    prb_elem_id_tmp++;                           // For LiteON FR2 : receive UP section ID = 13, MTU 1500
++                }
++
++                prbMapElm = &pRbMap->prbMap[prb_elem_id_tmp /*sect_id*/];
++                if(/*sect_id*/ prb_elem_id_tmp >= pRbMap->nPrbElm)
+                 {
+-                print_err("sect_id %d !=pRbMap->nPrbElm %d\n", sect_id,pRbMap->nPrbElm);
+-                *mb_free = MBUF_FREE;
+-                return size;
+-            }
++                    print_err("sect_id %d !=pRbMap->nPrbElm %d\n", sect_id,pRbMap->nPrbElm);
++                    *mb_free = MBUF_FREE;
++                    return size;
++                }
+             }
+             else
+             {
+@@ -397,7 +421,25 @@ int32_t xran_process_srs_sym(void *arg,
+                     else */
+                     {
+                     struct xran_section_desc *p_sec_desc = NULL;
+-                    prbMapElm = &pRbMap->prbMap[sect_id];
++                    u_int8_t section_id_tmp;    // hack for LiteON FR2 : receive UP section ID = 13
++                    u_int8_t prb_elem_id_tmp;   // hack for LiteON FR2 : receive UP section ID = 13
++                    if(0 == p_xran_dev_ctx->LiteOnIgnoreUPSectionIdEnable) {
++                        section_id_tmp = prb_elem_id_tmp = sect_id;
++                    } else {
++                        int8_t xran_port = xran_dev_ctx_get_port_id(p_xran_dev_ctx);
++                        u_int8_t mixed_ul_sym_start = 0;
++                        if (xran_fs_get_slot_type(xran_port, CC_ID, tti, XRAN_SLOT_TYPE_SP)) {
++                            mixed_ul_sym_start = XRAN_NUM_OF_SYMBOL_PER_SLOT - xran_fs_get_num_ul_sym_sp(xran_port, CC_ID, tti);
++                        }
++                        u_int8_t section_id_tmp = symb_id - mixed_ul_sym_start;     // hack for LiteON FR2 : receive UP section ID = 13, MTU 9000
++                        prb_elem_id_tmp = section_id_tmp;                           // hack for LiteON FR2 : receive UP section ID = 13, MTU 9000
++                        //Note for future reference when using MTU 1500
++                        //prb_elem_id_tmp = 2*section_id_tmp;                       // For LiteON FR2 : receive UP section ID = 13, MTU 1500
++                        //if (start_prbu !=0)                                       // For LiteON FR2 : receive UP section ID = 13, MTU 1500
++                        //    prb_elem_id_tmp++;                                    // For LiteON FR2 : receive UP section ID = 13, MTU 1500
++                    }
++
++                    prbMapElm = &pRbMap->prbMap[prb_elem_id_tmp /*sect_id*/];
+     //                    sec_desc_idx = 0;//prbMapElm->nSecDesc[symb_id];
+                         sec_desc_idx = prbMapElm->nSecDesc[symb_id];
+ 
+@@ -537,14 +579,33 @@ int32_t xran_process_rx_sym(void *arg,
+         pos = (char*) p_xran_dev_ctx->sFrontHaulRxBbuIoBufCtrl[tti % XRAN_N_FE_BUF_LEN][CC_ID][Ant_ID].sBufferList.pBuffers[symb_id].pData;
+         pRbMap = (struct xran_prb_map *) p_xran_dev_ctx->sFrontHaulRxPrbMapBbuIoBufCtrl[tti % XRAN_N_FE_BUF_LEN][CC_ID][Ant_ID].sBufferList.pBuffers->pData;
+         if(pRbMap){
+-            /** Get the prb_elem_id */
++            u_int8_t section_id_tmp;    // hack for LiteON FR2 : receive UP section ID = 13
++            u_int8_t prb_elem_id_tmp;   // hack for LiteON FR2 : receive UP section ID = 13
++            if(0 == p_xran_dev_ctx->LiteOnIgnoreUPSectionIdEnable) {
++                section_id_tmp = prb_elem_id_tmp = sect_id;
++            } else {
++                /** Get the prb_elem_id */
++                int8_t xran_port = xran_dev_ctx_get_port_id(p_xran_dev_ctx);
++                u_int8_t mixed_ul_sym_start = 0;
++                if (xran_fs_get_slot_type(xran_port, CC_ID, tti, XRAN_SLOT_TYPE_SP)) {
++                    mixed_ul_sym_start = XRAN_NUM_OF_SYMBOL_PER_SLOT - xran_fs_get_num_ul_sym_sp(xran_port, CC_ID, tti);
++                }
++
++                section_id_tmp = symb_id - mixed_ul_sym_start;     // hack for LiteON FR2 : receive UP section ID = 13, MTU 9000
++                prb_elem_id_tmp = section_id_tmp;                  // hack for LiteON FR2 : receive UP section ID = 13, MTU 9000
++                //Note for future reference when using MTU 1500
++                //prb_elem_id_tmp = 2*section_id_tmp;              // For LiteON FR2 : receive UP section ID = 13, MTU 1500
++                //if (start_prbu !=0)                              // For LiteON FR2 : receive UP section ID = 13, MTU 1500
++                //    prb_elem_id_tmp++;                           // For LiteON FR2 : receive UP section ID = 13, MTU 1500
++            }
++
+             total_sections=0;
+             if(pRbMap->prbMap[0].bf_weight.extType == 1)
+             {
+                 for(i=0 ; i < pRbMap->nPrbElm ; i++)
+                 {
+                     total_sections += pRbMap->prbMap[i].bf_weight.numSetBFWs;
+-                    if(total_sections >= (sect_id + 1))
++                    if(total_sections >= (/*sect_id*/ section_id_tmp + 1))
+                     {
+                         prb_elem_id = i;
+                         break;
+@@ -553,7 +614,7 @@ int32_t xran_process_rx_sym(void *arg,
+             }
+             else
+             {
+-                prb_elem_id = sect_id;
++                prb_elem_id = prb_elem_id_tmp; /*sect_id*/;
+             }
+ 
+             prbMapElm = &pRbMap->prbMap[prb_elem_id];
+@@ -597,7 +658,7 @@ int32_t xran_process_rx_sym(void *arg,
+                     if(p_sec_desc){
+                         mb = p_sec_desc->pCtrl;
+                         if(mb){
+-                           rte_pktmbuf_free(mb);
++                            rte_pktmbuf_free(mb);
+                         }
+                         p_sec_desc->pData         = iq_data_start;
+                         p_sec_desc->pCtrl         = mbuf;
 diff --git a/fhi_lib/lib/src/xran_timer.c b/fhi_lib/lib/src/xran_timer.c
 index 14a6a41..55182d8 100644
 --- a/fhi_lib/lib/src/xran_timer.c

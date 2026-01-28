@@ -304,7 +304,7 @@ static void configure_srs_info(fapi_nr_ul_config_srs_pdu *srs_config_pdu, nr_srs
 *                send srs according to current configuration
 *
 *********************************************************************/
-static bool ue_srs_procedures_nr(PHY_VARS_NR_UE *ue,
+bool ue_srs_procedures_nr(PHY_VARS_NR_UE *ue,
                                  const UE_nr_rxtx_proc_t *proc,
                                  c16_t **txdataF,
                                  nr_phy_data_tx_t *phy_data,
@@ -314,12 +314,13 @@ static bool ue_srs_procedures_nr(PHY_VARS_NR_UE *ue,
     return false;
   }
 
+  NR_DL_FRAME_PARMS *frame_parms = &(ue->frame_parms);
   fapi_nr_ul_config_srs_pdu *srs_config_pdu = &phy_data->srs_vars.srs_config_pdu;
-  int first_srs_symbol = ue->frame_parms.symbols_per_slot - 1 - srs_config_pdu->time_start_position;
+  const uint8_t l0 = frame_parms->symbols_per_slot - 1 - srs_config_pdu->time_start_position;
   // Num consecutive SRS symbols according to 38.211 6.4.1.4.1
   int num_srs_symbols[] = {1, 2, 4, 8, 12};
-  int last_srs_symbol = first_srs_symbol + num_srs_symbols[srs_config_pdu->num_symbols] - 1;
-  for (int i = first_srs_symbol; i <= last_srs_symbol; i++) {
+  int last_srs_symbol = l0 + num_srs_symbols[srs_config_pdu->num_symbols] - 1;
+  for (int i = l0; i <= last_srs_symbol; i++) {
     was_symbol_used[i] = true;
   }
 
@@ -351,8 +352,7 @@ static bool ue_srs_procedures_nr(PHY_VARS_NR_UE *ue,
 #endif
 
   configure_srs_info(srs_config_pdu, ue->nr_srs_info);
-  NR_DL_FRAME_PARMS *frame_parms = &(ue->frame_parms);
-  uint16_t symbol_offset = (frame_parms->symbols_per_slot - 1 - srs_config_pdu->time_start_position)*frame_parms->ofdm_symbol_size;
+  uint16_t symbol_offset = l0 * frame_parms->ofdm_symbol_size;
   bool generated = generate_srs_nr(frame_parms,
                                    txdataF,
                                    symbol_offset,
@@ -360,7 +360,8 @@ static bool ue_srs_procedures_nr(PHY_VARS_NR_UE *ue,
                                    ue->nr_srs_info,
                                    AMP,
                                    proc->frame_tx,
-                                   proc->nr_slot_tx);
+                                   proc->nr_slot_tx,
+                                   frame_parms->nb_antennas_tx);
   return generated;
 }
 
@@ -400,15 +401,14 @@ void phy_procedures_nrUE_TX(PHY_VARS_NR_UE *ue, const UE_nr_rxtx_proc_t *proc, n
   const NR_UE_PRACH *prach_var = ue->prach_vars[proc->gNB_id];
   if (!prach_var->active) {
     start_meas_nr_ue_phy(ue, OFDM_MOD_STATS);
-    nr_ue_pusch_common_procedures(ue,
-                                  proc->nr_slot_tx,
-                                  &ue->frame_parms,
-                                  ue->frame_parms.nb_antennas_tx,
-                                  (c16_t **)txdataF,
-                                  txp,
-                                  link_type_ul,
-                                  was_symbol_used,
-                                  ue->no_phase_pre_comp);
+    nr_tx_rotation_and_ofdm_mod(proc->nr_slot_tx,
+                                &ue->frame_parms,
+                                ue->frame_parms.nb_antennas_tx,
+                                (c16_t **)txdataF,
+                                txp,
+                                link_type_ul,
+                                was_symbol_used,
+                                ue->no_phase_pre_comp);
     stop_meas_nr_ue_phy(ue, OFDM_MOD_STATS);
   }
 
@@ -973,6 +973,32 @@ static void nr_ue_dlsch_procedures(PHY_VARS_NR_UE *ue,
 
 }
 
+static bool check_meas_to_perform(PHY_VARS_NR_UE *ue, int nr_slot_rx)
+{
+  if (nr_slot_rx != 0) {
+    return false;
+  }
+
+  if (ue->measurements.meas_request_pending == true) {
+    return false;
+  }
+
+  // Check if any intra-frequency neighbor cells are configured
+  uint32_t serving_ssb_freq = get_ssb_arfcn(&ue->frame_parms);
+  bool has_intra_freq_neighbors = false;
+
+  for (int cell_idx = 0; cell_idx < NUMBER_OF_NEIGHBORING_CELLS_MAX; cell_idx++) {
+    fapi_nr_neighboring_cell_t *nr_neighboring_cell = &ue->nrUE_config.meas_config.nr_neighboring_cell[cell_idx];
+    if (nr_neighboring_cell->active == 1) {
+      if (nr_neighboring_cell->ssb_freq == 0 || nr_neighboring_cell->ssb_freq == serving_ssb_freq) {
+        has_intra_freq_neighbors = true;
+      }
+    }
+  }
+
+  return has_intra_freq_neighbors;
+}
+
 static bool is_ssb_index_transmitted(const PHY_VARS_NR_UE *ue, const int index)
 {
   if (ue->received_config_request) {
@@ -1188,6 +1214,28 @@ int pbch_processing(PHY_VARS_NR_UE *ue, const UE_nr_rxtx_proc_t *proc, nr_phy_da
       } // for i
     } // for rsc_id
   } // for gNB_id
+
+  PHY_NR_MEASUREMENTS *measurements = &ue->measurements;
+  if (check_meas_to_perform(ue, nr_slot_rx)) {
+    measurements->meas_request_pending = true;
+
+    // Copy rxdata
+    uint32_t rxdata_size = (2 * (fp->samples_per_frame) + fp->ofdm_symbol_size);
+    size_t total_size = sizeof(nr_meas_task_args_t) + fp->nb_antennas_rx * rxdata_size * sizeof(c16_t);
+    nr_meas_task_args_t *args = malloc(total_size);
+    args->proc = *proc;
+    args->ue = ue;
+    args->rxdata_size = rxdata_size;
+
+    for (int i = 0; i < fp->nb_antennas_rx; i++) {
+      args->rxdata[i] = &args->rxdata_ant[i * rxdata_size];
+      memcpy(args->rxdata[i], ue->common_vars.rxdata[i], rxdata_size * sizeof(c16_t));
+    }
+
+    task_t t = {.func = nr_ue_meas_neighboring_cell, .args = args};
+    pushTpool(&get_nrUE_params()->Tpool, t);
+  }
+
   TracyCZoneEnd(ctx);
   return sampleShift;
 }

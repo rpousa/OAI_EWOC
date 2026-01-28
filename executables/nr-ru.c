@@ -881,7 +881,7 @@ static void fill_split7_2_config(split7_config_t *split7, const nfapi_nr_config_
 
   DevAssert(prach_config->prach_ConfigurationIndex.tl.tag == NFAPI_NR_CONFIG_PRACH_CONFIG_INDEX_TAG);
   split7->prach_index = prach_config->prach_ConfigurationIndex.value;
-  AssertFatal(prach_config->num_prach_fd_occasions.value == 1, "cannot handle more than one PRACH occasion\n");
+  AssertFatal(prach_config->num_prach_fd_occasions.value >= 1, "must have at least one PRACH occasion\n");
   split7->prach_freq_start = prach_config->num_prach_fd_occasions_list[0].k1.value;
 
   DevAssert(cell_config->frame_duplex_type.tl.tag == NFAPI_NR_CONFIG_FRAME_DUPLEX_TYPE_TAG);

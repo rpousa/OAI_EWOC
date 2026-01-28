@@ -1,16 +1,4 @@
-<table style="border-collapse: collapse; border: none;">
-  <tr style="border-collapse: collapse; border: none;">
-    <td style="border-collapse: collapse; border: none;">
-      <a href="http://www.openairinterface.org/">
-         <img src="../images/oai_final_logo.png" alt="" border=3 height=50 width=150>
-         </img>
-      </a>
-    </td>
-    <td style="border-collapse: collapse; border: none; vertical-align: center;">
-      <b><font size = "5">F1 split design</font></b>
-    </td>
-  </tr>
-</table>
+# F1 split design
 
 [[_TOC_]]
 
@@ -21,14 +9,17 @@ unit: PDCP, RRC, SDAP) and the DU (distributed unit: RLC, MAC, PHY). It is
 standardized in TS 38.470 - 38.473 for 5G NR.
 
 F1 specs:
+
 * 3GPP TS 38.470 F1 general aspects and principles
 * 3GPP TS 38.471 F1 layer 1
 
 F1-C:
+
 * 3GPP TS 38.472 F1 signalling transport
 * 3GPP TS 38.473 F1 Application Protocol (F1AP)
 
 F1-U:
+
 * 3GPP TS 38.474 F1 Data Transport
 
 No equivalent for 4G exists.
@@ -56,12 +47,14 @@ This is the current status:
 
 - gNB-CU/gNB-DU split
 - Supported deployments:
-  * SA
-  * Single cell per DU
-  * Multiple DUs connected to one CU (both CP and UP)
-  * [Mobility between DUs connected to a single CU](../handover-tutorial.md)
+
+    * SA
+    * Single cell per DU
+    * Multiple DUs connected to one CU (both CP and UP)
+    * [Mobility between DUs connected to a single CU](../handover-tutorial.md)
 - Not supported:
-  * NSA
+
+    * NSA
 
 ### F1-C
 
@@ -194,6 +187,7 @@ see [this `docker-compose` file](../../ci-scripts/yaml_files/5g_f1_rfsimulator/d
 
 The rules to decide if a config triggers a start of a DU, CU, or monolithic
 gNB, are, in order:
+
 1. If the `MACRLCs` section lists `f1` as **northbound transport preference**
    (`tr_n_preference`), it is a DU.
 2. If the `gNBs` section lists `f1` as a **southound transport preference**
@@ -208,12 +202,13 @@ on `192.168.70.129` towards the core, `127.0.0.3` towards the DU, and the DU
 `127.0.0.4` towards the CU.
 
 In the CU file:
+
 - Update the `gNBs.[0].amf_ip_address` and `gNBs.[0].NETWORK_INTERFACES`
   section towards the core (typically, OAI CN is configured to provide a docker
   bridge on `192.168.70.129` and the AMF is on `192.168.70.132`):
-  - `gNBs.[0].amf_ip_address.[0].ipv4 192.168.70.132`
-  - `gNBs.[0].NETWORK_INTERFACES.GNB_IPV4_ADDRESS_FOR_NG_AMF 192.168.70.129`
-  - `gNBs.[0].NETWORK_INTERFACES.GNB_IPV4_ADDRESS_FOR_NGU 192.168.70.132`
+    - `gNBs.[0].amf_ip_address.[0].ipv4 192.168.70.132`
+    - `gNBs.[0].NETWORK_INTERFACES.GNB_IPV4_ADDRESS_FOR_NG_AMF 192.168.70.129`
+    - `gNBs.[0].NETWORK_INTERFACES.GNB_IPV4_ADDRESS_FOR_NGU 192.168.70.132`
 - Set `gNBs.[0].tr_s_preference` (transport south-bound) to `f1`
 - Update the `gNBs.[0].local_s_address` (CU-local south address) for the
   F1-C/SCTP and F1-U/GTP/UDP south-bound interfaces: `127.0.0.3`
@@ -221,10 +216,11 @@ In the CU file:
   ignored, but we recommend to put `0.0.0.0` ("any")
 - Ports should match the ones in the DU config, but for simplicity and
   standards-conformity, simply set all to 2152:
-  - `local_s_portd` in CU should match `remote_n_portd` in DU
-  - `remote_s_portd` in CU should match `local_n_portd` in DU
+    - `local_s_portd` in CU should match `remote_n_portd` in DU
+    - `remote_s_portd` in CU should match `local_n_portd` in DU
 
 In the DU file:
+
 - Set `MACRLCs.[0].tr_n_preference` to `f1`
 - Update `MACRLCs.[0].local_n_address` (local north-bound address of the DU) to
   `127.0.0.4`. This IP address is used to bind the F1-C/SCTP and F1-U/GTP/UDP

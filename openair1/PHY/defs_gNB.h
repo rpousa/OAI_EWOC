@@ -46,6 +46,8 @@
 
 #define MAX_NUM_RU_PER_gNB 8
 #define MAX_PUCCH0_NID 8
+#define NR_SRS_IDFT_OVERSAMP_FACTOR 2
+#define NR_SRS_DETECTION_THRESHOLD 10
 
 typedef struct {
   int nb_id;

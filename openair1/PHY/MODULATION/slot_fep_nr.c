@@ -21,6 +21,7 @@
 
 #include "PHY/defs_nr_UE.h"
 #include "PHY/defs_gNB.h"
+#include "PHY/defs_nr_common.h"
 #include "modulation_UE.h"
 #include "nr_modulation.h"
 #include "PHY/LTE_ESTIMATION/lte_estimation.h"
@@ -135,61 +136,44 @@ int nr_slot_fep(PHY_VARS_NR_UE *ue,
   return 0;
 }
 
-int nr_slot_fep_ul(NR_DL_FRAME_PARMS *frame_parms,
-                   int32_t *rxdata,
-                   int32_t *rxdataF,
-                   unsigned char symbol,
-                   unsigned char Ns,
-                   int sample_offset)
+int nr_symbol_fep_ul(const NR_DL_FRAME_PARMS *fp,
+                     const c16_t *rxdata,
+                     c16_t *rxdataF,
+                     unsigned char symbol,
+                     unsigned char slot,
+                     int sample_offset)
 {
-  unsigned int nb_prefix_samples  = frame_parms->nb_prefix_samples;
-  unsigned int nb_prefix_samples0 = frame_parms->nb_prefix_samples0;
-
-  dft_size_idx_t dftsize = get_dft(frame_parms->ofdm_symbol_size);
+  dft_size_idx_t dftsize = get_dft(fp->ofdm_symbol_size);
   // This is for misalignment issues
-  int32_t tmp_dft_in[8192] __attribute__ ((aligned (32)));
+  int32_t tmp_dft_in[fp->ofdm_symbol_size] __attribute__((aligned(32)));
 
   // offset of first OFDM symbol
-  unsigned int rxdata_offset = get_samples_slot_timestamp(frame_parms, Ns);
-  unsigned int abs_symbol = Ns * frame_parms->symbols_per_slot + symbol;
-  for (int idx_symb = Ns*frame_parms->symbols_per_slot; idx_symb <= abs_symbol; idx_symb++)
-    rxdata_offset += (idx_symb%(0x7<<frame_parms->numerology_index)) ? nb_prefix_samples : nb_prefix_samples0;
-  rxdata_offset += frame_parms->ofdm_symbol_size * symbol;
-
+  uint32_t prefix_length = get_samples_symbol_duration(fp, slot, symbol, 1) - fp->ofdm_symbol_size;
+  unsigned int rxdata_offset =
+      get_samples_slot_timestamp(fp, slot) + get_samples_symbol_timestamp(fp, slot, symbol) + prefix_length;
   // use OFDM symbol from within 1/8th of the CP to avoid ISI
-  rxdata_offset -= (nb_prefix_samples / frame_parms->ofdm_offset_divisor);
+  rxdata_offset -= (fp->nb_prefix_samples / fp->ofdm_offset_divisor);
 
   int16_t *rxdata_ptr;
+  if (rxdata_offset >= sample_offset)
+    rxdata_offset -= sample_offset;
+  else
+    rxdata_offset += fp->samples_per_frame - sample_offset;
 
-  if(sample_offset > rxdata_offset) {
-
-    memcpy((void *)&tmp_dft_in[0],
-           (void *)&rxdata[frame_parms->samples_per_frame - sample_offset + rxdata_offset],
-           (sample_offset - rxdata_offset) * sizeof(int32_t));
-    memcpy((void *)&tmp_dft_in[sample_offset - rxdata_offset],
-           (void *)&rxdata[0],
-           (frame_parms->ofdm_symbol_size - sample_offset + rxdata_offset) * sizeof(int32_t));
+  if (rxdata_offset + fp->ofdm_symbol_size > fp->samples_per_frame) {
+    memcpy(&tmp_dft_in[0],
+           &rxdata[rxdata_offset],
+           (fp->samples_per_frame - rxdata_offset) * sizeof(int32_t));
+    memcpy(&tmp_dft_in[fp->samples_per_frame - rxdata_offset],
+           &rxdata[0],
+           (fp->ofdm_symbol_size - fp->samples_per_frame + rxdata_offset) * sizeof(int32_t));
     rxdata_ptr = (int16_t *)tmp_dft_in;
-
-  } else if (((rxdata_offset - sample_offset) & 7) != 0) {
-
-    // if input to dft is not 256-bit aligned
-    memcpy((void *)&tmp_dft_in[0],
-           (void *)&rxdata[rxdata_offset - sample_offset],
-           (frame_parms->ofdm_symbol_size) * sizeof(int32_t));
-    rxdata_ptr = (int16_t *)tmp_dft_in;
-
   } else {
-
     // use dft input from RX buffer directly
-    rxdata_ptr = (int16_t *)&rxdata[rxdata_offset - sample_offset];
-
+    rxdata_ptr = (int16_t *)&rxdata[rxdata_offset];
   }
 
-  dft(dftsize,
-      rxdata_ptr,
-      (int16_t *)&rxdataF[symbol * frame_parms->ofdm_symbol_size],
-      1);
+  dft(dftsize, rxdata_ptr, (int16_t *)rxdataF, 1);
 
   return 0;
 }
@@ -235,5 +219,29 @@ void apply_nr_rotation_symbol_RX(const NR_DL_FRAME_PARMS *frame_parms,
                     this_symbol + frame_parms->first_carrier_offset,
                     nb_rb * 6,
                     15);
+  }
+}
+
+void nr_ofdm_demod_and_rx_rotation(c16_t **rxdata,
+                                   c16_t **rxdataF,
+                                   const NR_DL_FRAME_PARMS *fp,
+                                   int nb_antennas,
+                                   int slot,
+                                   int slot_offsetF,
+                                   enum nr_Link linktype,
+                                   bool was_symbol_used[NR_NUMBER_OF_SYMBOLS_PER_SLOT])
+{
+  for (int aa = 0; aa < nb_antennas; aa++) {
+    for (uint8_t symbol = 0; symbol < fp->symbols_per_slot; symbol++) {
+      if (was_symbol_used[symbol] == true) {
+        nr_symbol_fep_ul(fp, &rxdata[aa][0], &rxdataF[aa][slot_offsetF + symbol * fp->ofdm_symbol_size], symbol, slot, 0);
+        apply_nr_rotation_symbol_RX(fp,
+                                    &rxdataF[aa][slot_offsetF + symbol * fp->ofdm_symbol_size],
+                                    fp->symbol_rotation[linktype],
+                                    fp->N_RB_UL,
+                                    slot,
+                                    symbol);
+      }
+    }
   }
 }

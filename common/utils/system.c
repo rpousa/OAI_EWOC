@@ -282,8 +282,13 @@ void threadCreate(pthread_t* t, void * (*func)(void*), void * param, char* name,
 
   ret=pthread_create(t, &attr, func, param);
   AssertFatal(ret == 0, "Error in pthread_create(): ret: %d, errno: %d\n", ret, errno);
-  
-  pthread_setname_np(*t, name);
+
+  char short_name[16];
+  strncpy(short_name, name, sizeof(short_name) - 1);
+  short_name[sizeof(short_name) - 1] = '\0';
+  ret = pthread_setname_np(*t, short_name);
+  AssertFatal(ret == 0, "Error in pthread_setname_np(): ret: %d, errno: %d\n", ret, errno);
+
   if (affinity != -1 ) {
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);

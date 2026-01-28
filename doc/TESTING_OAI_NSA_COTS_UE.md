@@ -6,13 +6,11 @@ STATUS 2020/10/15 : added External Resources section and links
 
 ## External Resources
 
-Additional Resources to this page can be found here (special mention to Walter Maguire <wmaguire@live.com>) :  
-[Additional Notes Supporting the OAI COTS NSA](https://docs.google.com/document/d/1pL8Szm0ocGxdl5ESVp12Ff71a4PbhCb9SpvbLZzwYbo/edit?usp=sharing)
+Additional Resources to this page can be found [here](https://docs.google.com/document/d/1pL8Szm0ocGxdl5ESVp12Ff71a4PbhCb9SpvbLZzwYbo/edit?usp=sharing) (special mention to Walter Maguire, [wmaguire@live.com](mailto:wmaguire@live.com)).
 At time of writing, the openairinterface5G Commit Tag is 2020.w39
 
 
-Faraday Cages can be found here :  
-[Faraday Cage](http://www.saelig.com/MFR00066/ste2300.htm)
+Faraday Cages can be found [here](http://www.saelig.com/MFR00066/ste2300.htm)
 
 
 ## Configuration Overview
@@ -37,7 +35,7 @@ Our code might not work with all 5G phones yet, but we are constantly improving 
 *  Simcom SIMCOM8200EA 
 *  Quectel RM500Q-GL
 
-Note1: In the version we have at Eurecom, you need to set the PLMN to 50501, and you also need to change the firmware to "11.0.0 (RD1A.201105.003.B1, Nov 2020, EU carriers)" (see [Factory Images for Nexus and Pixel Devices](https://developers.google.com/android/images))
+> **Note1:** In the version we have at Eurecom, you need to set the PLMN to 50501, and you also need to change the firmware to "11.0.0 (RD1A.201105.003.B1, Nov 2020, EU carriers)" (see [Factory Images for Nexus and Pixel Devices](https://developers.google.com/android/images))
 
 ## Repository
 

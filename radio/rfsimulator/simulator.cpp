@@ -713,7 +713,7 @@ static int rfsimu_setdistance_cmd(char *buff, int debug, telnet_printfunc_t prnt
 
   rfsimulator_state_t *t = (rfsimulator_state_t *)arg;
   const double sample_rate = t->sample_rate;
-  const double c = 299792458; /* 3e8 */
+  const double c = (double) SPEED_OF_LIGHT;
 
   const uint64_t new_offset = (double)distance * sample_rate / c;
   const double new_distance = (double)new_offset * c / sample_rate;
@@ -749,7 +749,7 @@ static int rfsimu_getdistance_cmd(char *buff, int debug, telnet_printfunc_t prnt
 
   rfsimulator_state_t *t = (rfsimulator_state_t *)arg;
   const double sample_rate = t->sample_rate;
-  const double c = 299792458; /* 3e8 */
+  const double c = (double) SPEED_OF_LIGHT;
 
   for (int i = 0; i < MAX_FD_RFSIMU; i++) {
     buffer_t *b = &t->buf[i];

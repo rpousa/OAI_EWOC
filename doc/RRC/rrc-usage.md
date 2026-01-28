@@ -6,7 +6,7 @@ Developer documentation, such as UE connection control flow, reestablishment, or
 
 [[_TOC_]]
 
-# General
+## General
 
 The RRC layer controls the basic connection setup of UEs as well as additional
 procedures. It is the fundamental building block of OAI's CU-CP, and interacts
@@ -14,7 +14,7 @@ with lower layers (DU, basically MAC and RLC) through F1AP messages, and with
 the CU-UP through E1AP messages. More information can be found in the
 respective [F1AP page](../F1AP/F1-design.md) and [E1AP page](../E1AP/E1-design.md).
 
-# Periodic output and interpretation
+## Periodic output and interpretation
 
 Similarly to the scheduler, the RRC periodically prints information about
 connected UEs and DUs into file `nrRRC_stats.log` in the current working
@@ -53,19 +53,19 @@ blocks/PRB). Only one cell per DU is supported.
 
 As of now, it does not print information about connected CU-UPs or AMFs.
 
-# Configuration of the RRC
+## Configuration of the RRC
 
-## Split-related options (when running in a CU or CU-CP)
+### Split-related options (when running in a CU or CU-CP)
 
 See [F1 documentation](../F1AP/F1-design.md) for information about the F1 split.
 See [E1 documentation](../E1AP/E1-design.md) for information about the E1 split.
 
-## RRC-specific configuration options
+### RRC-specific configuration options
 
 In the `gNBs` section of the gNB/CU/CU-CP configuration file is the
 RRC-specific configuration
 
-### cell-specific options
+#### cell-specific options
 
 Note that some SIBS are configured at the CU and some at the DU; please consult
 the [MAC configuration](../MAC/mac-usage.md) as well for SIB configuration.
@@ -90,18 +90,18 @@ the [MAC configuration](../MAC/mac-usage.md) as well for SIB configuration.
 - `cu_sibs` (default: `[]`) list of SIBs to give to the DU for transmission.
   Currently, SIB2 is supported.
 
-### UE-specific configuration
+#### UE-specific configuration
 
 - `um_on_default_drb` (default: false): use RLC UM instead of RLC AM on default
   bearers
 - `drbs` (default: 0): the number of DRBs to allocate for a UE, only useful for
   do-ra or phy-test testing
 
-### Neighbor-gNB configuration
+#### Neighbor-gNB configuration
 
 Refer to the [handover tutorial](../handover-tutorial.md) for detailed information about gNB neighbors and handover procedures.
 
-#### Required configuration parameters
+##### Required configuration parameters
 
 To define a neighbor cell in the configuration file, the following parameters are required:
 

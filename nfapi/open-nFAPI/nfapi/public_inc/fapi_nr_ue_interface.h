@@ -29,6 +29,11 @@
 #define NFAPI_UE_MAX_NUM_CB 8
 #define NFAPI_MAX_NUM_UL_PDU 255
 #define NFAPI_MAX_NUM_CSI_RATEMATCH 4
+// Maximum number of neighboring cells that can be tracked simultaneously
+// Set to 1 due to PSS search limitation: pss_search_time_nr() returns only
+// the single strongest PSS correlation peak, making it impossible to reliably
+// detect multiple neighbor cells in the same measurement cycle
+#define NUMBER_OF_NEIGHBORING_CELLS_MAX 1
 
 /*
   typedef unsigned int	   uint32_t;
@@ -719,6 +724,16 @@ typedef struct
 } fapi_nr_prach_config_t;
 
 typedef struct {
+  uint16_t Nid_cell;
+  uint8_t active;
+  uint32_t ssb_freq;
+} fapi_nr_neighboring_cell_t;
+
+typedef struct {
+  fapi_nr_neighboring_cell_t nr_neighboring_cell[NUMBER_OF_NEIGHBORING_CELLS_MAX];
+} fapi_nr_meas_config_t;
+
+typedef struct {
   int16_t target_Nid_cell;
   bool ssb_bw_scan;
 } fapi_nr_synch_request_t;
@@ -733,7 +748,7 @@ typedef struct {
   fapi_nr_tdd_table_t tdd_table;
   fapi_nr_prach_config_t prach_config;
   fapi_nr_ntn_config_t ntn_config;
-
+  fapi_nr_meas_config_t meas_config;
 } fapi_nr_config_request_t;
 
 #endif

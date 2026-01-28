@@ -114,9 +114,22 @@ uint32_t nr_ue_calculate_ssb_rsrp(const NR_DL_FRAME_PARMS *fp,
                                   int ssb_start_subcarrier);
 
 void nr_ue_ssb_rsrp_measurements(PHY_VARS_NR_UE *ue,
-                                 uint8_t gNB_index,
+                                 int ssb_index,
                                  const UE_nr_rxtx_proc_t *proc,
                                  c16_t rxdataF[][ue->frame_parms.samples_per_slot_wCP]);
+
+// Structure to pass data to neighboring cell measurement task
+typedef struct {
+  UE_nr_rxtx_proc_t proc;
+  PHY_VARS_NR_UE *ue;
+  c16_t *rxdata[NB_RX_ANTENNAS_MAX];
+  uint32_t rxdata_size;
+  c16_t rxdata_ant[];
+} nr_meas_task_args_t;
+
+void nr_ue_meas_neighboring_cell(void *arg);
+
+void do_neighboring_cell_measurements(UE_nr_rxtx_proc_t *proc, PHY_VARS_NR_UE *ue, c16_t **rxdata, uint32_t rxdata_size);
 
 void nr_ue_rrc_measurements(PHY_VARS_NR_UE *ue,
                             const UE_nr_rxtx_proc_t *proc,
