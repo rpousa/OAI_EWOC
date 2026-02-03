@@ -1,0 +1,177 @@
+#/*
+# * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
+# * contributor license agreements.  See the NOTICE file distributed with
+# * this work for additional information regarding copyright ownership.
+# * The OpenAirInterface Software Alliance licenses this file to You under
+# * the OAI Public License, Version 1.1  (the "License"); you may not use this file
+# * except in compliance with the License.
+# * You may obtain a copy of the License at
+# *
+# *      http://www.openairinterface.org/?page_id=698
+# *
+# * Unless required by applicable law or agreed to in writing, software
+# * distributed under the License is distributed on an "AS IS" BASIS,
+# * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# * See the License for the specific language governing permissions and
+# * limitations under the License.
+# *-------------------------------------------------------------------------------
+# * For more information about the OpenAirInterface (OAI) Software Alliance:
+# *      contact@openairinterface.org
+# */
+#
+#---------------------------------------------------------------------
+#
+# Dockerfile for the Open-Air-Interface FlexRIC service
+#   Valid for Ubuntu-22.04 (jammy)
+#
+#---------------------------------------------------------------------
+# BUILDER IMAGE
+#---------------------------------------------------------------------
+# Base builder image
+FROM ubuntu:jammy AS builder-base
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=Europe/Paris
+
+# Install build dependencies in a single layer
+RUN apt-get update && \
+    apt-get upgrade --yes && \
+    apt-get install -y --fix-missing \
+        apt-utils \
+        psmisc \
+        libsctp1 \
+        python3 \
+        python3-pip \
+        build-essential \
+        libsctp-dev \
+        gpg \
+        git \
+        wget \
+        tar \
+        m4 \
+        automake \
+        libtool \
+        cmake \
+        cmake-curses-gui \
+        ninja-build \
+        bison \
+        flex \
+        gdb \
+        libpcre2-dev \
+        software-properties-common \
+        python3.10-dev \
+        asn1c && \
+        apt-get clean 
+
+RUN     add-apt-repository -y ppa:ubuntu-toolchain-r/test && \
+        apt-get update && \
+        apt-get install -y --no-install-recommends \
+        build-essential \
+        ninja-build \
+        gcc-13 \
+        g++-13 \
+        mold && \
+        apt-get clean && \
+        rm -rf /var/lib/apt/lists/*
+
+# SWIG builder stage
+FROM builder-base AS swig-builder
+
+RUN git clone -b release-4.1 https://github.com/swig/swig.git && \
+    cd swig && \
+    ./autogen.sh && \
+    ./configure --prefix=/usr/ && \
+    make -j8 && \
+    make install
+
+# ASN.1 compiler builder stage
+FROM builder-base AS asn1c-builder
+RUN rm -rf /tmp/asn1c && \
+    git clone  https://github.com/mouse07410/asn1c /tmp/asn1c && \
+    cd /tmp/asn1c && \
+    git checkout 940dd5fa9f3917913fd487b13dfddfacd0ded06e && \
+    git log -n1 && \
+    autoreconf -iv && \
+    ./configure --prefix=/opt/asn1c/ && \
+    make -j8 && \
+    make install
+
+# FlexRIC builder stage
+FROM builder-base AS flexric-builder
+ARG E2AP_VERSION=E2AP_V3
+ARG KPM_VERSION=KPM_V3_00
+
+# Copy from previous stages
+COPY --from=swig-builder /usr/bin/swig /usr/bin/
+COPY --from=swig-builder /usr/share/swig /usr/share/swig
+COPY --from=asn1c-builder /opt/asn1c /opt/asn1c
+
+ENV PATH="/opt/asn1c/bin:${PATH}"
+
+# Build FlexRIC
+WORKDIR /flexric
+COPY ./flexric .
+RUN mkdir build && \
+    cd build && \
+    cmake -GNinja -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_ASN1C_EXECUTABLE=/opt/asn1c/bin/asn1c \
+          -DE2AP_VERSION=$E2AP_VERSION \
+          -DKPM_VERSION=$KPM_VERSION \
+          -DXAPP_MULTILANGUAGE=ON \
+          -DCMAKE_INSTALL_PREFIX=/usr/local \
+          -DCMAKE_C_FLAGS_RELEASE="-O3" \
+          -DCMAKE_CXX_FLAGS_RELEASE="-O3" \
+          -DCMAKE_C_COMPILER=gcc-13 \
+          -DCMAKE_CXX_COMPILER=g++-13 .. && \
+    ninja && \
+    ninja install
+
+# Final runtime image
+FROM ubuntu:jammy
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=Europe/Paris
+ENV XAPP_DURATION=-1
+
+# Install runtime dependencies only
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        libsctp1 \
+        python3.10 \
+        libpcre2-8-0 \
+        net-tools \
+        iproute2 \
+        libssl3 && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY --from=flexric-builder /flexric/build/examples/ric/nearRT-RIC /flexric/build/examples/ric/nearRT-RIC
+COPY --from=flexric-builder /flexric/build/src/xApp/libe42_xapp_shared.so /flexric/build/src/xApp/libe42_xapp_shared.so
+
+RUN ldconfig && \
+    echo "--- Check shared objects dependencies for executable nearRT-RIC ---" && \
+    ldd /flexric/build/examples/ric/nearRT-RIC && \
+    echo "--- Check shared objects dependencies for xApp shared library ---" && \
+    ldd /flexric/build/src/xApp/libe42_xapp_shared.so 
+
+# Copy necessary files from builder
+# COPY --from=flexric-builder /usr/local/lib/flexric/*.so /usr/local/lib/flexric/
+# COPY --from=flexric-builder /usr/local/bin/nearRT-RIC /usr/local/bin/
+# COPY --from=flexric-builder /flexric/build/examples/xApp /usr/local/flexric/xApp/
+# COPY --from=flexric-builder /flexric/build/examples/emulator/agent /usr/local/flexric/emulator/agent/
+COPY --from=flexric-builder /flexric/build/examples/ric/nearRT-RIC /usr/local/bin/ 
+COPY --from=flexric-builder /flexric/build/examples/xApp /usr/local/flexric/
+RUN mkdir -p /usr/local/flexric/emulator/agent
+COPY --from=flexric-builder /flexric/build/examples/emulator/agent /usr/local/flexric/emulator/
+COPY --from=flexric-builder /usr/local/lib/flexric/ /usr/local/lib/flexric/
+# Copy configuration files
+COPY ./volumes/flexric_*.conf /usr/local/etc/flexric/
+COPY ./volumes/ric.conf /usr/local/etc/flexric/
+COPY ./volumes/ric.conf /usr/local/etc/flexric/flexric.conf
+
+# Update shared library cache
+RUN ldconfig
+
+# Expose ports
+EXPOSE 36421/sctp 36422/sctp
+
+WORKDIR /flexric
+CMD ["/bin/bash", "-c", "sleep infinity"]
