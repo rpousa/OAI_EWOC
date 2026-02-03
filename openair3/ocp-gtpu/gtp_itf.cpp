@@ -1036,9 +1036,9 @@ static int Gtpv1uHandleError(int h, uint8_t *msgBuf, uint32_t msgBufLen, const s
         "   TV id for GTP addr %u (should be 133)\n"
         "   len for addr of UPF %u (should be IPv4 or IPv6 len)"
         "   (TS 29.281 Sec 7.3.1 Error Handling not implemented)\n",
-        msg->h.teid,
+        ntohl(msg->h.teid),
         msg->teid_data_i,
-        msg->teid,
+        ntohl(msg->teid),
         msg->addr_data_i,
         msg->addr_len);
   int rc = GTPNOK;

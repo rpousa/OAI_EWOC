@@ -326,4 +326,3 @@ void apply_nr_rotation_TX(const NR_DL_FRAME_PARMS *fp,
     }
   }
 }
-                       

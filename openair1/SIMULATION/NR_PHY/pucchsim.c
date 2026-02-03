@@ -96,7 +96,7 @@ int main(int argc, char **argv)
   sigaction(SIGINT, &sigint_action, &oldaction);
 
   int i;//,l;
-  double sigma2, sigma2_dB=10,SNR,snr0=-2.0,snr1=2.0;
+  double SNR, snr0 = -2.0, snr1 = 2.0;
   double cfo=0;
   uint8_t snr1set=0;
   double **s_re,**s_im,**r_re,**r_im;
@@ -566,15 +566,16 @@ int main(int argc, char **argv)
       // SNR Computation
       // standard says: SNR = S / N, where S is the total signal energy, N is the noise energy in the transmission bandwidth (i.e. N_RB_DL resource blocks)
       // txlev = S.
-      int txlev = signal_energy((int32_t *)&txdataF[0][startingSymbolIndex*frame_parms->ofdm_symbol_size], frame_parms->ofdm_symbol_size);
+
+      // Compute transmitter energy level
+      int symbol_offset = startingSymbolIndex * frame_parms->ofdm_symbol_size;
+      int symbol_length = frame_parms->ofdm_symbol_size;
+      double txlev = compute_tx_energy_level(txdataF, 1, symbol_offset, symbol_length, n_trials);
 
       // sigma2 is variance per dimension, so N/(N_RB*12)
       // so, sigma2 = N/(N_RB_DL*12) => (S/SNR)/(N_RB*12)
       int N_RB = (format == 0 || format == 1) ? 1 : nrofPRB;
-      sigma2_dB = 10*log10(txlev*(N_RB_DL/N_RB))-SNR;
-      sigma2 = pow(10.0,sigma2_dB/10.0);
-
-      if (n_trials==1) printf("txlev %d (%f dB), offset %d, sigma2 %f ( %f dB)\n",txlev,10*log10(txlev),startingSymbolIndex*frame_parms->ofdm_symbol_size,sigma2,sigma2_dB);
+      double sigma2 = compute_noise_variance(txlev, N_RB_DL * 12, N_RB, 1, SNR, n_trials);
 
       for (int symb=0; symb<gNB->frame_parms.symbols_per_slot;symb++) {
         if (symb<startingSymbolIndex || symb >= startingSymbolIndex+nrofSymbols) {
@@ -648,7 +649,16 @@ int main(int argc, char **argv)
       gNB_I0_measurements(gNB, nr_slot_tx, 0, gNB->frame_parms.symbols_per_slot, rb_mask_ul);
       start_meas(&gNB->phy_proc_rx);
 
-      if (n_trials==1) printf("noise rxlev %d (%d dB), rxlev pucch %d dB sigma2 %f dB, SNR %f, TX %f, I0 (pucch) %d, I0 (avg) %d\n",rxlev,dB_fixed(rxlev),dB_fixed(rxlev_pucch),sigma2_dB,SNR,10*log10((double)txlev*UE->frame_parms.ofdm_symbol_size/12),gNB->measurements.n0_subband_power_tot_dB[startingPRB],gNB->measurements.n0_subband_power_avg_dB);
+      if (n_trials == 1)
+        printf("noise rxlev %d (%d dB), rxlev pucch %d dB sigma2 %f dB, SNR %f, TX %f, I0 (pucch) %d, I0 (avg) %d\n",
+               rxlev,
+               dB_fixed(rxlev),
+               dB_fixed(rxlev_pucch),
+               10 * log10(sigma2),
+               SNR,
+               10 * log10((double)txlev * UE->frame_parms.ofdm_symbol_size / 12),
+               gNB->measurements.n0_subband_power_tot_dB[startingPRB],
+               gNB->measurements.n0_subband_power_avg_dB);
       if(format==0){
         nfapi_nr_uci_pucch_pdu_format_0_1_t uci_pdu;
         nfapi_nr_pucch_pdu_t pucch_pdu;

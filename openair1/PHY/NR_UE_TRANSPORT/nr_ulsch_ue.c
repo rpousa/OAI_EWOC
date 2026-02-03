@@ -1502,15 +1502,14 @@ void nr_ue_ulsch_procedures(PHY_VARS_NR_UE *UE,
   stop_meas_nr_ue_phy(UE, PUSCH_PROC_STATS);
 }
 
-uint8_t nr_ue_pusch_common_procedures(PHY_VARS_NR_UE *UE,
-                                      const uint8_t slot,
-                                      const NR_DL_FRAME_PARMS *frame_parms,
-                                      const uint8_t n_antenna_ports,
-                                      c16_t **txdataF,
-                                      c16_t **txdata,
-                                      uint32_t linktype,
-                                      bool was_symbol_used[NR_NUMBER_OF_SYMBOLS_PER_SLOT],
-                                      bool no_phase_pre_comp)
+uint8_t nr_tx_rotation_and_ofdm_mod(const uint8_t slot,
+                                    const NR_DL_FRAME_PARMS *frame_parms,
+                                    const uint8_t n_antenna_ports,
+                                    c16_t **txdataF,
+                                    c16_t **txdata,
+                                    uint32_t linktype,
+                                    bool was_symbol_used[NR_NUMBER_OF_SYMBOLS_PER_SLOT],
+                                    bool no_phase_pre_comp)
 {
   int N_RB = (linktype == link_type_sl) ? frame_parms->N_RB_SL : frame_parms->N_RB_UL;
 

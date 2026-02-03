@@ -59,8 +59,13 @@ void dump_nr_I0_stats(FILE *fd,PHY_VARS_gNB *gNB);
 
 void gNB_I0_measurements(PHY_VARS_gNB *gNB, int slot, int first_symb, int num_symb, uint32_t rb_mask_ul[14][9]);
 
-int nr_est_timing_advance_srs(const NR_DL_FRAME_PARMS *frame_parms,
-                              const c16_t srs_estimated_channel_time[][frame_parms->ofdm_symbol_size]);
+void nr_est_srs_timing_advance_offset(uint16_t ofdm_symbol_size,
+                                      const c16_t srs_estimated_channel_time[][NR_SRS_IDFT_OVERSAMP_FACTOR * ofdm_symbol_size],
+                                      uint8_t ant,
+                                      uint8_t N_ap,
+                                      uint32_t samples_per_frame,
+                                      uint16_t *timing_advance_offset,
+                                      int16_t *timing_advance_offset_nsec);
 
 void nr_pusch_ptrs_processing(PHY_VARS_gNB *gNB,
                               NR_DL_FRAME_PARMS *frame_parms,
@@ -70,21 +75,22 @@ void nr_pusch_ptrs_processing(PHY_VARS_gNB *gNB,
                               unsigned char symbol,
                               uint32_t nb_re_pusch);
 
-int nr_srs_channel_estimation(
-    const PHY_VARS_gNB *gNB,
-    const int frame,
-    const int slot,
-    const nfapi_nr_srs_pdu_t *srs_pdu,
-    const nr_srs_info_t *nr_srs_info,
-    const c16_t **srs_generated_signal,
-    c16_t srs_received_signal[][gNB->frame_parms.ofdm_symbol_size * (1 << srs_pdu->num_symbols)],
-    c16_t srs_received_noise[][gNB->frame_parms.ofdm_symbol_size * (1 << srs_pdu->num_symbols)],
-    c16_t srs_estimated_channel_freq[][1 << srs_pdu->num_ant_ports]
-                                    [gNB->frame_parms.ofdm_symbol_size * (1 << srs_pdu->num_symbols)],
-    c16_t srs_estimated_channel_time[][1 << srs_pdu->num_ant_ports][gNB->frame_parms.ofdm_symbol_size],
-    c16_t srs_estimated_channel_time_shifted[][1 << srs_pdu->num_ant_ports][gNB->frame_parms.ofdm_symbol_size],
-    int16_t *snr_per_rb,
-    int8_t *snr);
+int nr_srs_channel_estimation(int ant,
+                              int p_index,
+                              uint16_t ofdm_symbol_size,
+                              uint16_t first_carrier_offset,
+                              uint8_t N_symb_SRS,
+                              const nfapi_nr_srs_pdu_t *srs_pdu,
+                              const nr_srs_info_t *nr_srs_info,
+                              const c16_t *srs_generated_signal,
+                              c16_t srs_received_signal[ofdm_symbol_size * N_symb_SRS],
+                              c16_t srs_received_noise[ofdm_symbol_size * N_symb_SRS],
+                              c16_t srs_estimated_channel_freq[ofdm_symbol_size * N_symb_SRS],
+                              c16_t srs_estimated_channel_time[NR_SRS_IDFT_OVERSAMP_FACTOR * ofdm_symbol_size],
+                              c16_t srs_estimated_channel_time_shifted[NR_SRS_IDFT_OVERSAMP_FACTOR * ofdm_symbol_size],
+                              uint32_t *signal_power,
+                              uint32_t *noise_power,
+                              int16_t *noise_power_per_rb);
 
 void nr_freq_equalization(NR_DL_FRAME_PARMS *frame_parms,
                           c16_t *rxdataF_comp,

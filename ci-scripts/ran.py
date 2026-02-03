@@ -67,7 +67,6 @@ class RANManagement():
 		self.eNBOptions = ['', '', '']
 		self.eNBmbmsEnables = [False, False, False]
 		self.eNBstatuses = [-1, -1, -1]
-		self.testCase_id = ''
 		self.runtime_stats= ''
 		self.datalog_rt_stats={}
 		self.datalog_rt_stats_file='datalog_rt_stats.default.yaml'
@@ -88,7 +87,6 @@ class RANManagement():
 			raise ValueError(f"{node=}")
 		logging.debug('Starting eNB/gNB on server: ' + node)
 
-		self.testCase_id = HTML.testCase_id
 		lSourcePath = self.eNBSourceCodePath
 		cmd = cls_cmd.getConnection(node)
 		

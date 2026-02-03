@@ -21,26 +21,21 @@
 
 -->
 <testCaseList>
-	<htmlTabRef>build-tab</htmlTabRef>
-	<htmlTabName>Physical Simulators Check</htmlTabName>
-	<htmlTabIcon>wrench</htmlTabIcon>
-	<TestCaseRequestedList>
-          800813
-          010201
-	</TestCaseRequestedList>
-	<TestCaseExclusionList></TestCaseExclusionList>
+  <htmlTabRef>build-tab</htmlTabRef>
+  <htmlTabName>Physical Simulators Check</htmlTabName>
+  <htmlTabIcon>wrench</htmlTabIcon>
 
-        <testCase id="800813">
-                <class>Create_Workspace</class>
-                <desc>Create new Workspace</desc>
-                <node>avra</node>
-        </testCase>
+  <testCase>
+    <class>Create_Workspace</class>
+    <desc>Create new Workspace</desc>
+    <node>avra</node>
+  </testCase>
 
-        <testCase id="010201">
-		<class>Deploy_Run_OC_PhySim</class>
-                <desc>Deploy and run physical simulator on openshift</desc>
-                <oc_release>physims-4g</oc_release>
-                <node>avra</node>
-	</testCase>
+  <testCase>
+    <class>Deploy_Run_OC_PhySim</class>
+    <desc>Deploy and run physical simulator on openshift</desc>
+    <oc_release>physims-4g</oc_release>
+    <node>avra</node>
+  </testCase>
 
 </testCaseList>

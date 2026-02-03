@@ -67,7 +67,7 @@ class HTMLManagement():
 		self.htmlUEFailureMsg = ''
 
 		self.startTime = int(round(time.time() * 1000))
-		self.testCase_id = ''
+		self.testCaseIdx = ''
 		self.desc = ''
 
 #-----------------------------------------------------------
@@ -191,7 +191,7 @@ class HTMLManagement():
 			self.htmlFile.write('  <table class="table" border = "1">\n')
 			self.htmlFile.write('      <tr bgcolor = "#33CCFF" >\n')
 			self.htmlFile.write('        <th style="width:5%">Relative Time (s)</th>\n')
-			self.htmlFile.write('        <th style="width:5%">Test Id</th>\n')
+			self.htmlFile.write('        <th style="width:5%">Test Index</th>\n')
 			self.htmlFile.write('        <th>Test Desc</th>\n')
 			self.htmlFile.write('        <th>Test Options</th>\n')
 			self.htmlFile.write('        <th style="width:5%">Test Status</th>\n')
@@ -259,7 +259,7 @@ class HTMLManagement():
 		currentTime = int(round(time.time() * 1000)) - self.startTime
 		self.htmlFile.write('      <tr>\n')
 		self.htmlFile.write('        <td bgcolor = "lightcyan" >' + format(currentTime / 1000, '.1f') + '</td>\n')
-		self.htmlFile.write('        <td bgcolor = "lightcyan" >' + self.testCase_id  + '</td>\n')
+		self.htmlFile.write('        <td bgcolor = "lightcyan" >' + self.testCaseIdx  + '</td>\n')
 		self.htmlFile.write('        <td>' + self.desc  + '</td>\n')
 		self.htmlFile.write('        <td>' + str(options)  + '</td>\n')
 		if (str(status) == 'OK'):
@@ -374,7 +374,7 @@ class HTMLManagement():
 			addOrangeBK = False
 			self.htmlFile.write('      <tr>\n')
 			self.htmlFile.write('        <td bgcolor = "lightcyan" >' + format(currentTime / 1000, '.1f') + '</td>\n')
-			self.htmlFile.write('        <td bgcolor = "lightcyan" >' + self.testCase_id  + '</td>\n')
+			self.htmlFile.write('        <td bgcolor = "lightcyan" >' + self.testCaseIdx  + '</td>\n')
 			self.htmlFile.write('        <td>' + self.desc  + '</td>\n')
 			self.htmlFile.write('        <td>' + str(options)  + '</td>\n')
 			if (str(status) == 'OK'):

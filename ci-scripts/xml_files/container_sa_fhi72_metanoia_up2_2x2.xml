@@ -24,60 +24,41 @@
   <htmlTabRef>test-5g-fhi72-metanoia-2x2</htmlTabRef>
   <htmlTabName>100 MHz TDD SA METANOIA</htmlTabName>
   <htmlTabIcon>tasks</htmlTabIcon>
-  <TestCaseRequestedList>
-    200000
-    110000
-    800813
-    120000
-    102000
-    102001
-    100100
-    100010
-    100020
-    100030
-    100040
-    103000
-    100002
-    130000
-    777777
-    888888
-  </TestCaseRequestedList>
-  <TestCaseExclusionList></TestCaseExclusionList>
 
-  <testCase id="200000">
+  <testCase>
     <class>Custom_Script</class>
     <desc>Setup sriov and network interfaces Metanoia</desc>
     <node>cacofonix</node>
     <script>yaml_files/sa_fhi_7.2_metanoia_2x2_gnb/setup_sriov_metanoia.sh</script>
   </testCase>
 
-  <testCase id="110000">
+  <testCase>
     <class>Pull_Local_Registry</class>
     <desc>Pull Images from Local Registry</desc>
     <node>cacofonix</node>
     <images>oai-gnb-fhi72</images>
   </testCase>
 
-  <testCase id="800813">
+  <testCase>
     <class>Create_Workspace</class>
     <desc>Create new Workspace for server 0</desc>
     <node>cacofonix</node>
   </testCase>
 
-  <testCase id="120000">
+  <testCase>
     <class>Deploy_Object</class>
     <desc>Deploy gNB (TDD/Band78/100MHz/Metanoia) in a container</desc>
     <node>cacofonix</node>
     <yaml_path>ci-scripts/yaml_files/sa_fhi_7.2_metanoia_2x2_gnb</yaml_path>
   </testCase>
 
-  <testCase id="102001">
+  <testCase>
     <class>Attach_UE</class>
     <desc>Attach UE</desc>
     <id>up2-fhi72</id>
   </testCase>
 
-  <testCase id="100100">
+  <testCase>
     <class>Ping</class>
     <desc>Ping: 100 pings in 10 sec</desc>
     <id>up2-fhi72</id>
@@ -87,7 +68,7 @@
     <ping_rttavg_threshold>15</ping_rttavg_threshold>
   </testCase>
 
-  <testCase id="100010">
+  <testCase>
     <class>Iperf</class>
     <desc>iperf (DL/570Mbps/UDP)(30 sec)</desc>
     <iperf_args>-u -b 570M -t 30 -R</iperf_args>
@@ -98,16 +79,7 @@
     <svr_id>oc-cn5g-20897</svr_id>
   </testCase>
 
-  <testCase id="100030">
-    <class>Iperf</class>
-    <desc>iperf (DL/TCP)(30 sec)</desc>
-    <iperf_args>-t 30 -R</iperf_args>
-    <id>up2-fhi72</id>
-    <iperf_tcp_rate_target>80</iperf_tcp_rate_target>
-    <svr_id>oc-cn5g-20897</svr_id>
-  </testCase>
-
-  <testCase id="100020">
+  <testCase>
     <class>Iperf</class>
     <desc>iperf (UL/100Mbps/UDP)(30 sec)</desc>
     <iperf_args>-u -b 100M -t 30</iperf_args>
@@ -118,7 +90,16 @@
     <svr_id>oc-cn5g-20897</svr_id>
   </testCase>
 
-  <testCase id="100040">
+  <testCase>
+    <class>Iperf</class>
+    <desc>iperf (DL/TCP)(30 sec)</desc>
+    <iperf_args>-t 30 -R</iperf_args>
+    <id>up2-fhi72</id>
+    <iperf_tcp_rate_target>80</iperf_tcp_rate_target>
+    <svr_id>oc-cn5g-20897</svr_id>
+  </testCase>
+
+  <testCase>
     <class>Iperf</class>
     <desc>iperf (UL/TCP)(30 sec)</desc>
     <iperf_args>-t 30</iperf_args>
@@ -127,20 +108,20 @@
     <svr_id>oc-cn5g-20897</svr_id>
   </testCase>
 
-  <testCase id="103000">
+  <testCase>
     <class>Detach_UE</class>
     <always_exec>true</always_exec>
     <desc>Detach UE</desc>
     <id>up2-fhi72</id>
   </testCase>
 
-  <testCase id="100002">
+  <testCase>
     <class>IdleSleep</class>
     <desc>Sleep</desc>
     <idle_sleep_time_in_sec>5</idle_sleep_time_in_sec>
   </testCase>
 
-  <testCase id="130000">
+  <testCase>
     <class>Undeploy_Object</class>
     <always_exec>true</always_exec>
     <desc>Undeploy gNB</desc>
@@ -148,7 +129,7 @@
     <yaml_path>ci-scripts/yaml_files/sa_fhi_7.2_metanoia_2x2_gnb</yaml_path>
   </testCase>
 
-  <testCase id="777777">
+  <testCase>
     <class>Clean_Test_Server_Images</class>
     <always_exec>true</always_exec>
     <desc>Clean Test Images on Test Server</desc>
@@ -156,7 +137,7 @@
     <images>oai-gnb-fhi72</images>
   </testCase>
 
-  <testCase id="888888">
+  <testCase>
     <class>Custom_Script</class>
     <always_exec>true</always_exec>
     <desc>Set CPU to idle state, set kernel parameters to default values</desc>

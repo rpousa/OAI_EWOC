@@ -63,6 +63,34 @@ static void free_ho_ctx(nr_handover_context_t *ho_ctx)
   free(ho_ctx);
 }
 
+/** @brief Apply target handover context: update F1AP associations and RNTI */
+void nr_rrc_apply_target_context(gNB_RRC_UE_t *UE)
+{
+  DevAssert(UE->ho_context);
+  DevAssert(UE->ho_context->target);
+  nr_ho_target_cu_t *target_ctx = UE->ho_context->target;
+  f1_ue_data_t ue_data = cu_get_f1_ue_data(UE->rrc_ue_id);
+  LOG_I(NR_RRC,
+        "UE %d: update CU F1AP Context DU UE ID %u => %u and RNTI %04x => %04x\n",
+        UE->rrc_ue_id,
+        ue_data.secondary_ue,
+        target_ctx->du_ue_id,
+        UE->rnti,
+        target_ctx->new_rnti);
+
+  /* update F1 data: secondary UE association and DU association */
+  ue_data.secondary_ue = target_ctx->du_ue_id;
+  ue_data.du_assoc_id = target_ctx->du->assoc_id;
+  bool success = cu_update_f1_ue_data(UE->rrc_ue_id, &ue_data);
+  DevAssert(success);
+
+  /* update UE RNTI */
+  UE->rnti = target_ctx->new_rnti;
+
+  /* update UE NR cell ID */
+  UE->nr_cellid = target_ctx->du->setup_req->cell[0].info.nr_cellid;
+}
+
 /** @brief Fill DRB to Be Setup List in F1 UE Context Setup Request (optional list)
  * @return 0 if list is empty, list size otherwise */
 static int fill_drb_to_be_setup(const gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue, f1ap_drb_to_setup_t drbs[MAX_DRBS_PER_UE])
@@ -478,10 +506,7 @@ static void nr_rrc_n2_ho_acknowledge(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE)
   /* this is the callback for N2 handover after F1 UE context setup response in
    * the handover case. Check that there was no associated DU, then set it */
   AssertFatal(previous_data.secondary_ue == -1, "there was already a DU present\n");
-  previous_data.secondary_ue = UE->ho_context->target->du_ue_id;
-  bool success = cu_update_f1_ue_data(UE->rrc_ue_id, &previous_data);
-  DevAssert(success);
-  LOG_I(NR_RRC, "Updated CU F1AP Context for UE %d, DU Id : %u\n", UE->rrc_ue_id, UE->ho_context->target->du_ue_id);
+  nr_rrc_apply_target_context(UE);
 
   byte_array_t hoCommand = rrc_gNB_encode_HandoverCommand(UE, rrc);
   if (hoCommand.len < 0) {

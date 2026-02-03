@@ -21,18 +21,14 @@
 
 -->
 <testCaseList>
-	<htmlTabRef>epc-closure</htmlTabRef>
-	<htmlTabName>EPC-Closure</htmlTabName>
-	<htmlTabIcon>log-out</htmlTabIcon>
-	<TestCaseRequestedList>
-060000
-	</TestCaseRequestedList>
-	<TestCaseExclusionList></TestCaseExclusionList>
+  <htmlTabRef>epc-closure</htmlTabRef>
+  <htmlTabName>EPC-Closure</htmlTabName>
+  <htmlTabIcon>log-out</htmlTabIcon>
 
-	<testCase id="060000">
-		<class>UndeployCoreNetwork</class>
-		<desc>Terminate EPC</desc>
-		<cn_id>ltebox-nano</cn_id>
-	</testCase>
+  <testCase>
+    <class>UndeployCoreNetwork</class>
+    <desc>Terminate EPC</desc>
+    <cn_id>ltebox-nano</cn_id>
+  </testCase>
 
 </testCaseList>

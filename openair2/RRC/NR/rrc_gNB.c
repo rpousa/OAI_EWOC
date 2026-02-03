@@ -622,9 +622,6 @@ static nr_a3_event_t *get_a3_configuration(gNB_RRC_INST *rrc, int pci)
       return a3_event;
   }
 
-  if (measurementConfiguration->is_default_a3_configuration_exists)
-    return get_a3_configuration(rrc, -1);
-
   return NULL;
 }
 
@@ -750,6 +747,10 @@ NR_MeasConfig_t *nr_rrc_get_measconfig(const gNB_RRC_INST *rrc, uint64_t nr_cell
     if (neighbour_config)
       neighbour_cells = neighbour_config->neighbour_cells;
 
+    int *neigh_a3_id = NULL;
+    if (neighbour_cells && neighbour_cells->size)
+      neigh_a3_id = calloc_or_fail(neighbour_cells->size, sizeof(int));
+
     if (neighbour_cells && rrc->measurementConfiguration.a3_event_list && rrc->measurementConfiguration.a3_event_list->size > 0) {
       /* Loop through neighbours and find related A3 configuration
          If no related A3 but there is default add the default one.
@@ -759,16 +760,31 @@ NR_MeasConfig_t *nr_rrc_get_measconfig(const gNB_RRC_INST *rrc, uint64_t nr_cell
       bool default_a3_added = false; // To ensure that the default configuration is only added once
       for (int i = 0; i < neighbour_cells->size; i++) {
         nr_neighbour_cell_t *neighbourCell = (nr_neighbour_cell_t *)seq_arr_at(neighbour_cells, i);
-        if (default_a3_added && neighbourCell->physicalCellId == -1)
-          continue;
         seq_arr_push_back(&neigh_seq, neighbourCell, sizeof(nr_neighbour_cell_t));
         const nr_a3_event_t *a3Event = get_a3_configuration((gNB_RRC_INST *)rrc, neighbourCell->physicalCellId);
-        if (a3Event) {
-          NR_ReportConfigId_t reportConfigId = neighbourCell->physicalCellId == -1 ? 3 : i + 4;
-          seq_arr_push_back(&rc_A3_seq, prepare_a3_event_report(a3Event, reportConfigId), sizeof(NR_ReportConfigToAddMod_t));
-          if (neighbourCell->physicalCellId == -1)
-            default_a3_added = true;
+        if (!a3Event) {
+          /* no A3 event configured for this neighbour, let's try the default one, if it exists */
+          if (default_a3_added) {
+            /* default A3 exists and is already added, use it for this neighbour */
+            neigh_a3_id[i] = 3;
+            continue;
+          }
+          /* try to get the default A3 config */
+          a3Event = get_a3_configuration((gNB_RRC_INST *)rrc, -1);
+          if (!a3Event) {
+            /* no default A3 config found, so no A3 config for this neighbour */
+            neigh_a3_id[i] = -1;
+            continue;
+          }
+          default_a3_added = true;
+          /* default A3 report config ID is 3 */
+          neigh_a3_id[i] = 3;
+        } else {
+          /* specific A3 report config ID are 4, 5, ... */
+          neigh_a3_id[i] = i + 4;
         }
+        NR_ReportConfigId_t reportConfigId = neigh_a3_id[i];
+        seq_arr_push_back(&rc_A3_seq, prepare_a3_event_report(a3Event, reportConfigId), sizeof(NR_ReportConfigToAddMod_t));
       }
     }
     if (rrc->measurementConfiguration.per_event)
@@ -776,11 +792,13 @@ NR_MeasConfig_t *nr_rrc_get_measconfig(const gNB_RRC_INST *rrc, uint64_t nr_cell
     if (rrc->measurementConfiguration.a2_event)
       rc_A2 = prepare_a2_event_report(rrc->measurementConfiguration.a2_event);
 
-    NR_MeasConfig_t *result = get_MeasConfig(mt, band, scs, cell_info->nr_pci, rc_PER, rc_A2, &rc_A3_seq, &neigh_seq);
+    NR_MeasConfig_t *result = get_MeasConfig(mt, band, scs, cell_info->nr_pci, rc_PER, rc_A2, &rc_A3_seq, &neigh_seq, neigh_a3_id);
 
     // Clean up sequence arrays
     seq_arr_free(&rc_A3_seq, NULL);
     seq_arr_free(&neigh_seq, NULL);
+
+    free(neigh_a3_id);
 
     return result;
   }
@@ -1620,6 +1638,9 @@ static void process_Event_Based_Measurement_Report(gNB_RRC_INST *rrc,
         if (!neigh_cell && neighbour) {
           // No F1 connection but static neighbour configuration is available
           const nr_a3_event_t *a3_event_configuration = get_a3_configuration(rrc, neighbour->physicalCellId);
+          /* if no A3 event configured for this physical cell ID, try to get the default one */
+          if (!a3_event_configuration)
+            a3_event_configuration = get_a3_configuration(rrc, -1);
           // Additional check - This part can be modified according to additional cell specific Handover Margin
           // a3-Offset: The actual value is field value * 0.5 dB.
           if (a3_event_configuration
@@ -2440,10 +2461,8 @@ static void rrc_CU_process_ue_context_release_request(MessageDef *msg_p, sctp_as
   gNB_RRC_INST *rrc = RC.nrrrc[instance];
   rrc_gNB_ue_context_t *ue_context_p = rrc_gNB_get_ue_context(rrc, req->gNB_CU_ue_id);
   int srbid = 1;
-  // valid AMF UE NGAP ID range is 0..2^40-1
-  if (!ue_context_p || ue_context_p->ue_context.amf_ue_ngap_id >= (1LL << 40)) {
-    const char *reason = !ue_context_p ? "could not find UE context" : "no AMF";
-    LOG_W(RRC, "%s for CU UE ID %u: auto-generate release command\n", reason, req->gNB_CU_ue_id);
+  if (!ue_context_p) {
+    LOG_W(RRC, "could not find UE context for CU UE ID %u: auto-generate release command\n", req->gNB_CU_ue_id);
     uint8_t buffer[NR_RRC_BUF_SIZE] = {0};
     int size = do_NR_RRCRelease(buffer, NR_RRC_BUF_SIZE, rrc_gNB_get_next_transaction_identifier(0));
     RETURN_IF_INVALID_ASSOC_ID(assoc_id);
@@ -2585,17 +2604,9 @@ static void rrc_CU_process_ue_context_modification_response(MessageDef *msg_p, i
   // nothing is to be done, we wait for confirmation to release the UE in the
   // CU/DU)
   if (UE->ho_context && UE->ho_context->target && UE->ho_context->source) {
-    nr_ho_target_cu_t *target_ctx = UE->ho_context->target;
-    f1_ue_data_t ue_data = cu_get_f1_ue_data(UE->rrc_ue_id);
-    ue_data.secondary_ue = target_ctx->du_ue_id;
-    ue_data.du_assoc_id = target_ctx->du->assoc_id;
-    bool success = cu_update_f1_ue_data(UE->rrc_ue_id, &ue_data);
-    DevAssert(success);
-    LOG_I(NR_RRC, "UE %d handover: update RNTI from %04x to %04x\n", UE->rrc_ue_id, UE->rnti, target_ctx->new_rnti);
     nr_ho_source_cu_t *source_ctx = UE->ho_context->source;
     DevAssert(source_ctx->old_rnti == UE->rnti);
-    UE->rnti = target_ctx->new_rnti;
-    UE->nr_cellid = target_ctx->du->setup_req->cell[0].info.nr_cellid;
+    nr_rrc_apply_target_context(UE);
   }
 }
 

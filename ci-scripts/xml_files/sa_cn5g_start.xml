@@ -21,18 +21,14 @@
 
 -->
 <testCaseList>
-	<htmlTabRef>cn5g-start-tab</htmlTabRef>
-	<htmlTabName>CN5G-Start</htmlTabName>
-	<htmlTabIcon>log-in</htmlTabIcon>
-	<TestCaseRequestedList>
-000100
-	</TestCaseRequestedList>
-	<TestCaseExclusionList>
-	</TestCaseExclusionList>
+  <htmlTabRef>cn5g-start-tab</htmlTabRef>
+  <htmlTabName>CN5G-Start</htmlTabName>
+  <htmlTabIcon>log-in</htmlTabIcon>
 
-	<testCase id="000100">
-		<class>DeployCoreNetwork</class>
-		<desc>Initialize 5G Core</desc>
-		<cn_id>oc-cn5g</cn_id>
-	</testCase>
+  <testCase>
+    <class>DeployCoreNetwork</class>
+    <desc>Initialize 5G Core</desc>
+    <cn_id>oc-cn5g</cn_id>
+  </testCase>
+
 </testCaseList>

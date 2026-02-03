@@ -737,6 +737,8 @@ typedef struct ngap_ue_ctxt_modification_resp_s {
 typedef struct ngap_downlink_nas_s {
   /* UE id for initial connection to NGAP */
   uint32_t gNB_ue_ngap_id;
+  /* UE id at AMF */
+  uint64_t amf_ue_ngap_id;
   /* NAS pdu */
   byte_array_t nas_pdu;
 } ngap_downlink_nas_t;

@@ -24,12 +24,8 @@
   <htmlTabRef>cn5g-closure</htmlTabRef>
   <htmlTabName>CN5G-Closure</htmlTabName>
   <htmlTabIcon>log-out</htmlTabIcon>
-  <TestCaseRequestedList>
-    060000
-  </TestCaseRequestedList>
-  <TestCaseExclusionList></TestCaseExclusionList>
 
-  <testCase id="060000">
+  <testCase>
     <class>UndeployCoreNetwork</class>
     <desc>Terminate 5G Core</desc>
     <cn_id>oc-cn5g-20897</cn_id>

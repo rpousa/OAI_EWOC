@@ -68,7 +68,12 @@ NR_BCCH_BCH_Message_t *get_new_MIB_NR(const NR_ServingCellConfigCommon_t *scc);
 void free_MIB_NR(NR_BCCH_BCH_Message_t *mib);
 int encode_MIB_NR(NR_BCCH_BCH_Message_t *mib, int frame, uint8_t *buf, int buf_size);
 int encode_MIB_NR_setup(NR_MIB_t *mib, int frame, uint8_t *buf, int buf_size);
-
+void configure_coreset_for_mux23(const NR_ServingCellConfigCommon_t *scc,
+                                 int offset,
+                                 int limit,
+                                 int bwp_start,
+                                 int bwp_size,
+                                 bool do_TCI);
 struct NR_MeasurementTimingConfiguration;
 struct NR_MeasurementTimingConfiguration *get_new_MeasurementTimingConfiguration(const NR_ServingCellConfigCommon_t *scc);
 int encode_MeasurementTimingConfiguration(const struct NR_MeasurementTimingConfiguration *mtc, uint8_t *buf, int buf_len);
@@ -97,7 +102,6 @@ void update_cellGroupConfig(NR_CellGroupConfig_t *cellGroupConfig,
                             const nr_mac_config_t *configuration,
                             const NR_ServingCellConfigCommon_t *scc);
 int encode_cellGroupConfig(NR_CellGroupConfig_t *cellGroupConfig, uint8_t *buffer, int max_buffer_size);
-NR_CellGroupConfig_t *decode_cellGroupConfig(const uint8_t *buffer, int max_buffer_size);
 
 /* Note: this function returns a new CellGroupConfig for a user with given
  * configuration, but it will also overwrite the ServingCellConfig passed in

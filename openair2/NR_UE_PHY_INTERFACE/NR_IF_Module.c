@@ -108,18 +108,23 @@ static int handle_bcch_bch(NR_UE_MAC_INST_t *mac,
                            void *phy_data,
                            uint8_t *pduP,
                            unsigned int additional_bits,
-                           uint32_t ssb_index,
+                           uint32_t ssb_index_mod8,
                            uint32_t ssb_length,
                            uint16_t ssb_start_subcarrier,
                            long ssb_arfcn,
                            uint16_t cell_id)
 {
-  mac->mib_ssb = ssb_index;
+  mac->mib_ssb = ssb_index_mod8;
   mac->physCellId = cell_id;
   mac->mib_additional_bits = additional_bits;
   mac->ssb_start_subcarrier = ssb_start_subcarrier;
-  if(ssb_length == 64)
+  if(ssb_length == 64) {
     mac->frequency_range = FR2;
+    uint8_t ab = additional_bits & 0xff;
+    uint8_t out;
+    reverse_bits_u8(&ab, 1, &out);
+    mac->mib_ssb += (out & 0x7) << 3;
+  }
   else
     mac->frequency_range = FR1;
   //  fixed 3 bytes MIB PDU

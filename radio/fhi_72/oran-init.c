@@ -333,6 +333,7 @@ static void oran_allocate_buffers(void *handle,
   struct xran_prb_map dlPmMixed = {0};
   struct xran_prb_map ulPmMixed = {0};
   uint32_t idx = 0;
+
   if (fh_config->frame_conf.nFrameDuplexType == XRAN_TDD) {
     oran_mixed_slot_t info = get_mixed_slot_info(&fh_config->frame_conf);
     dlPmMixed = get_xran_prb_map(fh_config, XRAN_DIR_DL, 0, info.num_dlsym);
@@ -357,8 +358,16 @@ static void oran_allocate_buffers(void *handle,
 #ifdef E_RELEASE
   uint32_t size_of_prb_map = sizeof(struct xran_prb_map) + sizeof(struct xran_prb_elm) * (xran_max_sections_per_slot - 1);
 #elif defined F_RELEASE
-  uint32_t numPrbElm = xran_get_num_prb_elm(&dlPm, mtu);
-  uint32_t size_of_prb_map  = sizeof(struct xran_prb_map) + sizeof(struct xran_prb_elm) * (numPrbElm);
+  uint32_t size_of_prb_map;
+  if (fh_config->RunSlotPrbMapBySymbolEnable) {
+    // For Liteon FR2 with RunSlotPrbMapBySymbolEnable, xran_prb_map will have xran_prb_elm prbMap[14]
+    size_of_prb_map  = sizeof(struct xran_prb_map) + sizeof(struct xran_prb_elm) * (XRAN_NUM_OF_SYMBOL_PER_SLOT);
+  }
+  else {
+    // For non-Liteon w/o RunSlotPrbMapBySymbolEnable, xran_prb_map will have xran_prb_elm prbMap[1]
+    uint32_t numPrbElm = xran_get_num_prb_elm(&dlPm, mtu);
+    size_of_prb_map  = sizeof(struct xran_prb_map) + sizeof(struct xran_prb_elm) * (numPrbElm);
+  }
 #endif
 
   // PDSCH

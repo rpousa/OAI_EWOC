@@ -1,9 +1,11 @@
-set(F1AP_VERSION 16 3 1)
+set(F1AP_VERSION 16 21 0)
 make_version(F1AP_cc ${F1AP_VERSION})
 string(REPLACE ";" "." F1AP_RELEASE "${F1AP_VERSION}")
 
 if(F1AP_RELEASE VERSION_EQUAL "16.3.1")
   include(ASN1/f1ap-16.3.1.cmake)
+elseif(F1AP_RELEASE VERSION_EQUAL "16.21.0")
+  include(ASN1/f1ap-16.21.0.cmake)
 else()
   message(FATAL_ERROR "unknown F1AP_RELEASE ${F1AP_RELEASE}")
 endif()

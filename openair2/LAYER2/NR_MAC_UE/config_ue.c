@@ -142,9 +142,21 @@ static void config_common_ue_sa(NR_UE_MAC_INST_t *mac, NR_ServingCellConfigCommo
                                           frequencyInfoDL->scs_SpecificCarrierList.list.array[0]->carrierBandwidth);
   cfg->carrier_config.dl_bandwidth = get_supported_bw_mhz(mac->frequency_range, bw_index);
 
-  uint64_t dl_bw_khz = (12 * frequencyInfoDL->scs_SpecificCarrierList.list.array[0]->carrierBandwidth) *
-                       (15 << frequencyInfoDL->scs_SpecificCarrierList.list.array[0]->subcarrierSpacing);
-  cfg->carrier_config.dl_frequency = (downlink_frequency[cc_idP][0]/1000) - (dl_bw_khz>>1);
+  /** Only set frequency if not already initialized (e.g., from handover reconfigurationWithSync)
+  * MAC maintains its own frequency state, don't overwrite it with command-line parameter which
+  * is related to the initial cell selection. */
+  if (cfg->carrier_config.dl_frequency == 0) {
+    // Initial cell selection: derive from command-line parameter
+    uint64_t dl_bw_khz = (12 * frequencyInfoDL->scs_SpecificCarrierList.list.array[0]->carrierBandwidth) *
+                         (15 << frequencyInfoDL->scs_SpecificCarrierList.list.array[0]->subcarrierSpacing);
+    cfg->carrier_config.dl_frequency = (downlink_frequency[cc_idP][0]/1000) - (dl_bw_khz>>1);
+    LOG_I(NR_MAC,
+          "[UE %d] Initial cell selection: dl_frequency=%u kHz (from command-line, band=%d, scs=%ld)\n",
+          mac->ue_id,
+          cfg->carrier_config.dl_frequency,
+          mac->nr_band,
+          frequencyInfoDL->scs_SpecificCarrierList.list.array[0]->subcarrierSpacing);
+  }
 
   for (int i = 0; i < 5; i++) {
     if (i == frequencyInfoDL->scs_SpecificCarrierList.list.array[0]->subcarrierSpacing) {
@@ -165,10 +177,21 @@ static void config_common_ue_sa(NR_UE_MAC_INST_t *mac, NR_ServingCellConfigCommo
                                       frequencyInfoUL->scs_SpecificCarrierList.list.array[0]->carrierBandwidth);
   cfg->carrier_config.uplink_bandwidth = get_supported_bw_mhz(mac->frequency_range, bw_index);
 
-  if (frequencyInfoUL->absoluteFrequencyPointA == NULL)
-    cfg->carrier_config.uplink_frequency = cfg->carrier_config.dl_frequency;
-  else
-    cfg->carrier_config.uplink_frequency = cfg->carrier_config.dl_frequency + (uplink_frequency_offset[cc_idP][0] / 1000);
+  /** Only set UL frequency if not already initialized (e.g., from handover reconfigurationWithSync)
+  * MAC maintains its own frequency state, don't overwrite it with command-line parameter which
+  * is related to the initial cell selection. */
+  if (cfg->carrier_config.uplink_frequency == 0) {
+    // Initial cell selection: derive from DL frequency
+    LOG_I(NR_MAC,
+          "Initial cell selection: uplink_frequency=%u kHz (from dl_frequency=%u kHz, uplink_frequency_offset=%u kHz)\n",
+          cfg->carrier_config.uplink_frequency,
+          cfg->carrier_config.dl_frequency,
+          uplink_frequency_offset[cc_idP][0]);
+    if (frequencyInfoUL->absoluteFrequencyPointA == NULL)
+      cfg->carrier_config.uplink_frequency = cfg->carrier_config.dl_frequency;
+    else
+      cfg->carrier_config.uplink_frequency = cfg->carrier_config.dl_frequency + (uplink_frequency_offset[cc_idP][0] / 1000);
+  }
 
   for (int i = 0; i < 5; i++) {
     if (i == frequencyInfoUL->scs_SpecificCarrierList.list.array[0]->subcarrierSpacing) {
@@ -437,6 +460,13 @@ static void config_common_ue(NR_UE_MAC_INST_t *mac, NR_ServingCellConfigCommon_t
                                                     *scc->ssbSubcarrierSpacing,
                                                     frequencyInfoDL->absoluteFrequencyPointA)
                                        / 1000; // freq in kHz
+    LOG_I(NR_MAC,
+          "[UE %d] Set dl_frequency=%u kHz (from absoluteFrequencyPointA=%ld, band=%d, scs=%ld)\n",
+          mac->ue_id,
+          cfg->carrier_config.dl_frequency,
+          frequencyInfoDL->absoluteFrequencyPointA,
+          mac->nr_band,
+          *scc->ssbSubcarrierSpacing);
 
     for (int i = 0; i < 5; i++) {
       if (i == frequencyInfoDL->scs_SpecificCarrierList.list.array[0]->subcarrierSpacing) {
@@ -2857,4 +2887,18 @@ void nr_rrc_mac_config_req_cg(module_id_t module_id,
     ue_init_config_request(mac, mac->frame_structure.numb_slots_frame);
   ret = pthread_mutex_unlock(&mac->if_mutex);
   AssertFatal(!ret, "mutex failed %d\n", ret);
+}
+
+void nr_rrc_mac_config_req_meas(module_id_t module_id, const nr_neighbor_cell_info_t *neighbor_cells, int num_neighbors)
+{
+  NR_UE_MAC_INST_t *mac = get_mac_inst(module_id);
+
+  for (int i = 0; i < num_neighbors && i < NUMBER_OF_NEIGHBORING_CELLS_MAX; i++) {
+    fapi_nr_neighboring_cell_t *phy_cell = &mac->phy_config.config_req.meas_config.nr_neighboring_cell[i];
+    phy_cell->Nid_cell = neighbor_cells[i].Nid_cell;
+    phy_cell->ssb_freq = neighbor_cells[i].ssb_freq;
+    phy_cell->active = neighbor_cells[i].active;
+  }
+
+  mac->if_module->phy_config_request(&mac->phy_config);
 }

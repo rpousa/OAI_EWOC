@@ -146,11 +146,12 @@ bool generate_srs_nr(const NR_DL_FRAME_PARMS *frame_parms,
                      nr_srs_info_t *nr_srs_info,
                      int16_t amp,
                      frame_t frame_number,
-                     slot_t slot_number)
+                     slot_t slot_number,
+                     uint8_t nb_antennas)
 {
   uint8_t K_TC = 2 << nr_srs_info->comb_size;
   /* Number of antenna ports (M) can't be higher than number of physical antennas (N): M <= N */
-  int N_ap = nr_srs_info->n_srs_ports > frame_parms->nb_antennas_tx ? frame_parms->nb_antennas_tx : nr_srs_info->n_srs_ports;
+  int N_ap = nr_srs_info->n_srs_ports > nb_antennas ? nb_antennas : nr_srs_info->n_srs_ports;
   uint8_t l0 = frame_parms->symbols_per_slot - 1 - nr_srs_info->l_offset;  // Starting symbol position in the time domain
   uint8_t n_SRS_cs_max = srs_max_number_cs[nr_srs_info->comb_size];
   int m_SRS_b = get_m_srs(nr_srs_info->C_SRS, nr_srs_info->B_SRS);   // Number of resource blocks
@@ -179,6 +180,11 @@ bool generate_srs_nr(const NR_DL_FRAME_PARMS *frame_parms,
   LOG_I(NR_PHY,"m_SRS_b = %i\n", m_SRS_b);
   LOG_I(NR_PHY,"M_sc_b_SRS = %i\n", M_sc_b_SRS);
 #endif
+
+  AssertFatal(l0 + nr_srs_info->N_symb_SRS - 1 < frame_parms->symbols_per_slot,
+              "last symbol index %d should be < %d\n",
+              l0 + nr_srs_info->N_symb_SRS,
+              frame_parms->symbols_per_slot - 1);
 
   // Validation of SRS config parameters
 

@@ -1,25 +1,13 @@
-<table style="border-collapse: collapse; border: none;">
-  <tr style="border-collapse: collapse; border: none;">
-    <td style="border-collapse: collapse; border: none;">
-      <a href="http://www.openairinterface.org/">
-         <img src="../images/oai_final_logo.png" alt="" border=3 height=50 width=150>
-         </img>
-      </a>
-    </td>
-    <td style="border-collapse: collapse; border: none; vertical-align: center;">
-      <b><font size = "5">F1AP Messages Encoding & Decoding Library</font></b>
-    </td>
-  </tr>
-</table>
+# F1AP Messages Encoding & Decoding Library
 
 [[_TOC_]]
 
 
-# Intro
+## Intro
 
 This library is for the encoding, decoding and testing of F1AP (F1 Application Protocol) messages.
 
-# Implementation Details
+## Implementation Details
 
 The library includes the following components:
 
@@ -40,7 +28,7 @@ e.g. The following module contains functions that performs the encoding/decoding
 
 * [f1ap_rrc_message_transfer.c](../../openair2/F1AP/lib/f1ap_rrc_message_transfer.c)
 
-# Testing
+## Testing
 
 The functions in the file [f1ap_lib_common.c](../../openair2/F1AP/tests/f1ap_lib_test.c) are used to test F1AP message encoding and decoding functionalities, according to the following steps:
 

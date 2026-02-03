@@ -1,10 +1,12 @@
+# Contribution Guidelines and Coding Style for Developers
+
 This document lays out the basic contribution policies for developers. It
 describes the generel workflow, describes some coding rules, and how code
 review is performed.
 
 [[_TOC_]]
 
-# General
+## General
 
 OpenAirInterface employs both human review and automated CI tests to judge
 whether a code contribution is ready to be merged.
@@ -25,7 +27,7 @@ There is the official [Gitlab Help](https://docs.gitlab.com/) that can help you
 with any questions regarding Gitlab. We recommend reading the [Git
 Book](https://git-scm.com/book/en/v2) to use Git properly.
 
-# Basic coding rules
+## Basic coding rules
 
 You should respect the `.clang-format` file in the root of the repository. The
 `clang-format` tool will pick up this file when being applied to code in the
@@ -64,9 +66,9 @@ document](https://gitlab.eurecom.fr/oai/openairinterface5g/-/wikis/documents/ope
 that might be useful; if this document and `.clang-format` contradict,
 `.clang-format` takes precedence.
 
-# Main Workflow and Versioning
+## Main Workflow and Versioning
 
-## Workflow
+### Workflow
 
 You should be familiar with git branching, merging, and rebasing.
 
@@ -113,7 +115,7 @@ After some time, we make a stable release. For this, we simply merge develop
 into master, and give a semantic versioning number, e.g., `v1.1`. We target to
 make releases bi-yearly.
 
-## How to manage your own branch
+### How to manage your own branch
 
 Before starting to work, please make sure to branch off the latest `develop`
 branch.  Make commits as appropriate.
@@ -153,7 +155,7 @@ Once you rebased, push the changes to the remote
 $ git push origin my-new-feature --force-with-lease # force with lease let's you only overwrite what you also have locally in origin/my-new-feature
 ```
 
-# Merge Requests
+## Merge Requests
 
 A merge request (MR) can be submitted as soon as the code is considered stable
 and reviewable. The idea is to start the review early enough so that the code
@@ -215,7 +217,7 @@ during its lifetime in the sidebar on the right. Following options:
 - %OK_TO_BE_MERGED: the OAI team plans to merge this; *do not push any changes
   anymore at this point*.
 
-# Review Form
+## Review Form
 
 The following is a check list that might be used by a reviewer to check that
 code contribution fulfils minimum standard w.r.t. formatting, data types,
@@ -244,7 +246,7 @@ Additional optional questions in case they apply:
 - Has a new tool/dependency been introduced? Needs to be discussed if to be added.
 - Is a new CI test necessary? Can it be done in simulators?
 
-# Reporting bugs
+## Reporting bugs
 
 Please report only true bugs in the [issue tracker](../../issues). Do not
 report general user problems; use the [mailing
@@ -260,5 +262,5 @@ When reporting a bug, please clearly
   command lines).
 
 You are encouraged to use these bullet points to structure your issue for easy
-understanding.  Use code tags (the "insert code" button with symbol `</>` in
+understanding.  Use code tags (the "insert code" button with symbol &lt;/&gt; in
 the gitlab editor) for logs and small code snippets.

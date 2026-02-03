@@ -21,79 +21,68 @@
 
 -->
 <testCaseList>
-        <htmlTabRef>rfsim-5gnr-sidelink</htmlTabRef>
-        <htmlTabName>Sidelink test</htmlTabName>
-        <htmlTabIcon>wrench</htmlTabIcon>
-        <TestCaseRequestedList>
- 111111
- 800813
- 000002
- 000003
- 000004
- 000005
- 100001
- 222222
-        </TestCaseRequestedList>
-        <TestCaseExclusionList></TestCaseExclusionList>
+  <htmlTabRef>rfsim-5gnr-sidelink</htmlTabRef>
+  <htmlTabName>Sidelink test</htmlTabName>
+  <htmlTabIcon>wrench</htmlTabIcon>
 
-        <testCase id="111111">
-                <class>Pull_Local_Registry</class>
-                <desc>Pull Images from Local Registry</desc>
-                <node>localhost</node>
-                <images>oai-nr-ue-asan</images>
-        </testCase>
+  <testCase>
+    <class>Pull_Local_Registry</class>
+    <desc>Pull Images from Local Registry</desc>
+    <node>localhost</node>
+    <images>oai-nr-ue-asan</images>
+  </testCase>
 
-        <testCase id="800813">
-                <class>Create_Workspace</class>
-                <desc>Create new Workspace</desc>
-                <node>localhost</node>
-        </testCase>
+  <testCase>
+    <class>Create_Workspace</class>
+    <desc>Create new Workspace</desc>
+    <node>localhost</node>
+  </testCase>
 
-        <testCase id="000002">
-                <class>Deploy_Object</class>
-                <desc>Deploy OAI 5G UE 1</desc>
-                <node>localhost</node>
-                <yaml_path>ci-scripts/yaml_files/5g_rfsimulator_sidelink</yaml_path>
-                <services>oai-nr-ue-1</services>
-        </testCase>
-        
-        <testCase id="000003"> 
-                <class>Deploy_Object</class>
-                <desc>Deploy OAI 5G UE 2</desc>
-                <node>localhost</node>
-                <yaml_path>ci-scripts/yaml_files/5g_rfsimulator_sidelink</yaml_path>
-                <services>oai-nr-ue-2</services>
-        </testCase>
+  <testCase>
+    <class>Deploy_Object</class>
+    <desc>Deploy OAI 5G UE 1</desc>
+    <node>localhost</node>
+    <yaml_path>ci-scripts/yaml_files/5g_rfsimulator_sidelink</yaml_path>
+    <services>oai-nr-ue-1</services>
+  </testCase>
 
-        <testCase id="000004">
-                <class>IdleSleep</class>
-                <desc>Sleep</desc>
-                <idle_sleep_time_in_sec>20</idle_sleep_time_in_sec>
-        </testCase>
+  <testCase>
+    <class>Deploy_Object</class>
+    <desc>Deploy OAI 5G UE 2</desc>
+    <node>localhost</node>
+    <yaml_path>ci-scripts/yaml_files/5g_rfsimulator_sidelink</yaml_path>
+    <services>oai-nr-ue-2</services>
+  </testCase>
 
-        <testCase id="000005">
-                <class>Custom_Command</class>
-                <desc>Check that UE synched</desc>
-                <node>localhost</node>
-                <command>docker logs rfsim5g-oai-nr-ue-2 | grep -m 1 "PSBCH RX:OK"</command>
-        </testCase>
+  <testCase>
+    <class>IdleSleep</class>
+    <desc>Sleep</desc>
+    <idle_sleep_time_in_sec>20</idle_sleep_time_in_sec>
+  </testCase>
 
-        <testCase id="100001">
-                <class>Undeploy_Object</class>
-                <always_exec>true</always_exec>
-                <desc>Undeploy all OAI 5G stack</desc>
-                <node>localhost</node>
-                <yaml_path>ci-scripts/yaml_files/5g_rfsimulator_sidelink</yaml_path>
-                <d_retx_th>1,0,0,0</d_retx_th>
-                <u_retx_th>1,0,0,0</u_retx_th>
-        </testCase>
+  <testCase>
+    <class>Custom_Command</class>
+    <desc>Check that UE synched</desc>
+    <node>localhost</node>
+    <command>docker logs rfsim5g-oai-nr-ue-2 | grep -m 1 "PSBCH RX:OK"</command>
+  </testCase>
 
-        <testCase id="222222">
-                <class>Clean_Test_Server_Images</class>
-                <always_exec>true</always_exec>
-                <desc>Clean Test Images on Test Server</desc>
-                <node>localhost</node>
-                <images>oai-nr-ue-asan</images>
-        </testCase>
+  <testCase>
+    <class>Undeploy_Object</class>
+    <always_exec>true</always_exec>
+    <desc>Undeploy all OAI 5G stack</desc>
+    <node>localhost</node>
+    <yaml_path>ci-scripts/yaml_files/5g_rfsimulator_sidelink</yaml_path>
+    <d_retx_th>1,0,0,0</d_retx_th>
+    <u_retx_th>1,0,0,0</u_retx_th>
+  </testCase>
+
+  <testCase>
+    <class>Clean_Test_Server_Images</class>
+    <always_exec>true</always_exec>
+    <desc>Clean Test Images on Test Server</desc>
+    <node>localhost</node>
+    <images>oai-nr-ue-asan</images>
+  </testCase>
 
 </testCaseList>

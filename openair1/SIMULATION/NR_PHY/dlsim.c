@@ -198,16 +198,12 @@ void nr_dlsim_preprocessor(gNB_MAC_INST *nr_mac, post_process_pdsch_t *pp_pdsch)
   NR_UE_DL_BWP_t *current_BWP = &UE_info->current_DL_BWP;
   NR_ServingCellConfigCommon_t *scc = nr_mac->common_channels[0].ServingCellConfigCommon;
 
-  uint8_t nr_of_candidates = 0;
+  int nr_of_candidates = 0;
   if (g_mcsIndex < 4) {
-    find_aggregation_candidates(&sched_ctrl->aggregation_level,
-                                &nr_of_candidates,
-                                sched_ctrl->search_space,8);
+    find_aggregation_candidates(&sched_ctrl->aggregation_level, &nr_of_candidates, sched_ctrl->search_space, 8);
   }
   if (nr_of_candidates == 0) {
-    find_aggregation_candidates(&sched_ctrl->aggregation_level,
-                                &nr_of_candidates,
-                                sched_ctrl->search_space,4);
+    find_aggregation_candidates(&sched_ctrl->aggregation_level, &nr_of_candidates, sched_ctrl->search_space, 4);
   }
   uint32_t Y = get_Y(sched_ctrl->search_space, pp_pdsch->slot, UE_info->rnti);
   int CCEIndex = find_pdcch_candidate(nr_mac,
@@ -324,7 +320,7 @@ int main(int argc, char **argv)
   setbuf(stdout, NULL);
   int c;
   int i,aa;//,l;
-  double sigma2, sigma2_dB=10, SNR, snr0=-2.0, snr1=2.0;
+  double SNR, snr0 = -2.0, snr1 = 2.0;
   uint8_t snr1set=0;
   double effRate;
   //float psnr;
@@ -1172,15 +1168,12 @@ int main(int argc, char **argv)
           }
         }
 
-        int txlev[n_tx];
-        int txlev_sum = 0;
+        // Compute transmitter energy level
         int l_ofdm = 6;
-        for (aa=0; aa<n_tx; aa++) {
-          txlev[aa] = signal_energy((int32_t *)&txdata[aa][slot_offset +l_ofdm*frame_parms->ofdm_symbol_size + (l_ofdm-1)*frame_parms->nb_prefix_samples + frame_parms->nb_prefix_samples0],
-          frame_parms->ofdm_symbol_size + frame_parms->nb_prefix_samples);
-          txlev_sum += txlev[aa];
-          if (n_trials==1) printf("txlev[%d] = %d (%f dB) txlev_sum %d\n",aa,txlev[aa],10*log10((double)txlev[aa]),txlev_sum);
-        }
+        int symbol_offset = slot_offset + l_ofdm * frame_parms->ofdm_symbol_size + (l_ofdm - 1) * frame_parms->nb_prefix_samples
+                            + frame_parms->nb_prefix_samples0;
+        int symbol_length = frame_parms->ofdm_symbol_size + frame_parms->nb_prefix_samples;
+        double txlev_sum = compute_tx_energy_level(txdata, n_tx, symbol_offset, symbol_length, n_trials);
 
         for (i = 0; i < slot_length; i++) {
           for (aa=0; aa<frame_parms->nb_antennas_tx; aa++) {
@@ -1189,11 +1182,11 @@ int main(int argc, char **argv)
           }
         }
 
-        double ts = 1.0/(frame_parms->subcarrier_spacing * frame_parms->ofdm_symbol_size); 
-        //Compute AWGN variance
-        sigma2_dB = 10 * log10((double)txlev_sum * ((double)UE->frame_parms.ofdm_symbol_size/(12*pdsch_pdu_rel15->rbSize))) - SNR;
-        sigma2    = pow(10, sigma2_dB/10);
-        if (n_trials==1) printf("sigma2 %f (%f dB), txlev_sum %f (factor %f)\n",sigma2,sigma2_dB,10*log10((double)txlev_sum),(double)(double)UE->frame_parms.ofdm_symbol_size/(12*pdsch_pdu_rel15->rbSize));
+        double ts = 1.0/(frame_parms->subcarrier_spacing * frame_parms->ofdm_symbol_size);
+
+        // Estimate noise power from the transmitter level and SNR
+        double sigma2 =
+            compute_noise_variance(txlev_sum, UE->frame_parms.ofdm_symbol_size, pdsch_pdu_rel15->rbSize, 1, SNR, n_trials);
 
         for (aa = 0; aa < n_rx; aa++) {
           bzero(r_re[aa], slot_length * sizeof(double));

@@ -65,7 +65,7 @@ void update_channel_model(channel_desc_t *channelDesc, uint64_t TS)
     const double pos_ue_y = 0;
     const double pos_ue_z = radius_earth;
 
-    const double c = 299792458; // m/s
+    const double c = (double) SPEED_OF_LIGHT;
 
     if (channelDesc->is_uplink) {
       const double dir_ue_sat_x = pos_sat_x - pos_ue_x;

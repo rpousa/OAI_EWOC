@@ -1,22 +1,10 @@
-<table style="border-collapse: collapse; border: none;">
-  <tr style="border-collapse: collapse; border: none;">
-    <td style="border-collapse: collapse; border: none;">
-      <a href="http://www.openairinterface.org/">
-         <img src="./images/oai_final_logo.png" alt="" border=3 height=50 width=150>
-         </img>
-      </a>
-    </td>
-    <td style="border-collapse: collapse; border: none; vertical-align: center;">
-      <b><font size = "5">OAI 7.2 Fronthaul Interface 5G SA Tutorial</font></b>
-    </td>
-  </tr>
-</table>
+# OAI 7.2 Fronthaul Interface 5G SA Tutorial
 
 **Table of Contents**
 
 [[_TOC_]]
 
-# Prerequisites
+## Prerequisites
 
 The hardware on which we have tried this tutorial:
 
@@ -61,7 +49,7 @@ The UEs that have been tested and confirmed working with Aerial are the followin
 | Samsung         | S23 Ultra                     |
 
 
-## Configure your server
+### Configure your server
 
 To set up the L1 and install the components manually refer to this [instructions page](https://docs.nvidia.com/aerial/cuda-accelerated-ran/index.html).
 
@@ -71,7 +59,7 @@ of the FAPI 10.04 version of the SRS PDU, and RX_Beamforming PDU.
 - To configure the Gigabyte server please refer to these [instructions](https://gitlab.eurecom.fr/oai/openairinterface5g/-/blob/2025.w13/doc/Aerial_FAPI_Split_Tutorial.md)
 - The last release to support the Gigabyte server is **Aerial CUDA-Accelerated RAN 24-1**.
 
-### CPU allocation
+#### CPU allocation
 
 | Server brand     | Model         | Nº of CPU Cores | Isolated CPUs  |
 |------------------|---------------|:---------------:|:--------------:|
@@ -84,7 +72,7 @@ of the FAPI 10.04 version of the SRS PDU, and RX_Beamforming PDU.
 | PTP & PHC2SYS Services | 41             |
 | OAI `nr-softmodem`     | 13-16          |
 
-## PTP configuration
+### PTP configuration
 
 1. You need to install the `linuxptp` debian package. It will install both ptp4l and phc2sys.
 
@@ -144,7 +132,7 @@ WantedBy=multi-user.target
 
 ```
 
-# Build OAI gNB
+## Build OAI gNB
 
 If it's not already cloned, the first step is to clone OAI repository
 ```bash
@@ -152,7 +140,7 @@ git clone https://gitlab.eurecom.fr/oai/openairinterface5g.git ~/openairinterfac
 cd ~/openairinterface5g/
 ```
 
-## Get nvIPC sources from the L1 container 
+### Get nvIPC sources from the L1 container
 
 The library used for communication between L1 and L2 components is called nvIPC, and is developed by NVIDIA. It is not open-source and can't be freely distributed.
 In order to achieve this communication, we need to obtain the nvIPC source files from the L1 container (cuBB) and place it in the gNB project directory `~/openairinterface5g`.
@@ -210,7 +198,7 @@ aerial@c_aerial_aerial:/opt/nvidia/cuBB/cuPHY-CP/gt_common_libs# exit
 
 With the nvIPC sources in the project directory, the docker image can be built.
 
-## Building OAI gNB docker image
+### Building OAI gNB docker image
 
 In order to build the target image (`oai-gnb-aerial`), first you should build a common shared image (`ran-base`)
 ```bash
@@ -220,12 +208,12 @@ In order to build the target image (`oai-gnb-aerial`), first you should build a 
 ```
 
 
-# Running the setup
+## Running the setup
 
 In order to use Docker Compose to automatically start and stop the setup, we first need to create a pre-built image of L1 after compiling the L1 software and making the necessary adjustments to its configuration files.
 The process of preparing L1 is covered in NVIDIA's documentation and falls outside the scope of this document.
 
-## Prepare the L1 image
+### Prepare the L1 image
 After preparing the L1 software, the container needs to be committed to create an image where L1 is ready for execution, which can later be referenced by a `docker-compose.yaml` file.
 
 *Note:* The default L1 configuration file is `cuphycontroller_P5G_FXN_GH.yaml`, located in `/opt/nvidia/cuBB/cuPHY-CP/cuphycontroller/config/`.
@@ -239,7 +227,7 @@ cubb-build                                    25-2.1                            
 -..
 ```
 
-## Adapt the OAI-gNB configuration file to your system/workspace
+### Adapt the OAI-gNB configuration file to your system/workspace
 
 Edit the sample OAI gNB configuration file and check following parameters:
 
@@ -253,8 +241,8 @@ The default amf_ip_address:ipv4 value is 192.168.70.132, when installing the CN5
 Both 'GNB_IPV4_ADDRESS_FOR_NG_AMF' and 'GNB_IPV4_ADDRESS_FOR_NGU' need to be set to the IP address of the NIC referenced previously.
 
 
-## Running docker compose
-### Aerial L1 entrypoint script
+### Running docker compose
+#### Aerial L1 entrypoint script
 The `aerial_l1_entrypoint` script is used by the L1 container to start the L1 software and is called in the Docker Compose file.
 It begins by setting up environment variables, restarting NVIDIA MPS, and finally running `cuphycontroller_scf`.
 
@@ -275,7 +263,7 @@ The logs can be followed using these commands:
 docker logs -f oai-gnb-aerial
 docker logs -f nv-cubb
 ```
-### Running with multiple L2s
+#### Running with multiple L2s
 One L1 instance can support multiple L2 instances. See also the [aerial documentation](https://developer.nvidia.com/docs/gputelecom/aerial-sdk/text/cubb_quickstart/running_cubb-end-to-end.html#run-multiple-l2-instances-with-single-l1-instance) for more details.
 
 In OAI the shared memory prefix must be configured in the configuration file.
@@ -286,7 +274,7 @@ In OAI the shared memory prefix must be configured in the configuration file.
 ```
 
 
-## Stopping the setup
+### Stopping the setup
 
 Run the following command to stop and remove both containers, leaving the system ready to be restarted later:
 ```bash

@@ -39,7 +39,8 @@
 void set_cset_offset(uint16_t);
 void get_K1_K2(int N1, int N2, int *K1, int *K2, int layers);
 int get_NTN_Koffset(const NR_ServingCellConfigCommon_t *scc);
-
+bool is_ssb_configured(const NR_ServingCellConfigCommon_t *scc, int ssb_index);
+int get_max_ssbs(const NR_ServingCellConfigCommon_t *scc);
 int get_first_ul_slot(const frame_structure_t *fs, bool mixed);
 int get_ul_slots_per_period(const frame_structure_t *fs);
 int get_ul_slots_per_frame(const frame_structure_t *fs);
@@ -47,7 +48,6 @@ int get_dl_slots_per_period(const frame_structure_t *fs);
 int get_full_ul_slots_per_period(const frame_structure_t *fs);
 int get_full_dl_slots_per_period(const frame_structure_t *fs);
 int get_ul_slot_offset(const frame_structure_t *fs, int idx, bool count_mixed);
-
 void delete_nr_ue_data(NR_UE_info_t *UE, NR_COMMON_channels_t *ccPtr, uid_allocator_t *uia);
 
 void mac_top_init_gNB(ngran_node_t node_type,
@@ -420,7 +420,7 @@ int get_cce_index(const gNB_MAC_INST *nrmac,
                   const int CC_id,
                   const int slot,
                   const rnti_t rnti,
-                  uint8_t *aggregation_level,
+                  int *aggregation_level,
                   int beam_idx,
                   const NR_SearchSpace_t *ss,
                   const NR_ControlResourceSet_t *coreset,

@@ -6,13 +6,13 @@ without sudo.
 
 [TOC]
 
-# Performance Tuning
+## Performance Tuning
 
 Please also refer to the [advanced configuration in the
 tutorial](NR_SA_Tutorial_COTS_UE.md#6-advanced-configurations-optional), which
 groups many tips and tricks.
 
-## CPU
+### CPU
 
 OAI used to try to set the minimum CPU-DMA latency to 2 us by writing to
 `/dev/cpu_dma_latency`. However, it is unclear if this has a significant
@@ -46,7 +46,7 @@ You can disable KPTI Protections for Spectre/Meltdown for more performance.
 **This is a security risk.** Add `mitigations=off nosmt` in your grub config and
 update grub.
 
-## Ethernet-based Radios
+### Ethernet-based Radios
 
 For ethernet-based radios, such as AW2S, some USRPs, and 7.2 radios, increase
 the ringbuffers to a maximum. Read on interface `<fronthaul-interface-name>`
@@ -67,7 +67,7 @@ sudo sysctl -n -e -q -w net.core.wmem_default=134217728
 sudo sysctl -n -e -q -w net.core.wmem_max=134217728
 ```
 
-# Capabilities
+## Capabilities
 
 Historically, all softmodems are executed as `root`, typically using `sudo`.
 This remains a possibility, but we do not recommend it due to security
@@ -75,7 +75,7 @@ considerations. Rather, consider giving specific capabilities as outlined
 below. Read `capabilities(7)` (`man 7 capabilities`) for more information on
 each of the below capabilities.
 
-Note that we tested this using 5G executables; 4G should work, but have not
+> Note that we tested this using 5G executables; 4G should work, but have not
 been tested as extensively. If in doubt, run eNB/lteUE using `sudo`. The below
 comments on capabilities apply in general as well; however, 4G executable might
 not warn about missing capabilities or just fail.
@@ -111,7 +111,7 @@ cap_block_suspend,cap_audit_read,cap_perfmon,cap_bpf,cap_checkpoint_restore" --p
 `\`). To run with `SYS_NICE`, remove the first capability (`cap_sys_nice`)
 from the list of dropped capabilities.
 
-## General capabilities
+### General capabilities
 
 - `SYS_NICE`: required by all softmodems to assign a higher priority to
   threads to increase the likelihood that the Linux scheduler schedules a
@@ -137,7 +137,7 @@ from the list of dropped capabilities.
   run without this capability, but you cannot inject any traffic into the
   system. 4G executables might need this requirement, and possibly fail.
 
-## Capabilities with DPDK
+### Capabilities with DPDK
 
 Additionally to the "general capabilities" above, you need these capabilities
 when running with 7.2 fronthaul, which uses the xran library with a dependency
@@ -150,19 +150,19 @@ on DPDK:
    mode to read `/proc/self/pagemaps`. However, if DPDK EAL is configured to use
    IOVA VA (Virtual Address) mode, this capability is no longer required.
 
-## Capabilities with UHD
+### Capabilities with UHD
 
 You don't need any additional capabilities for UHD beyond the "general
 capabilities" for performance outlined above. Make sure that the USB device(s)
 are readable and writable by the current user (e.g., `uhd_usrp_probe` can be
 executed by a non-root user).
 
-## Capabilities with AW2S
+### Capabilities with AW2S
 
 You don't need any additional capabilities for AW2S beyond the "general
 capabilities" for performance outlined above.
 
-## Other radios
+### Other radios
 
 Other radios have not been tested. If they do not work without additional
 capabilities beyond the "general capabilities", please file a bug report.

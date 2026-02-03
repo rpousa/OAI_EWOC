@@ -1,12 +1,12 @@
 # I/Q record-replay
 ## using the iq record-replay
 
-This feature provides I/Q record-replay as initially presented in the 4th OAI workshop for LTE
-(https://www.openairinterface.org/docs/workshop/4_OAI_Workshop_20171107/Talks/MONGAZON_Nokia-Bell-Labs-OAI-IQ.pdf)
+This feature provides I/Q record-replay as initially presented in the [4th OAI workshop for LTE](https://www.openairinterface.org/docs/workshop/4_OAI_Workshop_20171107/Talks/MONGAZON_Nokia-Bell-Labs-OAI-IQ.pdf)
 The current implementation has been temporarily disrupted for LTE and only works for 5G SA
 nr-uesoftmodem executable.
 
 The I/Q record-replay feature is briefly described hereafter, it allows you to:
+
 * record slots received by the USRP board in a file while the system is operating.
   For example you can record a full nrUE connection/traffic/disconnection sequence.
   Today the OAI USRP device is the only one supporting the recording feature. 
@@ -17,6 +17,7 @@ The record-replay features are activated and configured using OAI configuration 
 
 ### Record mode
 options for record mode are:
+
 * `subframes-record` Activate record mode
 * `subframes-file`   Path of the file used for slots recording (default is `/tmp/iqfile`)
 * `subframes-max`    Maximum count of slots to be recorded in a file (default is 120000)
@@ -31,7 +32,8 @@ At that time, up to the value of `--subframes-max` slots will be written on disk
 The nr-uesoftmodem will indicate the exact count of slots written to disk, which may be less (but not higher)
 than the value of `--subframes-max` parameter.
 
->Recording session example:
+**Recording session example:**
+
 ```bash
 ./nr-uesoftmodem -O /home/oaitests/mediatek_sim.conf --numerology 1 -r 106 -C 3649440000 --band 78 -E --ue-fo-compensation --device.recplay.subframes-record 1 --device.recplay.subframes-file /home/iqs/oai-nrUE-17042023.dat --device.recplay.use-mmap 1 --device.recplay.subframes-max 30000
 ............................................
@@ -42,17 +44,20 @@ than the value of `--subframes-max` parameter.
 [HW]   Writing 4565 subframes to /home/iqs/oai-nrUE-17042023.dat 
 [HW]   File /home/iqs/oai-nrUE-17042023.dat closed
 [HW]   releasing USRP
+```
 
 ### Replay mode
 Replaying I/Q works only for nr-uesoftmodem at 40MHz bandwidth 3/4 sampling.
 Mismatch between file content and run time parameters might lead to unpredictable results.
 options for replay mode are:
+
 * `subframes-replay` Activate replay mode
 * `subframes-file`   Path of the file used for slots replay (default is `/tmp/iqfile`)
 * `subframes-loops`  Number of iterations to replay the entire slots file (default is 5)
 * `use-mmap`         Boolean, set to 1 (true) by default, iq file is map to memory if true, otherwise iq's are read from file. 
 
->Replay mode session example:
+**Replay mode session example:**
+
 ```bash
 ./nr-uesoftmodem -O /home/oaitests/mediatek_sim.conf --numerology 1 -r 106 -C 3649440000 --band 78 -E --ue-fo-compensation --device.recplay.subframes-replay 1 --device.recplay.subframes-file /home/iqs/oai-nrUE-17042023.dat --device.recplay.use-mmap 1 --device.recplay.subframes-loops 1
 ..................................
@@ -62,5 +67,6 @@ options for replay mode are:
 [HW]   iqplayer device initialized, replay /home/iqs/oai-nrUE-17042023.dat for 1 iteration(s)
 ..................................
 ..................................
+```
 
 [OAI Wikis home](https://gitlab.eurecom.fr/oai/openairinterface5g/wikis/home)

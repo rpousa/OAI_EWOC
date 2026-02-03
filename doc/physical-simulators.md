@@ -5,7 +5,7 @@ simulators** or simply **physims**, used in the OpenAirInterface (OAI) project f
 
 [[_TOC_]]
 
-# Introduction
+## Introduction
 
 **Unitary simulations** are standalone test programs designed to validate individual physical layer (L1) transport or
 control channels. These simulations are based on **Monte Carlo techniques**, enabling statistical evaluation of
@@ -25,7 +25,7 @@ pipelines:
 - [RAN-PhySim-Cluster-5G](https://jenkins-oai.eurecom.fr/job/RAN-PhySim-Cluster-5G/)
 - [RAN-PhySim-GraceHopper-5G](https://jenkins-oai.eurecom.fr/job/RAN-PhySim-GraceHopper-5G/)
 
-## Examples of Simulators
+### Examples of Simulators
 
 | Technology | Simulators                                | Description                      |
 |------------|-------------------------------------------|----------------------------------|
@@ -36,9 +36,10 @@ pipelines:
 |            | `nr_pbchsim`                              | Broadcast channel simulation     |
 |            | `nr_prachsim`                             | PRACH simulation                 |
 |            | `nr_psbchsim`                             | Sidelink simulation              |
+|            | `nr_srssim`                               | SRS simulation                   |
 | Coding     | `ldpctest`, `polartest`, `smallblocktest` | LDPC, Polar, and other FEC tests |
 
-## Source Locations
+### Source Locations
 
 * 4G PHY simulators: `openair1/SIMULATION/LTE_PHY/`
 * 5G PHY simulators: `openair1/SIMULATION/NR_PHY/`
@@ -51,9 +52,9 @@ Example:
 openair1/SIMULATION/NR_PHY/dlsim.c
 ```
 
-# How to Run Simulators Using `ctest`
+## How to Run Simulators Using `ctest`
 
-## Option 1: Using CMake
+### Option 1: Using CMake
 
 Build the simulators and tests using the dedicated cmake option, then run
 `ctest` which will run all registered tests.
@@ -66,7 +67,7 @@ ninja tests
 ctest
 ```
 
-## Option 2: Using the `build_oai` script
+### Option 2: Using the `build_oai` script
 
 This method simplifies the process by automatically building the simulators with ctest support.
 
@@ -77,7 +78,7 @@ cd ran_build/build
 ctest
 ```
 
-## `ctest` Usage Tips
+### `ctest` Usage Tips
 
 Use the following options to customize test execution:
 
@@ -99,7 +100,7 @@ parallel, type
 
     ctest -L nr_ulschsim -j 4
 
-# Adding a New Physim Test
+## Adding a New Physim Test
 
 To define a new test or modify existing ones, update the following file:
 
@@ -107,7 +108,7 @@ To define a new test or modify existing ones, update the following file:
 openair1/SIMULATION/tests/CMakeLists.txt
 ```
 
-## `add_physim_test()`
+### `add_physim_test()`
 
 Use the `add_physim_test()` macro with the following arguments:
 
@@ -125,7 +126,7 @@ For instance, a PRACHsim looks like this:
 
     add_physim_test(physim.5g.nr_prachsim.test8 "15kHz SCS, 25 PRBs" nr_prachsim -a -s -30 -n 300 -p 99 -R 25 -m 0)
 
-## `add_timed_physim_test()`
+### `add_timed_physim_test()`
 
 Use the `add_timed_physim_test()` macro to add a test the same way as with
 `add_physim_test()` above. Additionally, it allows to check for thresholds with
@@ -162,7 +163,7 @@ For instance, this could look like this:
     add_timed_physim_test(physim.5g.nr_dlsim.test3 "Some description" nr_dlsim -P)
     check_physim_threshold(physim.5g.nr_dlsim.test3 "DLSCH encoding time" "< 50")
 
-# How to rerun failed CI tests using `ctest`
+## How to rerun failed CI tests using `ctest`
 
 Ctest automatically logs the failed tests in LastTestsFailed.log. This log is archived in
 the CI artifacts and can be reused locally to rerun only those failed tests.
@@ -185,7 +186,7 @@ cp /path/to/test_logs_123/test_logs/LastTestsFailed.log ./Testing/Temporary/
 ctest --rerun-failed
 ```
 
-# Legacy Bash Autotest (Deprecated)
+## Legacy Bash Autotest (Deprecated)
 
 > **Note:** Autotest script, configuration, and documentation, are no longer maintained.
 
@@ -195,7 +196,7 @@ For legacy support or archival purposes, you can still find this implementation 
 git checkout 2025.w18
 ```
 
-# Unmaintained tests
+## Unmaintained tests
 
 A few tests dedicated to 4G are unmaintained:
 

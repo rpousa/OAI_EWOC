@@ -34,9 +34,8 @@ DPDK_PATH = '/opt/dpdk-t2-22.11.0'
 
 class Native():
 
-	def Build(ctx, node, test_case, HTML, directory, options):
+	def Build(ctx, node, HTML, directory, options):
 		logging.debug(f'Building on server: {node}')
-		HTML.testCase_id = test_case
 
 		with cls_cmd.getConnection(node) as ssh:
 			base = f"{directory}/cmake_targets"

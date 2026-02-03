@@ -102,7 +102,7 @@ services:
             public_net:
                 ipv4_address: 192.168.71.140
         volumes:
-            - ../../conf_files/gnb.sa.band261.u3.32prb.rfsim.conf:/opt/oai-gnb/etc/gnb.conf
+            - ../../conf_files/gnb.sa.band257.u3.66prb.rfsim.conf:/opt/oai-gnb/etc/gnb.conf
         healthcheck:
             test: /bin/bash -c "pgrep nr-softmodem"
             start_period: 10s
@@ -122,7 +122,7 @@ services:
         environment:
             USE_ADDITIONAL_OPTIONS: --rfsim
                                     --rfsimulator.serveraddr 192.168.71.140 --log_config.global_log_options level,nocolor,time
-                                    -r 32 --numerology 3 --band 261 -C 27533160000 --ssb 73
+                                    -C 27975360000 -r 66 --numerology 3 --ssb 48 --band 257
             ASAN_OPTIONS: detect_leaks=0
         devices:
              - /dev/net/tun:/dev/net/tun

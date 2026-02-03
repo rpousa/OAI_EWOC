@@ -102,6 +102,7 @@ void oai_xran_fh_rx_callback(void *pCallbackTag, xran_status_t status)
           AssertFatal(pRbMap != NULL, "(%d:%d:%d)pRbMap == NULL. Aborting.\n", cc_id, tti % XRAN_N_FE_BUF_LEN, ant_id);
 
           for (uint32_t sym_id = 0; sym_id < XRAN_NUM_OF_SYMBOL_PER_SLOT; sym_id++) {
+            LOG_D(HW, "cb pRbMap->nPrbElm %d\n", pRbMap->nPrbElm);
             for (uint32_t idxElm = 0; idxElm < pRbMap->nPrbElm; idxElm++ ) {
               struct xran_prb_elm *pRbElm = &pRbMap->prbMap[idxElm];
               pRbElm->nSecDesc[sym_id] = 0; // number of section descriptors per symbol; M-plane info <supported-section-types>
@@ -263,6 +264,28 @@ static bool is_tdd_ul_symbol(const struct xran_frame_config *frame_conf, int slo
   int slot_in_period = slot % tdd_period;
   /* check if symbol is UL */
   return frame_conf->sSlotConfig[slot_in_period].nSymbolType[sym_idx] == 1 /* UL */;
+}
+
+/** @brief Check if symbol in slot is DL.
+ *
+ * @param frame_conf xran frame configuration
+ * @param slot the current (absolute) slot (number)
+ * @param sym_idx the current symbol index */
+static bool is_tdd_dl_symbol(const struct xran_frame_config *frame_conf, int slot, int sym_idx)
+{
+  /* in FDD, every symbol is also UL */
+  if (frame_conf->nFrameDuplexType == XRAN_FDD)
+    return true;
+  int tdd_period = frame_conf->nTddPeriod;
+  int slot_in_period = slot % tdd_period;
+  /* check if symbol is UL */
+  return frame_conf->sSlotConfig[slot_in_period].nSymbolType[sym_idx] == 0 /* DL */;
+}
+
+/** @brief Check if current slot is guard/mixed */
+static bool is_tdd_guard_slot(const struct xran_frame_config *frame_conf, int slot)
+{
+  return (is_tdd_dl_symbol(frame_conf, slot, 0) && is_tdd_ul_symbol(frame_conf, slot,  XRAN_NUM_OF_SYMBOL_PER_SLOT - 1));
 }
 
 /** @brief Check if current slot is DL or guard/mixed without UL (i.e., current
@@ -650,6 +673,473 @@ int xran_fh_tx_send_slot(ru_info_t *ru, int frame, int slot, uint64_t timestamp)
               xranlib_compress_avx512(&bfp_com_req, &bfp_com_rsp);
 #elif defined(__arm__) || defined(__aarch64__)
               armral_bfp_compression(p_prbMapElm->iqWidth, p_prbMapElm->nRBSize, (int16_t *)local_src, (int8_t *)dst);
+#else
+              AssertFatal(1 == 0, "BFP compression not supported on this architecture");
+#endif
+
+            } else {
+              printf("p_prbMapElm->compMethod == %d is not supported\n", p_prbMapElm->compMethod);
+              exit(-1);
+            }
+
+            p_sec_desc->iq_buffer_offset = RTE_PTR_DIFF(dst, u8dptr);
+            p_sec_desc->iq_buffer_len = payload_len;
+
+            dst += payload_len;
+            dst = xran_add_hdr_offset(dst, p_prbMapElm->compMethod);
+          }
+
+          // The tti should be updated as it increased.
+          pRbMap->tti_id = tti;
+
+        } else {
+          printf("ptr ==NULL\n");
+          exit(-1); // fails here??
+        }
+      }
+    }
+  }
+  return (0);
+}
+
+/** @details Read PRACH and PUSCH data from xran buffers.  If
+ * I/Q compression (bitwidth < 16 bits) is configured, deccompresses the data
+ * before writing. Prints ON TIME counters every 128 frames.
+ *
+ * Function is blocking and waits for next frame/slot combination. It is unblocked
+ * by oai_xran_fh_rx_callback(). It writes the current slot into parameters
+ * frame/slot. */
+int xran_fh_rx_read_slot_BySymbol(ru_info_t *ru, int *frame, int *slot)
+{
+  void *ptr = NULL;
+  int32_t *pos = NULL;
+  int idx = 0;
+
+  static int64_t old_rx_counter[XRAN_PORTS_NUM] = {0};
+  static int64_t old_tx_counter[XRAN_PORTS_NUM] = {0};
+  struct xran_common_counters x_counters[XRAN_PORTS_NUM];
+  static int outcnt = 0;
+  #ifndef USE_POLLING
+  // pull next even from oran_sync_fifo
+  notifiedFIFO_elt_t *res = pullNotifiedFIFO(&oran_sync_fifo);
+
+  notifiedFIFO_elt_t *f;
+  while ((f = pollNotifiedFIFO(&oran_sync_fifo)) != NULL) {
+    oran_sync_info_t *old_info = NotifiedFifoData(res);
+    oran_sync_info_t *new_info = NotifiedFifoData(f);
+    LOG_E(HW, "Detected double sync message %d.%d => %d.%d\n", old_info->f, old_info->sl, new_info->f, new_info->sl);
+    delNotifiedFIFO_elt(res);
+    res = f;
+  }
+
+  oran_sync_info_t *info = NotifiedFifoData(res);
+
+  *slot = info->sl;
+  *frame = info->f;
+  delNotifiedFIFO_elt(res);
+#else
+  *slot = oran_sync_info.sl;
+  *frame = oran_sync_info.f;
+  uint32_t tti_in = oran_sync_info.tti;
+
+  static int last_slot = -1;
+  LOG_D(HW, "oran slot %d, last_slot %d\n", *slot, last_slot);
+  int cnt = 0;
+  // while (*slot == last_slot)  {
+  while (tti_in == oran_sync_info.tti) {
+    //*slot = oran_sync_info.sl;
+    cnt++;
+  }
+  LOG_D(HW, "cnt %d, Reading %d.%d\n", cnt, *frame, *slot);
+  last_slot = *slot;
+#endif
+  // return(0);
+
+  struct xran_fh_config *fh_cfg = get_xran_fh_config(0);
+  int slots_per_frame = 10 << fh_cfg->frame_conf.nNumerology;
+
+  int tti = slots_per_frame * (*frame) + (*slot);
+
+  read_prach_data(ru, *frame, *slot);
+
+  const struct xran_fh_init *fh_init = get_xran_fh_init();
+  int nPRBs = fh_cfg->nULRBs;
+  int fftsize = 1 << fh_cfg->ru_conf.fftSize;
+
+  int slot_offset_rxdata = 3 & (*slot);
+  uint32_t slot_size = 4 * 14 * fftsize;
+  uint8_t *rx_data = (uint8_t *)ru->rxdataF[0];
+  uint8_t *start_ptr = NULL;
+  int nb_rx_per_ru = ru->nb_rx / fh_init->xran_ports;
+  for (uint16_t cc_id = 0; cc_id < 1 /*nSectorNum*/; cc_id++) { // OAI does not support multiple CC yet.
+    for (uint8_t ant_id = 0; ant_id < ru->nb_rx; ant_id++) {
+      rx_data = (uint8_t *)ru->rxdataF[ant_id];
+      start_ptr = rx_data + (slot_size * slot_offset_rxdata);
+      const struct xran_frame_config *frame_conf = &get_xran_fh_config(ant_id / nb_rx_per_ru)->frame_conf;
+      // skip processing this slot is TX (no RX in this slot)
+      if (!is_tdd_ul_guard_slot(frame_conf, *slot))
+        continue;
+      bool sym_start_found = false;
+      int32_t sym_start = 0;
+      // This loop would better be more inner to avoid confusion and maybe also errors.
+      for (int32_t sym_idx = 0; sym_idx < XRAN_NUM_OF_SYMBOL_PER_SLOT; sym_idx++) {
+        /* the callback is for mixed and UL slots. In mixed, we have to
+         * skip DL and guard symbols. */
+        if (!is_tdd_ul_symbol(frame_conf, *slot, sym_idx))
+          continue;
+        if (!sym_start_found) {
+          sym_start = sym_idx;
+          sym_start_found = true;
+        }
+
+        uint8_t *pData;
+        oran_buf_list_t *bufs = get_xran_buffers(ant_id / nb_rx_per_ru);
+        uint8_t *pPrbMapData = bufs->dstcp[ant_id % nb_rx_per_ru][tti % XRAN_N_FE_BUF_LEN].pBuffers->pData;
+        struct xran_prb_map *pPrbMap = (struct xran_prb_map *)pPrbMapData;
+
+        struct xran_prb_map *pRbMap = pPrbMap;
+        for (int idxElm = 0; idxElm < pRbMap->nPrbElm; idxElm++) {
+          struct xran_prb_elm *pRbElm = &pRbMap->prbMap[idxElm];
+#ifdef E_RELEASE
+          struct xran_section_desc *p_sec_desc = pRbElm->p_sec_desc[sym_idx][0];
+          uint32_t one_rb_size =
+              (((pRbElm->iqWidth == 0) || (pRbElm->iqWidth == 16)) ? (N_SC_PER_PRB * 2 * 2) : (3 * pRbElm->iqWidth + 1));
+          if (fh_init->mtu < pRbElm->nRBSize * one_rb_size)
+            pData = bufs->dst[ant_id % nb_rx_per_ru][tti % XRAN_N_FE_BUF_LEN]
+                        .pBuffers[sym_idx % XRAN_NUM_OF_SYMBOL_PER_SLOT]
+                        .pData;
+          else
+            pData = p_sec_desc->pData;
+#elif defined F_RELEASE
+          struct xran_section_desc *p_sec_desc = &pRbElm->sec_desc[sym_idx][0];
+          pData = p_sec_desc->pData;
+#endif 
+          ptr = pData;
+          pos = (int32_t *)(start_ptr + (4 * sym_idx * fftsize));
+          if (ptr == NULL || pos == NULL)
+            continue;
+
+          uint8_t *src = (uint8_t *)ptr;
+
+          LOG_D(HW, "rx pRbMap->nPrbElm %d\n", pRbMap->nPrbElm);
+          // For Liteon FR2 with RunSlotPrbMapBySymbolEnable xran_prb_map will have xran_prb_elm prbMap[14], each idxElm matches to sym_idx.
+          u_int8_t section_id_tmp = pPrbMap->nPrbElm < XRAN_NUM_OF_SYMBOL_PER_SLOT ? sym_idx - sym_start: sym_idx;
+          if (section_id_tmp != pRbElm->nSectId) {
+              LOG_D(HW,
+                "rx prbMap[%d] : PRBstart %d nPRBs %d nSectId %d != sym_idx %d:%d\n",
+                idxElm,
+                pRbMap->prbMap[idxElm].nRBStart,
+                pRbMap->prbMap[idxElm].nRBSize,
+                pRbMap->prbMap[idxElm].nSectId, sym_idx, section_id_tmp
+              );
+            continue;
+          }
+          LOG_D(HW,
+                "rx prbMap[%d] : PRBstart %d:%d nPRBs %d:%d nSectId %d sym_idx %d:%d\n",
+                idxElm,
+                pRbMap->prbMap[idxElm].nRBStart, pRbMap->prbMap[idxElm].UP_nRBStart,
+                pRbMap->prbMap[idxElm].nRBSize, pRbMap->prbMap[idxElm].UP_nRBSize,
+                pRbMap->prbMap[idxElm].nSectId, sym_idx, section_id_tmp
+              );
+
+          int pos_len = 0;
+          int neg_len = 0;
+          int num_prbu = p_sec_desc->num_prbu;
+          int start_prbu = p_sec_desc->start_prbu;
+          if (start_prbu < (nPRBs >> 1)) // there are PRBs left of DC
+            neg_len = min((nPRBs * 6) - (start_prbu * 12), num_prbu * N_SC_PER_PRB);
+          pos_len = (num_prbu * N_SC_PER_PRB) - neg_len;
+
+          src = pData;
+          // Calculation of the pointer for the section in the buffer.
+          // positive half
+          uint8_t *dst1 = (uint8_t *)(pos + (neg_len == 0 ? ((start_prbu * N_SC_PER_PRB) - (nPRBs * 6)) : 0));
+          // negative half
+          uint8_t *dst2 = (uint8_t *)(pos + (start_prbu * N_SC_PER_PRB) + fftsize - (nPRBs * 6));
+          int32_t local_dst[num_prbu * N_SC_PER_PRB] __attribute__((aligned(64)));
+          if (pRbElm->compMethod == XRAN_COMPMETHOD_NONE) {
+            // NOTE: gcc 11 knows how to generate AVX2 for this!
+            for (idx = 0; idx < num_prbu * N_SC_PER_PRB * 2; idx++)
+              ((int16_t *)local_dst)[idx] = ((int16_t)ntohs(((uint16_t *)src)[idx])) >> 2;
+            memcpy((void *)dst2, (void *)local_dst, neg_len * 4);
+            memcpy((void *)dst1, (void *)&local_dst[neg_len], pos_len * 4);
+          } else if (pRbElm->compMethod == XRAN_COMPMETHOD_BLKFLOAT) {
+#if defined(__i386__) || defined(__x86_64__)
+            struct xranlib_decompress_request bfp_decom_req = {};
+            struct xranlib_decompress_response bfp_decom_rsp = {};
+
+            int16_t payload_len = (3 * pRbElm->iqWidth + 1) * num_prbu;
+
+            bfp_decom_req.data_in = (int8_t *)src;
+            bfp_decom_req.numRBs = num_prbu;
+            bfp_decom_req.len = payload_len;
+            bfp_decom_req.compMethod = pRbElm->compMethod;
+            bfp_decom_req.iqWidth = pRbElm->iqWidth;
+
+            bfp_decom_rsp.data_out = (int16_t *)local_dst;
+            bfp_decom_rsp.len = 0;
+
+            xranlib_decompress_avx512(&bfp_decom_req, &bfp_decom_rsp);
+#elif defined(__arm__) || defined(__aarch64__)
+            armral_bfp_decompression(pRbElm->iqWidth, num_prbu, (int8_t *)src, (int16_t *)local_dst);
+#else
+            AssertFatal(1 == 0, "BFP compression not supported on this architecture");
+#endif
+            memcpy((void *)dst2, (void *)local_dst, neg_len * 4);
+            memcpy((void *)dst1, (void *)&local_dst[neg_len], pos_len * 4);
+            outcnt++;
+          } else {
+            printf("pRbElm->compMethod == %d is not supported\n", pRbElm->compMethod);
+            exit(-1);
+          }
+        }
+      } // sym_ind
+    } // ant_ind
+  } // vv_inf
+  if ((*frame & 0x7f) == 0 && *slot == 0 && xran_get_common_counters(gxran_handle, &x_counters[0]) == XRAN_STATUS_SUCCESS) {
+    for (int o_xu_id = 0; o_xu_id < fh_init->xran_ports; o_xu_id++) {
+      LOG_I(HW,
+            "[%s%d][rx %7ld pps %7ld kbps %7ld][tx %7ld pps %7ld kbps %7ld][Total Msgs_Rcvd %ld]\n",
+            "o-du ",
+            o_xu_id,
+            x_counters[o_xu_id].rx_counter,
+            x_counters[o_xu_id].rx_counter - old_rx_counter[o_xu_id],
+            x_counters[o_xu_id].rx_bytes_per_sec * 8 / 1000L,
+            x_counters[o_xu_id].tx_counter,
+            x_counters[o_xu_id].tx_counter - old_tx_counter[o_xu_id],
+            x_counters[o_xu_id].tx_bytes_per_sec * 8 / 1000L,
+            x_counters[o_xu_id].Total_msgs_rcvd);
+      for (int rxant = 0; rxant < ru->nb_rx / fh_init->xran_ports; rxant++)
+        LOG_I(HW,
+              "[%s%d][pusch%d %7ld prach%d %7ld]\n",
+              "o_du",
+              o_xu_id,
+              rxant,
+              x_counters[o_xu_id].rx_pusch_packets[rxant],
+              rxant,
+              x_counters[o_xu_id].rx_prach_packets[rxant]);
+      if (x_counters[o_xu_id].rx_counter > old_rx_counter[o_xu_id])
+        old_rx_counter[o_xu_id] = x_counters[o_xu_id].rx_counter;
+      if (x_counters[o_xu_id].tx_counter > old_tx_counter[o_xu_id])
+        old_tx_counter[o_xu_id] = x_counters[o_xu_id].tx_counter;
+    }
+  }
+  return (0);
+}
+
+/** @details Write PDSCH IQ-data from OAI txdataF_BF buffer to xran buffers. If
+ * I/Q compression (bitwidth < 16 bits) is configured, compresses the data
+ * before writing. */
+int xran_fh_tx_send_slot_BySymbol(ru_info_t *ru, int frame, int slot, uint64_t timestamp)
+{
+  int tti = /*frame*SUBFRAMES_PER_SYSTEMFRAME*SLOTNUM_PER_SUBFRAME+*/ 20 * frame
+            + slot; // commented out temporarily to check that compilation of oran 5g is working.
+
+  void *ptr = NULL;
+  int32_t *pos = NULL;
+  int idx = 0;
+
+  const struct xran_fh_init *fh_init = get_xran_fh_init();
+  const struct xran_fh_config *fh_cfg = get_xran_fh_config(0);
+  int nPRBs = fh_cfg->nDLRBs;
+  int fftsize = 1 << fh_cfg->ru_conf.fftSize;
+  int nb_tx_per_ru = ru->nb_tx / fh_init->xran_ports;
+  int nb_rx_per_ru = ru->nb_rx / fh_init->xran_ports;
+
+  // Handle CP UL packet here instead of at xran_fh_rx_read_slot() as oran_fh_if4p5_south_in() lags behind
+  // oran_fh_if4p5_south_out() (which is invoked at the right time slot) by 4 slots.
+  // Need to use --continuous-tx so that this routine will be triggered in RX slot.
+  for (uint16_t cc_id = 0; cc_id < 1 /*nSectorNum*/; cc_id++) { // OAI does not support multiple CC yet.
+    for (uint8_t ant_id = 0; ant_id < ru->nb_rx; ant_id++) {
+      const struct xran_frame_config *frame_conf = &get_xran_fh_config(ant_id / nb_rx_per_ru)->frame_conf;
+      // skip processing this slot is TX (no RX in this slot)
+      if (!is_tdd_ul_guard_slot(frame_conf, slot)) {
+        continue;
+      }
+      bool sym_start_found = false;
+      int32_t sym_start = 0;
+      // This loop would better be more inner to avoid confusion and maybe also errors.
+      for (int32_t sym_idx = 0; sym_idx < XRAN_NUM_OF_SYMBOL_PER_SLOT; sym_idx++) {
+        /* the callback is for mixed and UL slots. In mixed, we have to
+         * skip DL and guard symbols. */
+        if (!is_tdd_ul_symbol(frame_conf, slot, sym_idx)) {
+          continue;
+        }
+        if (!sym_start_found) {
+          sym_start = sym_idx;
+          sym_start_found = true;
+        }
+
+        oran_buf_list_t *bufs = get_xran_buffers(ant_id / nb_rx_per_ru);
+        uint8_t *pPrbMapData = bufs->dstcp[ant_id % nb_rx_per_ru][tti % XRAN_N_FE_BUF_LEN].pBuffers->pData;
+        struct xran_prb_map *pPrbMap = (struct xran_prb_map *)pPrbMapData;
+
+        struct xran_prb_elm *pRbElm = &pPrbMap->prbMap[0];
+
+        struct xran_prb_map *pRbMap = pPrbMap;
+        uint32_t idxElm = 0;
+
+        LOG_D(HW, "tx0 pRbMap->nPrbElm %d\n", pRbMap->nPrbElm);
+        for (idxElm = 0; idxElm < pRbMap->nPrbElm; idxElm++) {
+          LOG_D(HW, "prbMap[%d] : PRBstart %d nPRBs %d\n", idxElm, pRbMap->prbMap[idxElm].nRBStart, pRbMap->prbMap[idxElm].nRBSize);
+          pRbElm = &pRbMap->prbMap[idxElm];
+          // For Liteon FR2 with RunSlotPrbMapBySymbolEnable xran_prb_map will have xran_prb_elm prbMap[14], each idxElm matches to sym_idx.
+          u_int8_t section_id_tmp = pPrbMap->nPrbElm < XRAN_NUM_OF_SYMBOL_PER_SLOT ? sym_idx - sym_start: sym_idx;
+          if (section_id_tmp != pRbElm->nSectId) {
+              LOG_D(HW,
+                    "tx0 prbMap[%d] : PRBstart %d:%d nPRBs %d:%d nSectId %d != sym_idx %d:%d\n",
+                    idxElm,
+                    pRbMap->prbMap[idxElm].nRBStart, pRbMap->prbMap[idxElm].UP_nRBStart,
+                    pRbMap->prbMap[idxElm].nRBSize, pRbMap->prbMap[idxElm].UP_nRBSize,
+                    pRbMap->prbMap[idxElm].nSectId, sym_idx, section_id_tmp
+                    );
+            continue;
+          }
+          LOG_D(HW,
+                "tx0 prbMap[%d] : PRBstart %d:%d nPRBs %d:%d nSectId %d sym_idx %d:%d\n",
+                idxElm,
+                pRbMap->prbMap[idxElm].nRBStart, pRbMap->prbMap[idxElm].UP_nRBStart,
+                pRbMap->prbMap[idxElm].nRBSize, pRbMap->prbMap[idxElm].UP_nRBSize,
+                pRbMap->prbMap[idxElm].nSectId, sym_idx, section_id_tmp
+                );
+
+          // ant_id / no of antenna per beam gives the beam_nb
+          pRbElm->nBeamIndex = ru->beam_id[ant_id / (ru->nb_rx / ru->num_beams_period)][slot * XRAN_NUM_OF_SYMBOL_PER_SLOT + sym_idx];
+          // In phy-f-1.0/fhi_lib/lib/api/xran_pkt_cp.h, beamId:15 is of 15bit. -1 set extension bit ef:1 to 1 mistakenly.
+          if (pRbElm->nBeamIndex == -1)
+            pRbElm->nBeamIndex = 0;
+        }
+      }
+    }
+  }
+
+  for (uint16_t cc_id = 0; cc_id < 1 /*nSectorNum*/; cc_id++) { // OAI does not support multiple CC yet.
+    for (uint8_t ant_id = 0; ant_id < ru->nb_tx; ant_id++) {
+      oran_buf_list_t *bufs = get_xran_buffers(ant_id / nb_tx_per_ru);
+      const struct xran_frame_config *frame_conf = &get_xran_fh_config(ant_id / nb_tx_per_ru)->frame_conf;
+      // skip processing this slot is TX (no TX in this slot)
+      if (!is_tdd_dl_guard_slot(frame_conf, slot)) {
+        continue;
+      }
+
+      // Set nPrbElm if beam_id = -1 for all downlink symbols
+      bool beam_used = false;
+      uint8_t *pPrbMapData = bufs->srccp[ant_id % nb_tx_per_ru][tti % XRAN_N_FE_BUF_LEN].pBuffers->pData;
+      struct xran_prb_map *pPrbMap = (struct xran_prb_map *)pPrbMapData;
+      struct xran_prb_map *pRbMap = pPrbMap;
+      int32_t dl_sym_end = 0;
+      for (int32_t sym_idx = 0; sym_idx < XRAN_NUM_OF_SYMBOL_PER_SLOT; sym_idx++) {
+        if (is_tdd_dl_symbol(frame_conf, slot, sym_idx)) {
+          if (ru->beam_id[ant_id / (ru->nb_tx / ru->num_beams_period)][slot * XRAN_NUM_OF_SYMBOL_PER_SLOT+ sym_idx] != -1)
+            beam_used |= true;
+        }
+        else {
+            dl_sym_end = sym_idx;
+            break;
+        }
+      }
+      if (is_tdd_guard_slot(frame_conf, slot))
+        pRbMap->nPrbElm = dl_sym_end;
+      else
+        pRbMap->nPrbElm = XRAN_NUM_OF_SYMBOL_PER_SLOT;
+      if (!beam_used) {
+        pRbMap->nPrbElm = 0;
+        continue;
+      }
+
+      // This loop would better be more inner to avoid confusion and maybe also errors.
+      for (int32_t sym_idx = 0; sym_idx < XRAN_NUM_OF_SYMBOL_PER_SLOT; sym_idx++) {
+        /* the callback is for mixed and UL slots. In mixed, we have to
+         * skip UL and guard symbols. */
+        if (is_tdd_ul_symbol(frame_conf, slot, sym_idx)) {
+          continue;
+        }
+        uint8_t *pData =
+            bufs->src[ant_id % nb_tx_per_ru][tti % XRAN_N_FE_BUF_LEN].pBuffers[sym_idx % XRAN_NUM_OF_SYMBOL_PER_SLOT].pData;
+        uint8_t *pPrbMapData = bufs->srccp[ant_id % nb_tx_per_ru][tti % XRAN_N_FE_BUF_LEN].pBuffers->pData;
+        struct xran_prb_map *pPrbMap = (struct xran_prb_map *)pPrbMapData;
+        ptr = pData;
+        pos = &ru->txdataF_BF[ant_id][sym_idx * fftsize];
+
+        uint8_t *u8dptr;
+        struct xran_prb_map *pRbMap = pPrbMap;
+        int32_t sym_id = sym_idx % XRAN_NUM_OF_SYMBOL_PER_SLOT;
+        if (ptr && pos) {
+          uint32_t idxElm = 0;
+          u8dptr = (uint8_t *)ptr;
+          int16_t payload_len = 0;
+
+          uint8_t *dst = (uint8_t *)u8dptr;
+
+          struct xran_prb_elm *p_prbMapElm = &pRbMap->prbMap[idxElm];
+          LOG_D(HW, "tx1 pRbMap->nPrbElm %d\n", pRbMap->nPrbElm);
+          for (idxElm = 0; idxElm < pRbMap->nPrbElm; idxElm++) {
+            // For Liteon FR2 with RunSlotPrbMapBySymbolEnable xran_prb_map will have xran_prb_elm prbMap[14], each idxElm matches to sym_idx.
+            struct xran_section_desc *p_sec_desc = NULL;
+            p_prbMapElm = &pRbMap->prbMap[idxElm];
+            if (sym_idx != p_prbMapElm->nSectId)
+              continue;
+            // ant_id / no of antenna per beam gives the beam_nb
+            p_prbMapElm->nBeamIndex = ru->beam_id[ant_id / (ru->nb_tx / ru->num_beams_period)][slot * XRAN_NUM_OF_SYMBOL_PER_SLOT+ sym_idx];
+            // In phy-f-1.0/fhi_lib/lib/api/xran_pkt_cp.h, beamId:15 is of 15bit. -1 set extension bit ef:1 to 1 mistakenly.
+            if (p_prbMapElm->nBeamIndex == -1)
+              p_prbMapElm->nBeamIndex = 0;
+
+            // assumes one fragment per symbol
+#ifdef E_RELEASE
+            p_sec_desc = p_prbMapElm->p_sec_desc[sym_id][0];
+#elif F_RELEASE
+            p_sec_desc = &p_prbMapElm->sec_desc[sym_id][0];
+#endif
+
+            dst = xran_add_hdr_offset(dst, p_prbMapElm->compMethod);
+
+            if (p_sec_desc == NULL) {
+              printf("p_sec_desc == NULL\n");
+              exit(-1);
+            }
+            uint16_t *dst16 = (uint16_t *)dst;
+
+            int pos_len = 0;
+            int neg_len = 0;
+
+            if (p_prbMapElm->UP_nRBStart < (nPRBs >> 1)) // there are PRBs left of DC
+              neg_len = min((nPRBs * 6) - (p_prbMapElm->UP_nRBStart * 12), p_prbMapElm->UP_nRBSize * N_SC_PER_PRB);
+            pos_len = (p_prbMapElm->UP_nRBSize * N_SC_PER_PRB) - neg_len;
+            // Calculation of the pointer for the section in the buffer.
+            // start of positive frequency component
+            uint16_t *src1 = (uint16_t *)&pos[(neg_len == 0) ? ((p_prbMapElm->UP_nRBStart * N_SC_PER_PRB) - (nPRBs * 6)) : 0];
+            // start of negative frequency component
+            uint16_t *src2 = (uint16_t *)&pos[(p_prbMapElm->UP_nRBStart * N_SC_PER_PRB) + fftsize - (nPRBs * 6)];
+
+            uint32_t local_src[p_prbMapElm->UP_nRBSize * N_SC_PER_PRB] __attribute__((aligned(64)));
+            memcpy((void *)local_src, (void *)src2, neg_len * 4);
+            memcpy((void *)&local_src[neg_len], (void *)src1, pos_len * 4);
+            if (p_prbMapElm->compMethod == XRAN_COMPMETHOD_NONE) {
+              payload_len = p_prbMapElm->UP_nRBSize * N_SC_PER_PRB * 4L;
+              /* convert to Network order */
+              // NOTE: ggc 11 knows how to generate AVX2 for this!
+              for (idx = 0; idx < (pos_len + neg_len) * 2; idx++)
+                ((uint16_t *)dst16)[idx] = htons(((uint16_t *)local_src)[idx]);
+            } else if (p_prbMapElm->compMethod == XRAN_COMPMETHOD_BLKFLOAT) {
+              payload_len = (3 * p_prbMapElm->iqWidth + 1) * p_prbMapElm->UP_nRBSize;
+
+#if defined(__i386__) || defined(__x86_64__)
+              struct xranlib_compress_request bfp_com_req = {};
+              struct xranlib_compress_response bfp_com_rsp = {};
+
+              bfp_com_req.data_in = (int16_t *)local_src;
+              bfp_com_req.numRBs = p_prbMapElm->UP_nRBSize;
+              bfp_com_req.len = payload_len;
+              bfp_com_req.compMethod = p_prbMapElm->compMethod;
+              bfp_com_req.iqWidth = p_prbMapElm->iqWidth;
+
+              bfp_com_rsp.data_out = (int8_t *)dst;
+              bfp_com_rsp.len = 0;
+
+              xranlib_compress_avx512(&bfp_com_req, &bfp_com_rsp);
+#elif defined(__arm__) || defined(__aarch64__)
+              armral_bfp_compression(p_prbMapElm->iqWidth, p_prbMapElm->UP_nRBSize, (int16_t *)local_src, (int8_t *)dst);
 #else
               AssertFatal(1 == 0, "BFP compression not supported on this architecture");
 #endif

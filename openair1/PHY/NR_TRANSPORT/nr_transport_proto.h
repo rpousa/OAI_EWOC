@@ -231,6 +231,22 @@ int nr_get_srs_signal(PHY_VARS_gNB *gNB,
                       c16_t srs_received_signal[][gNB->frame_parms.ofdm_symbol_size * (1 << srs_pdu->num_symbols)],
                       c16_t srs_received_noise[][gNB->frame_parms.ofdm_symbol_size * (1 << srs_pdu->num_symbols)]);
 
+void nr_srs_rx_procedures(PHY_VARS_gNB *gNB,
+                          int frame_rx,
+                          int slot_rx,
+                          uint8_t nb_antennas_rx,
+                          uint8_t N_ap,
+                          uint8_t N_symb_SRS,
+                          uint16_t ofdm_symbol_size,
+                          NR_gNB_SRS_t *srs,
+                          nr_srs_info_t *nr_srs_info,
+                          int *srs_est,
+                          c16_t srs_estimated_channel_freq[][N_ap][ofdm_symbol_size * N_symb_SRS],
+                          c16_t srs_estimated_channel_time[][N_ap][NR_SRS_IDFT_OVERSAMP_FACTOR * ofdm_symbol_size],
+                          int16_t *snr_per_rb,
+                          uint16_t *timing_advance_offset,
+                          int16_t *timing_advance_offset_nsec);
+
 int get_nr_prach_duration(uint8_t prach_format);
 
 void free_nr_prach_entry(prach_list_t *, prach_item_t *);

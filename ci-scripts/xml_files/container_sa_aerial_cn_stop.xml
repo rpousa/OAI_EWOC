@@ -21,18 +21,15 @@
 
 -->
 <testCaseList>
-        <htmlTabRef>TEST-AERIAL-SA-CN-STOP</htmlTabRef>
-        <htmlTabName>Undeploy 5GC</htmlTabName>
-        <htmlTabIcon>tasks</htmlTabIcon>
-        <TestCaseRequestedList>
-                000555
-        </TestCaseRequestedList>
-        <TestCaseExclusionList></TestCaseExclusionList>
-        <testCase id="000555">
-                <class>UndeployCoreNetwork</class>
-                <always_exec>true</always_exec>
-                <desc>Terminate 5G Core</desc>
-                <cn_id>oc-cn5g-20897-aerial</cn_id>
-        </testCase>
-</testCaseList>
+  <htmlTabRef>TEST-AERIAL-SA-CN-STOP</htmlTabRef>
+  <htmlTabName>Undeploy 5GC</htmlTabName>
+  <htmlTabIcon>tasks</htmlTabIcon>
 
+  <testCase>
+    <class>UndeployCoreNetwork</class>
+    <always_exec>true</always_exec>
+    <desc>Terminate 5G Core</desc>
+    <cn_id>oc-cn5g-20897-aerial</cn_id>
+  </testCase>
+
+</testCaseList>

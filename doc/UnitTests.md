@@ -12,7 +12,7 @@ GoogleTest is a C++ unit testing framework that has been added as an external de
 See [primer](http://google.github.io/googletest/primer.html) for a quick introduction. To add it to your test executable link against
 `GTest::gtest` or `GTest::gtest_main`.
 
-# How to compile tests
+## How to compile tests
 
 To compile only the tests, a special target `tests` is available. It has to be
 enabled with the special cmake variable `ENABLE_TESTS`:
@@ -26,7 +26,7 @@ ninja tests
 
 The user can use either `ninja` or `make`.
 
-# Run unit tests
+## Run unit tests
 
 Then, you can run `ctest` to run all tests:
 
@@ -75,7 +75,7 @@ if(ENABLE_TESTS)
 endif()
 ```
 
-Note that this might get more complicated, e.g., typically you will have to
+> Note that this might get more complicated, e.g., typically you will have to
 link some library into the executable with `target_link_libraries()`, or pass
 some option to the test program.
 
@@ -116,7 +116,7 @@ that directory directly, which you might also use to compare to the
    directly declare the executable in `add_test()`, and `ctest` will locate and
    run the executable properly.
 
-# Benchmarking
+## Benchmarking
 
 Google benchmark can be used to profile and benchmark small pieces of code. See
 `benchmark_rotate_vector` for reference implementation. To start benchmarking code,
@@ -147,7 +147,7 @@ BM_rotate_cpx_vector/16384       4220 ns         4220 ns       169070
 BM_rotate_cpx_vector/20000       5288 ns         5289 ns       136190
 ```
 
-## Comparing results
+### Comparing results
 
 Benchmark results can be output to json by using command line arguments, example below
 

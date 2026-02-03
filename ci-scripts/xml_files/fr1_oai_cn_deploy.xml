@@ -21,19 +21,14 @@
 
 -->
 <testCaseList>
-	<htmlTabRef>epc-deploy-tab</htmlTabRef>
-	<htmlTabName>EPC-Deploy</htmlTabName>
-	<htmlTabIcon>log-in</htmlTabIcon>
-	<TestCaseRequestedList>
- 000100
-	</TestCaseRequestedList>
-	<TestCaseExclusionList>
-	</TestCaseExclusionList>
+  <htmlTabRef>epc-deploy-tab</htmlTabRef>
+  <htmlTabName>EPC-Deploy</htmlTabName>
+  <htmlTabIcon>log-in</htmlTabIcon>
 
-	<testCase id="000100">
-		<class>DeployCoreNetwork</class>
-		<desc>Deploy EPC</desc>
-		<cn_id>porcepix-cn4g</cn_id>
-	</testCase>
+  <testCase>
+    <class>DeployCoreNetwork</class>
+    <desc>Deploy EPC</desc>
+    <cn_id>porcepix-cn4g</cn_id>
+  </testCase>
 
 </testCaseList>

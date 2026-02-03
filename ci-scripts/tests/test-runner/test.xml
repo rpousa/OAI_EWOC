@@ -22,60 +22,51 @@
 -->
 
 <testCaseList>
-        <htmlTabRef>test</htmlTabRef>
-        <htmlTabName>Manual testing</htmlTabName>
-        <htmlTabIcon>wrench</htmlTabIcon>
-        <TestCaseRequestedList>
- 000001
- 000011
- 000012
- 000002
- 000003
- 000004
-        </TestCaseRequestedList>
-        <TestCaseExclusionList></TestCaseExclusionList>
+  <htmlTabRef>test</htmlTabRef>
+  <htmlTabName>Manual testing</htmlTabName>
+  <htmlTabIcon>wrench</htmlTabIcon>
+  <testCase>
+    <class>Custom_Command</class>
+    <desc>This should succeed</desc>
+    <node>localhost</node>
+    <command>true</command>
+  </testCase>
 
-        <testCase id="000001">
-                <class>Custom_Command</class>
-                <desc>This should succeed</desc>
-                <node>localhost</node>
-                <command>true</command>
-        </testCase>
+  <testCase>
+    <class>Custom_Command</class>
+    <desc>This may fail</desc>
+    <may_fail>true</may_fail>
+    <node>localhost</node>
+    <command>false</command>
+  </testCase>
 
-        <testCase id="000011">
-                <class>Custom_Command</class>
-                <desc>This may fail</desc>
-                <may_fail>true</may_fail>
-                <node>localhost</node>
-                <command>false</command>
-        </testCase>
+  <testCase>
+    <class>Custom_Command</class>
+    <desc>This is still executed</desc>
+    <node>localhost</node>
+    <command>true</command>
+  </testCase>
 
-        <testCase id="000012">
-                <class>Custom_Command</class>
-                <desc>This is still executed</desc>
-                <node>localhost</node>
-                <command>true</command>
-        </testCase>
+  <testCase>
+    <class>Custom_Command</class>
+    <desc>This should fail</desc>
+    <node>localhost</node>
+    <command>false</command>
+  </testCase>
 
-        <testCase id="000002">
-                <class>Custom_Command</class>
-                <desc>This should fail</desc>
-                <node>localhost</node>
-                <command>false</command>
-        </testCase>
+  <testCase>
+    <class>Custom_Command</class>
+    <desc>This should be skipped</desc>
+    <node>localhost</node>
+    <command>true</command>
+  </testCase>
 
-        <testCase id="000003">
-                <class>Custom_Command</class>
-                <desc>This should be skipped</desc>
-                <node>localhost</node>
-                <command>true</command>
-        </testCase>
+  <testCase>
+    <class>Custom_Command</class>
+    <desc>This should be executed because marked so</desc>
+    <always_exec>true</always_exec>
+    <node>localhost</node>
+    <command>true</command>
+  </testCase>
 
-        <testCase id="000004">
-                <class>Custom_Command</class>
-                <desc>This should be executed because marked so</desc>
-                <always_exec>true</always_exec>
-                <node>localhost</node>
-                <command>true</command>
-        </testCase>
 </testCaseList>

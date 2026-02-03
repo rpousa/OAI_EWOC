@@ -195,10 +195,7 @@ void nr_ue_decode_mib(NR_UE_MAC_INST_t *mac, int cc_id)
 
   frame = frame << 4;
   mac->mib_frame = frame | frame_number_4lsb;
-  if (mac->frequency_range == FR2) {
-    for (int i = 0; i < 3; i++)
-      mac->mib_ssb += (((extra_bits >> (7 - i)) & 0x01) << (3 + i));
-  } else{
+  if (mac->frequency_range == FR1) {
     if(ssb_subcarrier_offset_msb)
       ssb_subcarrier_offset = ssb_subcarrier_offset | 0x10;
   }

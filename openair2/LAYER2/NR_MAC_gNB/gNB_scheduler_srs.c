@@ -428,7 +428,7 @@ static void nr_configure_srs(gNB_MAC_INST *nrmac,
   srs_pdu->num_ant_ports = srs_resource->nrofSRS_Ports;
   srs_pdu->num_symbols = srs_resource->resourceMapping.nrofSymbols;
   srs_pdu->num_repetitions = srs_resource->resourceMapping.repetitionFactor;
-  srs_pdu->time_start_position = NR_NUMBER_OF_SYMBOLS_PER_SLOT - 1 - srs_resource->resourceMapping.startPosition;
+  srs_pdu->time_start_position = srs_resource->resourceMapping.startPosition;
   srs_pdu->config_index = srs_resource->freqHopping.c_SRS;
   srs_pdu->sequence_id = srs_resource->sequenceId;
   srs_pdu->bandwidth_index = srs_resource->freqHopping.b_SRS;
@@ -479,7 +479,8 @@ static void nr_configure_srs(gNB_MAC_INST *nrmac,
   AssertFatal(beam.idx >= 0, "Cannot allocate SRS in any available beam\n");
   uint16_t *vrb_map_UL = &nrmac->common_channels[CC_id].vrb_map_UL[beam.idx][buffer_index * MAX_BWP_SIZE];
   uint16_t num = 1 << srs_pdu->num_symbols; // 0,1,2 means 1,2,4 symbols, see 222.10.04 table 3-105
-  uint16_t mask = SL_to_bitmap(srs_pdu->time_start_position, num);
+  const uint8_t l0 = NR_NUMBER_OF_SYMBOLS_PER_SLOT - 1 - srs_pdu->time_start_position;
+  uint16_t mask = SL_to_bitmap(l0, num);
   DevAssert(mask != 0);
   for (int i = 0; i < srs_pdu->bwp_size; ++i) {
     int rb = i + srs_pdu->bwp_start;

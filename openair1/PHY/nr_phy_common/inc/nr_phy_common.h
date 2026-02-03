@@ -372,7 +372,8 @@ bool generate_srs_nr(const NR_DL_FRAME_PARMS *frame_parms,
                      nr_srs_info_t *nr_srs_info,
                      int16_t amp,
                      frame_t frame_number,
-                     slot_t slot_number);
+                     slot_t slot_number,
+                     uint8_t nb_antennas);
 void nr_generate_csi_rs(const NR_DL_FRAME_PARMS *frame_parms,
                         const csi_mapping_parms_t *phy_csi_parms,
                         const int16_t amp,

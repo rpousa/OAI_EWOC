@@ -22,6 +22,9 @@ target_link_libraries(extract PRIVATE tracer_utils)
 add_executable(macpdu2wireshark macpdu2wireshark.c)
 target_link_libraries(macpdu2wireshark PRIVATE tracer_utils)
 
+add_executable(csv csv.c)
+target_link_libraries(csv PRIVATE tracer_utils)
+
 add_executable(multi multi.c)
 target_link_libraries(multi PRIVATE tracer_utils T)
 target_include_directories(multi PRIVATE ..)
@@ -38,7 +41,7 @@ add_custom_target(T_tools)
 add_dependencies(T_tools
                  record replay extract_config extract_input_subframe
                  extract_output_subframe extract macpdu2wireshark multi
-                 textlog)
+                 textlog csv)
 add_dependencies(nr-softmodem T_tools)
 add_dependencies(nr-uesoftmodem T_tools)
 add_dependencies(lte-softmodem T_tools)

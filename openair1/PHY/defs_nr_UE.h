@@ -125,6 +125,17 @@ typedef enum {
 
 #define debug_msg if (((mac_xface->frame%100) == 0) || (mac_xface->frame < 50)) msg
 
+#define NEIGHBOR_CELL_MAX_CONSECUTIVE_FAILURES 10
+
+typedef struct {
+  int pss_search_start;
+  int pss_search_length;
+  uint32_t ssb_rsrp;
+  int ssb_rsrp_dBm;
+  int consec_fail; // Counter for consecutive detection failures
+  bool valid_meas;
+} neighboring_cell_info_t;
+
 typedef struct {
   uint8_t decoded_output[3]; // PBCH paylod not larger than 3B
   uint8_t xtra_byte;
@@ -214,7 +225,9 @@ typedef struct {
   unsigned char  nb_antennas_rx;
   /// DLSCH error counter
   // short          dlsch_errors;
-
+  /// Info about neighboring cells to perform the measurements
+  neighboring_cell_info_t neighboring_cell_info[NUMBER_OF_NEIGHBORING_CELLS_MAX];
+  bool meas_request_pending;
 } PHY_NR_MEASUREMENTS;
 
 typedef struct {
@@ -572,6 +585,30 @@ typedef struct {
   int adjust_rxgain;
   task_ans_t *ans;
 } nr_ue_ssb_scan_t;
+
+// Common SSB search parameters - used by both initial sync and neighbor cell search
+typedef struct {
+  const NR_DL_FRAME_PARMS *frame_parms;
+  c16_t **rxdata;
+  uint32_t rxdata_size;
+  int ssb_start_subcarrier;
+  int target_nid_cell; // -1 for blind search, specific PCI for targeted search
+  int exclude_nid_cell; // -1 for no exclusion, or serving cell PCI to exclude
+  bool apply_freq_offset; // whether to compensate frequency offset
+  int search_frame_id; // Frame index to search (0, 1, 2...) within rxdata buffer
+  bool fo_flag; // frequency offset estimation flag for pss_synchro_nr()
+  void *rxdataF; // Pre-allocated rxdataF buffer
+  void *pssTime; // Pre-generated PSS time sequences
+  // Output parameters
+  int *detected_nid_cell; // detected PCI
+  int *ssb_offset; // SSB offset in samples
+  int32_t *sss_metric; // SSS detection metric
+  int *freq_offset_pss; // PSS frequency offset estimate
+  int *freq_offset_sss; // SSS frequency offset estimate
+  uint8_t *sss_phase; // SSS phase
+  int *pss_peak; // PSS correlation peak power
+  int *pss_avg; // PSS correlation average power
+} nr_ssb_search_params_t;
 
 typedef struct nr_phy_data_tx_s {
   NR_UE_ULSCH_t ulsch;

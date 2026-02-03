@@ -1,16 +1,4 @@
-<table style="border-collapse: collapse; border: none;">
-  <tr style="border-collapse: collapse; border: none;">
-    <td style="border-collapse: collapse; border: none;">
-      <a href="http://www.openairinterface.org/">
-         <img src="./images/oai_final_logo.png" alt="" border=3 height=50 width=150>
-         </img>
-      </a>
-    </td>
-    <td style="border-collapse: collapse; border: none; vertical-align: center;">
-      <b><font size = "5">OAI LDPC offload (O-RAN AAL/DPDK BBDEV)</font></b>
-    </td>
-  </tr>
-</table>
+# OAI LDPC offload (O-RAN AAL/DPDK BBDEV)
 
 **Table of Contents**
 
@@ -19,40 +7,40 @@
 This documentation describes the integration of LDPC coding for lookaside acceleration using O-RAN AAL/DPDK BBDEV in OAI, along with its usage.
 For details on the implementation, please consult the [developer notes](../openair1/PHY/CODING/nrLDPC_coding/nrLDPC_coding_aal/README.md).
 
-# Requirements
+## Requirements
 
 In principle, any lookaside LDPC accelerator supporting the O-RAN AAL/DPDK BBDEV should work.
 However, the current implementation has only been validated for the Xilinx T2, Intel ACC100, and Intel ACC200 (VRB1).
 Therefore, your mileage may vary when using other BBDEV devices as there may be some hardware-specific changes required -- contributions are welcome!
 
-## DPDK Version Requirements
+### DPDK Version Requirements
 
 The following DPDK versions are supported:
 - For the Xilinx T2 card, DPDK20.11+ is supported.
 - As for the Intel ACC100/ACC200, only DPDK22.11+ is supported.
 
-## Tested Devices/ DPDK versions
+### Tested Devices/ DPDK versions
 
-### Xilinx T2
+#### Xilinx T2
 
 - DPDK20.11.9*.
 - DPDK22.11.7*.
 > Note: FPGA bitstream image and the corresponding patch file (e.g., `ACCL_BBDEV_DPDK20.11.3_ldpc_3.1.918.patch` for DPDK20.11) from Accelercomm required.
 
-### Intel ACC100
+#### Intel ACC100
 
 - DPDK22.11.7*.
 - DPDK23.11.3*.
 - DPDK24.11.2.
 > Note: [Patch]((https://github.com/DPDK/dpdk/commit/fdde63a1dfc129d0a510a831aa98253b36a2a1cd)) required for pre-DPDK24.11 versions when using the Intel ACC100.
 
-### Intel ACC200 (also known as VRB1)
+#### Intel ACC200 (also known as VRB1)
 - DPDK22.11.7.
 - DPDK23.11.3.
 - DPDK24.11.2.
 
-# System Setup
-## DPDK installation
+## System Setup
+### DPDK installation
 
 > Important: 
 > - If you are using the Xilinx T2 card, you will need to apply the vendor-supplied patches before compiling DPDK. 
@@ -89,9 +77,9 @@ sudo ldconfig
 ```
 </details>
 
-## System configuration
+### System configuration
 
-### Setting up Hugepages
+#### Setting up Hugepages
 
 First, we must setup hugepages on the system.
 In our setup, we setup 16 of the 1G hugepages.
@@ -101,7 +89,7 @@ Apart from 1G, 2MB hugepages works too, but make sure to allocate a sufficient n
 # sudo dpdk-hugepages.py -p 1G --setup 16G
 ```
 
-### Locating the Accelerator
+#### Locating the Accelerator
 
 Next, we check whether our system can detect our accelerator using `dpdk-devbind.py`.
 You should see Baseband devices detected by DPDK, as follows:
@@ -117,14 +105,14 @@ Baseband devices using DPDK-compatible driver
 As you can see here, our Intel ACC200 has the address of `0000:f7:00.0`.
 Depending on the accelerator you are using, the address may vary.
 
-### Loading VFIO-PCI and enabling SR-IOV
+#### Loading VFIO-PCI and enabling SR-IOV
 Following, make sure to load the `vfio-pci` kernel modules and ensure that SR-IOV is enabled.
 
 ```
 # sudo modprobe vfio-pci enable_sriov=1 disable_idle_d3=1
 ```
 
-### Binding the Accelerator with `vfio-pci`
+#### Binding the Accelerator with `vfio-pci`
 
 Lastly, we bind our accelerator with the `vfio-pci` driver.
 ```
@@ -134,7 +122,7 @@ Lastly, we bind our accelerator with the `vfio-pci` driver.
 > Note: For the Xilinx T2, we can use this device directly.
 If you use an Intel vRAN accelerator, read on.
 
-### Additional Steps for Intel vRAN Accelerators
+#### Additional Steps for Intel vRAN Accelerators
 
 > IMPORTANT NOTE: 
 > - Currently, we only support using the Virtual Functions (VFs) of the Intel vRAN accelerators, but not the Physical Function (PF). 
@@ -142,7 +130,7 @@ If you use an Intel vRAN accelerator, read on.
 
 If you are using an Intel vRAN accelerator, you will need to use the [pf_bb_config](https://github.com/intel/pf-bb-config) tool to configure the accelerator beforehand. 
 
-#### pf_bb_config
+##### pf_bb_config
 For more details, please consult the `pf_bb_config` README.
 
 ```
@@ -164,7 +152,7 @@ VRB1 PF [0000:f7:00.0] configuration complete!
 Log file = /var/log/pf_bb_cfg_0000:f7:00.0.log
 ```
 
-#### Creating VFs
+##### Creating VFs
 
 Finally, we create the VF(s) for our accelerator. 
 In this example, we only create one SR-IOV VF.
@@ -190,7 +178,7 @@ Baseband devices using DPDK-compatible driver
 ...
 ```
 
-# Building OAI with ORAN-AAL
+## Building OAI with ORAN-AAL
 OTA deployment is precisely described in the following tutorial:
 - [NR_SA_Tutorial_COTS_UE](https://gitlab.eurecom.fr/oai/openairinterface5g/-/blob/develop/doc/NR_SA_Tutorial_COTS_UE.md)
 Instead of section *3.2 Build OAI gNB* from the tutorial, run the following commands:
@@ -218,7 +206,7 @@ The selection of the library to compile is done using `--build-lib ldpc_aal`.
 
 > Note: The required DPDK poll mode driver has to be present on the host machine and required DPDK version has to be installed on the host, prior to building OAI.
 
-# O-RAN AAL DPDK EAL parameters
+## O-RAN AAL DPDK EAL parameters
 To configure O-RAN AAL/DPDK BBDEV, you can set the following parameters via the command line of PHY simulators or nr-softmodem:
 
 > Note: the group parameter name has been renamed from `nrLDPC_coding_t2` to
@@ -254,14 +242,14 @@ loader : {
 };
 ```
 
-# Running OAI with O-RAN AAL
+## Running OAI with O-RAN AAL
 
 In general, to offload of the channel coding to the LDPC accelerator, we use use the `--loader.ldpc.shlibversion _aal` option.
 Reminder, if you are using the Xilinx T2 card, make sure to set `--nrLDPC_coding_aal.is_t2 1`.
 
-## 5G PHY simulators
+### 5G PHY simulators
 
-### nr_ulsim
+#### nr_ulsim
 
 Example command:
 ```bash
@@ -270,7 +258,7 @@ source oaienv
 cd cmake_targets/ran_build/build
 sudo ./nr_ulsim -n100 -s20 -m20 -r273 -R273 --loader.ldpc.shlibversion _aal --nrLDPC_coding_aal.dpdk_dev 0000:f7:00.1 --nrLDPC_coding_aal.dpdk_core_list 0-1 --nrLDPC_coding_aal.vfio_vf_token 00112233-4455-6677-8899-aabbccddeeff
 ```
-### nr_dlsim
+#### nr_dlsim
 
 Example command:
 ```bash
@@ -280,9 +268,9 @@ cd cmake_targets/ran_build/build
 sudo ./nr_dlsim -n300 -s30 -R 106 -e 27 --loader.ldpc.shlibversion _aal --nrLDPC_coding_aal.dpdk_dev 0000:f7:00.1 --nrLDPC_coding_aal.dpdk_core_list 0-1 --nrLDPC_coding_aal.vfio_vf_token 00112233-4455-6677-8899-aabbccddeeff
 ```
 
-## OTA test
+### OTA test
 
-### Running OAI gNB with USRP B210/FHI72
+#### Running OAI gNB with USRP B210/FHI72
 
 When running the gNB **with FHI 7.2**, it is not necessary to provide the `--nrLDPC_coding_aal.dpdk_core_list` argument
 since the core list specified for FHI 7.2 will be used for DPDK.
@@ -296,9 +284,9 @@ cd cmake_targets/ran_build/build
 sudo ./nr-softmodem -O ~/gnb.conf --loader.ldpc.shlibversion _aal --nrLDPC_coding_aal.dpdk_dev 0000:f7:00.1 --nrLDPC_coding_aal.dpdk_core_list 14-15 --nrLDPC_coding_aal.vfio_vf_token 00112233-4455-6677-8899-aabbccddeeff
 ```
 
-# Known Issue(s)
+## Known Issue(s)
 
-## Potential Low Throughput
+### Potential Low Throughput
 
 The current implementation has been tested to work in an end-to-end setup and is functional. 
 However, depending on the accelerator in use,

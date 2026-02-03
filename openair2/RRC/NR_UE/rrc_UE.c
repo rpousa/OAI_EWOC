@@ -921,6 +921,14 @@ static void nr_rrc_manage_rlc_bearers(NR_UE_RRC_INST_t *rrc, const NR_CellGroupC
   }
 }
 
+static void nr_ue_meas_reset(meas_t *meas_cell, bool csi_meas)
+{
+  if (csi_meas)
+    meas_cell->csi_rsrp_dBm.init = false;
+  else
+    meas_cell->ss_rsrp_dBm.init = false;
+}
+
 static void nr_rrc_process_reconfigurationWithSync(NR_UE_RRC_INST_t *rrc,
                                                    NR_ReconfigurationWithSync_t *reconfigurationWithSync,
                                                    int gNB_index)
@@ -934,12 +942,32 @@ static void nr_rrc_process_reconfigurationWithSync(NR_UE_RRC_INST_t *rrc,
     return;
   }
 
+  // Clear neighbor cell lists from measurement objects during handover
+  rrcPerNB_t *rrcNB = &rrc->perNB[gNB_index];
+  for (int i = 0; i < MAX_MEAS_OBJ; i++) {
+    if (rrcNB->MeasObj[i] && rrcNB->MeasObj[i]->measObject.present == NR_MeasObjectToAddMod__measObject_PR_measObjectNR) {
+      NR_MeasObjectNR_t *measObjNR = rrcNB->MeasObj[i]->measObject.choice.measObjectNR;
+      if (measObjNR->cellsToAddModList) {
+        ASN_STRUCT_FREE(asn_DEF_NR_CellsToAddModList, measObjNR->cellsToAddModList);
+        measObjNR->cellsToAddModList = NULL;
+      }
+    }
+  }
+
+  l3_measurements_t *l3m = &rrcNB->l3_measurements;
+  for (int i = 0; i < NUMBER_OF_NEIGHBORING_CELLS_MAX; i++) {
+    nr_ue_meas_reset(&l3m->neighboring_cell[i], false);
+    nr_ue_meas_reset(&l3m->neighboring_cell[i], true);
+  }
+
   if (reconfigurationWithSync->spCellConfigCommon) {
     /* if the frequencyInfoDL is included, consider the target SpCell
        to be one on the SSB frequency indicated by the frequencyInfoDL */
     const NR_DownlinkConfigCommon_t *dcc = reconfigurationWithSync->spCellConfigCommon->downlinkConfigCommon;
-    if (dcc && dcc->frequencyInfoDL && dcc->frequencyInfoDL->absoluteFrequencySSB)
+    if (dcc && dcc->frequencyInfoDL && dcc->frequencyInfoDL->absoluteFrequencySSB) {
       rrc->arfcn_ssb = *dcc->frequencyInfoDL->absoluteFrequencySSB;
+      LOG_I(NR_RRC, "UE %ld: updated ARFCN_SSB=%ld\n", rrc->ue_id, rrc->arfcn_ssb);
+    }
 
     // consider the target SpCell to be one with a physical cell identity indicated by the physCellId
     if (!reconfigurationWithSync->spCellConfigCommon->physCellId)
@@ -1353,7 +1381,11 @@ static void handle_measid_remove(rrcPerNB_t *rrc, struct NR_MeasIdToRemoveList *
   }
 }
 
-static void handle_measid_addmod(rrcPerNB_t *rrc, struct NR_MeasIdToAddModList *addmod_list, NR_UE_Timers_Constants_t *timers)
+static void handle_measid_addmod(rrcPerNB_t *rrc,
+                                 struct NR_MeasIdToAddModList *addmod_list,
+                                 NR_UE_Timers_Constants_t *timers,
+                                 nr_neighbor_cell_info_t *neighbor_cells,
+                                 int *num_neighbors)
 {
   for (int i = 0; i < addmod_list->list.count; i++) {
     NR_MeasId_t id = addmod_list->list.array[i]->measId;
@@ -1387,11 +1419,56 @@ static void handle_measid_addmod(rrcPerNB_t *rrc, struct NR_MeasIdToAddModList *
           nr_timer_start(&timers->T321);
         }
       }
+      // Check for A3 event and extract neighbor cell info for MAC/PHY
+      else if (reportNR->reportType.present == NR_ReportConfigNR__reportType_PR_eventTriggered) {
+        NR_EventTriggerConfig_t *eventTriggerConfig = reportNR->reportType.choice.eventTriggered;
+        if (eventTriggerConfig->eventId.present == NR_EventTriggerConfig__eventId_PR_eventA3) {
+          if (rrc->MeasObj[measObjectId]
+              && rrc->MeasObj[measObjectId]->measObject.present == NR_MeasObjectToAddMod__measObject_PR_measObjectNR) {
+            NR_MeasObjectNR_t *obj_nr = rrc->MeasObj[measObjectId]->measObject.choice.measObjectNR;
+
+            uint32_t ssb_freq = 0;
+            if (obj_nr->ssbFrequency) {
+              ssb_freq = *obj_nr->ssbFrequency;
+            }
+
+            if (obj_nr->cellsToAddModList) {
+              NR_CellsToAddModList_t *cellsToAddModList = obj_nr->cellsToAddModList;
+              for (int j = 0; j < cellsToAddModList->list.count; j++) {
+                if (*num_neighbors < NUMBER_OF_NEIGHBORING_CELLS_MAX) {
+                  NR_CellsToAddMod_t *cell = cellsToAddModList->list.array[j];
+                  neighbor_cells[*num_neighbors].Nid_cell = cell->physCellId;
+                  neighbor_cells[*num_neighbors].ssb_freq = ssb_freq;
+                  neighbor_cells[*num_neighbors].active = 1;
+                  (*num_neighbors)++;
+                } else {
+                  LOG_W(NR_RRC,
+                        "More than %d neighboring cells configured, ignoring excess cells!\n",
+                        NUMBER_OF_NEIGHBORING_CELLS_MAX);
+                  break;
+                }
+              }
+            } else {
+              // We do not know PCI of neighboring cells, so we do blind search
+              if (*num_neighbors < NUMBER_OF_NEIGHBORING_CELLS_MAX) {
+                neighbor_cells[*num_neighbors].Nid_cell = -1;
+                neighbor_cells[*num_neighbors].ssb_freq = ssb_freq;
+                neighbor_cells[*num_neighbors].active = 1;
+                (*num_neighbors)++;
+              }
+            }
+          }
+        }
+      }
     }
   }
 }
 
-static void nr_rrc_ue_process_measConfig(rrcPerNB_t *rrc, NR_MeasConfig_t *const measConfig, NR_UE_Timers_Constants_t *timers)
+static void nr_rrc_ue_process_measConfig(rrcPerNB_t *rrc,
+                                         NR_MeasConfig_t *const measConfig,
+                                         NR_UE_Timers_Constants_t *timers,
+                                         nr_neighbor_cell_info_t *neighbor_cells,
+                                         int *num_neighbors)
 {
   if (measConfig->measObjectToRemoveList)
     handle_measobj_remove(rrc, measConfig->measObjectToRemoveList, timers);
@@ -1412,7 +1489,7 @@ static void nr_rrc_ue_process_measConfig(rrcPerNB_t *rrc, NR_MeasConfig_t *const
     handle_measid_remove(rrc, measConfig->measIdToRemoveList, timers);
 
   if (measConfig->measIdToAddModList)
-    handle_measid_addmod(rrc, measConfig->measIdToAddModList, timers);
+    handle_measid_addmod(rrc, measConfig->measIdToAddModList, timers, neighbor_cells, num_neighbors);
 
   LOG_W(NR_RRC, "Measurement gaps not yet supported!\n");
 
@@ -1485,7 +1562,12 @@ static void nr_rrc_ue_process_rrcReconfiguration(NR_UE_RRC_INST_t *rrc, int gNB_
       }
       if (ie->measConfig) {
         LOG_I(NR_RRC, "RRCReconfiguration includes Measurement Configuration\n");
-        nr_rrc_ue_process_measConfig(rrcNB, ie->measConfig, &rrc->timers_and_constants);
+        nr_neighbor_cell_info_t neighbor_cells[NUMBER_OF_NEIGHBORING_CELLS_MAX];
+        int num_neighbors = 0;
+        nr_rrc_ue_process_measConfig(rrcNB, ie->measConfig, &rrc->timers_and_constants, neighbor_cells, &num_neighbors);
+        if (num_neighbors > 0) {
+          nr_rrc_mac_config_req_meas(rrc->ue_id, neighbor_cells, num_neighbors);
+        }
       }
       if (ie->lateNonCriticalExtension) {
         LOG_E(NR_RRC, "RRCReconfiguration includes lateNonCriticalExtension. Not handled.\n");
@@ -1767,6 +1849,15 @@ static void nr_rrc_ue_decode_NR_BCCH_BCH_Message(NR_UE_RRC_INST_t *rrc,
   }
 
   NR_BCCH_BCH_Message_t *bcch_message = NULL;
+  if (rrc->phyCellID != phycellid || rrc->arfcn_ssb != ssb_arfcn) {
+    LOG_I(NR_RRC,
+          "[UE %ld] BCCH update: phyCellID %d->%u, arfcn_ssb %ld->%ld\n",
+          rrc->ue_id,
+          rrc->phyCellID,
+          phycellid,
+          rrc->arfcn_ssb,
+          ssb_arfcn);
+  }
   rrc->phyCellID = phycellid;
   rrc->arfcn_ssb = ssb_arfcn;
 
@@ -2396,6 +2487,7 @@ static void nr_rrc_ue_process_rrcReestablishment(NR_UE_RRC_INST_t *rrc,
   // perform the actions upon going to RRC_IDLE as specified in 5.3.11
   // with release cause 'RRC connection failure', upon which the procedure ends
   if (!integrity_pass) {
+    LOG_W(NR_RRC, "Integrity of RRCReestablishment failed, going to IDLE\n");
     NR_Release_Cause_t release_cause = RRC_CONNECTION_FAILURE;
     nr_rrc_going_to_IDLE(rrc, release_cause, NULL);
     return;
@@ -2613,13 +2705,10 @@ static void apply_ema(val_init_t *vi_rsrp_dBm, float filter_coeff_rsrp, int rsrp
   *meas_init = true;
 }
 
-void nr_ue_meas_filtering(rrcPerNB_t *rrc, bool is_neighboring_cell, uint16_t Nid_cell, bool csi_meas, int rsrp_dBm)
+void nr_ue_meas_filtering(rrcPerNB_t *rrc, meas_t *meas_cell, uint16_t Nid_cell, bool csi_meas, int rsrp_dBm)
 {
-  if (is_neighboring_cell)
-    return;
-
   l3_measurements_t *l3_measurements = &rrc->l3_measurements;
-  meas_t *meas_cell = &l3_measurements->serving_cell;
+
   if (meas_cell->Nid_cell != Nid_cell) {
     meas_cell->ss_rsrp_dBm.init = false;
     meas_cell->csi_rsrp_dBm.init = false;
@@ -2664,6 +2753,179 @@ static long get_measurement_report_interval_ms(NR_ReportInterval_t interval)
   }
 }
 
+static int get_rsrp_value(const meas_t *cell)
+{
+  if (cell->ss_rsrp_dBm.init)
+    return cell->ss_rsrp_dBm.val;
+  if (cell->csi_rsrp_dBm.init)
+    return cell->csi_rsrp_dBm.val;
+  return INT_MAX;
+}
+
+static int get_meas_id(rrcPerNB_t *rrcNB, int report_config_id)
+{
+  for (int j = 0; j < MAX_MEAS_ID; j++) {
+    NR_MeasIdToAddMod_t *meas_id_toAddMod = rrcNB->MeasId[j];
+    if (meas_id_toAddMod && meas_id_toAddMod->reportConfigId == report_config_id)
+      return meas_id_toAddMod->measId;
+  }
+  return -1;
+}
+
+static void setup_meas_trigger(l3_measurements_t *l3_measurements,
+                               NR_EventTriggerConfig_t *event_config,
+                               int meas_id,
+                               long trigger_quantity,
+                               bool neighbor_cell_valid)
+{
+  l3_measurements->trigger_to_measid = meas_id;
+  l3_measurements->trigger_quantity = trigger_quantity;
+  l3_measurements->rs_type = event_config->rsType;
+  l3_measurements->reports_sent = 0;
+  l3_measurements->max_reports =
+      (event_config->reportAmount == NR_EventTriggerConfig__reportAmount_infinity) ? INT_MAX : (1 << event_config->reportAmount);
+  l3_measurements->report_interval_ms = get_measurement_report_interval_ms(event_config->reportInterval);
+  l3_measurements->neighbor_cell_valid = neighbor_cell_valid;
+}
+
+static void start_meas_event(l3_measurements_t *l3_measurements,
+                             rrcPerNB_t *rrcNB,
+                             NR_timer_t *event_timer,
+                             NR_EventTriggerConfig_t *event_config,
+                             int report_config_id,
+                             long trigger_quantity,
+                             bool neighbor_cell_valid,
+                             long time_to_trigger)
+{
+  nr_timer_setup(event_timer, get_event_time_to_trigger(time_to_trigger), 10);
+  nr_timer_start(event_timer);
+
+  int meas_id = get_meas_id(rrcNB, report_config_id);
+  AssertFatal(meas_id > 0, "meas_id did not found for report_config_id %i\n", report_config_id);
+
+  setup_meas_trigger(l3_measurements, event_config, meas_id, trigger_quantity, neighbor_cell_valid);
+}
+
+static void stop_meas_event(l3_measurements_t *l3_measurements, NR_timer_t *event_timer)
+{
+  nr_timer_stop(event_timer);
+  nr_timer_stop(&l3_measurements->periodic_report_timer);
+  l3_measurements->reports_sent = 0;
+}
+
+// TS 38.331 - 5.5.4.3 Event A2 (Serving becomes worse than threshold)
+static void handle_event_a2(l3_measurements_t *l3_measurements,
+                            rrcPerNB_t *rrcNB,
+                            struct NR_EventTriggerConfig__eventId__eventA2 *event_A2,
+                            NR_EventTriggerConfig_t *event_trigger_config,
+                            long report_config_id)
+{
+  if (event_A2->a2_Threshold.present != NR_MeasTriggerQuantity_PR_rsrp)
+    return;
+
+  meas_t *serving_cell = &l3_measurements->serving_cell;
+  int serving_cell_rsrp = get_rsrp_value(serving_cell);
+  if (serving_cell_rsrp == INT_MAX) {
+    LOG_E(NR_RRC, "There are no RSRP measurements taken for the active cell\n");
+  }
+
+  // TS 38.133 - Table 10.1.6.1-1: SS-RSRP and CSI-RSRP measurement report mapping
+  int rsrp_threshold = event_A2->a2_Threshold.choice.rsrp - 157;
+  int rsrp_hysteresis = event_A2->hysteresis >> 1;
+
+  if (serving_cell_rsrp + rsrp_hysteresis < rsrp_threshold) {
+    if (!nr_timer_is_active(&l3_measurements->TA2) && (l3_measurements->reports_sent == 0)) {
+      start_meas_event(l3_measurements,
+                       rrcNB,
+                       &l3_measurements->TA2,
+                       event_trigger_config,
+                       report_config_id,
+                       event_A2->a2_Threshold.present,
+                       false,
+                       event_A2->timeToTrigger);
+
+      LOG_W(NR_RRC,
+            "(active_cell_rsrp) %i + (rsrp_hysteresis) %i < (rsrp_threshold) %i\n",
+            serving_cell_rsrp,
+            rsrp_hysteresis,
+            rsrp_threshold);
+    }
+  } else if (nr_timer_is_active(&l3_measurements->TA2) && (serving_cell_rsrp - rsrp_hysteresis > rsrp_threshold)) {
+    stop_meas_event(l3_measurements, &l3_measurements->TA2);
+  }
+}
+
+// TS 38.331 - 5.5.4.4 Event A3 (Neighbour becomes offset better than SpCell)
+static void handle_event_a3(l3_measurements_t *l3_measurements,
+                            rrcPerNB_t *rrcNB,
+                            struct NR_EventTriggerConfig__eventId__eventA3 *event_A3,
+                            NR_EventTriggerConfig_t *event_trigger_config,
+                            long report_config_id)
+{
+  if (event_A3->a3_Offset.present != NR_MeasTriggerQuantityOffset_PR_rsrp)
+    return;
+
+  meas_t *serving_cell = &l3_measurements->serving_cell;
+
+  int serving_cell_rsrp = get_rsrp_value(serving_cell);
+  if (serving_cell_rsrp == INT_MAX) {
+    LOG_D(NR_RRC, "There are no RSRP measurements taken for the serving cell\n");
+    return;
+  }
+
+  int rsrp_offset = event_A3->a3_Offset.choice.rsrp >> 1;
+  int rsrp_hysteresis = event_A3->hysteresis;
+
+  // Check all neighboring cells for Event A3 condition
+  bool entry_cond_met = false;
+  bool above_leaving_threshold = false;
+  int entry_neighbor_rsrp = INT_MIN;
+
+  for (int i = 0; i < NUMBER_OF_NEIGHBORING_CELLS_MAX; i++) {
+    meas_t *neighboring_cell = &l3_measurements->neighboring_cell[i];
+    int neighboring_cell_rsrp = get_rsrp_value(neighboring_cell);
+
+    if (neighboring_cell_rsrp == INT_MAX) {
+      LOG_D(NR_RRC, "There are no RSRP measurements taken for the neighboring cell %d\n", i);
+      neighboring_cell_rsrp = INT_MIN;
+    }
+
+    // Check entry condition
+    if (neighboring_cell_rsrp > serving_cell_rsrp + rsrp_offset + rsrp_hysteresis) {
+      entry_cond_met = true;
+      entry_neighbor_rsrp = neighboring_cell_rsrp;
+    }
+
+    // Check if any neighbor is still above leaving threshold
+    if (neighboring_cell_rsrp >= serving_cell_rsrp + rsrp_offset - rsrp_hysteresis) {
+      above_leaving_threshold = true;
+    }
+  }
+
+  // Trigger event if any neighbor meets entry condition
+  if (entry_cond_met && !nr_timer_is_active(&l3_measurements->TA3) && (l3_measurements->reports_sent == 0)) {
+    start_meas_event(l3_measurements,
+                     rrcNB,
+                     &l3_measurements->TA3,
+                     event_trigger_config,
+                     report_config_id,
+                     NR_MeasTriggerQuantityOffset_PR_rsrp,
+                     true,
+                     event_A3->timeToTrigger);
+
+    LOG_W(NR_RRC,
+          "(neighboring_cell_rsrp) %i > (serving_cell_rsrp %i) + (rsrp_offset) %i + (rsrp_hysteresis) %i\n",
+          entry_neighbor_rsrp,
+          serving_cell_rsrp,
+          rsrp_offset,
+          rsrp_hysteresis);
+  }
+  // Stop event if all neighbors are below leaving threshold
+  else if (nr_timer_is_active(&l3_measurements->TA3) && !above_leaving_threshold) {
+    stop_meas_event(l3_measurements, &l3_measurements->TA3);
+  }
+}
+
 static void nr_ue_check_meas_report(NR_UE_RRC_INST_t *rrc, const uint8_t gnb_index)
 {
   rrcPerNB_t *rrcNB = rrc->perNB + gnb_index;
@@ -2682,64 +2944,24 @@ static void nr_ue_check_meas_report(NR_UE_RRC_INST_t *rrc, const uint8_t gnb_ind
       continue;
 
     NR_EventTriggerConfig_t *event_trigger_config = report_config_nr->reportType.choice.eventTriggered;
-    if (event_trigger_config->eventId.present != NR_EventTriggerConfig__eventId_PR_eventA2)
-      continue;
 
-    struct NR_EventTriggerConfig__eventId__eventA2 *event_A2 = event_trigger_config->eventId.choice.eventA2;
-    if (event_A2->a2_Threshold.present != NR_MeasTriggerQuantity_PR_rsrp)
-      continue;
-
-    meas_t *serving_cell = &l3_measurements->serving_cell;
-    int serving_cell_rsrp = INT_MAX;
-    if (serving_cell->ss_rsrp_dBm.init == true) {
-      serving_cell_rsrp = serving_cell->ss_rsrp_dBm.val;
-    } else if (serving_cell->csi_rsrp_dBm.init == true) {
-      serving_cell_rsrp = serving_cell->csi_rsrp_dBm.val;
-    } else {
-      LOG_E(NR_RRC, "There are no RSRP measurements taken for the active cell\n");
-    }
-
-    // TS 38.133 - Table 10.1.6.1-1: SS-RSRP and CSI-RSRP measurement report mapping
-    int rsrp_threshold = event_A2->a2_Threshold.choice.rsrp - 157;
-    int rsrp_hysteresis = event_A2->hysteresis >> 1;
-
-    // TS 38.331 - 5.5.4.3 Event A2 (Serving becomes worse than threshold)
-    if (serving_cell_rsrp + rsrp_hysteresis < rsrp_threshold) {
-      if (!nr_timer_is_active(&l3_measurements->TA2) && (l3_measurements->reports_sent == 0)) {
-        nr_timer_setup(&l3_measurements->TA2, get_A2_event_time_to_trigger(event_A2->timeToTrigger), 10);
-        nr_timer_start(&l3_measurements->TA2);
-        int report_config_id = report_config->reportConfigId;
-        int meas_id = -1;
-        for (int j = 0; j < MAX_MEAS_ID; j++) {
-          NR_MeasIdToAddMod_t *meas_id_toAddMod = rrcNB->MeasId[j];
-          if (meas_id_toAddMod == NULL) {
-            continue;
-          }
-          if (meas_id_toAddMod->reportConfigId == report_config_id) {
-            meas_id = meas_id_toAddMod->measId;
-          }
-        }
-        AssertFatal(meas_id > 0, "meas_id did not found for report_config_id %i\n", report_config_id);
-
-        l3_measurements->trigger_to_measid = meas_id;
-        l3_measurements->trigger_quantity = event_A2->a2_Threshold.present;
-        l3_measurements->rs_type = event_trigger_config->rsType;
-        l3_measurements->reports_sent = 0;
-        l3_measurements->max_reports = (event_trigger_config->reportAmount == NR_EventTriggerConfig__reportAmount_infinity)
-                                           ? INT_MAX
-                                           : (1 << event_trigger_config->reportAmount);
-        l3_measurements->report_interval_ms = get_measurement_report_interval_ms(event_trigger_config->reportInterval);
-
-        LOG_W(NR_RRC,
-              "(active_cell_rsrp) %i + (rsrp_hysteresis) %i < (rsrp_threshold) %i\n",
-              serving_cell_rsrp,
-              rsrp_hysteresis,
-              rsrp_threshold);
-      }
-    } else if (nr_timer_is_active(&l3_measurements->TA2) && (serving_cell_rsrp - rsrp_hysteresis > rsrp_threshold)) {
-      nr_timer_stop(&l3_measurements->TA2);
-      nr_timer_stop(&l3_measurements->periodic_report_timer);
-      l3_measurements->reports_sent = 0;
+    switch (event_trigger_config->eventId.present) {
+      case NR_EventTriggerConfig__eventId_PR_eventA2:
+        handle_event_a2(l3_measurements,
+                        rrcNB,
+                        event_trigger_config->eventId.choice.eventA2,
+                        event_trigger_config,
+                        report_config->reportConfigId);
+        break;
+      case NR_EventTriggerConfig__eventId_PR_eventA3:
+        handle_event_a3(l3_measurements,
+                        rrcNB,
+                        event_trigger_config->eventId.choice.eventA3,
+                        event_trigger_config,
+                        report_config->reportConfigId);
+        break;
+      default:
+        break;
     }
   }
 }
@@ -2785,6 +3007,54 @@ static void nr_rrc_handle_ra_indication(NR_UE_RRC_INST_t *rrc, bool ra_succeeded
         && !nr_timer_is_active(&timers->T311)
         && !nr_timer_is_active(&timers->T319))
       handle_rlf_detection(rrc);
+  }
+}
+
+static void nr_rrc_handle_meas_indication(NR_UE_RRC_INST_t *rrc, NRRrcMacMeasDataInd *meas_ind)
+{
+  rrcPerNB_t *rrcNB = rrc->perNB + meas_ind->gnb_index;
+  l3_measurements_t *l3_measurements = &rrcNB->l3_measurements;
+  meas_t *meas_cell = NULL;
+
+  if (meas_ind->is_neighboring_cell) {
+    uint16_t target_nid_cell = meas_ind->Nid_cell;
+    for (int i = 0; i < NUMBER_OF_NEIGHBORING_CELLS_MAX; i++) {
+      if (l3_measurements->neighboring_cell[i].Nid_cell == target_nid_cell) {
+        meas_cell = &l3_measurements->neighboring_cell[i];
+        break;
+      }
+    }
+    if (!meas_cell) {
+      for (int i = 0; i < NUMBER_OF_NEIGHBORING_CELLS_MAX; i++) {
+        if (!l3_measurements->neighboring_cell[i].ss_rsrp_dBm.init && !l3_measurements->neighboring_cell[i].csi_rsrp_dBm.init) {
+          meas_cell = &l3_measurements->neighboring_cell[i];
+          break;
+        }
+      }
+    }
+  } else {
+    meas_cell = &l3_measurements->serving_cell;
+  }
+
+  if (!meas_cell) {
+    LOG_E(NR_RRC, "meas_cell not found!\n");
+    return;
+  }
+
+  if (meas_ind->is_neighboring_cell && meas_ind->rsrp_dBm == INT_MAX) {
+    LOG_W(NR_RRC, "[Nid_cell %i] Neighboring cell not detected. L3 measurements will be reset.\n", meas_ind->Nid_cell);
+    meas_cell->Nid_cell = meas_ind->Nid_cell;
+    nr_ue_meas_reset(meas_cell, meas_ind->is_csi_meas);
+  } else {
+    LOG_D(NR_RRC,
+          "[%s][Nid_cell %i] Received %s measurements: RSRP = %i (dBm)\n",
+          meas_ind->is_neighboring_cell ? "Neighboring cell" : "Active cell",
+          meas_ind->Nid_cell,
+          meas_ind->is_csi_meas ? "CSI meas" : "SSB meas",
+          meas_ind->rsrp_dBm);
+
+    nr_ue_meas_filtering(rrcNB, meas_cell, meas_ind->Nid_cell, meas_ind->is_csi_meas, meas_ind->rsrp_dBm);
+    nr_ue_check_meas_report(rrc, meas_ind->gnb_index);
   }
 }
 
@@ -2892,21 +3162,9 @@ void *rrc_nrue(void *notUsed)
 
     nr_rrc_ue_decode_NR_SBCCH_SL_BCH_Message(rrc, sbcch->gnb_index,sbcch->frame, sbcch->slot, sbcch->sdu,
                                              sbcch->sdu_size, sbcch->rx_slss_id);
+    break;
   case NR_RRC_MAC_MEAS_DATA_IND:
-
-    LOG_D(NR_RRC, "[%s][Nid_cell %i] Received %s measurements: RSRP = %i (dBm)\n",
-          NR_RRC_MAC_MEAS_DATA_IND(msg_p).is_neighboring_cell? "Neighboring cell" : "Active cell",
-          NR_RRC_MAC_MEAS_DATA_IND(msg_p).Nid_cell,
-          NR_RRC_MAC_MEAS_DATA_IND(msg_p).is_csi_meas ? "CSI meas" : "SSB meas",
-          NR_RRC_MAC_MEAS_DATA_IND(msg_p).rsrp_dBm);
-
-    rrcPerNB_t *rrcNB = rrc->perNB + NR_RRC_MAC_MEAS_DATA_IND(msg_p).gnb_index;
-    nr_ue_meas_filtering(rrcNB,
-                         NR_RRC_MAC_MEAS_DATA_IND(msg_p).is_neighboring_cell,
-                         NR_RRC_MAC_MEAS_DATA_IND(msg_p).Nid_cell,
-                         NR_RRC_MAC_MEAS_DATA_IND(msg_p).is_csi_meas,
-                         NR_RRC_MAC_MEAS_DATA_IND(msg_p).rsrp_dBm);
-    nr_ue_check_meas_report(rrc, NR_RRC_MAC_MEAS_DATA_IND(msg_p).gnb_index);
+    nr_rrc_handle_meas_indication(rrc, &NR_RRC_MAC_MEAS_DATA_IND(msg_p));
     break;
 
   case NR_RRC_MAC_CCCH_DATA_IND: {
@@ -3308,11 +3566,17 @@ void rrc_ue_generate_measurementReport(rrcPerNB_t *rrc, instance_t ue_id)
   l3_measurements_t *l3m = &rrc->l3_measurements;
   int rsrp_dBm = l3m->rs_type == NR_NR_RS_Type_ssb ? l3m->serving_cell.ss_rsrp_dBm.val : l3m->serving_cell.csi_rsrp_dBm.val;
   int rsrp_index = get_rsrp_index(rsrp_dBm);
+  int neighbor_rsrp_dBm =
+      l3m->rs_type == NR_NR_RS_Type_ssb ? l3m->neighboring_cell[0].ss_rsrp_dBm.val : l3m->neighboring_cell[0].csi_rsrp_dBm.val;
+  int neighbor_rsrp_index = get_rsrp_index(neighbor_rsrp_dBm);
   uint8_t size = do_nrMeasurementReport_SA(l3m->trigger_to_measid,
                                            l3m->trigger_quantity,
                                            l3m->rs_type,
                                            l3m->serving_cell.Nid_cell,
                                            rsrp_index,
+                                           l3m->neighbor_cell_valid,
+                                           l3m->neighboring_cell[0].Nid_cell,
+                                           neighbor_rsrp_index,
                                            buffer,
                                            sizeof(buffer));
 

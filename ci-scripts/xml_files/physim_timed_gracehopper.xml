@@ -21,26 +21,21 @@
 
 -->
 <testCaseList>
-        <htmlTabRef>physim-timed-tab</htmlTabRef>
-        <htmlTabName>PhySim with timing check</htmlTabName>
-        <htmlTabIcon>wrench</htmlTabIcon>
-        <TestCaseRequestedList>
-          800813
-	  010202
-        </TestCaseRequestedList>
-        <TestCaseExclusionList></TestCaseExclusionList>
+  <htmlTabRef>physim-timed-tab</htmlTabRef>
+  <htmlTabName>PhySim with timing check</htmlTabName>
+  <htmlTabIcon>wrench</htmlTabIcon>
 
-        <testCase id="800813">
-                <class>Create_Workspace</class>
-                <desc>Create new Workspace</desc>
-                <node>localhost</node>
-        </testCase>
+  <testCase>
+    <class>Create_Workspace</class>
+    <desc>Create new Workspace</desc>
+    <node>localhost</node>
+  </testCase>
 
-	<testCase id="010202">
-		<class>Build_Deploy_Docker_PhySim</class>
-		<desc>Build and Deploy PhySim with timing check</desc>
-		<node>localhost</node>
-		<ctest-opt>-R 5g -R "nr_dlsim|nr_ulsim|ldpctest" -E physim.5g.nr_dlsim.mcs.mimo.test9 -j1</ctest-opt> <!-- one nr_dlsim test fails on ARM -->
-	</testCase>
+  <testCase>
+    <class>Build_Deploy_Docker_PhySim</class>
+    <desc>Build and Deploy PhySim with timing check</desc>
+    <node>localhost</node>
+    <ctest-opt>-R 5g -R "nr_dlsim|nr_ulsim|ldpctest" -E physim.5g.nr_dlsim.mcs.mimo.test9 -j1</ctest-opt>
+  </testCase>
 
 </testCaseList>

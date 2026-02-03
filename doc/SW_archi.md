@@ -1,21 +1,3 @@
-<style type="text/css" rel="stylesheet">
-
-body {
-   font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
-   font-size: 13px;
-   line-height: 18px;
-   color: #fff;
-   background-color: #110F14;
-}
-  h2 { margin-left: 20px; }
-  h3 { margin-left: 40px; }
-  h4 { margin-left: 60px; }
-
-.func2 { margin-left: 20px; }
-.func3 { margin-left: 40px; }
-.func4 { margin-left: 60px; }
-
-</style>
 
 ```mermaid
 flowchart TB
@@ -83,11 +65,10 @@ end
 ```
 
 This tuto for 5G gNB design, with Open Cells main
-{: .text-center}
 
-# The main thread is in ru_thread()
+## The main thread is in ru_thread()
 The infinite loop:
-## rx_rf()
+### rx_rf()
   Collect radio signal samples from RF board  
     all SDR processing is triggered by I/Q sample reception and it's date (timestamp)  
     TX I/Q samples will have a date in the future, compared to RX timestamp  
@@ -97,11 +78,11 @@ The infinite loop:
     (each sample has a incremental number representing a very accurate timing)  
 raw incoming data is in buffer called "rxdata"  
     We derivate frame number, slot number, ... from the RX timestamp
-{: .func2}
-## gNB_top()
-only compute frame numbre, slot number, ...
-{: .func3}
-## ocp_rxtx()
+
+### gNB_top()
+only compute frame number, slot number, ...
+
+### ocp_rxtx()
 main processing for both UL and DL  
 start by calling oai_subframe_ind() that trigger processing in pnf_p7_subframe_ind() purpose ???  
 all the context is in the passed structure UL_INFO  
@@ -110,92 +91,96 @@ but not actual coherency (see below handle_nr_rach() assumes data is up-to-date)
 The first part (in NR_UL_indication, uses the data computed by the lower part (phy_procedures_gNB_uespec_RX), but for the **previous** slot  
 Then, phy_procedures_gNB_uespec_RX will hereafter replace the data for the next run  
 This is very tricky and not thread safe at all.
-{: .func3}
 
-### NR_UL_indication()  
+
+#### NR_UL_indication()
 This block processes data already decoded and stored in structures behind UL_INFO
-{: .func4}
+
 
 * handle_nr_rach()  
 process data from RACH primary detection  
 if the input is a UE RACH detection
-{: .func4}
+
     * nr_schedule_msg2()
-{: .func4}
+
 * handle_nr_uci()  
 handles uplink control information, i.e., for the moment HARQ feedback.
-{: .func4}
+
 * handle_nr_ulsch()  
 handles ulsch data prepared by nr_fill_indication()
-{: .func4}
+
 * gNB_dlsch_ulsch_scheduler ()  
 the **scheduler** is called here, see dedicated chapter
-{: .func4}
+
 * NR_Schedule_response()  
 process as per the scheduler decided
-{: .func4}
 
-### L1_nr_prach_procedures()  
+
+#### L1_nr_prach_procedures()  
 ????
-{: .func4}
-### phy_procedures_gNB_uespec_RX()
+
+#### phy_procedures_gNB_uespec_RX()
 * nr_decode_pucch0()  
 actual CCH channel decoding form rxdataF (rx data in frequency domain)  
 populates UL_INFO.uci_ind, actual uci data is in gNB->pucch  
-{: .func4}
+
 * nr_rx_pusch()  
-{: .func4}
+
     * extracts data from rxdataF (frequency transformed received data)
-{: .func4}
+
     * nr_pusch_channel_estimation()
-{: .func4}
+
     * nr_ulsch_extract_rbs_single()
-{: .func4}
+
     * nr_scale_channel()
-{: .func4}
+
     * nr_ulsch_channel_level()
-{: .func4}
+
     * nr_ulsch_channel_compensation()
-{: .func4}
+
     * nr_ulsch_compute_llr()  
 this function creates the "likelyhood ratios"  
-{: .func4}
+
 * nr_ulsch_procedures()
-{: .func4}
+
     * actual ULsch decoding
-{: .func4}
+
     * nr_ulsch_unscrambling()
- {: .func4}
+
    * nr_ulsch_decoding()
- {: .func4}
+
    * nr_fill_indication()   
 populate the data for the next call to "NR_UL_indication()"  
 it would be better to call **NR_UL_indication()** now instead of before (on previous slot)
-{: .func4}
 
-### phy_procedures_gNB_TX()
+
+#### phy_procedures_gNB_TX()
 * nr_common_signal_procedures()  
 generate common signals
-{: .func4}
+
 * nr_generate_dci()
 generate DCI: the scheduling informtion for each UE in both DL and UL
-{: .func4}
+
 * nr_generate_pdsch()  
 generate DL shared channel (user data)
-{: .func4}
 
-### nr_feptx_prec()
+
+#### nr_feptx_prec()
 tx precoding
-{: .func3}
-### nr_feptx0
+<<<<<<< HEAD:doc/SW_archi.md
+
+#### nr_feptx0
 do the inverse DFT
-{: .func3}
-### tx_rf()
+
+#### nr_feptx0
+do the inverse DFT
+
+#### tx_rf()
 send radio signal samples to the RF board  
 the samples numbers are the future time for these samples emission on-air
-{: .func3}
 
-# Scheduler
+
+## Scheduler
 
 The main scheduler function  is called by the chain: nr_ul_indication()=>gNB_dlsch_ulsch_scheduler()
 It calls sub functions to process each physical channel (rach, ...)  
@@ -274,7 +259,7 @@ nr_preprocessor_phytest()], multiple users [nr_dlsch_preprocessor()].
   process information, and fill nFAPI structures (allocate a DCI and PDCCH
   messages, TX_req, ...)
 
-# RRC
+## RRC
 RRC is a regular thread with itti loop on queue: TASK_RRC_GNB
 it receives it's configuration in message NRRRC_CONFIGURATION_REQ, then real time mesages for all events: S1/NGAP events, X2AP messages and RRC_SUBFRAME_PROCESS  
   
@@ -283,7 +268,7 @@ RRC_SUBFRAME_PROCESS message is send each subframe
 how does it communicate to  scheduler ?  
 
 
-# RLC
+## RLC
 RLC code is new implementation, not using OAI mechanisms: it is implemented directly on pthreads, ignoring OAI common functions.  
 It is a library, running in thread RRC but also in PHY layer threads and some bits in pdcp running thread or F1 interface threads.
 
@@ -302,9 +287,9 @@ nr_rlc_ms_tick() must be called periodically to manage the internal timers
 
 successful_delivery() and max_retx_reached(): in ??? trigger, the RLC sends a itti message to RRC: RLC_SDU_INDICATION (neutralized by #if 0 right now)
 
-## RLC data flow
+### RLC data flow
 
-### TX Flow
+#### TX Flow
 
 Incoming data to be transmitted is forwarded to RLC by PDCP via `rlc_data_req()`.
 
@@ -315,11 +300,11 @@ At the transport layer, in downlink (DL) at the gNB and uplink (UL) at UE, the s
 
 Subsequently, the scheduler issues commands to lower layers.
 
-### RX Flow
+#### RX Flow
 
 In the RX chain, in downlink (DL) at the UE and uplink (UL) at gNB, the transport layer pushes data into RLC through `mac_rlc_data_ind()`. Following this, RLC forwards the data to PDCP by invoking `pdcp_data_ind()` via a complex internal callback mechanism (`deliver_sdu()`).
 
-# PDCP
+## PDCP
 
 The PDCP implementation is secured by a general mutex, akin to the design of the RLC layer. This setup ensures that PDCP data remains isolated and encapsulated.
 
@@ -327,19 +312,19 @@ Initialization of the PDCP layer follows a structure similar to that of the RLC 
 
 To manage UE connections, `nr_pdcp_add_srbs()` is employed for adding UE SRBs in PDCP, while `nr_pdcp_remove_UE()` is used for their removal. Similarly, `nr_pdcp_add_drb()` adds UE DRB in PDCP, with `nr_pdcp_remove_UE()` handling their removal.
 
-## PDCP Tx flow
+### PDCP Tx flow
 
 On the Tx side (downlink in gNB), the entry functions `nr_pdcp_data_req_drb()` and `nr_pdcp_data_req_srb()` are called by the upper layer. The upper layer could be GTP or a PDCP internal thread like `gnb_tun_read_thread()`, which reads directly from the Linux socket if the 3GPP core implementation is skipped. The PDCP internals for `nr_pdcp_data_req_srb()` and `nr_pdcp_data_req_drb()` are thread-safe. Within these functions, the PDCP manager protects access to the SDU receiving function of PDCP (`recv_sdu()` callback, corresponding to `nr_pdcp_entity_recv_pdu()` for DRBs) using mutex. When necessary, the PDCP layer pushes this data to RLC by calling `rlc_data_req()`.
 
-## PDCP Rx flow
+### PDCP Rx flow
 
 At the Rx side, `pdcp_data_ind()` serves as the entry point for receiving data from RLC. Within `pdcp_data_ind()`, the PDCP manager mutex protects access to the PDU receiving function of PDCP (`recv_pdu()` callback corresponding to `nr_pdcp_entity_recv_pdu()` for DRBs). Following this, the `deliver_sdu_drb()` function dispatches the received data to the SDAP sublayer.
 
-## PDCP security
+### PDCP security
 
 nr_pdcp_config_set_security(): sets the keys for AS security of a UE
 
-# AM DRB traffic flow in OAI
+## AM DRB traffic flow in OAI
 
 A sequence diagram of the traffic flow across PDCP and RLC layers. By default, data traffic is directed towards AM DRBs.
 
@@ -430,46 +415,46 @@ and for uplink:
     SG->>GG: send to GTP-U
 ```
 
-# GTP
+## GTP
 Gtp + UDP are two twin threads performing the data plane interface to the core network
 The design is hybrid: thread and inside other threads calls. It should at least be protected by a mutex.
-## GTP thread
+### GTP thread
 Gtp thread has a itti interface: queue TASK_GTPV1_U  
 The interface is about full definition: control messages (create/delet GTP tunnels) and data messages (user plane UL and DL).  
 PDCP layer push to the GTP queue (outside UDP thread that do almost nothing and work only with GTP thread) is to push a UL packet.
 
 
-## GTP thread running code from other layers
+### GTP thread running code from other layers
 gtp thread calls directly nr_pdcp_data_req_drb(), so it runs inside it's context internal pdcp structures updates
 
-## inside other threads
+### inside other threads
 gtpv1u_create_s1u_tunnel(), delete tunnel, ... functions are called inside the other threads, without mutex.
 
-# New GTP
-## initialization
+## New GTP
+### initialization
 
 gtpv1uTask(): this creates only the thread, doesn't configure anything
 gtpv1Init(): creates a listening socket to Linux for a given reception and select a local IP address
 
-## newGtpuCreateTunnel()   
+### newGtpuCreateTunnel()
 this function will replace the xxx_create_tunnel_xxx() for various cases  
 The parameters are: 
 1. outgoing TEid, associated with outpoing pair(rnti, id)
 2. incoming packets callback, incoming pair(rnti,id) and a callback function for incoming data 
 
-## outgoing packets 
+### outgoing packets
 
 Each call to newGtpuCreateTunnel() creates a outgoing context for a teid (given as function input), a pair(rnti,outgoing id).  
  Each outgoing packet received on GTP-U ITTI queue must match one pair(rnti,id), so the gtp-u thread can lookup the related TEid and use it to encode the outpoing GTP-U tunneled packet.  
 
-## incoming packets   
+### incoming packets
 
 newGtpuCreateTunnel() computes and return the incoming teid that will be used for incoming packets.
 When a incoming packet arrives on this incoming teid, the GTP-U thread calls the defined callback, with the associated pair(rnti, incoming id).  
 
 stuff like enb_flag, mui and more important data are not given explicitly by any legacy function (gtpv1u_create_s1u_tunnel), but the legacy and the new interface to lower layer (like pdcp) require this data. We hardcode it in first version.
 
-## remaining work 
+### remaining work
 These teids and "instance", so in a Linux socket: same teid can co-exist for different sockets
  Remain here a lack to fill: the information given in the legacy funtions is not enough to fullfil the data needed by the callback  
 
@@ -478,17 +463,10 @@ cmake new option: NEW_GTPU to use the new implementation (it changes for the ent
 It is possible to use both old and new GTP in same executable because the itti task and all functions names are different 
 Current status of new implementation: not tested, X2 not developped, 5G new GTP option not developped, remain issues on data coming from void: muid, enb_flag, ...
 
-# NGAP
+## NGAP
 NGAP would be a itti thread as is S1AP (+twin thread SCTP that is almost void processing)?  
 About all messages are exchanged with RRC thread  
 
 
-<div class="panel panel-info">
-**Note**
-{: .panel-heading}
-<div class="panel-body">
 
-
-</div>
-</div>
 

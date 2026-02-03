@@ -1,8 +1,10 @@
+# Feature Set
+
 **Table of Contents**
 
 [[_TOC_]]
 
-# Functional Split Architecture #
+## Functional Split Architecture
 
 -  RCC: Radio-Cloud Center
 -  RAU: Radio-Access Unit
@@ -14,13 +16,13 @@
 ![Functional Split Architecture](./images/oai_enb_func_split_arch.png)
 
 
-# OpenAirInterface Block Diagram #
+## OpenAirInterface Block Diagram
 
 ![Block Diagram](./images/oai_enb_block_diagram.png)
 
-# OpenAirInterface 5G-NR Feature Set #
+## OpenAirInterface 5G-NR Feature Set
 
-## General Parameters
+### General Parameters
 
 The following features are valid for the gNB and the 5G-NR UE.
 
@@ -58,7 +60,7 @@ These modes of operation are supported:
   - is unstable (only one UE connection)
 
 
-## gNB PHY
+### gNB PHY
 
 *  15kHz and 30kHz SCS for FR1 and 120kHz SCS for FR2
 *  Generation of NR-PSS/NR-SSS
@@ -101,7 +103,7 @@ These modes of operation are supported:
 *  Highly efficient 3GPP compliant polar encoder and decoder
 *  Encoder and decoder for short block
 
-## gNB MAC
+### gNB MAC
 
 - MAC -> PHY configuration using NR FAPI P5 interface
 - MAC <-> PHY data interface using FAPI P7 interface for DL_TTI.request,
@@ -157,7 +159,7 @@ These modes of operation are supported:
   - Consider ntn-Config-r17.cellSpecificKoffset-r17 in scheduling
   - Function-based interface for ntn-Config-r17 updates (used by NTN-LEO RFsimulator)
 
-## gNB RLC
+### gNB RLC
 
 - Send/Receive operations according to 38.322 Rel.16
   - Segmentation and reassembly procedures
@@ -168,7 +170,7 @@ These modes of operation are supported:
   - Interfaces with PDCP, MAC
   - Interfaces with gtp-u (data Tx/Rx over F1-U at the DU)
 
-## gNB PDCP
+### gNB PDCP
 
 - Send/Receive operations according to 38.323 Rel.16
   - Integrity protection and ciphering procedures
@@ -177,7 +179,7 @@ These modes of operation are supported:
   - Interfaces with RRC, RLC
   - Interfaces with gtp-u (data Tx/Rx over N3 and F1-U interfaces)
 
-## gNB SDAP
+### gNB SDAP
 
 - Send/Receive operations according to 37.324 Rel.15
   - Establishment/Handling of SDAP entities.
@@ -186,7 +188,7 @@ These modes of operation are supported:
   - Marking QoS flow ID in both DL and UL packets
   - Reflective QoS flow to DRB mapping for UL SDAP data PDUs
 
-## gNB RRC
+### gNB RRC
 
 - NR RRC (38.331) Rel 17 messages using new [asn1c](https://github.com/mouse07410/asn1c)
 - LTE RRC (36.331) also updated to Rel 15
@@ -213,13 +215,13 @@ These modes of operation are supported:
   - Support for handover decision triggers (A3 events, manual triggers)
 - Initial support for RedCap (see MAC)
 
-## gNB X2AP
+### gNB X2AP
 
 - Integration of X2AP messages and procedures for the exchanges with the eNB over X2 interface supporting the NSA setup according to 36.423 Rel. 15
   - X2 setup with eNB
   - Handling of SgNB Addition Request/Addition Request Acknowledge/Reconfiguration Complete
 
-## gNB NGAP
+### gNB NGAP
 
 - Integration of NGAP messages and procedures for the exchanges with the AMF over N2 interface according to 38.413 Rel. 15
   - NGAP Setup request/response
@@ -241,7 +243,7 @@ These modes of operation are supported:
     * NGAP Downlink RAN Status Transfer
 - Interface with RRC
 
-## gNB F1AP
+### gNB F1AP
 
 - Integration of F1AP messages and procedures for the control plane exchanges between the CU and DU entities according to 38.473 Rel. 16
   - F1 Interface Management:
@@ -265,7 +267,7 @@ These modes of operation are supported:
 - One CU(-CP) can handle multiple DUs
 - Support for intra-CU mobility (across DUs)
 
-## gNB E1AP
+### gNB E1AP
 
 - Integration of E1AP messages and procedures for exchange between CU-CP and CU-UP according to TS 38.463 Rel. 16
   - E1 Setup (gNB-CU-UP initiated)
@@ -282,21 +284,21 @@ These modes of operation are supported:
 - Interface with RRC and PDCP/SDAP
 - One CU-CP can handle multiple CU-UPs
 
-## gNB GTP-U
+### gNB GTP-U
 
 - New GTP-U implementation supporting both N3 and F1-U interfaces according to 29.281 Rel.15
   - Interfaces with RRC, F1AP for tunnel creation
   - Interfaces with PDCP and RLC for data send/receive at the CU and DU respectively (F1-U interface)
   - Interface with SDAP for data send/receive, capture of GTP-U Optional Header, GTP-U Extension Header and PDU Session Container.
 
-## Number of supported UEs
+### Number of supported UEs
 
 * 16 by default (as defined in `MAX_MOBILES_PER_GNB`)
 * up to 64 if the configured bandwidth is sufficient (at leat 40 MHz)
 
-# OpenAirInterface 5G-NR UE Feature Set #
+## OpenAirInterface 5G-NR UE Feature Set
 
-##  NR UE PHY Layer ##
+###  NR UE PHY Layer
 
 *  Initial synchronization
    - non-blind synchronization (information required: carrier frequency, bandwidth, numerology)
@@ -308,6 +310,7 @@ These modes of operation are supported:
 *  Reception of NR-PSS/NR-SSS
 *  NR-PBCH supports multiple SSBs and flexible periodicity
    - RSRP measurement for the strongest SSB
+   - RSRP measurement for neighboring cell at same SSB frequency with serving cell
 *  Reception of NR-PDCCH (including reception of DCI, polar decoding, de-scrambling, de-modulation, RB de-mapping, etc)
    - common search space configured by MIB
    - user-specific search space configured by RRC
@@ -361,15 +364,15 @@ These modes of operation are supported:
 *  Highly efficient 3GPP compliant polar encoder and decoder
 *  Encoder and decoder for short block
 
-## NR UE FAPI ##
+### NR UE FAPI
 
 *  MAC -> PHY configuration via UE FAPI P5 interface
 *  Basic MAC to control PHY via UE FAPI P7 interface
 *  PHY -> MAC indication
 
-## NR UE Higher Layers ##
+### NR UE Higher Layers
 
-## UE MAC
+### UE MAC
 
 * Minimum system information (MSI)
    - MIB processing
@@ -418,7 +421,7 @@ These modes of operation are supported:
    - Consider ntn-Config-r17.cellSpecificKoffset-r17 in scheduling
 
 
-## UE RLC
+### UE RLC
 
 * Tx/Rx operations according to 38.322 Rel.16
    - Segmentation and reassembly procedures
@@ -428,7 +431,7 @@ These modes of operation are supported:
    - Timers implementation
    - Interfaces with PDCP, MAC
 
-## UE PDCP
+### UE PDCP
 
 * Tx/Rx operations according to 38.323 Rel.16
    - Integrity protection and ciphering procedures
@@ -436,7 +439,7 @@ These modes of operation are supported:
    - Radio bearer establishment/handling and association with PDCP entities
    - Interfaces with RRC, RLC
 
-## UE SDAP
+### UE SDAP
 
 *  Tx/Rx operations operations according to 37.324 Rel.15
   - Establishment/Handling of SDAP entities.
@@ -444,7 +447,7 @@ These modes of operation are supported:
   - Reflective Mapping
   - RRC Signaling Mapping
 
-## UE RRC
+### UE RRC
 
 * Integration of RRC messages and procedures supporting UE 5G SA connection according to 38.331 Rel.16
    - RRCSetupRequest/RRCSetup/RRCSetupComplete
@@ -456,13 +459,14 @@ These modes of operation are supported:
    - RRCReestablishmentRequest/RRC Reestablishment/Reestablishment complete
    - Support for master cell group configuration
    - Reception of UECapabilityEnquiry, encoding and transmission of UECapability
+   - Support for measurement report of Event A2/A3
 * NTN according to 38.331 Rel.17
    - Reception of ntn-Config-r17 from SIB19 or reconfigurationWithSync
    - Handling of ntn-UlSyncValidityDuration-r17 in SIB19
 * Interface with PDCP: configuration, DCCH and CCCH message handling
 * Interface with RLC and MAC for configuration
 
-## UE 5G NAS
+### UE 5G NAS
 
 * Transfer of NAS messages between the AMF and the UE supporting the UE registration with the core network and the PDU session establishment according to 24.501 Rel.16
 * 5GMM (5G Mobility Management) messages:
@@ -484,9 +488,9 @@ These modes of operation are supported:
 
 For detailed implementation status, encoding/decoding support, and unit test coverage, see [5G NAS Implementation Documentation](5Gnas.md).
 
-# OpenAirInterface 4G LTE eNB Feature Set #
+## OpenAirInterface 4G LTE eNB Feature Set
 
-## eNB PHY Layer ##
+### eNB PHY Layer
 
 The Physical layer implements **3GPP 36.211**, **36.212**, **36.213** and provides the following features:
 
@@ -504,7 +508,7 @@ The Physical layer implements **3GPP 36.211**, **36.212**, **36.213** and provid
 - Multi-RRU support: over the air synchro b/ multi RRU in TDD mode
 - Support for CE-modeA for LTE-M. Limited support for repeatition, single-LTE-M connection, legacy-LTE UE attach is disabled.
 
-### Performances ###
+#### Performances
 
 **Transmission Mode, Bandwidth** | **Expected Throughput** | **Measured Throughput** | **Measurement Conditions**
 -------------------------------- | ----------------------- | ------------------------| ----------------:
@@ -524,13 +528,13 @@ TDD UL: 5 MHz, 25 PRBS/ MCS **XX**   | 2.0 Mbit/s          | TM1: 3.31 Mbits/s  
 TDD UL: 10 MHz, 50 PRBS/ MCS **XX**  | 2.0 Mbit/s          | TM1: 7.25 Mbits/s       | COTS-UE Cat 4 (150/50 Mbps)
 TDD UL: 20 MHz, 100 PRBS/ MCS **XX** | 3.0 Mbit/s          | TM1: 4.21 Mbits/s       | COTS-UE Cat 4 (150/50 Mbps)
 
-### Number of supported UEs ###
+#### Number of supported UEs
 
 * 16 by default
 * up to 256 when compiling with dedicated compile flag
 * was tested with 40 COTS-UE
 
-## eNB MAC Layer ##
+### eNB MAC Layer
 
 The MAC layer implements a subset of the **3GPP 36.321** release v8.6 in support of BCH, DLSCH, RACH, and ULSCH channels.
 
@@ -548,7 +552,7 @@ The MAC layer implements a subset of the **3GPP 36.321** release v8.6 in support
 - Link adaptation
 - Connected DRX (CDRX) support for FDD LTE UE. Compatible with R13 from 3GPP. Support for Cat-M1 UE comming soon.
 
-## eNB RLC Layer ##
+### eNB RLC Layer
 
 The RLC layer implements a full specification of the 3GPP 36.322 release v9.3.
 
@@ -568,7 +572,7 @@ The RLC layer implements a full specification of the 3GPP 36.322 release v9.3.
   * RLC PDU retransmission in support of error control and correction
   * Generation of data/control PDUs
 
-## eNB PDCP Layer ##
+### eNB PDCP Layer
 
 The current PDCP layer is header compliant with **3GPP 36.323** Rel 10.1.0 and implements the following functions:
 
@@ -578,7 +582,7 @@ The current PDCP layer is header compliant with **3GPP 36.323** Rel 10.1.0 and i
 - PDCP entity association with one or two RLC entities
 - Integrity check and encryption using the AES and Snow3G algorithms
 
-## eNB RRC Layer ##
+### eNB RRC Layer
 
 The RRC layer is based on **3GPP 36.331** v15.6 and implements the following functions:
 
@@ -594,7 +598,7 @@ The RRC layer is based on **3GPP 36.331** v15.6 and implements the following fun
 - Paging (soon)
 - RRC inactivity timer (release of UE after a period of data inactivity)
 
-## eNB X2AP ##
+### eNB X2AP
 
 The X2AP layer is based on **3GPP 36.423** v14.6.0 and implements the following functions:
 
@@ -612,7 +616,7 @@ The X2AP layer is based on **3GPP 36.423** v14.6.0 and implements the following 
  - RRC  : Handling of RRC Connection Reconfiguration with 5G cell info, configuration of 5G-NR measurements
  - S1AP : Handling of E-RAB Modification Indication / Confirmation
 
-## eNB/MCE M2AP ##
+### eNB/MCE M2AP
 
 The M2AP layer is based on **3GPP 36.443** v14.0.1:
  - M2 Setup Request
@@ -623,7 +627,7 @@ The M2AP layer is based on **3GPP 36.443** v14.0.1:
  - M2 Session Start Request
  - M2 Session Start Response
 
-## MCE/MME M3AP ##
+### MCE/MME M3AP
 
 The M3AP layer is based on **3GPP 36.444** v14.0.1:
  - M3 Setup Request
@@ -633,9 +637,9 @@ The M3AP layer is based on **3GPP 36.444** v14.0.1:
  - M3 Session Start Response
 
 
-# OpenAirInterface 4G LTE UE Feature Set #
+## OpenAirInterface 4G LTE UE Feature Set
 
-## LTE UE PHY Layer ##
+### LTE UE PHY Layer
 
 The Physical layer implements **3GPP 36.211**, **36.212**, **36.213** and provides the following features:
 
@@ -652,7 +656,7 @@ The Physical layer implements **3GPP 36.211**, **36.212**, **36.213** and provid
 - LTE non-MBSFN subframe (feMBMS) Carrier Adquistion Subframe-CAS procedures (PSS/SSS/PBCH/PDSH) (experimental)
 - LTE MBSFN MBSFN subframe channel (feMBMS): PMCH (CS@1.25KHz) (channel estimation for 25MHz bandwidth) (experimental)
 
-## LTE UE MAC Layer ##
+### LTE UE MAC Layer
 
 The MAC layer implements a subset of the **3GPP 36.321** release v8.6 in support of BCH, DLSCH, RACH, and ULSCH channels.
 
@@ -665,15 +669,15 @@ The MAC layer implements a subset of the **3GPP 36.321** release v8.6 in support
 - MBMS-dedicated cell (feMBMS) RRC interface for BCCH
 - eMBMS and MBMS-dedicated cell (feMBMS) RRC interface for MCCH, MTCH
 
-## LTE UE RLC Layer ##
+### LTE UE RLC Layer
 
 The RLC layer implements a full specification of the 3GPP 36.322 release v9.3.
 
-## LTE UE PDCP Layer ##
+### LTE UE PDCP Layer
 
 The current PDCP layer is header compliant with **3GPP 36.323** Rel 10.1.0.
 
-## LTE UE RRC Layer ##
+### LTE UE RRC Layer
 
 The RRC layer is based on **3GPP 36.331** v14.3.0 and implements the following functions:
 
@@ -681,7 +685,7 @@ The RRC layer is based on **3GPP 36.331** v14.3.0 and implements the following f
 - RRC connection establishment
 - MBMS-dedicated cell (feMBMS) SI-MBMS/SIB1-MBMS management
 
-## LTE UE NAS Layer ##
+### LTE UE NAS Layer
 
 The NAS layer is based on **3GPP 24.301** and implements the following functions:
 

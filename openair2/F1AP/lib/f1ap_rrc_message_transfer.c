@@ -114,7 +114,7 @@ bool decode_initial_ul_rrc_message_transfer(const F1AP_F1AP_PDU_t *pdu, f1ap_ini
   memset(out, 0, sizeof(*out));
 
   F1AP_InitialULRRCMessageTransfer_t *container = &pdu->choice.initiatingMessage->value.choice.InitialULRRCMessageTransfer;
-  F1AP_ProtocolIE_Container_10659P31_t *pIEs = &container->protocolIEs;
+  F1AP_ProtocolIE_Container_10986P31_t *pIEs = &container->protocolIEs;
   F1AP_InitialULRRCMessageTransferIEs_t *ie;
 
   F1AP_LIB_FIND_IE(F1AP_InitialULRRCMessageTransferIEs_t, ie, &pIEs->list, F1AP_ProtocolIE_ID_id_gNB_DU_UE_F1AP_ID, true);
@@ -259,7 +259,7 @@ bool decode_ul_rrc_message_transfer(const F1AP_F1AP_PDU_t *pdu, f1ap_ul_rrc_mess
   DevAssert(pdu != NULL);
 
   F1AP_ULRRCMessageTransfer_t *container = &pdu->choice.initiatingMessage->value.choice.ULRRCMessageTransfer;
-  F1AP_ProtocolIE_Container_10659P33_t *pIEs = &container->protocolIEs;
+  F1AP_ProtocolIE_Container_10986P33_t *pIEs = &container->protocolIEs;
   F1AP_ULRRCMessageTransferIEs_t *ie;
 
   // gNB-CU UE F1AP ID (M)
@@ -394,7 +394,7 @@ bool decode_dl_rrc_message_transfer(const F1AP_F1AP_PDU_t *pdu, f1ap_dl_rrc_mess
 
   DevAssert(pdu != NULL);
   F1AP_DLRRCMessageTransfer_t *container = &pdu->choice.initiatingMessage->value.choice.DLRRCMessageTransfer;
-  F1AP_ProtocolIE_Container_10659P32_t *pIEs = &container->protocolIEs;
+  F1AP_ProtocolIE_Container_10986P32_t *pIEs = &container->protocolIEs;
   F1AP_DLRRCMessageTransferIEs_t *ie;
   // gNB-CU UE F1AP ID (M)
   F1AP_LIB_FIND_IE(F1AP_DLRRCMessageTransferIEs_t, ie, &pIEs->list, F1AP_ProtocolIE_ID_id_gNB_CU_UE_F1AP_ID, true);

@@ -671,4 +671,937 @@ typedef struct f1ap_reset_ack_t {
   //uint16_t criticality_diagnostics; // not implemented as of now
 } f1ap_reset_ack_t;
 
+/* Structure of Position Information Transfer related NRPPA messages */
+/* IE structures for Positioning related messages as per TS 38.473 V16.3.1*/
+
+typedef enum f1ap_subcarrier_spacing_e {
+  F1AP_SUBCARRIER_SPACING_15KHZ,
+  F1AP_SUBCARRIER_SPACING_30KHZ,
+  F1AP_SUBCARRIER_SPACING_60KHZ,
+  F1AP_SUBCARRIER_SPACING_120KHZ
+} f1ap_subcarrier_spacing_pr;
+
+typedef struct f1ap_scs_specific_carrier_s {
+  uint32_t offset_to_carrier;
+  f1ap_subcarrier_spacing_pr subcarrier_spacing;
+  uint16_t carrier_bandwidth;
+} f1ap_scs_specific_carrier_t;
+
+typedef struct f1ap_uplink_channel_bw_per_scs_list_s {
+  f1ap_scs_specific_carrier_t *scs_specific_carrier;
+  uint32_t scs_specific_carrier_list_length;
+} f1ap_uplink_channel_bw_per_scs_list_t;
+
+typedef enum f1ap_transmission_comb_e {
+  F1AP_TRANSMISSION_COMB_PR_NOTHING,
+  F1AP_TRANSMISSION_COMB_PR_N2,
+  F1AP_TRANSMISSION_COMB_PR_N4
+} f1ap_transmission_comb_pr;
+
+typedef struct f1ap_transmission_comb_n2_s {
+  uint8_t comb_offset_n2;
+  uint8_t cyclic_shift_n2;
+} f1ap_transmission_comb_n2_t, f1ap_transmission_comb_pos_n2_t;
+
+typedef struct f1ap_transmission_comb_n4_s {
+  uint8_t comb_offset_n4;
+  uint8_t cyclic_shift_n4;
+} f1ap_transmission_comb_n4_t, f1ap_transmission_comb_pos_n4_t;
+
+typedef union f1ap_transmission_comb_c {
+  f1ap_transmission_comb_n2_t n2;
+  f1ap_transmission_comb_n4_t n4;
+} f1ap_transmission_comb_u;
+
+typedef struct f1ap_transmission_comb_s {
+  f1ap_transmission_comb_pr present;
+  f1ap_transmission_comb_u choice;
+} f1ap_transmission_comb_t;
+
+typedef enum f1ap_srs_resource_type_periodicity_e {
+  F1AP_SRS_RESOURCE_TYPE_PERIODICITY_SLOT1 = 0,
+  F1AP_SRS_RESOURCE_TYPE_PERIODICITY_SLOT2,
+  F1AP_SRS_RESOURCE_TYPE_PERIODICITY_SLOT4,
+  F1AP_SRS_RESOURCE_TYPE_PERIODICITY_SLOT5,
+  F1AP_SRS_RESOURCE_TYPE_PERIODICITY_SLOT8,
+  F1AP_SRS_RESOURCE_TYPE_PERIODICITY_SLOT10,
+  F1AP_SRS_RESOURCE_TYPE_PERIODICITY_SLOT16,
+  F1AP_SRS_RESOURCE_TYPE_PERIODICITY_SLOT20,
+  F1AP_SRS_RESOURCE_TYPE_PERIODICITY_SLOT32,
+  F1AP_SRS_RESOURCE_TYPE_PERIODICITY_SLOT40,
+  F1AP_SRS_RESOURCE_TYPE_PERIODICITY_SLOT64,
+  F1AP_SRS_RESOURCE_TYPE_PERIODICITY_SLOT80,
+  F1AP_SRS_RESOURCE_TYPE_PERIODICITY_SLOT160,
+  F1AP_SRS_RESOURCE_TYPE_PERIODICITY_SLOT320,
+  F1AP_SRS_RESOURCE_TYPE_PERIODICITY_SLOT640,
+  F1AP_SRS_RESOURCE_TYPE_PERIODICITY_SLOT1280,
+  F1AP_SRS_RESOURCE_TYPE_PERIODICITY_SLOT2560
+} f1ap_srs_resource_type_periodicity_pr;
+
+typedef struct f1ap_resource_type_periodic_s {
+  f1ap_srs_resource_type_periodicity_pr periodicity;
+  uint16_t offset;
+} f1ap_resource_type_periodic_t, f1ap_resource_type_semi_persistent_t;
+
+typedef union f1ap_resource_type_c {
+  f1ap_resource_type_periodic_t periodic;
+  f1ap_resource_type_semi_persistent_t semi_persistent;
+  bool aperiodic;
+} f1ap_resource_type_u;
+
+typedef enum f1ap_resource_type_e {
+  F1AP_RESOURCE_TYPE_PR_NOTHING,
+  F1AP_RESOURCE_TYPE_PR_PERIODIC,
+  F1AP_RESOURCE_TYPE_PR_SEMI_PERSISTENT,
+  F1AP_RESOURCE_TYPE_PR_APERIODIC
+} f1ap_resource_type_pr;
+
+typedef struct f1ap_resource_type_s {
+  f1ap_resource_type_pr present;
+  f1ap_resource_type_u choice;
+} f1ap_resource_type_t;
+
+typedef struct f1ap_transmission_comb_n8_s {
+  uint8_t comb_offset_n8;
+  uint8_t cyclic_shift_n8;
+} f1ap_transmission_comb_pos_n8_t;
+
+typedef union f1ap_transmission_comb_pos_c {
+  f1ap_transmission_comb_pos_n2_t n2;
+  f1ap_transmission_comb_pos_n4_t n4;
+  f1ap_transmission_comb_pos_n8_t n8;
+} f1ap_transmission_comb_pos_u;
+
+typedef enum f1ap_transmission_comb_pos_e {
+  F1AP_TRANSMISSION_COMB_POS_PR_NOTHING,
+  F1AP_TRANSMISSION_COMB_POS_PR_N2,
+  F1AP_TRANSMISSION_COMB_POS_PR_N4,
+  F1AP_TRANSMISSION_COMB_POS_PR_N8
+} f1ap_transmission_comb_pos_pr;
+
+typedef struct f1ap_transmission_comb_pos_s {
+  f1ap_transmission_comb_pos_pr present;
+  f1ap_transmission_comb_pos_u choice;
+} f1ap_transmission_comb_pos_t;
+
+typedef enum f1ap_srs_resource_type_pos_periodicity_e {
+  F1AP_SRS_RESOURCE_TYPE_POS_PERIODICITY_SLOT1 = 0,
+  F1AP_SRS_RESOURCE_TYPE_POS_PERIODICITY_SLOT2,
+  F1AP_SRS_RESOURCE_TYPE_POS_PERIODICITY_SLOT4,
+  F1AP_SRS_RESOURCE_TYPE_POS_PERIODICITY_SLOT5,
+  F1AP_SRS_RESOURCE_TYPE_POS_PERIODICITY_SLOT8,
+  F1AP_SRS_RESOURCE_TYPE_POS_PERIODICITY_SLOT10,
+  F1AP_SRS_RESOURCE_TYPE_POS_PERIODICITY_SLOT16,
+  F1AP_SRS_RESOURCE_TYPE_POS_PERIODICITY_SLOT20,
+  F1AP_SRS_RESOURCE_TYPE_POS_PERIODICITY_SLOT32,
+  F1AP_SRS_RESOURCE_TYPE_POS_PERIODICITY_SLOT40,
+  F1AP_SRS_RESOURCE_TYPE_POS_PERIODICITY_SLOT64,
+  F1AP_SRS_RESOURCE_TYPE_POS_PERIODICITY_SLOT80,
+  F1AP_SRS_RESOURCE_TYPE_POS_PERIODICITY_SLOT160,
+  F1AP_SRS_RESOURCE_TYPE_POS_PERIODICITY_SLOT320,
+  F1AP_SRS_RESOURCE_TYPE_POS_PERIODICITY_SLOT640,
+  F1AP_SRS_RESOURCE_TYPE_POS_PERIODICITY_SLOT1280,
+  F1AP_SRS_RESOURCE_TYPE_POS_PERIODICITY_SLOT2560,
+  F1AP_SRS_RESOURCE_TYPE_POS_PERIODICITY_SLOT5120,
+  F1AP_SRS_RESOURCE_TYPE_POS_PERIODICITY_SLOT10240,
+  F1AP_SRS_RESOURCE_TYPE_POS_PERIODICITY_SLOT20480,
+  F1AP_SRS_RESOURCE_TYPE_POS_PERIODICITY_SLOT40960,
+  F1AP_SRS_RESOURCE_TYPE_POS_PERIODICITY_SLOT81920
+} f1ap_srs_resource_type_pos_periodicity_pr;
+
+typedef struct f1ap_resource_type_periodic_pos_s {
+  f1ap_srs_resource_type_pos_periodicity_pr periodicity;
+  uint16_t offset;
+} f1ap_resource_type_periodic_pos_t, f1ap_resource_type_semi_persistent_pos_t;
+
+typedef struct f1ap_resource_type_aperiodic_pos_s {
+  uint8_t slot_offset;
+} f1ap_resource_type_aperiodic_pos_t;
+
+typedef union f1ap_resource_type_pos_c {
+  f1ap_resource_type_periodic_pos_t periodic;
+  f1ap_resource_type_semi_persistent_pos_t semi_persistent;
+  f1ap_resource_type_aperiodic_pos_t aperiodic;
+} f1ap_resource_type_pos_u;
+
+typedef enum f1ap_resource_type_pos_e {
+  F1AP_RESOURCE_TYPE_POS_PR_NOTHING,
+  F1AP_RESOURCE_TYPE_POS_PR_PERIODIC,
+  F1AP_RESOURCE_TYPE_POS_PR_SEMI_PERSISTENT,
+  F1AP_RESOURCE_TYPE_POS_PR_APERIODIC
+} f1ap_resource_type_pos_pr;
+
+typedef struct f1ap_resource_type_pos_s {
+  f1ap_resource_type_pos_pr present;
+  f1ap_resource_type_pos_u choice;
+} f1ap_resource_type_pos_t;
+
+typedef struct f1ap_srs_resource_id_list_s {
+  long *srs_resource_id;
+  uint8_t srs_resource_id_list_length;
+} f1ap_srs_resource_id_list_t;
+
+typedef struct f1ap_resource_set_type_aperiodic_s {
+  uint8_t srs_resource_trigger;
+  long slot_offset;
+} f1ap_resource_set_type_aperiodic_t;
+
+typedef union f1ap_resource_set_type_c {
+  bool periodic;
+  bool semi_persistent;
+  f1ap_resource_set_type_aperiodic_t aperiodic;
+} f1ap_resource_set_type_u;
+
+typedef enum f1ap_resource_set_type_e {
+  F1AP_RESOURCE_SET_TYPE_PR_NOTHING,
+  F1AP_RESOURCE_SET_TYPE_PR_PERIODIC,
+  F1AP_RESOURCE_SET_TYPE_PR_SEMI_PERSISTENT,
+  F1AP_RESOURCE_SET_TYPE_PR_APERIODIC
+} f1ap_resource_set_type_pr;
+
+typedef struct f1ap_resource_set_type_s {
+  f1ap_resource_set_type_pr present;
+  f1ap_resource_set_type_u choice;
+} f1ap_resource_set_type_t;
+
+typedef struct f1ap_pos_srs_resource_id_list_s {
+  long *srs_pos_resource_id;
+  uint32_t pos_srs_resource_id_list_length;
+} f1ap_pos_srs_resource_id_list_t;
+
+typedef union f1ap_pos_resource_set_type_c {
+  bool periodic;
+  bool semi_persistent;
+  uint8_t srs_resource;
+} f1ap_pos_resource_set_type_u;
+
+typedef enum f1ap_pos_resource_set_type_e {
+  F1AP_POS_RESOURCE_SET_TYPE_PR_NOTHING,
+  F1AP_POS_RESOURCE_SET_TYPE_PR_PERIODIC,
+  F1AP_POS_RESOURCE_SET_TYPE_PR_SEMI_PERSISTENT,
+  F1AP_POS_RESOURCE_SET_TYPE_PR_APERIODIC
+} f1ap_pos_resource_set_type_pr;
+
+typedef struct f1ap_pos_resource_set_type_s {
+  f1ap_pos_resource_set_type_pr present;
+  f1ap_pos_resource_set_type_u choice;
+} f1ap_pos_resource_set_type_t;
+
+typedef enum f1ap_srs_resource_number_of_ports_e {
+  F1AP_SRS_NUMBER_OF_PORTS_N1,
+  F1AP_SRS_NUMBER_OF_PORTS_N2,
+  F1AP_SRS_NUMBER_OF_PORTS_N4
+} f1ap_srs_resource_number_of_ports_pr;
+
+typedef enum f1ap_srs_resource_number_of_symbols_e {
+  F1AP_SRS_NUMBER_OF_SYMBOLS_N1,
+  F1AP_SRS_NUMBER_OF_SYMBOLS_N2,
+  F1AP_SRS_NUMBER_OF_SYMBOLS_N4
+} f1ap_srs_resource_number_of_symbols_pr;
+
+typedef enum f1ap_srs_repetition_factor_e {
+  F1AP_SRS_REPETITION_FACTOR_RF1,
+  F1AP_SRS_REPETITION_FACTOR_RF2,
+  F1AP_SRS_REPETITION_FACTOR_RF4
+} f1ap_srs_repetition_factor_pr;
+
+typedef enum f1ap_srs_group_or_sequencehopping_e {
+  F1AP_GROUPORSEQUENCEHOPPING_NOTHING,
+  F1AP_GROUPORSEQUENCEHOPPING_GROUPHOPPING,
+  F1AP_GROUPORSEQUENCEHOPPING_SEQUENCEHOPPING
+} f1ap_srs_group_or_sequencehopping_pr;
+
+typedef struct f1ap_srs_resource_s {
+  uint32_t srs_resource_id;
+  f1ap_srs_resource_number_of_ports_pr nr_of_srs_ports;
+  f1ap_transmission_comb_t transmission_comb;
+  uint8_t start_position;
+  f1ap_srs_resource_number_of_symbols_pr nr_of_symbols;
+  f1ap_srs_repetition_factor_pr repetition_factor;
+  uint8_t freq_domain_position;
+  uint16_t freq_domain_shift;
+  uint8_t c_srs;
+  uint8_t b_srs;
+  uint8_t b_hop;
+  f1ap_srs_group_or_sequencehopping_pr group_or_sequence_hopping;
+  f1ap_resource_type_t resource_type;
+  uint16_t sequence_id;
+} f1ap_srs_resource_t;
+
+typedef enum f1ap_srs_resource_item_number_of_symbols_e {
+  F1AP_SRS_RESOURCE_ITEM_NUMBER_OF_SYMBOLS_N1,
+  F1AP_SRS_RESOURCE_ITEM_NUMBER_OF_SYMBOLS_N2,
+  F1AP_SRS_RESOURCE_ITEM_NUMBER_OF_SYMBOLS_N4,
+  F1AP_SRS_RESOURCE_ITEM_NUMBER_OF_SYMBOLS_N8,
+  F1AP_SRS_RESOURCE_ITEM_NUMBER_OF_SYMBOLS_N12
+} f1ap_srs_resource_item_number_of_symbols_pr;
+
+typedef struct f1ap_pos_srs_resource_item_s {
+  uint32_t srs_pos_resource_id;
+  f1ap_transmission_comb_pos_t transmission_comb_pos;
+  uint8_t start_position;
+  f1ap_srs_resource_item_number_of_symbols_pr nr_of_symbols;
+  uint16_t freq_domain_shift;
+  uint8_t c_srs;
+  f1ap_srs_group_or_sequencehopping_pr group_or_sequence_hopping;
+  f1ap_resource_type_pos_t resource_type_pos;
+  uint32_t sequence_id;
+} f1ap_pos_srs_resource_item_t;
+
+typedef struct f1ap_srs_resource_set_s {
+  uint8_t srs_resource_set_id;
+  f1ap_srs_resource_id_list_t srs_resource_id_list;
+  f1ap_resource_set_type_t resource_set_type;
+} f1ap_srs_resource_set_t;
+
+typedef struct f1ap_pos_srs_resource_set_item_s {
+  uint8_t pos_srs_resource_set_id;
+  f1ap_pos_srs_resource_id_list_t pos_srs_resource_id_list;
+  f1ap_pos_resource_set_type_t pos_resource_set_type;
+} f1ap_pos_srs_resource_set_item_t;
+
+typedef struct f1ap_srs_resource_list_s {
+  f1ap_srs_resource_t *srs_resource;
+  uint32_t srs_resource_list_length;
+} f1ap_srs_resource_list_t;
+
+typedef struct f1ap_pos_srs_resource_list_s {
+  f1ap_pos_srs_resource_item_t *pos_srs_resource_item;
+  uint32_t pos_srs_resource_list_length;
+} f1ap_pos_srs_resource_list_t;
+
+typedef struct f1ap_srs_resource_set_list_s {
+  f1ap_srs_resource_set_t *srs_resource_set;
+  uint32_t srs_resource_set_list_length;
+} f1ap_srs_resource_set_list_t;
+
+typedef struct f1ap_pos_srs_resource_set_list_s {
+  f1ap_pos_srs_resource_set_item_t *pos_srs_resource_set_item;
+  uint32_t pos_srs_resource_set_list_length;
+} f1ap_pos_srs_resource_set_list_t;
+
+typedef struct f1ap_srs_config_s {
+  f1ap_srs_resource_list_t *srs_resource_list;
+  f1ap_pos_srs_resource_list_t *pos_srs_resource_list;
+  f1ap_srs_resource_set_list_t *srs_resource_set_list;
+  f1ap_pos_srs_resource_set_list_t *pos_srs_resource_set_list;
+} f1ap_srs_config_t;
+
+typedef enum f1ap_cp_type_e { F1AP_CP_TYPE_NORMAL, F1AP_CP_TYPE_EXTENDED } f1ap_cp_type_pr;
+
+typedef struct f1ap_active_ul_bwp_s {
+  uint32_t location_and_bandwidth;
+  f1ap_subcarrier_spacing_pr subcarrier_spacing;
+  f1ap_cp_type_pr cyclic_prefix;
+  uint32_t tx_direct_current_location;
+  uint8_t shift_7_dot_5kHz;
+  f1ap_srs_config_t srs_config;
+} f1ap_active_ul_bwp_t;
+
+typedef struct f1ap_srs_carrier_list_item_s {
+  uint32_t pointA;
+  f1ap_uplink_channel_bw_per_scs_list_t uplink_channel_bw_per_scs_list;
+  f1ap_active_ul_bwp_t active_ul_bwp;
+  uint16_t pci;
+} f1ap_srs_carrier_list_item_t;
+
+typedef struct f1ap_srs_carrier_list_s {
+  f1ap_srs_carrier_list_item_t *srs_carrier_list_item;
+  uint32_t srs_carrier_list_length;
+} f1ap_srs_carrier_list_t;
+
+// optional: IE 9.3.1.192 (TS 38.473 V16.21.0)
+typedef struct f1ap_srs_configuration_s {
+  f1ap_srs_carrier_list_t srs_carrier_list;
+} f1ap_srs_configuration_t;
+
+typedef union f1ap_srs_type_c {
+  uint8_t *srs_resource_set_id;
+  bool *aperiodic;
+} f1ap_srs_type_u;
+
+typedef enum f1ap_srs_type_e {
+  F1AP_SRS_TYPE_PR_NOTHING,
+  F1AP_SRS_TYPE_PR_SEMIPERSISTENTSRS,
+  F1AP_SRS_TYPE_PR_APERIODICSRS
+} f1ap_srs_type_pr;
+
+typedef struct f1ap_srs_type_s {
+  f1ap_srs_type_pr present;
+  f1ap_srs_type_u choice;
+} f1ap_srs_type_t;
+
+typedef union f1ap_abort_transmission_c {
+  uint8_t srs_resource_set_id;
+  bool release_all;
+} f1ap_abort_transmission_u;
+
+typedef enum f1ap_abort_transmission_e {
+  F1AP_ABORT_TRANSMISSION_PR_NOTHING,
+  F1AP_ABORT_TRANSMISSION_PR_SRSRESOURCESETID,
+  F1AP_ABORT_TRANSMISSION_PR_RELEASEALL
+} f1ap_abort_transmission_pr;
+
+typedef struct f1ap_abort_transmission_s {
+  f1ap_abort_transmission_pr present;
+  f1ap_abort_transmission_u choice;
+} f1ap_abort_transmission_t;
+
+typedef struct f1ap_trp_list_item_s {
+  uint32_t trp_id;
+} f1ap_trp_list_item_t;
+
+typedef struct f1ap_trp_list_s {
+  f1ap_trp_list_item_t *trp_list_item;
+  uint32_t trp_list_length;
+} f1ap_trp_list_t;
+
+typedef enum f1ap_trp_information_type_item_e {
+  F1AP_TRP_INFORMATION_TYPE_ITEM_NR_PCI,
+  F1AP_TRP_INFORMATION_TYPE_ITEM_NG_RAN_CGI,
+  F1AP_TRP_INFORMATION_TYPE_ITEM_NR_ARFCN,
+  F1AP_TRP_INFORMATION_TYPE_ITEM_PRS_CONFIG,
+  F1AP_TRP_INFORMATION_TYPE_ITEM_SSB_CONFIG,
+  F1AP_TRP_INFORMATION_TYPE_ITEM_SFN_INIT_TIME,
+  F1AP_TRP_INFORMATION_TYPE_ITEM_SPATIAL_DIRECTION_INFO,
+  F1AP_TRP_INFORMATION_TYPE_ITEM_GEO_COORDINATES
+} f1ap_trp_information_type_item_pr;
+
+typedef struct f1ap_trp_information_type_list_s {
+  f1ap_trp_information_type_item_pr *trp_information_type_item;
+  uint8_t trp_information_type_list_length;
+} f1ap_trp_information_type_list_t;
+
+typedef struct f1ap_access_point_position_s {
+  long latitude_sign;
+  long latitude;
+  long longitude;
+  long direction_of_altitude;
+  long altitude;
+  long uncertainty_semi_major;
+  long uncertainty_semi_minor;
+  long orientation_of_major_axis;
+  long uncertainty_altitude;
+  long confidence;
+} f1ap_access_point_position_t;
+
+typedef struct f1ap_ngran_high_accuracy_access_point_position_s {
+  long latitude;
+  long longitude;
+  long altitude;
+  long uncertainty_semi_major;
+  long uncertainty_semi_minor;
+  long orientation_of_major_axis;
+  long horizontal_confidence;
+  long uncertainty_altitude;
+  long vertical_confidence;
+} f1ap_ngran_high_accuracy_access_point_position_t;
+
+typedef union f1ap_trp_position_direct_accuracy_c {
+  f1ap_access_point_position_t trp_position;
+  f1ap_ngran_high_accuracy_access_point_position_t trp_HAposition;
+} f1ap_trp_position_direct_accuracy_u;
+
+typedef enum f1ap_trp_position_direct_accuracy_e {
+  F1AP_TRP_POSITION_DIRECT_ACCURACY_PR_NOTHING,
+  F1AP_TRP_POSITION_DIRECT_ACCURACY_PR_TRPPOSITION,
+  F1AP_TRP_POSITION_DIRECT_ACCURACY_PR_TRPHAPOSITION
+} f1ap_trp_position_direct_accuracy_pr;
+
+typedef struct f1ap_trp_position_direct_accuracy_s {
+  f1ap_trp_position_direct_accuracy_pr present;
+  f1ap_trp_position_direct_accuracy_u choice;
+} f1ap_trp_position_direct_accuracy_t;
+
+typedef struct f1ap_trp_position_direct_s {
+  f1ap_trp_position_direct_accuracy_t accuracy;
+} f1ap_trp_position_direct_t;
+
+typedef enum f1ap_reference_point_e {
+  F1AP_REFERENCE_POINT_PR_NOTHING,
+  F1AP_REFERENCE_POINT_PR_COORDINATEID,
+  F1AP_REFERENCE_POINT_PR_REFERENCEPOINTCOORDINATE,
+  F1AP_REFERENCE_POINT_PR_REFERENCEPOINTCOORDINATEHA
+} f1ap_reference_point_pr;
+
+typedef union f1ap_reference_point_c {
+  long coordinate_id;
+  f1ap_access_point_position_t reference_point_coordinate;
+  f1ap_ngran_high_accuracy_access_point_position_t reference_point_coordinateHA;
+} f1ap_reference_point_u;
+
+typedef struct f1ap_reference_point_s {
+  f1ap_reference_point_pr present;
+  f1ap_reference_point_u choice;
+} f1ap_reference_point_t;
+
+typedef struct f1ap_location_uncertainty_s {
+  long horizontal_uncertainty;
+  long horizontal_confidence;
+  long vertical_uncertainty;
+  long vertical_confidence;
+} f1ap_location_uncertainty_t;
+
+typedef struct f1ap_relative_geodetic_location_s {
+  long milli_arc_second_units;
+  long height_units;
+  long delta_latitude;
+  long delta_longitude;
+  long delta_height;
+  f1ap_location_uncertainty_t location_uncertainty;
+} f1ap_relative_geodetic_location_t;
+
+typedef struct f1ap_relative_cartesian_location_s {
+  long xyz_unit;
+  long xvalue;
+  long yvalue;
+  long zvalue;
+  f1ap_location_uncertainty_t location_uncertainty;
+} f1ap_relative_cartesian_location_t;
+
+typedef union f1ap_trp_reference_point_type_c {
+  f1ap_relative_geodetic_location_t trp_position_relative_geodetic;
+  f1ap_relative_cartesian_location_t trp_position_relative_cartesian;
+} f1ap_trp_reference_point_type_u;
+
+typedef enum f1ap_trp_reference_point_type_e {
+  F1AP_TRP_REFERENCE_POINT_TYPE_PR_NOTHING,
+  F1AP_TRP_REFERENCE_POINT_TYPE_PR_TRPPOSITION_RELATIVE_GEODETIC,
+  F1AP_TRP_REFERENCE_POINT_TYPE_PR_TRPPOSITION_RELATIVE_CARTESIAN
+} f1ap_trp_reference_point_type_pr;
+
+typedef struct f1ap_trp_reference_point_type_t {
+  f1ap_trp_reference_point_type_pr present;
+  f1ap_trp_reference_point_type_u choice;
+} f1ap_trp_reference_point_type_t;
+
+typedef struct f1ap_trp_position_referenced_t {
+  f1ap_reference_point_t reference_point;
+  f1ap_trp_reference_point_type_t reference_point_type;
+} f1ap_trp_position_referenced_t;
+
+typedef union f1ap_trp_position_definition_type_c {
+  f1ap_trp_position_direct_t direct;
+  f1ap_trp_position_referenced_t referenced;
+} f1ap_trp_position_definition_type_u;
+
+typedef enum f1ap_trp_position_definition_type_e {
+  F1AP_TRP_POSITION_DEFINITION_TYPE_PR_NOTHING,
+  F1AP_TRP_POSITION_DEFINITION_TYPE_PR_DIRECT,
+  F1AP_TRP_POSITION_DEFINITION_TYPE_PR_REFERENCED
+} f1ap_trp_position_definition_type_pr;
+
+typedef struct f1ap_trp_position_definition_type_s {
+  f1ap_trp_position_definition_type_u choice;
+  f1ap_trp_position_definition_type_pr present;
+} f1ap_trp_position_definition_type_t;
+
+typedef struct f1ap_geographical_coordinates_s {
+  f1ap_trp_position_definition_type_t trp_position_definition_type;
+} f1ap_geographical_coordinates_t;
+
+typedef struct f1ap_ng_ran_cgi_s {
+  plmn_id_t plmn;
+  uint64_t nr_cellid;
+} f1ap_ng_ran_cgi_t;
+
+typedef union f1ap_trp_information_type_response_item_c {
+  uint16_t pci_nr;
+  f1ap_ng_ran_cgi_t ng_ran_cgi;
+  uint32_t nr_arfcn;
+  // f1ap_prs_configuration_t pRSConfiguration;
+  // f1ap_ssb_information_t sSBinformation;
+  // bit_string_t sFNInitialisationTime;
+  // f1ap_spatial_direction_information_t spatialDirectionInformation;
+  f1ap_geographical_coordinates_t geographical_coordinates;
+} f1ap_trp_information_type_response_item_u;
+
+typedef enum f1ap_trp_information_type_response_item_e {
+  F1AP_TRP_INFORMATION_TYPE_RESPONSE_ITEM_PR_NOTHING,
+  F1AP_TRP_INFORMATION_TYPE_RESPONSE_ITEM_PR_PCI_NR,
+  F1AP_TRP_INFORMATION_TYPE_RESPONSE_ITEM_PR_NG_RAN_CGI,
+  F1AP_TRP_INFORMATION_TYPE_RESPONSE_ITEM_PR_NRARFCN,
+  F1AP_TRP_INFORMATION_TYPE_RESPONSE_ITEM_PR_PRSCONFIGURATION,
+  F1AP_TRP_INFORMATION_TYPE_RESPONSE_ITEM_PR_SSBINFORMATION,
+  F1AP_TRP_INFORMATION_TYPE_RESPONSE_ITEM_PR_SFNINITIALISATIONTIME,
+  F1AP_TRP_INFORMATION_TYPE_RESPONSE_ITEM_PR_SPATIALDIRECTIONINFORMATION,
+  F1AP_TRP_INFORMATION_TYPE_RESPONSE_ITEM_PR_GEOGRAPHICALCOORDINATES
+} f1ap_trp_information_type_response_item_pr;
+
+typedef struct f1ap_trp_information_type_response_item_s {
+  f1ap_trp_information_type_response_item_pr present;
+  f1ap_trp_information_type_response_item_u choice;
+} f1ap_trp_information_type_response_item_t;
+
+typedef struct f1ap_trp_information_type_response_list_s {
+  f1ap_trp_information_type_response_item_t *trp_information_type_response_item;
+  uint8_t trp_information_type_response_item_length;
+} f1ap_trp_information_type_response_list_t;
+
+typedef struct f1ap_trp_information_s {
+  uint32_t trp_id;
+  f1ap_trp_information_type_response_list_t trp_information_type_response_list;
+} f1ap_trp_information_t;
+
+// IE 9.3.1.176 (TS 38.473 V16.21.0)
+typedef struct f1ap_trp_information_list_s {
+  f1ap_trp_information_t *trp_information_item;
+  uint32_t trp_information_item_length;
+} f1ap_trp_information_list_t;
+
+typedef struct f1ap_trp_measurement_request_item_s {
+  uint32_t tRPID;
+} f1ap_trp_measurement_request_item_t;
+
+typedef struct f1ap_trp_measurement_request_list_s {
+  f1ap_trp_measurement_request_item_t *trp_measurement_request_item;
+  uint32_t trp_measurement_request_list_length;
+} f1ap_trp_measurement_request_list_t;
+
+typedef enum f1ap_PosMeasurementType_e {
+  F1AP_POSMEASUREMENTTYPE_GNB_RX_TX = 0,
+  F1AP_POSMEASUREMENTTYPE_UL_SRS_RSRP = 1,
+  F1AP_POSMEASUREMENTTYPE_UL_AOA = 2,
+  F1AP_POSMEASUREMENTTYPE_UL_RTOA = 3
+} f1ap_PosMeasurementType_e;
+
+typedef struct f1ap_pos_measurement_quantities_item_s {
+  f1ap_PosMeasurementType_e pos_measurement_type;
+} f1ap_pos_measurement_quantities_item_t;
+
+typedef struct f1ap_pos_measurement_quantities_s {
+  f1ap_pos_measurement_quantities_item_t *pos_measurement_quantities_item;
+  uint32_t pos_measurement_quantities_length;
+} f1ap_pos_measurement_quantities_t;
+
+typedef enum f1ap_pos_measurement_periodicity_e {
+  F1AP_POSMEASUREMENTPERIODICITY_MS120 = 0,
+  F1AP_POSMEASUREMENTPERIODICITY_MS240 = 1,
+  F1AP_POSMEASUREMENTPERIODICITY_MS480 = 2,
+  F1AP_POSMEASUREMENTPERIODICITY_MS640 = 3,
+  F1AP_POSMEASUREMENTPERIODICITY_MS1024 = 4,
+  F1AP_POSMEASUREMENTPERIODICITY_MS2048 = 5,
+  F1AP_POSMEASUREMENTPERIODICITY_MS5120 = 6,
+  F1AP_POSMEASUREMENTPERIODICITY_MS10240 = 7,
+  F1AP_POSMEASUREMENTPERIODICITY_MIN1 = 8,
+  F1AP_POSMEASUREMENTPERIODICITY_MIN6 = 9,
+  F1AP_POSMEASUREMENTPERIODICITY_MIN12 = 10,
+  F1AP_POSMEASUREMENTPERIODICITY_MIN30 = 11,
+  F1AP_POSMEASUREMENTPERIODICITY_MIN60 = 12
+} f1ap_pos_measurement_periodicity_pr;
+
+typedef enum f1ap_pos_report_characteristics_e {
+  F1AP_POSREPORTCHARACTERISTICS_ONDEMAND = 0,
+  F1AP_POSREPORTCHARACTERISTICS_PERIODIC = 1
+} f1ap_pos_report_characteristics_pr;
+
+typedef struct f1ap_lcs_to_gcs_translationaoa_c {
+  uint16_t alpha;
+  uint16_t beta;
+  uint16_t gamma;
+} f1ap_lcs_to_gcs_translationaoa_t;
+
+typedef struct f1ap_ul_aoa_s {
+  uint16_t azimuth_aoa;
+  uint16_t *zenith_aoa;
+  f1ap_lcs_to_gcs_translationaoa_t *lcs_to_gcs_translation_aoa;
+} f1ap_ul_aoa_t;
+
+typedef union f1ap_relative_path_delay_c {
+  uint32_t k0;
+  uint32_t k1;
+  uint32_t k2;
+  uint32_t k3;
+  uint32_t k4;
+  uint32_t k5;
+} f1ap_relative_path_delay_u, f1ap_ul_rtoa_measurement_item_u, f1ap_gnb_rx_tx_time_diff_meas_u;
+
+typedef enum f1ap_gnb_rx_tx_time_diff_meas_e {
+  F1AP_GNBRXTXTIMEDIFFMEAS_PR_NOTHING,
+  F1AP_GNBRXTXTIMEDIFFMEAS_PR_K0,
+  F1AP_GNBRXTXTIMEDIFFMEAS_PR_K1,
+  F1AP_GNBRXTXTIMEDIFFMEAS_PR_K2,
+  F1AP_GNBRXTXTIMEDIFFMEAS_PR_K3,
+  F1AP_GNBRXTXTIMEDIFFMEAS_PR_K4,
+  F1AP_GNBRXTXTIMEDIFFMEAS_PR_K5
+} f1ap_gnb_rx_tx_time_diff_meas_pr;
+
+typedef struct f1ap_gnb_rx_tx_time_diff_meas_s {
+  f1ap_gnb_rx_tx_time_diff_meas_pr present;
+  f1ap_gnb_rx_tx_time_diff_meas_u choice;
+} f1ap_gnb_rx_tx_time_diff_meas_t;
+
+typedef enum f1ap_ul_rtoa_measurement_item_e {
+  F1AP_ULRTOAMEAS_PR_NOTHING,
+  F1AP_ULRTOAMEAS_PR_K0,
+  F1AP_ULRTOAMEAS_PR_K1,
+  F1AP_ULRTOAMEAS_PR_K2,
+  F1AP_ULRTOAMEAS_PR_K3,
+  F1AP_ULRTOAMEAS_PR_K4,
+  F1AP_ULRTOAMEAS_PR_K5
+} f1ap_ul_rtoa_measurement_item_pr;
+
+typedef struct f1ap_ul_rtoa_measurement_item_s {
+  f1ap_ul_rtoa_measurement_item_pr present;
+  f1ap_ul_rtoa_measurement_item_u choice;
+} f1ap_ul_rtoa_measurement_item_t;
+
+typedef union f1ap_ul_rtoa_measurement_s {
+  f1ap_ul_rtoa_measurement_item_t ul_rtoa_measurement_item;
+} f1ap_ul_rtoa_measurement_t;
+
+typedef struct f1ap_gnb_rx_tx_time_diff_s {
+  f1ap_gnb_rx_tx_time_diff_meas_t rx_tx_time_diff;
+} f1ap_gnb_rx_tx_time_diff_t;
+
+typedef union f1ap_measured_results_value_c {
+  f1ap_ul_aoa_t ul_angle_of_arrival;
+  uint8_t ul_srs_rsrp;
+  f1ap_ul_rtoa_measurement_t ul_rtoa;
+  f1ap_gnb_rx_tx_time_diff_t gnb_rx_tx_time_diff;
+} f1ap_measured_results_value_u;
+
+typedef enum f1ap_measured_results_value_e {
+  F1AP_MEASURED_RESULTS_VALUE_PR_NOTHING,
+  F1AP_MEASURED_RESULTS_VALUE_PR_UL_ANGLEOFARRIVAL,
+  F1AP_MEASURED_RESULTS_VALUE_PR_UL_SRS_RSRP,
+  F1AP_MEASURED_RESULTS_VALUE_PR_UL_RTOA,
+  F1AP_MEASURED_RESULTS_VALUE_PR_GNB_RXTXTIMEDIFF
+} f1ap_measured_results_value_pr;
+
+typedef struct f1ap_measured_results_value_s {
+  f1ap_measured_results_value_pr present;
+  f1ap_measured_results_value_u choice;
+} f1ap_measured_results_value_t;
+
+typedef union f1ap_time_stamp_slot_index_c {
+  uint8_t scs_15;
+  uint8_t scs_30;
+  uint8_t scs_60;
+  uint8_t scs_120;
+} f1ap_time_stamp_slot_index_u;
+
+typedef enum f1ap_time_stamp_slot_index_e {
+  F1AP_TIME_STAMP_SLOT_INDEX_PR_NOTHING,
+  F1AP_TIME_STAMP_SLOT_INDEX_PR_SCS_15,
+  F1AP_TIME_STAMP_SLOT_INDEX_PR_SCS_30,
+  F1AP_TIME_STAMP_SLOT_INDEX_PR_SCS_60,
+  F1AP_TIME_STAMP_SLOT_INDEX_PR_SCS_120
+} f1ap_time_stamp_slot_index_pr;
+
+typedef struct f1ap_time_stamp_slot_index_s {
+  f1ap_time_stamp_slot_index_pr present;
+  f1ap_time_stamp_slot_index_u choice;
+} f1ap_time_stamp_slot_index_t;
+
+typedef struct f1ap_time_stamp_s {
+  uint16_t system_frame_number;
+  f1ap_time_stamp_slot_index_t slot_index;
+} f1ap_time_stamp_t;
+
+typedef struct f1ap_pos_measurement_result_item_s {
+  f1ap_measured_results_value_t measured_results_value;
+  f1ap_time_stamp_t time_stamp;
+} f1ap_pos_measurement_result_item_t;
+
+typedef struct f1ap_pos_measurement_result_s {
+  f1ap_pos_measurement_result_item_t *pos_measurement_result_item;
+  uint32_t pos_measurement_result_item_length;
+} f1ap_pos_measurement_result_t;
+
+typedef struct f1ap_pos_measurement_result_list_item_s {
+  f1ap_pos_measurement_result_t pos_measurement_result;
+  uint32_t trp_id;
+} f1ap_pos_measurement_result_list_item_t;
+
+typedef struct f1ap_pos_measurement_result_list_s {
+  f1ap_pos_measurement_result_list_item_t *pos_measurement_result_list_item;
+  uint32_t pos_measurement_result_list_length;
+} f1ap_pos_measurement_result_list_t;
+
+typedef struct f1ap_positioning_information_req_s {
+  // IE 9.3.1.4 (mandatory)
+  uint32_t gNB_CU_ue_id;
+  // IE 9.3.1.5 (mandatory)
+  uint32_t gNB_DU_ue_id;
+} f1ap_positioning_information_req_t;
+
+typedef struct f1ap_positioning_information_resp_s {
+  // IE 9.3.1.4 (mandatory)
+  uint32_t gNB_CU_ue_id;
+  // IE 9.3.1.5 (mandatory)
+  uint32_t gNB_DU_ue_id;
+  // IE 9.3.1.192 (optional)
+  f1ap_srs_configuration_t *srs_configuration;
+} f1ap_positioning_information_resp_t;
+
+typedef struct f1ap_positioning_information_failure_s {
+  // IE 9.3.1.4 (mandatory)
+  uint32_t gNB_CU_ue_id;
+  // IE 9.3.1.5 (mandatory)
+  uint32_t gNB_DU_ue_id;
+  // IE 9.3.1.2 (mandatory)
+  f1ap_Cause_t cause;
+  // IE 9.3.1.2 (mandatory)
+  long cause_value;
+} f1ap_positioning_information_failure_t;
+
+typedef struct f1ap_positioning_activation_req_s {
+  // IE 9.3.1.4 (mandatory)
+  uint32_t gNB_CU_ue_id;
+  // IE 9.3.1.5 (mandatory)
+  uint32_t gNB_DU_ue_id;
+  // (mandatory)
+  f1ap_srs_type_t srs_type;
+} f1ap_positioning_activation_req_t;
+
+typedef struct f1ap_positioning_activation_resp_s {
+  // IE 9.3.1.4 (mandatory)
+  uint32_t gNB_CU_ue_id;
+  // IE 9.3.1.5 (mandatory)
+  uint32_t gNB_DU_ue_id;
+} f1ap_positioning_activation_resp_t;
+
+typedef struct f1ap_positioning_activation_failure_s {
+  // IE 9.3.1.4 (mandatory)
+  uint32_t gNB_CU_ue_id;
+  // IE 9.3.1.5 (mandatory)
+  uint32_t gNB_DU_ue_id;
+  // IE 9.3.1.2 (mandatory)
+  f1ap_Cause_t cause;
+  // IE 9.3.1.2 (mandatory)
+  long cause_value;
+} f1ap_positioning_activation_failure_t;
+
+typedef struct f1ap_positioning_deactivation_s {
+  // IE 9.3.1.4 (mandatory)
+  uint32_t gNB_CU_ue_id;
+  // IE 9.3.1.5 (mandatory)
+  uint32_t gNB_DU_ue_id;
+  // (mandatory)
+  f1ap_abort_transmission_t abort_transmission;
+} f1ap_positioning_deactivation_t;
+
+typedef struct f1ap_positioning_information_update_s {
+  // IE 9.3.1.4 (mandatory)
+  uint32_t gNB_CU_ue_id;
+  // IE 9.3.1.5 (mandatory)
+  uint32_t gNB_DU_ue_id;
+  // IE 9.3.1.192 (optional)
+  f1ap_srs_configuration_t *srs_configuration;
+} f1ap_positioning_information_update_t;
+
+typedef struct f1ap_trp_information_req_s {
+  // IE 9.3.1.23 (mandatory)
+  uint8_t transaction_id;
+  bool has_trp_list;
+  // mandatory
+  f1ap_trp_list_t trp_list;
+  // mandatory
+  f1ap_trp_information_type_list_t trp_information_type_list;
+} f1ap_trp_information_req_t;
+
+typedef struct f1ap_trp_information_resp_s {
+  // IE 9.3.1.23 (mandatory)
+  uint8_t transaction_id;
+  // mandatory
+  f1ap_trp_information_list_t trp_information_list;
+} f1ap_trp_information_resp_t;
+
+typedef struct f1ap_trp_information_failure_s {
+  // IE 9.3.1.23 (mandatory)
+  uint8_t transaction_id;
+  // IE 9.3.1.2 (mandatory)
+  f1ap_Cause_t cause;
+  // IE 9.3.1.2 (mandatory)
+  long cause_value;
+} f1ap_trp_information_failure_t;
+
+typedef struct f1ap_measurement_req_s {
+  // IE 9.3.1.23 (mandatory)
+  uint8_t transaction_id;
+  // (mandatory)
+  uint16_t lmf_measurement_id;
+  // (mandatory)
+  uint16_t ran_measurement_id;
+  // (mandatory)
+  f1ap_trp_measurement_request_list_t trp_measurement_request_list;
+  // (mandatory) ondemand = 0, periodic = 1
+  f1ap_pos_report_characteristics_pr pos_report_characteristics;
+  // if report characteristics periodic
+  f1ap_pos_measurement_periodicity_pr measurement_periodicity;
+  // (mandatory)
+  f1ap_pos_measurement_quantities_t pos_measurement_quantities;
+  // IE 9.3.1.192 (optional)
+  f1ap_srs_configuration_t *srs_configuration;
+} f1ap_positioning_measurement_req_t;
+
+typedef struct f1ap_positioning_measurement_resp_s {
+  // IE 9.3.1.23 (mandatory)
+  uint8_t transaction_id;
+  // (mandatory)
+  uint16_t lmf_measurement_id;
+  // (mandatory)
+  uint16_t ran_measurement_id;
+  // (mandatory)
+  f1ap_pos_measurement_result_list_t *pos_measurement_result_list;
+} f1ap_positioning_measurement_resp_t;
+
+typedef struct f1ap_positioning_measurement_failure_s {
+  // IE 9.3.1.23 (mandatory)
+  uint8_t transaction_id;
+  // (mandatory)
+  uint16_t lmf_measurement_id;
+  // (mandatory)
+  uint16_t ran_measurement_id;
+  // IE 9.3.1.2 (mandatory)
+  f1ap_Cause_t cause;
+  // IE 9.3.1.2 (mandatory)
+  long cause_value;
+} f1ap_positioning_measurement_failure_t;
+
+typedef struct f1ap_positioning_measurement_report_s {
+  // IE 9.3.1.23 (mandatory)
+  uint8_t transaction_id;
+  // (mandatory)
+  uint16_t lmf_measurement_id;
+  // (mandatory)
+  uint16_t ran_measurement_id;
+  // (mandatory)
+  f1ap_pos_measurement_result_list_t *pos_measurement_result_list;
+} f1ap_positioning_measurement_report_t;
+
+typedef struct f1ap_positioning_measurement_abort_s {
+  // IE 9.3.1.23 (mandatory)
+  uint8_t transaction_id;
+  // (mandatory)
+  uint16_t lmf_measurement_id;
+  // (mandatory)
+  uint16_t ran_measurement_id;
+} f1ap_positioning_measurement_abort_t;
+
+typedef struct f1ap_positioning_measurement_failure_indication_s {
+  // IE 9.3.1.23 (mandatory)
+  uint8_t transaction_id;
+  // (mandatory)
+  uint16_t lmf_measurement_id;
+  // (mandatory)
+  uint16_t ran_measurement_id;
+  // IE 9.3.1.2 (mandatory)
+  f1ap_Cause_t cause;
+  // IE 9.3.1.2 (mandatory)
+  long cause_value;
+} f1ap_positioning_measurement_failure_indication_t;
+
+typedef struct f1ap_positioning_measurement_update_s {
+  // IE 9.3.1.23 (mandatory)
+  uint8_t transaction_id;
+  // (mandatory)
+  uint16_t lmf_measurement_id;
+  // (mandatory)
+  uint16_t ran_measurement_id;
+  // IE 9.3.1.192 (optional)
+  f1ap_srs_configuration_t *srs_configuration;
+} f1ap_positioning_measurement_update_t;
+
 #endif /* F1AP_MESSAGES_TYPES_H_ */

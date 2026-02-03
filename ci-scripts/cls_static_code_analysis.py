@@ -88,7 +88,6 @@ class StaticCodeAnalysis():
 			raise ValueError(f"{lSourcePath=} {node=}")
 		logging.debug('Building on server: ' + node)
 		cmd = cls_cmd.getConnection(node)
-		self.testCase_id = HTML.testCase_id
 		# on RedHat/CentOS .git extension is mandatory
 		result = re.search('([a-zA-Z0-9\:\-\.\/])+\.git', self.ranRepository)
 		if result is not None:
@@ -187,8 +186,6 @@ class StaticCodeAnalysis():
 			raise ValueError(f"{lSourcePath=} {node=}")
 		logging.debug('Building on server: ' + node)
 		cmd = cls_cmd.getConnection(node)
-		self.testCase_id = HTML.testCase_id
-
 		check_options = ''
 		if self.ranAllowMerge:
 			check_options = f'--build-arg MERGE_REQUEST=true --build-arg SRC_BRANCH={self.ranBranch}'

@@ -114,6 +114,7 @@ int16_t fill_dmrs_mask(const NR_PDSCH_Config_t *pdsch_Config,
                        mappingType_t mappingtype,
                        int length);
 int get_slots_per_frame_from_scs(int scs);
+uint16_t get_ul_bitmap(const frame_structure_t *fs, int slot);
 bool is_ul_slot(const slot_t slot, const frame_structure_t *fs);
 bool is_dl_slot(const slot_t slot, const frame_structure_t *fs);
 bool is_mixed_slot(const slot_t slot, const frame_structure_t *fs);
@@ -171,10 +172,7 @@ uint16_t get_rb_bwp_dci(nr_dci_format_t format,
                         uint16_t initial_ul_bwp_size,
                         uint16_t initial_dl_bwp_size);
 
-void find_aggregation_candidates(uint8_t *aggregation_level,
-                                 uint8_t *nr_of_candidates,
-                                 const NR_SearchSpace_t *ss,
-                                 int maxL);
+void find_aggregation_candidates(int *aggregation_level, int *nr_of_candidates, const NR_SearchSpace_t *ss, int L);
 
 bool get_nr_prach_sched_from_info(nr_prach_info_t info,
                                   int config_index,
@@ -244,6 +242,7 @@ void get_type0_PDCCH_CSS_config_parameters(NR_Type0_PDCCH_CSS_config_t *type0_PD
                                            NR_SubcarrierSpacing_t scs_ssb,
                                            frequency_range_t frequency_range,
                                            int nr_band,
+                                           int grid_size,
                                            uint32_t ssb_index,
                                            uint32_t ssb_period,
                                            uint32_t ssb_offset_point_a);

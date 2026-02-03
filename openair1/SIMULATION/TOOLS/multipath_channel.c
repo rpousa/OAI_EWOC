@@ -68,7 +68,7 @@ void __attribute__ ((no_sanitize_address)) multipath_channel(channel_desc_t *des
 
 #ifdef DEBUG_CH
 
-  for (l = 0; l<(int)desc->channel_length; l++) {
+  for (int l = 0; l<(int)desc->channel_length; l++) {
     printf("%p (%f,%f) ",desc->ch[0],desc->ch[0][l].x,desc->ch[0][l].y);
   }
 
@@ -168,7 +168,7 @@ void __attribute__ ((no_sanitize_address)) multipath_channel(channel_desc_t *des
   }
 
 #ifdef DEBUG_CH
-  for (l = 0; l<(int)desc->channel_length; l++) {
+  for (int l = 0; l<(int)desc->channel_length; l++) {
     printf("ch[%i] = (%f, %f)\n", l, desc->ch[0][l].r, desc->ch[0][l].i);
   }
 #endif

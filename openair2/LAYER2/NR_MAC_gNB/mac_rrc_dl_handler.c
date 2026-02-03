@@ -888,6 +888,7 @@ void ue_context_release_command(const f1ap_ue_context_rel_cmd_t *cmd)
   UE = UE ? UE : find_ra_UE(&mac->UE_info, cmd->gNB_DU_ue_id);
   if (UE == NULL) {
     NR_SCHED_UNLOCK(&mac->sched_lock);
+    LOG_W(NR_MAC, "UE Context Release Command for unknown RNTI %04x/CU UE ID %d\n", cmd->gNB_DU_ue_id, cmd->gNB_CU_ue_id);
     f1ap_ue_context_rel_cplt_t complete = {
         .gNB_CU_ue_id = cmd->gNB_CU_ue_id,
         .gNB_DU_ue_id = cmd->gNB_DU_ue_id,

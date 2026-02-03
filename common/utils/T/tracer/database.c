@@ -403,7 +403,7 @@ static int onoff_id(database *d, char *name, int *a, int onoff)
   i = my_bsearch(&(id){.name=name}, d->i, d->isize, sizeof(id), id_cmp);
   if (i == NULL) return 0;
   a[i->id] = onoff;
-  printf("turning %s %s\n", onoff ? "ON" : "OFF", name);
+  fprintf(stderr, "turning %s %s\n", onoff ? "ON" : "OFF", name);
   return 1;
 }
 
@@ -424,7 +424,7 @@ void on_off(void *_d, char *item, int *a, int onoff)
   int i;
   if (item == NULL) {
     for (i = 0; i < d->isize; i++) a[i] = onoff;
-    printf("turning %s all traces\n", onoff ? "ON" : "OFF");
+    fprintf(stderr, "turning %s all traces\n", onoff ? "ON" : "OFF");
     return;
   }
   done = onoff_group(d, item, a, onoff);
