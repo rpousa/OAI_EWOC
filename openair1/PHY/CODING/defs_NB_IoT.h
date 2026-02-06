@@ -30,15 +30,9 @@
 
 #include <stdint.h>  // for uint8/16/32_t
 
-#define CRC24_A_NB_IoT 0
-#define CRC24_B_NB_IoT 1
-#define CRC16_NB_IoT 2
-#define CRC8_NB_IoT 3
 
 //#define MAX_TURBO_ITERATIONS_MBSFN 8  // no MBSFN
-#define MAX_TURBO_ITERATIONS_NB_IoT 4
 
-#define LTE_NULL_NB_IoT 2  // defined also in PHY/LTE_TRANSPORT/defs_NB_IoT.h
 
 /** \fn uint32_t sub_block_interleaving_cc(uint32_t D, uint8_t *d,uint8_t *w)
 \brief This is the subblock interleaving algorithm for convolutionally coded blocks from 36-212 (Release 13.4, 2017).

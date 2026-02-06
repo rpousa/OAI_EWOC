@@ -38,7 +38,6 @@
 #define FGC_NAS_MESSAGE_CONTAINER_H_
 
 #define FGC_NAS_MESSAGE_CONTAINER_MINIMUM_LENGTH 4
-#define FGC_NAS_MESSAGE_CONTAINER_MAXIMUM_LENGTH 65535
 
 typedef struct FGCNasMessageContainer_tag {
   OctetString nasmessagecontainercontents;

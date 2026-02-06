@@ -50,8 +50,6 @@
 # error "You are compiling s1ap with the wrong version of ASN1C"
 #endif
 
-#define S1AP_UE_ID_FMT  "0x%06"PRIX32
-
 #include "common/utils/LOG/log.h"
 #include "s1ap_eNB_default_values.h"
 #define S1AP_ERROR(x, args...) LOG_E(S1AP, x, ##args)

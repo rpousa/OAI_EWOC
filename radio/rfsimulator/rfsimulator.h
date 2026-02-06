@@ -30,5 +30,5 @@ void rxAddInput(c16_t **input_sig,
                 channel_desc_t *channelDesc,
                 int nbSamples,
                 uint64_t TS);
-void update_channel_model(channel_desc_t *channelDesc, uint64_t TS);
+void update_channel_model(channel_desc_t *channelDesc, int nbSamples, uint64_t TS);
 #endif

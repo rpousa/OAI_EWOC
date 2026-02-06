@@ -31,8 +31,6 @@
 #define _GNU_SOURCE  /* required for pthread_getname_np */
 //#define LOG_TEST 1
 
-#define COMPONENT_LOG
-#define COMPONENT_LOG_IF
 #include <ctype.h>
 #define LOG_MAIN
 #include "log.h"

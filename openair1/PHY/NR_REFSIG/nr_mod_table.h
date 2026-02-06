@@ -23,10 +23,6 @@
 #define __PHY_NR_REFSIG_NR_MOD_TABLE__H__
 
 #define NR_MOD_TABLE_SIZE_SHORT 686
-#define NR_MOD_TABLE_BPSK_OFFSET 1
-#define NR_MOD_TABLE_QAM16_OFFSET 7
-#define NR_MOD_TABLE_QAM64_OFFSET 23
-#define NR_MOD_TABLE_QAM256_OFFSET 87
 
 extern c16_t nr_qpsk_mod_table[4];
 extern simde__m128i nr_qpsk_byte_mod_table[256];

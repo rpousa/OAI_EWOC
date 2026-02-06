@@ -47,7 +47,6 @@
 #include "UTIL/LOG/log.h"
 
 #define MAX_NUM_CLIENTS 15
-#define MAX_LINE 100
 
 struct sockaddr_in saddr;
 unsigned short server_port = 1352;

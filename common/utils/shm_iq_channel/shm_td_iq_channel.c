@@ -208,8 +208,11 @@ IQChannelErrorType shm_td_iq_channel_rx(ShmTDIQChannel *channel,
     size_t num_samples_first_copy = CIRCULAR_BUFFER_SIZE - first_sample;
     memcpy(tx_iq_data, base_ptr + first_sample, num_samples_first_copy * sizeof(sample_t));
     memcpy(tx_iq_data + num_samples_first_copy, base_ptr, (num_samples - num_samples_first_copy) * sizeof(sample_t));
+    memset(base_ptr + first_sample, 0, num_samples_first_copy * sizeof(sample_t));
+    memset(base_ptr, 0, (num_samples - num_samples_first_copy) * sizeof(sample_t));
   } else {
     memcpy(tx_iq_data, base_ptr + first_sample, num_samples * sizeof(sample_t));
+    memset(base_ptr + first_sample, 0, num_samples * sizeof(sample_t));
   }
   return CHANNEL_NO_ERROR;
 }

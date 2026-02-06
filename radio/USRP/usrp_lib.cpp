@@ -104,7 +104,7 @@ typedef struct {
   //int first_tx;
   //int first_rx;
   //! timestamp of RX packet
-  openair0_timestamp rx_timestamp;
+  openair0_timestamp_t rx_timestamp;
 } usrp_state_t;
 
 //void print_notes(void)
@@ -145,7 +145,8 @@ int check_ref_locked(usrp_state_t *s,size_t mboard) {
   return ref_locked;
 }
 
-static int sync_to_gps(openair0_device *device) {
+static int sync_to_gps(openair0_device_t *device)
+{
   //uhd::set_thread_priority_safe();
   //std::string args;
   //Set up program options
@@ -266,7 +267,7 @@ static int sync_to_gps(openair0_device *device) {
 #define ATR_XX   0x20 //data[5]
 #define MAN_MASK ATR_MASK ^ 0xFFF // manually controlled pins
 
-static void trx_usrp_start_interdigital_gpio(openair0_device *device, usrp_state_t *s)
+static void trx_usrp_start_interdigital_gpio(openair0_device_t *device, usrp_state_t *s)
 {
   AssertFatal(device->type == USRP_X400_DEV,
               "interdigital frontend device for beam management can only be used together with an X400\n");
@@ -280,7 +281,7 @@ static void trx_usrp_start_interdigital_gpio(openair0_device *device, usrp_state
   s->usrp->set_gpio_attr(s->gpio_bank, "OUT", (1 << 4), 0x1c);
 }
 
-static void trx_usrp_start_generic_gpio(openair0_device *device, usrp_state_t *s)
+static void trx_usrp_start_generic_gpio(openair0_device_t *device, usrp_state_t *s)
 {
   // setup GPIO for TDD, GPIO(4) = ATR_RX
   // set data direction register (DDR) to output
@@ -299,7 +300,8 @@ static void trx_usrp_start_generic_gpio(openair0_device *device, usrp_state_t *s
 /*! \brief Called to start the USRP transceiver. Return 0 if OK, < 0 if error
     @param device pointer to the device structure specific to the RF hardware target
 */
-static int trx_usrp_start(openair0_device *device) {
+static int trx_usrp_start(openair0_device_t *device)
+{
   usrp_state_t *s = (usrp_state_t *)device->priv;
 
   s->gpio_bank = (char *) "FP0"; //good for B210, X310 and N310
@@ -383,7 +385,8 @@ static void trx_usrp_write_reset(openair0_thread_t *wt);
 /*! \brief Terminate operation of the USRP transceiver -- free all associated resources
  * \param device the hardware to use
  */
-static void trx_usrp_end(openair0_device *device) {
+static void trx_usrp_end(openair0_device_t *device)
+{
   if (device == NULL)
     return;
 
@@ -423,12 +426,13 @@ static void trx_usrp_end(openair0_device *device) {
       @param antenna_id index of the antenna if the device has multiple antennas
       @param flags flags must be set to true if timestamp parameter needs to be applied
 */
-static int trx_usrp_write(openair0_device *device,
-			  openair0_timestamp timestamp,
+static int trx_usrp_write(openair0_device_t *device,
+			  openair0_timestamp_t timestamp,
 			  void **buff,
 			  int nsamps,
 			  int cc,
-			  int flags) {
+			  int flags)
+{
   int ret=0;
   usrp_state_t *s = (usrp_state_t *)device->priv;
   timestamp -= device->openair0_cfg->command_line_sample_advance + device->openair0_cfg->tx_sample_advance;
@@ -562,22 +566,23 @@ static int trx_usrp_write(openair0_device *device,
       @param antenna_id index of the antenna if the device has multiple antennas
       @param flags flags must be set to true if timestamp parameter needs to be applied
 */
-void *trx_usrp_write_thread(void * arg){
+void *trx_usrp_write_thread(void * arg)
+{
   int ret=0;
-  openair0_device *device=(openair0_device *)arg;
+  openair0_device_t *device=(openair0_device_t *)arg;
   openair0_thread_t *write_thread = &device->write_thread;
   openair0_write_package_t *write_package = write_thread->write_package;
 
   usrp_state_t *s;
   int nsamps2;  // aligned to upper 32 or 16 byte boundary
   int start;
-  openair0_timestamp timestamp;
-  void               **buff;
-  int                nsamps;
-  int                cc;
-  signed char        first_packet;
-  signed char        last_packet;
-  int                flags_gpio;
+  openair0_timestamp_t timestamp;
+  void        **buff;
+  int         nsamps;
+  int         cc;
+  signed char first_packet;
+  signed char last_packet;
+  int         flags_gpio;
 
   printf("trx_usrp_write_thread started on cpu %d\n",sched_getcpu());
   while(1){
@@ -659,8 +664,8 @@ void *trx_usrp_write_thread(void * arg){
   return NULL;
 }
 
-int trx_usrp_write_init(openair0_device *device){
-
+int trx_usrp_write_init(openair0_device_t *device)
+{
   //uhd::set_thread_priority_safe(1.0);
   openair0_thread_t *write_thread = &device->write_thread;
   printf("initializing tx write thread\n");
@@ -705,7 +710,8 @@ static void trx_usrp_write_reset(openair0_thread_t *wt) {
  * \param antenna_id Index of antenna for which to receive samples
  * \returns the number of sample read
 */
-static int trx_usrp_read(openair0_device *device, openair0_timestamp *ptimestamp, void **buff, int nsamps, int cc) {
+static int trx_usrp_read(openair0_device_t *device, openair0_timestamp_t *ptimestamp, void **buff, int nsamps, int cc)
+{
   usrp_state_t *s = (usrp_state_t *)device->priv;
   int samples_received=0;
   int nsamps2; // aligned to upper 32 or 16 byte boundary
@@ -817,7 +823,7 @@ static bool is_equal(double a, double b) {
 }
 
 void *freq_thread(void *arg) {
-  openair0_device *device=(openair0_device *)arg;
+  openair0_device_t *device=(openair0_device_t *)arg;
   usrp_state_t *s = (usrp_state_t *)device->priv;
   uhd::tune_request_t tx_tune_req(device->openair0_cfg[0].tx_freq[0],
                                   device->openair0_cfg[0].tune_offset);
@@ -833,7 +839,7 @@ void *freq_thread(void *arg) {
  * \param dummy dummy variable not used
  * \returns 0 in success
  */
-int trx_usrp_set_freq(openair0_device *device, openair0_config_t *openair0_cfg)
+int trx_usrp_set_freq(openair0_device_t *device, openair0_config_t *openair0_cfg)
 {
   usrp_state_t *s = (usrp_state_t *)device->priv;
   printf("Setting USRP TX Freq %f, RX Freq %f, tune_offset: %f\n", openair0_cfg[0].tx_freq[0], openair0_cfg[0].rx_freq[0], openair0_cfg[0].tune_offset);
@@ -851,7 +857,8 @@ int trx_usrp_set_freq(openair0_device *device, openair0_config_t *openair0_cfg)
  * \param openair0_cfg RF frontend parameters set by application
  * \returns 0 in success
  */
-int openair0_set_rx_frequencies(openair0_device *device, openair0_config_t *openair0_cfg) {
+int openair0_set_rx_frequencies(openair0_device_t *device, openair0_config_t *openair0_cfg)
+{
   usrp_state_t *s = (usrp_state_t *)device->priv;
   uhd::tune_request_t rx_tune_req(openair0_cfg[0].rx_freq[0], openair0_cfg[0].tune_offset);
   printf("In openair0_set_rx_frequencies, freq: %f, tune offset: %f\n",
@@ -867,8 +874,9 @@ int openair0_set_rx_frequencies(openair0_device *device, openair0_config_t *open
  * \param openair0_cfg RF frontend parameters set by application
  * \returns 0 in success
  */
-int trx_usrp_set_gains(openair0_device *device,
-                       openair0_config_t *openair0_cfg) {
+int trx_usrp_set_gains(openair0_device_t *device,
+                       openair0_config_t *openair0_cfg)
+{
   usrp_state_t *s = (usrp_state_t *)device->priv;
   ::uhd::gain_range_t gain_range_tx = s->usrp->get_tx_gain_range(0);
   s->usrp->set_tx_gain(gain_range_tx.stop()-openair0_cfg[0].tx_gain[0]);
@@ -892,7 +900,8 @@ int trx_usrp_set_gains(openair0_device *device,
 /*! \brief Stop USRP
  * \param card refers to the hardware index to use
  */
-int trx_usrp_stop(openair0_device *device) {
+int trx_usrp_stop(openair0_device_t *device)
+{
   return(0);
 }
 
@@ -1012,7 +1021,8 @@ void set_rx_gain_offset(openair0_config_t *openair0_cfg, int chain_index,int bw_
 * \param device the hardware to use
 * \returns  0 on success
 */
-int trx_usrp_get_stats(openair0_device *device) {
+int trx_usrp_get_stats(openair0_device_t *device)
+{
   return(0);
 }
 
@@ -1020,7 +1030,8 @@ int trx_usrp_get_stats(openair0_device *device) {
  * \param device the hardware to use
  * \returns  0 on success
  */
-int trx_usrp_reset_stats(openair0_device *device) {
+int trx_usrp_reset_stats(openair0_device_t *device)
+{
   return(0);
 }
 
@@ -1047,7 +1058,8 @@ static void usrp_sync_pps(usrp_state_t *s)
 }
 
 extern "C" {
-  int device_init(openair0_device *device, openair0_config_t *openair0_cfg) {
+  int device_init(openair0_device_t *device, openair0_config_t *openair0_cfg)
+  {
     LOG_I(HW, "openair0_cfg[0].sdr_addrs == '%s'\n", openair0_cfg[0].sdr_addrs);
     LOG_I(HW, "openair0_cfg[0].clock_source == '%d' (internal = %d, external = %d)\n", openair0_cfg[0].clock_source,internal,external);
     usrp_state_t *s ;

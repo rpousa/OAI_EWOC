@@ -50,7 +50,6 @@ typedef enum {
   RAT_EHRPD          = 2003,
 } rat_type_t;
 
-#define NUMBER_OF_RAT_TYPE 11
 
 typedef enum {
   SS_SERVICE_GRANTED = 0,

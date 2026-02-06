@@ -37,18 +37,6 @@
 #include "common/ngran_types.h"
 #include "RRC_nr_paramsvalues.h"
 
-
-#define GNB_CONFIG_STRING_CC_NODE_FUNCTION        "node_function"
-#define GNB_CONFIG_STRING_CC_NODE_TIMING          "node_timing"   
-#define GNB_CONFIG_STRING_CC_NODE_SYNCH_REF       "node_synch_ref"   
-
-
-// OTG config per GNB-UE DL
-#define GNB_CONF_STRING_OTG_CONFIG                "otg_config"
-#define GNB_CONF_STRING_OTG_UE_ID                 "ue_id"
-#define GNB_CONF_STRING_OTG_APP_TYPE              "app_type"
-#define GNB_CONF_STRING_OTG_BG_TRAFFIC            "bg_traffic"
-
 #ifdef LIBCONFIG_LONG
 #define libconfig_int long
 #else
@@ -64,7 +52,6 @@ typedef enum {
 	NRlastel = 5
 } NRRC_config_functions_t;
 
-#define CONFIG_STRING_ACTIVE_RUS                  "Active_RUs"
 /*------------------------------------------------------------------------------------------------------------------------------------------*/
 
 /*    RUs  configuration for gNB is the same for eNB */
@@ -74,8 +61,6 @@ typedef enum {
 /*---------------------------------------------------------------------------------------------------------------------------------------*/
 /* value definitions for ASN1 verbosity parameter */
 #define GNB_CONFIG_STRING_ASN1_VERBOSITY_NONE              "none"
-#define GNB_CONFIG_STRING_ASN1_VERBOSITY_ANNOYING          "annoying"
-#define GNB_CONFIG_STRING_ASN1_VERBOSITY_INFO              "info"
 
 /* global parameters, not under a specific section   */
 #define GNB_CONFIG_STRING_ASN1_VERBOSITY                   "Asn1_verbosity"
@@ -338,8 +323,6 @@ typedef enum {
 // clang-format on
 #define GNB_CONFIG_STRING_NEIGHBOUR_CELL_LIST "neighbour_cell_configuration"
 
-#define GNB_CONFIG_STRING_NEIGHBOUR_GNB_ID "gNB_ID"
-#define GNB_CONFIG_STRING_NEIGHBOUR_NR_CELLID "nr_cellid"
 #define GNB_CONFIG_STRING_NEIGHBOUR_CELL_PHYSICAL_ID "physical_cellId"
 #define GNB_CONFIG_STRING_NEIGHBOUR_CELL_ABS_FREQ_SSB "absoluteFrequencySSB"
 #define GNB_CONFIG_STRING_NEIGHBOUR_CELL_SCS "subcarrierSpacing"
@@ -642,7 +625,6 @@ typedef enum {
 #define GNB_PORT_FOR_X2C_IDX                       4
 
 /* S1 interface configuration parameters names   */
-#define GNB_CONFIG_STRING_GNB_IPV4_ADDRESS_FOR_S1_MME   "GNB_IPV4_ADDRESS_FOR_S1_MME"
 #define GNB_CONFIG_STRING_GNB_IPV4_ADDRESS_FOR_S1U      "GNB_IPV4_ADDRESS_FOR_S1U"
 #define GNB_CONFIG_STRING_GNB_PORT_FOR_S1U              "GNB_PORT_FOR_S1U"
 
@@ -690,14 +672,12 @@ typedef enum {
 // clang-format on
 /* L1 configuration section names   */
 #define CONFIG_STRING_L1_LIST                              "L1s"
-#define CONFIG_STRING_L1_CONFIG                            "l1_config"
 
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------*/
 /*----------------------------------------------------------------------------------------------------------------------------------------------------*/
 /* MACRLC configuration section names   */
 #define CONFIG_STRING_MACRLC_LIST                          "MACRLCs"
-#define CONFIG_STRING_MACRLC_CONFIG                        "macrlc_config"
 
 
 /* MACRLC configuration parameters names   */

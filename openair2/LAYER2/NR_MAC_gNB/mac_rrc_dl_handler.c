@@ -607,6 +607,86 @@ static NR_UE_info_t *create_new_UE(gNB_MAC_INST *mac, uint32_t cu_id, const NR_C
   return UE;
 }
 
+/** @brief Encode CellGroupConfig to byte array for transparent forwarding in F1AP messages.
+ * The encoded bytes are intended for transparent forwarding to the UE without
+ * decode/re-encode cycles per TS 38.473 transparency requirements.
+ * @param cellGroup CellGroupConfig to encode
+ * @return Encoded byte array */
+static byte_array_t encode_cellgroup_config(const NR_CellGroupConfig_t *cellGroup)
+{
+  byte_array_t cgc = {0};
+  ssize_t encoded = uper_encode_to_new_buffer(&asn_DEF_NR_CellGroupConfig, NULL, cellGroup, (void **)&cgc.buf);
+  AssertFatal(encoded > 0, "Could not encode CellGroup\n");
+  cgc.len = encoded;
+  return cgc;
+}
+
+/** @brief Handle RRC container from UE Context Setup/Modification request.
+ * Per 3GPP TS 38.473, the RRCContainer IE contains an RRC message (e.g., DL-DCCH-Message
+ * as defined in TS 38.331) that is encapsulated in a PDCP PDU. The DU forwards this
+ * container transparently to the UE via SRB1 without decode/re-encode cycles.
+ * @param rrc_container RRC container
+ * @param rnti RNTI of the UE */
+static void handle_ue_context_rrc_container(const byte_array_t *rrc_container, const rnti_t rnti)
+{
+  DevAssert(rrc_container);
+  logical_chan_id_t id = 1;
+  nr_rlc_srb_recv_sdu(rnti, id, rrc_container->buf, rrc_container->len);
+}
+
+/** @brief Get and clone CellGroupConfig for UE Context Setup/Modification response.
+ * The source depends on re-establishment state:
+ * - CellGroup: Currently active/runtime CellGroupConfig used by MAC for scheduling.
+ *   During re-establishment, spCellConfig is removed from it (per TS 38.331 §5.3.7.2).
+ * - reconfigCellGroup: Staging area that holds a complete CellGroupConfig saved before
+ *   modifications. During re-establishment, it still contains spCellConfig (saved before
+ *   removal). It becomes the new CellGroup when reconfiguration completes.
+ * During re-establishment, we must clone from reconfigCellGroup to get a complete
+ * CellGroupConfig with spCellConfig for transparent forwarding to the UE.
+ * @param UE UE context
+ * @return Cloned CellGroupConfig */
+static NR_CellGroupConfig_t *get_cellgroup_config(NR_UE_info_t *UE)
+{
+  if (UE->reestablish_rlc && UE->reconfigCellGroup != NULL) {
+    return clone_CellGroupConfig(UE->reconfigCellGroup);
+  } else {
+    return clone_CellGroupConfig(UE->CellGroup);
+  }
+}
+
+/** @brief Update CellGroupConfig for RRC re-establishment procedure.
+ * This function prepares a complete CellGroupConfig for gNB-DU Configuration Query response
+ * during RRC re-establishment.
+ * The function sets reestablishRLC flags for all RLC bearers except SRB1.
+ * SRB1 is removed from the bearer list since it is already re-established during
+ * RRCReestablishment and should not be included. */
+static void update_cellgroup_for_reestablishment(NR_UE_info_t *UE, NR_CellGroupConfig_t *new_CellGroup)
+{
+  DevAssert(new_CellGroup);
+  DevAssert(new_CellGroup->spCellConfig);
+  DevAssert(UE->reestablish_rlc);
+  LOG_I(NR_MAC, "UE %04x: Re-establishment detected, setting reestablishRLC flags\n", UE->rnti);
+  struct NR_CellGroupConfig__rlc_BearerToAddModList *addmod = new_CellGroup->rlc_BearerToAddModList;
+  if (addmod && addmod->list.count > 0) {
+    LOG_I(NR_MAC, "UE %04x: CellGroupConfig has %d bearers:\n", UE->rnti, addmod->list.count);
+    for (int i = 0; i < addmod->list.count; ++i) {
+      NR_RLC_BearerConfig_t *bearer = addmod->list.array[i];
+      int lcid = bearer->logicalChannelIdentity;
+      int rb_type = bearer->servedRadioBearer->present;
+      int rb_id = (rb_type == NR_RLC_BearerConfig__servedRadioBearer_PR_srb_Identity)
+                      ? bearer->servedRadioBearer->choice.srb_Identity
+                      : bearer->servedRadioBearer->choice.drb_Identity;
+      if (rb_type == NR_RLC_BearerConfig__servedRadioBearer_PR_srb_Identity && rb_id == 1) {
+        asn_sequence_del(&addmod->list, i, 1);
+        --i;
+        continue;
+      }
+      LOG_I(NR_MAC, "UE %04x: Re-establishing RLC for LCID %d\n", UE->rnti, lcid);
+      asn1cCallocOne(addmod->list.array[i]->reestablishRLC, NR_RLC_BearerConfig__reestablishRLC_true);
+    }
+  }
+}
+
 void ue_context_setup_request(const f1ap_ue_context_setup_req_t *req)
 {
   const bool is_SA = IS_SA_MODE(get_softmodem_params());
@@ -653,7 +733,8 @@ void ue_context_setup_request(const f1ap_ue_context_setup_req_t *req)
   AssertFatal(UE, "no UE found or could not be created, but UE Context Setup Failed not implemented\n");
   resp.gNB_DU_ue_id = UE->rnti;
 
-  NR_CellGroupConfig_t *new_CellGroup = clone_CellGroupConfig(UE->CellGroup);
+  NR_CellGroupConfig_t *new_CellGroup = get_cellgroup_config(UE);
+
   // Needed for DRB Setup (e.g., RLC might reduce SN size)
   UE->capability = ue_cap;
 
@@ -667,8 +748,7 @@ void ue_context_setup_request(const f1ap_ue_context_setup_req_t *req)
   }
 
   if (req->rrc_container != NULL) {
-    logical_chan_id_t id = 1;
-    nr_rlc_srb_recv_sdu(UE->rnti, id, req->rrc_container->buf, req->rrc_container->len);
+    handle_ue_context_rrc_container(req->rrc_container, UE->rnti);
   }
 
   NR_ServingCellConfigCommon_t *scc = mac->common_channels[0].ServingCellConfigCommon;
@@ -676,6 +756,15 @@ void ue_context_setup_request(const f1ap_ue_context_setup_req_t *req)
     // store the new UE capabilities, and update the cellGroupConfig
     // only to be done if we did not already update through the cg_configinfo
     update_cellGroupConfig(new_CellGroup, UE->uid, UE->capability, &mac->radio_config, scc);
+  }
+
+  /* During re-establishment, prepare CellGroupConfig for UE Context Setup response.
+   * Per TS 38.401 §8.7: when a UE re-establishes on a different DU, the CU triggers
+   * UE Context Setup on the new DU. The DU must respond with a CellGroupConfig that has
+   * reestablishRLC flags set for all RLC bearers except SRB1. This prepares the CellGroupConfig
+   * for transparent forwarding to the UE per TS 38.473 transparency requirements. */
+  if (UE->reestablish_rlc) {
+    update_cellgroup_for_reestablishment(UE, new_CellGroup);
   }
 
   if (!ue_id_provided && cg_configinfo == NULL) {
@@ -688,12 +777,7 @@ void ue_context_setup_request(const f1ap_ue_context_setup_req_t *req)
     }
   }
 
-  byte_array_t cgc = { .buf = calloc_or_fail(1,1024) };
-  asn_enc_rval_t enc_rval =
-      uper_encode_to_buffer(&asn_DEF_NR_CellGroupConfig, NULL, new_CellGroup, cgc.buf, 1024);
-  AssertFatal(enc_rval.encoded > 0, "Could not encode CellGroup, failed element %s\n", enc_rval.failed_type->name);
-  cgc.len = (enc_rval.encoded + 7) >> 3;
-  resp.du_to_cu_rrc_info.cell_group_config = cgc;
+  resp.du_to_cu_rrc_info.cell_group_config = encode_cellgroup_config(new_CellGroup);
 
   ASN_STRUCT_FREE(asn_DEF_NR_CellGroupConfig, UE->reconfigCellGroup);
   UE->reconfigCellGroup = new_CellGroup;
@@ -745,7 +829,7 @@ void ue_context_modification_request(const f1ap_ue_context_mod_req_t *req)
     return;
   }
 
-  NR_CellGroupConfig_t *new_CellGroup = clone_CellGroupConfig(UE->CellGroup);
+  NR_CellGroupConfig_t *new_CellGroup = get_cellgroup_config(UE);
 
   if (req->srbs_len > 0) {
     resp.srbs_len = handle_ue_context_srbs_setup(UE, req->srbs_len, req->srbs, &resp.srbs, new_CellGroup, &mac->rlc_config);
@@ -760,8 +844,7 @@ void ue_context_modification_request(const f1ap_ue_context_mod_req_t *req)
   }
 
   if (req->rrc_container != NULL) {
-    logical_chan_id_t id = 1;
-    nr_rlc_srb_recv_sdu(req->gNB_DU_ue_id, id, req->rrc_container->buf, req->rrc_container->len);
+    handle_ue_context_rrc_container(req->rrc_container, req->gNB_DU_ue_id);
   }
 
   NR_ServingCellConfigCommon_t *scc = mac->common_channels[0].ServingCellConfigCommon;
@@ -771,6 +854,10 @@ void ue_context_modification_request(const f1ap_ue_context_mod_req_t *req)
   } else if (req->reconfig_compl) {
     LOG_I(NR_MAC, "DU received confirmation of successful RRC Reconfiguration\n");
     if (UE->reconfigCellGroup) {
+      /** During handover, target DU never sends RRC Reconfiguration (source DU does),
+       * so ack_reconfig is never called on target DU - this warning is expected.
+       * If RRC Reconfiguration was sent via PDSCH, ack_reconfig should have been called when UE ACKed it.
+       * If not, this warning would indicate a bug. */
       LOG_W(NR_MAC, "reconfigCellGroup still present, did we miss ACK for RRCReconfiguration?\n");
       ASN_STRUCT_FREE(asn_DEF_NR_CellGroupConfig, UE->CellGroup);
       UE->CellGroup = UE->reconfigCellGroup;
@@ -780,6 +867,7 @@ void ue_context_modification_request(const f1ap_ue_context_mod_req_t *req)
       for (int i = 1; i < seq_arr_size(&UE->UE_sched_ctrl.lc_config); ++i) {
         nr_lc_config_t *c = seq_arr_at(&UE->UE_sched_ctrl.lc_config, i);
         c->suspended = false;
+        LOG_I(NR_MAC, "UE %04x: Re-establishing RLC for LCID %d\n", UE->rnti, c->lcid);
         nr_rlc_reestablish_entity(req->gNB_DU_ue_id, c->lcid);
       }
       UE->reestablish_rlc = false;
@@ -797,18 +885,21 @@ void ue_context_modification_request(const f1ap_ue_context_mod_req_t *req)
     update_cellGroupConfig(new_CellGroup, UE->uid, UE->capability, &mac->radio_config, scc);
   }
 
-  if (req->srbs_len > 0 || req->drbs_len > 0 || req->drbs_rel_len > 0 || ue_cap != NULL) {
-    resp.du_to_cu_rrc_info = calloc_or_fail(1, sizeof(du_to_cu_rrc_information_t));
-    byte_array_t cgc = { .buf = calloc_or_fail(1, 1024) };
-    asn_enc_rval_t enc_rval = uper_encode_to_buffer(&asn_DEF_NR_CellGroupConfig,
-                                                    NULL,
-                                                    new_CellGroup,
-                                                    cgc.buf,
-                                                    1024);
-    AssertFatal(enc_rval.encoded > 0, "Could not encode CellGroup, failed element %s\n", enc_rval.failed_type->name);
-    cgc.len = (enc_rval.encoded + 7) >> 3;
-    resp.du_to_cu_rrc_info->cell_group_config = cgc;
+  /* 3GPP TS 38.473 Clause 8.3.4: If gNB-DU Configuration Query is present, include CellGroupConfig
+   * (CU requested CellGroupConfig for transparent forwarding) */
+  if (req->gNB_DU_Configuration_Query != NULL && *req->gNB_DU_Configuration_Query) {
+    LOG_I(NR_MAC, "UE %04x: gNB-DU Configuration Query received, will include CellGroupConfig in response\n", UE->rnti);
 
+    if (UE->reestablish_rlc) {
+      update_cellgroup_for_reestablishment(UE, new_CellGroup);
+    }
+
+    /* Encode CellGroupConfig for transparent forwarding in the DU to CU trasnfer IE
+     * CU will forward these encoded bytes directly to UE without decode/re-encode cycles */
+    resp.du_to_cu_rrc_info = calloc_or_fail(1, sizeof(du_to_cu_rrc_information_t));
+    resp.du_to_cu_rrc_info->cell_group_config = encode_cellgroup_config(new_CellGroup);
+
+    // Replace reconfigCellGroup with new_CellGroup (now contains complete config with spCellConfig restored)
     ASN_STRUCT_FREE(asn_DEF_NR_CellGroupConfig, UE->reconfigCellGroup);
     UE->reconfigCellGroup = new_CellGroup;
     configure_UE_BWP(mac, scc, UE, false, NR_SearchSpace__searchSpaceType_PR_common, -1, -1);
@@ -915,6 +1006,11 @@ void ue_context_release_command(const f1ap_ue_context_rel_cmd_t *cmd)
   NR_SCHED_UNLOCK(&mac->sched_lock);
 }
 
+/** @brief Process a DL RRC MESSAGE TRANSFER. Handles delivery of an RRC message to a UE
+ * via the F1AP DL RRC MESSAGE TRANSFER procedure, as specified in TS 38.473. This procedure
+ * is also responsible for re-establishing UE context when required (e.g., during RRC connection
+ * reestablishment).
+ * @param dl_rrc Pointer to the DL RRC MESSAGE TRANSFER data structure. */
 void dl_rrc_message_transfer(const f1ap_dl_rrc_message_t *dl_rrc)
 {
   LOG_D(NR_MAC,
@@ -942,50 +1038,71 @@ void dl_rrc_message_transfer(const f1ap_dl_rrc_message_t *dl_rrc)
     DevAssert(success);
   }
 
-
-  /* if we get the old-gNB-DU-UE-ID, this means there is a reestablishment
-   * ongoing. */
+  /* Per TS 38.473: "The DL RRC MESSAGE TRANSFER message shall include, if available,
+   * the old gNB-DU UE F1AP ID IE so that the gNB-DU can retrieve the existing UE context
+   * in RRC connection reestablishment procedure, as defined in TS 38.401"
+   *
+   * "If the gNB-DU identifies the UE-associated logical F1-connection by the gNB-DU UE F1AP ID
+   * IE in the DL RRC MESSAGE TRANSFER message and the old gNB-DU UE F1AP ID IE is included,
+   * it shall release the old gNB-DU UE F1AP ID and the related configurations associated
+   * with the old gNB-DU UE F1AP ID." */
   if (dl_rrc->old_gNB_DU_ue_id != NULL) {
     AssertFatal(*dl_rrc->old_gNB_DU_ue_id != dl_rrc->gNB_DU_ue_id,
                 "logic bug: current and old gNB DU UE ID cannot be the same\n");
-    /* 38.401 says: "Find UE context based on old gNB-DU UE F1AP ID, replace
-     * old C-RNTI/PCI with new C-RNTI/PCI". Below, we do the inverse: we keep
-     * the new UE context (with new C-RNTI), but set up everything to reuse the
-     * old config. */
     NR_UE_info_t *oldUE = find_nr_UE(&mac->UE_info, *dl_rrc->old_gNB_DU_ue_id);
-    AssertFatal(oldUE, "CU claims we should know UE %04x, but we don't\n", *dl_rrc->old_gNB_DU_ue_id);
-    pthread_mutex_lock(&mac->sched_lock);
-    uid_t temp_uid = UE->uid;
-    UE->uid = oldUE->uid;
-    oldUE->uid = temp_uid;
-    for (int i = 1; i < seq_arr_size(&oldUE->UE_sched_ctrl.lc_config); ++i) {
-      const nr_lc_config_t *c = seq_arr_at(&oldUE->UE_sched_ctrl.lc_config, i);
-      nr_lc_config_t new = *c;
-      new.suspended = true;
-      nr_mac_add_lcid(&UE->UE_sched_ctrl, &new);
+    if (oldUE == NULL) {
+      /* No matching UE-associated logical F1-connection for the old gNB-DU UE F1AP ID.
+       * Per TS 38.473, if there's no matching connection, there's nothing to release. */
+      LOG_I(NR_MAC,
+           "DL RRC Message Transfer: old gNB-DU UE F1AP ID %04x has no matching UE-associated logical F1-connection, nothing to "
+           "release\n",
+           *dl_rrc->old_gNB_DU_ue_id);
+      /* Clean up any F1 UE data associated with the old gNB-DU UE F1AP ID */
+      if (du_exists_f1_ue_data(*dl_rrc->old_gNB_DU_ue_id)) {
+        du_remove_f1_ue_data(*dl_rrc->old_gNB_DU_ue_id);
+      }
+    } else {
+      /* Per TS 38.401: "Find UE context based on old gNB-DU UE F1AP ID, replace
+       * old C-RNTI/PCI with new C-RNTI/PCI". Below, we do the inverse: we keep
+       * the new UE context (with new C-RNTI), but set up everything to reuse the
+       * old config. */
+      pthread_mutex_lock(&mac->sched_lock);
+      uid_t temp_uid = UE->uid;
+      UE->uid = oldUE->uid;
+      oldUE->uid = temp_uid;
+      for (int i = 1; i < seq_arr_size(&oldUE->UE_sched_ctrl.lc_config); ++i) {
+        const nr_lc_config_t *c = seq_arr_at(&oldUE->UE_sched_ctrl.lc_config, i);
+        nr_lc_config_t new = *c;
+        new.suspended = true;
+        nr_mac_add_lcid(&UE->UE_sched_ctrl, &new);
+      }
+      ASN_STRUCT_FREE(asn_DEF_NR_CellGroupConfig, UE->CellGroup);
+      UE->CellGroup = oldUE->CellGroup;
+      oldUE->CellGroup = NULL;
+      ASN_STRUCT_FREE(asn_DEF_NR_UE_NR_Capability, UE->capability);
+      UE->capability = oldUE->capability;
+      oldUE->capability = NULL;
+      UE->mac_stats = oldUE->mac_stats;
+      UE->measgap_config = oldUE->measgap_config;
+      UE->local_bwp_id = oldUE->local_bwp_id;
+      mac_remove_nr_ue(mac, *dl_rrc->old_gNB_DU_ue_id);
+      pthread_mutex_unlock(&mac->sched_lock);
+      nr_rlc_remove_ue(dl_rrc->gNB_DU_ue_id);
+      nr_rlc_update_id(*dl_rrc->old_gNB_DU_ue_id, dl_rrc->gNB_DU_ue_id);
+      instance_t f1inst = get_f1_gtp_instance();
+      if (f1inst >= 0) // we actually use F1-U
+        gtpv1u_update_ue_id(f1inst, *dl_rrc->old_gNB_DU_ue_id, dl_rrc->gNB_DU_ue_id);
     }
-    ASN_STRUCT_FREE(asn_DEF_NR_CellGroupConfig, UE->CellGroup);
-    UE->CellGroup = oldUE->CellGroup;
-    oldUE->CellGroup = NULL;
-    ASN_STRUCT_FREE(asn_DEF_NR_UE_NR_Capability, UE->capability);
-    UE->capability = oldUE->capability;
-    oldUE->capability = NULL;
-    UE->mac_stats = oldUE->mac_stats;
-    UE->measgap_config = oldUE->measgap_config;
-    UE->local_bwp_id = oldUE->local_bwp_id;
-    /* 38.331 5.3.7.2 says that the UE releases the spCellConfig, so we drop it
+    /* Per TS 38.331 5.3.7.2: the UE releases the spCellConfig, so we drop it
      * from the current configuration. It will be reapplied when the
      * reconfiguration has succeeded (indicated by the CU) */
     asn_copy(&asn_DEF_NR_CellGroupConfig, (void **)&UE->reconfigCellGroup, UE->CellGroup);
     ASN_STRUCT_FREE(asn_DEF_NR_SpCellConfig, UE->CellGroup->spCellConfig);
     UE->CellGroup->spCellConfig = NULL;
     UE->reestablish_rlc = true;
-    mac_remove_nr_ue(mac, *dl_rrc->old_gNB_DU_ue_id);
-    pthread_mutex_unlock(&mac->sched_lock);
-    nr_rlc_remove_ue(dl_rrc->gNB_DU_ue_id);
-    nr_rlc_update_id(*dl_rrc->old_gNB_DU_ue_id, dl_rrc->gNB_DU_ue_id);
-    /* 38.331 clause 5.3.7.4: apply gNB RLC configuration for SRB1 to match the UE RLC configuration defined in 9.2.1 */
-    nr_rlc_configuration_t rlc_configuration = mac->rlc_config; // use configuration file values for timers t_poll_retransmit, t_reassembly and t_status_prohibit
+    /* Per TS 38.331 clause 5.3.7.4: apply gNB RLC configuration for SRB1 to match the UE RLC configuration defined in 9.2.1.
+     * Use configuration file values for timers t_poll_retransmit, t_reassembly and t_status_prohibit */
+    nr_rlc_configuration_t rlc_configuration = mac->rlc_config;
     rlc_configuration.srb.poll_pdu = -1;
     rlc_configuration.srb.poll_byte = -1;
     rlc_configuration.srb.max_retx_threshold = 8;
@@ -993,9 +1110,6 @@ void dl_rrc_message_transfer(const f1ap_dl_rrc_message_t *dl_rrc)
     NR_RLC_Config_t *rlc_Config = nr_srb_config(&rlc_configuration);
     nr_rlc_reconfigure_entity(dl_rrc->gNB_DU_ue_id, 1, rlc_Config);
     ASN_STRUCT_FREE(asn_DEF_NR_RLC_Config, rlc_Config);
-    instance_t f1inst = get_f1_gtp_instance();
-    if (f1inst >= 0) // we actually use F1-U
-      gtpv1u_update_ue_id(f1inst, *dl_rrc->old_gNB_DU_ue_id, dl_rrc->gNB_DU_ue_id);
   }
 
   /* the DU ue id is the RNTI */

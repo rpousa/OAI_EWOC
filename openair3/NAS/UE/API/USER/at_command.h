@@ -59,12 +59,6 @@ Description Defines the ATtention (AT) command set supported by the NAS
 #define AT_COMMAND_PARAM8 0x0080  /* 8th parameter is present */
 #define AT_COMMAND_PARAM9 0x0100  /* 9th parameter is present */
 #define AT_COMMAND_PARAM10  0x0200  /* 10th parameter is present  */
-#define AT_COMMAND_PARAM11  0x0400  /* 11th parameter is present  */
-#define AT_COMMAND_PARAM12  0x0800  /* 12th parameter is present  */
-#define AT_COMMAND_PARAM13  0x1000  /* 13th parameter is present  */
-#define AT_COMMAND_PARAM14  0x2000  /* 14th parameter is present  */
-#define AT_COMMAND_PARAM15  0x4000  /* 15th parameter is present  */
-#define AT_COMMAND_PARAM16  0x8000  /* 16th parameter is present  */
 
 /* Value of the mask parameter for AT commands without any parameters */
 #define AT_COMMAND_NO_PARAM AT_COMMAND_PARAM0
@@ -249,8 +243,6 @@ typedef struct at_cimi_s {
 /* Functionality levels */
 #define AT_CFUN_MIN 0   /* minimum functionality      */
 #define AT_CFUN_FULL  1   /* full functionality     */
-#define AT_CFUN_SEND  2   /* disable phone transmit RF circuits only  */
-#define AT_CFUN_RECV  3   /* disable phone receive RF circuits only */
 #define AT_CFUN_BOTH  4   /* disable phone both transmit and receive
            * RF circuits        */
 #define AT_CFUN_MAX   AT_CFUN_BOTH
@@ -265,7 +257,6 @@ typedef struct at_cimi_s {
            * is not given)        */
 #define AT_CFUN_RST 1   /* reset the ME before setting it to <fun>
            * power level        */
-#define AT_CFUN_RST_DEFAULT AT_CFUN_NORST
 /* Default resetting action applied when
  * no value is given      */
 /* Optional parameter bitmask */
@@ -468,12 +459,6 @@ typedef struct {
  * no value is given        */
 /* Access technology indicators */
 #define AT_COPS_GSM   NET_ACCESS_GSM     /* GSM   */
-#define AT_COPS_COMPACT   NET_ACCESS_COMPACT /* GSM Compact */
-#define AT_COPS_UTRAN   NET_ACCESS_UTRAN   /* UTRAN   */
-#define AT_COPS_EGPRS   NET_ACCESS_EGPRS   /* GSM w/EGPRS */
-#define AT_COPS_HSDPA   NET_ACCESS_HSDPA   /* UTRAN w/HSDPA */
-#define AT_COPS_HSUPA   NET_ACCESS_HSUPA   /* UTRAN w/HSUPA */
-#define AT_COPS_HSDUPA    NET_ACCESS_HSDUPA  /* w/HSDPA and HSUPA */
 #define AT_COPS_EUTRAN    NET_ACCESS_EUTRAN  /* E-UTRAN   */
 #define AT_COPS_ACT_MIN   AT_COPS_GSM
 /* Minimum value of supported access
@@ -675,21 +660,15 @@ typedef struct {
 #define AT_CGDCONT_CID_DEFAULT    AT_CGDCONT_CID_MIN
 /* PDP data compression parameter values */
 #define AT_CGDCONT_D_COMP_OFF 0 /* PDP data compression is disabled   */
-#define AT_CGDCONT_D_COMP_ON  1 /* manufacturer preferred compression   */
-#define AT_CGDCONT_D_COMP_V42B  2 /* V.42bis          */
 #define AT_CGDCONT_D_COMP_V44 3 /* V.44         */
 #define AT_CGDCONT_D_COMP_MIN   AT_CGDCONT_D_COMP_OFF
 #define AT_CGDCONT_D_COMP_MAX   AT_CGDCONT_D_COMP_V44
-#define AT_CGDCONT_D_COMP_DEFAULT AT_CGDCONT_D_COMP_OFF
 /* PDP header compression parameter values */
 #define AT_CGDCONT_H_COMP_OFF 0 /* PDP header compression is disabled   */
-#define AT_CGDCONT_H_COMP_ON  1 /* manufacturer preferred compression   */
 #define AT_CGDCONT_H_COMP_1144  2 /* RFC1144 (applicable for SNDCP only)  */
-#define AT_CGDCONT_H_COMP_2507  3 /* RFC2507          */
 #define AT_CGDCONT_H_COMP_3095  4 /* RFC3095 (applicable for PDCP only)   */
 #define AT_CGDCONT_H_COMP_MIN   AT_CGDCONT_H_COMP_OFF
 #define AT_CGDCONT_H_COMP_MAX   AT_CGDCONT_H_COMP_3095
-#define AT_CGDCONT_H_COMP_DEFAULT AT_CGDCONT_H_COMP_OFF
 /* IPv4AddrAlloc parameter values */
 #define AT_CGDCONT_IPV4_NAS 0 /* IPv4 Address Allocation through NAS
            * Signalling         */
@@ -708,8 +687,6 @@ typedef struct {
 /* P_CSCF_discovery parameter values */
 #define AT_CGDCONT_PCSCF_OFF  0 /* Preference of P-CSCF address discovery
            * not influenced by +CGDCONTPDP    */
-#define AT_CGDCONT_PCSCF_NAS  1 /* Preference of P-CSCF address discovery
-           * through NAS Signalling     */
 #define AT_CGDCONT_PCSCF_DHCP 2 /* Preference of P-CSCF address discovery
            * through DHCP       */
 #define AT_CGDCONT_PCSCF_MIN    AT_CGDCONT_PCSCF_OFF

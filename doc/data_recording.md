@@ -239,7 +239,7 @@ sudo ./cmake_targets/ran_build/build/nr-softmodem -O ./targets/PROJECTS/GENERIC-
 ```
 Run NR gNB Softmodem in RF Simulation:
 ```
-sudo ./cmake_targets/ran_build/build/nr-softmodem -O ./targets/PROJECTS/GENERIC-NR-5GC/CONF/gnb.band78.sa.fr1.106PRB.1x1.usrpx410_3300MHz.conf --gNBs.[0].min_rxtxtime 6 --rfsim --rfsimulator.serveraddr server --phy-test -d --T_stdout 2 --T_nowait
+sudo ./cmake_targets/ran_build/build/nr-softmodem -O ./targets/PROJECTS/GENERIC-NR-5GC/CONF/gnb.band78.sa.fr1.106PRB.1x1.usrpx410_3300MHz.conf --gNBs.[0].min_rxtxtime 6 --rfsim --rfsimulator.[0].serveraddr server --phy-test -d --T_stdout 2 --T_nowait
 ```
 > **Note:** User needs to change the name of gNB config file to your gNB config file.
 
@@ -265,7 +265,7 @@ sudo ./cmake_targets/ran_build/build/nr-uesoftmodem --usrp-args "type=x4xx,addr=
 
 Run OAI Soft UE in RF Simulation, assume the IP address of gNB server is `192.168.100.2`:
 ```
-sudo ./cmake_targets/ran_build/build/nr-uesoftmodem --rfsim --rfsimulator.serveraddr 192.168.100.2 --phy-test -O ./targets/PROJECTS/GENERIC-NR-5GC/CONF/ue.conf --reconfig-file /home/user/workarea/rrc_files/reconfig.raw --rbconfig-file /home/user/workarea/rrc_files/rbconfig.raw --T_stdout 2 --T_nowait --T_port 2023
+sudo ./cmake_targets/ran_build/build/nr-uesoftmodem --rfsim --rfsimulator.[0].serveraddr 192.168.100.2 --phy-test -O ./targets/PROJECTS/GENERIC-NR-5GC/CONF/ue.conf --reconfig-file /home/user/workarea/rrc_files/reconfig.raw --rbconfig-file /home/user/workarea/rrc_files/rbconfig.raw --T_stdout 2 --T_nowait --T_port 2023
 ```
 
 ### Step3: Run Data Recording Application Services

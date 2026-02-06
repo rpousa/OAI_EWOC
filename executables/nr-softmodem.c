@@ -114,9 +114,6 @@ double tx_gain[MAX_NUM_CCs][4] = {{20,0,0,0},{20,0,0,0}};
 double rx_gain[MAX_NUM_CCs][4] = {{110,0,0,0},{20,0,0,0}};
 #endif
 
-double rx_gain_off = 0.0;
-
-static int tx_max_power[MAX_NUM_CCs]; /* =  {0,0}*/;
 int chain_offset = 0;
 int numerology = 0;
 double cpuf;
@@ -527,7 +524,6 @@ int main( int argc, char **argv ) {
   setvbuf(stderr, NULL, _IONBF, 0);
 #endif
   mode = normal_txrx;
-  memset(tx_max_power,0,sizeof(int)*MAX_NUM_CCs);
   logInit();
   lock_memory_to_ram();
   get_options(uniqCfg);

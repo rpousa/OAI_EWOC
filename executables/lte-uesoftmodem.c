@@ -343,28 +343,23 @@ static void init_openair0(LTE_DL_FRAME_PARMS *frame_parms, int rxgain)
     if(frame_parms->N_RB_DL == 100) {
       if (frame_parms->threequarter_fs) {
         openair0_cfg[card].sample_rate=23.04e6;
-        openair0_cfg[card].samples_per_frame = 230400;
         openair0_cfg[card].tx_bw = 10e6;
         openair0_cfg[card].rx_bw = 10e6;
       } else {
         openair0_cfg[card].sample_rate=30.72e6;
-        openair0_cfg[card].samples_per_frame = 307200;
         openair0_cfg[card].tx_bw = 10e6;
         openair0_cfg[card].rx_bw = 10e6;
       }
     } else if(frame_parms->N_RB_DL == 50) {
       openair0_cfg[card].sample_rate=15.36e6;
-      openair0_cfg[card].samples_per_frame = 153600;
       openair0_cfg[card].tx_bw = 5e6;
       openair0_cfg[card].rx_bw = 5e6;
     } else if (frame_parms->N_RB_DL == 25) {
       openair0_cfg[card].sample_rate=7.68e6;
-      openair0_cfg[card].samples_per_frame = 76800;
       openair0_cfg[card].tx_bw = 2.5e6;
       openair0_cfg[card].rx_bw = 2.5e6;
     } else if (frame_parms->N_RB_DL == 6) {
       openair0_cfg[card].sample_rate=1.92e6;
-      openair0_cfg[card].samples_per_frame = 19200;
       openair0_cfg[card].tx_bw = 1.5e6;
       openair0_cfg[card].rx_bw = 1.5e6;
     }
@@ -374,7 +369,6 @@ static void init_openair0(LTE_DL_FRAME_PARMS *frame_parms, int rxgain)
     else //FDD
       openair0_cfg[card].duplex_mode = duplex_mode_FDD;
 
-    openair0_cfg[card].Mod_id = 0;
     openair0_cfg[card].num_rb_dl=frame_parms->N_RB_DL;
     openair0_cfg[card].clock_source = get_softmodem_params()->clock_source;
     openair0_cfg[card].time_source = get_softmodem_params()->timing_source;

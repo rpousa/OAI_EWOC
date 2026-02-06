@@ -34,6 +34,7 @@
 #include <common/utils/load_module_shlib.h>
 #include <common/config/config_userapi.h>
 #include "common_lib.h"
+#include "pdu_session.h"
 
 /* 3GPP glossary
 RES	RESponse
@@ -53,6 +54,8 @@ typedef struct {
   char *dnnStr;
   int  nssai_sst;
   int  nssai_sd;
+  pdu_session_config_t pdu_sessions[256];
+  int n_pdu_sessions;
   uint8_t key[16];
   uint8_t opc[16];
   uint8_t amf[2];

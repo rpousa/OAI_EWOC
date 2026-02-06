@@ -29,7 +29,6 @@
  * @ingroup pdcp
  */
 
-#define PDCP_FIFO_C
 
 extern int otg_enabled;
 
@@ -42,8 +41,6 @@ extern int otg_enabled;
 #include <stdlib.h>
 #include <unistd.h>
 #include <netinet/ip.h>
-#define rtf_put write
-#define rtf_get read
 
 #include "../MAC/mac_extern.h"
 #include "RRC/L2_INTERFACE/openair_rrc_L2_interface.h"

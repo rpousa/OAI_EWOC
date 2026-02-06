@@ -46,8 +46,6 @@ Description Defines identifiers of the EPS Session Management messages
 
 /* Header length boundaries of EPS Session Management messages  */
 #define ESM_HEADER_LENGTH   sizeof(esm_msg_header_t)
-#define ESM_HEADER_MINIMUM_LENGTH ESM_HEADER_LENGTH
-#define ESM_HEADER_MAXIMUM_LENGTH ESM_HEADER_LENGTH
 
 /* Message identifiers for EPS Session Management   */
 # define ACTIVATE_DEFAULT_EPS_BEARER_CONTEXT_REQUEST   0b11000001 /* 193 = 0xc1 */

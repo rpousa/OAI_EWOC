@@ -699,7 +699,6 @@ struct DCI1A_RA_5MHz_TDD_1_6 {
 } __attribute__ ((__packed__));
 
 typedef struct DCI1A_RA_5MHz_TDD_1_6 DCI1A_RA_5MHz_TDD_1_6_t;
-#define sizeof_DCI1A_RA_5MHz_TDD_1_6_t 27
 
 /// DCI Format Type 1A (5 MHz, TDD, frame 0, 27 bits)
 /*
@@ -717,7 +716,6 @@ struct DCI1A_5MHz_TDD_0 {
 } __attribute__ ((__packed__));
 
 typedef struct DCI1A_5MHz_TDD_0 DCI1A_5MHz_TDD_0_t;
-#define sizeof_DCI1A_5MHz_TDD_0_t 27
 */
 
 /// DCI Format Type 1B (5 MHz, FDD, 2 Antenna Ports, 27 bits)
@@ -745,7 +743,6 @@ struct DCI1B_5MHz_2A_FDD {
 } __attribute__ ((__packed__));
 
 typedef struct DCI1B_5MHz_2A_FDD DCI1B_5MHz_2A_FDD_t;
-#define sizeof_DCI1B_5MHz_FDD_t 27
 
 /// DCI Format Type 1B (5 MHz, TDD, 2 Antenna Ports, 29 bits)
 struct DCI1B_5MHz_2A_TDD {
@@ -772,7 +769,6 @@ struct DCI1B_5MHz_2A_TDD {
 } __attribute__ ((__packed__));
 
 typedef struct DCI1B_5MHz_2A_TDD DCI1B_5MHz_2A_TDD_t;
-#define sizeof_DCI1B_5MHz_2A_TDD_t 29
 
 /// DCI Format Type 1B (5 MHz, FDD, 4 Antenna Ports, 28 bits)
 struct DCI1B_5MHz_4A_FDD {
@@ -797,7 +793,6 @@ struct DCI1B_5MHz_4A_FDD {
 } __attribute__ ((__packed__));
 
 typedef struct DCI1B_5MHz_4A_FDD DCI1B_5MHz_4A_FDD_t;
-#define sizeof_DCI1B_5MHz_4A_FDD_t 28
 
 /// DCI Format Type 1B (5 MHz, TDD, 4 Antenna Ports, 31 bits)
 struct DCI1B_5MHz_4A_TDD {
@@ -824,7 +819,6 @@ struct DCI1B_5MHz_4A_TDD {
 } __attribute__ ((__packed__));
 
 typedef struct DCI1B_5MHz_4A_TDD DCI1B_5MHz_4A_TDD_t;
-#define sizeof_DCI1B_5MHz_4A_TDD_t 31
 
 /// DCI Format Type 1C (1.4 MHz, 8 bits)
 struct DCI1C_1_5MHz
@@ -876,7 +870,6 @@ struct DCI1C_15MHz
 } __attribute__ ((__packed__));
 
 typedef struct DCI1C_15MHz DCI1C_15MHz_t;
-#define sizeof_DCI1C_15MHz_t X
 
 /// DCI Format Type 1C (20 MHz, 15 bits)
 struct DCI1C_20MHz
@@ -919,7 +912,6 @@ struct DCI1D_5MHz_2A_FDD {
 } __attribute__ ((__packed__));
 
 typedef struct DCI1D_5MHz_2A_FDD DCI1D_5MHz_2A_FDD_t;
-#define sizeof_DCI1D_5MHz_2A_FDD_t 27
 
 /// DCI Format Type 1D (5 MHz, TDD, 2 Antenna Ports, 30 bits)
 struct DCI1D_5MHz_2A_TDD {
@@ -948,7 +940,6 @@ struct DCI1D_5MHz_2A_TDD {
 } __attribute__ ((__packed__));
 
 typedef struct DCI1D_5MHz_2A_TDD DCI1D_5MHz_2A_TDD_t;
-#define sizeof_DCI1D_5MHz_2A_TDD_t 30
 
 /// DCI Format Type 1D (5 MHz, FDD, 4 Antenna Ports, 29 bits)
 struct DCI1D_5MHz_4A_FDD {
@@ -975,7 +966,6 @@ struct DCI1D_5MHz_4A_FDD {
 }  __attribute__ ((__packed__));
 
 typedef struct DCI1D_5MHz_4A_FDD DCI1D_5MHz_4A_FDD_t;
-#define sizeof_DCI1D_5MHz_4A_FDD_t 29
 
 /// DCI Format Type 1D (5 MHz, TDD, 4 Antenna Ports, 33 bits)
 struct DCI1D_5MHz_4A_TDD {
@@ -1006,7 +996,6 @@ struct DCI1D_5MHz_4A_TDD {
 } __attribute__ ((__packed__));
 
 typedef struct DCI1D_5MHz_4A_TDD DCI1D_5MHz_4A_TDD_t;
-#define sizeof_DCI1D_5MHz_4A_TDD_t 33
 
 
 ///******************NEW DCI Format for MU-MIMO****************///////////
@@ -2121,7 +2110,6 @@ struct DCI2B_1_5MHz_TDD {
 } __attribute__ ((__packed__));
 
 typedef struct DCI2B_1_5MHz_TDD DCI2B_1_5MHz_TDD_t;
-#define sizeof_DCI2B_1_5MHz_TDD_t 33
 
 /// DCI Format Type 2B (5 MHz, TDD,  39 bits)
 struct DCI2B_5MHz_TDD {
@@ -2156,7 +2144,6 @@ struct DCI2B_5MHz_TDD {
 } __attribute__ ((__packed__));
 
 typedef struct DCI2B_5MHz_TDD DCI2B_5MHz_TDD_t;
-#define sizeof_DCI2B_5MHz_TDD_t 39
 
 /// DCI Format Type 2B (10 MHz, TDD,  43 bits)
 struct DCI2B_10MHz_TDD {
@@ -2191,7 +2178,6 @@ struct DCI2B_10MHz_TDD {
 } __attribute__ ((__packed__));
 
 typedef struct DCI2B_10MHz_TDD DCI2B_10MHz_TDD_t;
-#define sizeof_DCI2B_10MHz_TDD_t 43
 
 /// DCI Format Type 2B (20 MHz, TDD,  51 bits)
 struct DCI2B_20MHz_TDD {
@@ -2226,7 +2212,6 @@ struct DCI2B_20MHz_TDD {
 } __attribute__ ((__packed__));
 
 typedef struct DCI2B_20MHz_TDD DCI2B_20MHz_TDD_t;
-#define sizeof_DCI2B_20MHz_TDD_t 51
 
 /// DCI Format Type 2B (1.5 MHz, FDD,  28 bits)
 struct DCI2B_1_5MHz_FDD {
@@ -2255,7 +2240,6 @@ struct DCI2B_1_5MHz_FDD {
 } __attribute__ ((__packed__));
 
 typedef struct DCI2B_1_5MHz_FDD DCI2B_1_5MHz_FDD_t;
-#define sizeof_DCI2B_1_5MHz_FDD_t 28
 
 /// DCI Format Type 2B (5 MHz, FDD,  36 bits)
 struct DCI2B_5MHz_FDD {
@@ -2285,7 +2269,6 @@ struct DCI2B_5MHz_FDD {
   uint64_t rah:1;
 } __attribute__ ((__packed__));
 
-#define sizeof_DCI2B_5MHz_FDD_t 36
 typedef struct DCI2B_5MHz_FDD DCI2B_5MHz_FDD_t;
 
 /// DCI Format Type 2B (10 MHz, FDD,  41 bits)
@@ -2318,7 +2301,6 @@ struct DCI2B_10MHz_FDD {
   uint64_t padding0:1;
 } __attribute__ ((__packed__));
 
-#define sizeof_DCI2B_10MHz_FDD_t 41
 typedef struct DCI2B_10MHz_FDD DCI2B_10MHz_FDD_t;
 
 /// DCI Format Type 2B (20 MHz, FDD,  48 bits)
@@ -2349,7 +2331,6 @@ struct DCI2B_20MHz_FDD {
   uint64_t rah:1;
 } __attribute__ ((__packed__));
 
-#define sizeof_DCI2B_20MHz_FDD_t 48
 typedef struct DCI2B_20MHz_FDD DCI2B_20MHz_FDD_t;
 
 // *******************************************************************
@@ -2386,7 +2367,6 @@ struct DCI2C_1_5MHz_TDD {
 } __attribute__ ((__packed__));
 
 typedef struct DCI2C_1_5MHz_TDD DCI2C_1_5MHz_TDD_t;
-#define sizeof_DCI2C_1_5MHz_TDD_t 34
 
 /// DCI Format Type 2C (5 MHz, TDD,  41 bits)
 struct DCI2C_5MHz_TDD {
@@ -2421,7 +2401,6 @@ struct DCI2C_5MHz_TDD {
 } __attribute__ ((__packed__));
 
 typedef struct DCI2C_5MHz_TDD DCI2C_5MHz_TDD_t;
-#define sizeof_DCI2C_5MHz_TDD_t 41
 
 /// DCI Format Type 2C (10 MHz, TDD,  45 bits)
 struct DCI2C_10MHz_TDD {
@@ -2456,7 +2435,6 @@ struct DCI2C_10MHz_TDD {
 } __attribute__ ((__packed__));
 
 typedef struct DCI2C_10MHz_TDD DCI2C_10MHz_TDD_t;
-#define sizeof_DCI2C_10MHz_TDD_t 45
 
 /// DCI Format Type 2C (20 MHz, TDD,  53 bits)
 struct DCI2C_20MHz_TDD {
@@ -2491,7 +2469,6 @@ struct DCI2C_20MHz_TDD {
 } __attribute__ ((__packed__));
 
 typedef struct DCI2C_20MHz_TDD DCI2C_20MHz_TDD_t;
-#define sizeof_DCI2C_20MHz_TDD_t 53
 
 /// DCI Format Type 2C (1.5 MHz, FDD,  30 bits)
 struct DCI2C_1_5MHz_FDD {
@@ -2520,7 +2497,6 @@ struct DCI2C_1_5MHz_FDD {
 } __attribute__ ((__packed__));
 
 typedef struct DCI2C_1_5MHz_FDD DCI2C_1_5MHz_FDD_t;
-#define sizeof_DCI2C_1_5MHz_FDD_t 30
 
 /// DCI Format Type 2C (5 MHz, FDD,  38 bits)
 struct DCI2C_5MHz_FDD {
@@ -2550,7 +2526,6 @@ struct DCI2C_5MHz_FDD {
   uint64_t rah:1;
 } __attribute__ ((__packed__));
 
-#define sizeof_DCI2C_5MHz_FDD_t 38
 typedef struct DCI2C_5MHz_FDD DCI2C_5MHz_FDD_t;
 
 /// DCI Format Type 2C (10 MHz, FDD,  42 bits)
@@ -2581,7 +2556,6 @@ struct DCI2C_10MHz_FDD {
   uint64_t rah:1;
 } __attribute__ ((__packed__));
 
-#define sizeof_DCI2C_10MHz_FDD_t 43
 typedef struct DCI2C_10MHz_FDD DCI2C_10MHz_FDD_t;
 
 /// DCI Format Type 2C (20 MHz, FDD,  50 bits)
@@ -2612,7 +2586,6 @@ struct DCI2C_20MHz_FDD {
   uint64_t rah:1;
 } __attribute__ ((__packed__));
 
-#define sizeof_DCI2C_20MHz_FDD_t 50
 typedef struct DCI2C_20MHz_FDD DCI2C_20MHz_FDD_t;
 
 // *******************************************************************
@@ -2651,7 +2624,6 @@ struct DCI2D_1_5MHz_TDD {
 } __attribute__ ((__packed__));
 
 typedef struct DCI2D_1_5MHz_TDD DCI2D_1_5MHz_TDD_t;
-#define sizeof_DCI2D_1_5MHz_TDD_t 36
 
 /// DCI Format Type 2D (5 MHz, TDD,  43 bits)
 struct DCI2D_5MHz_TDD {
@@ -2688,7 +2660,6 @@ struct DCI2D_5MHz_TDD {
 } __attribute__ ((__packed__));
 
 typedef struct DCI2D_5MHz_TDD DCI2D_5MHz_TDD_t;
-#define sizeof_DCI2D_5MHz_TDD_t 43
 
 /// DCI Format Type 2D (10 MHz, TDD,  47 bits)
 struct DCI2D_10MHz_TDD {
@@ -2725,7 +2696,6 @@ struct DCI2D_10MHz_TDD {
 } __attribute__ ((__packed__));
 
 typedef struct DCI2D_10MHz_TDD DCI2D_10MHz_TDD_t;
-#define sizeof_DCI2D_10MHz_TDD_t 47
 
 /// DCI Format Type 2D (20 MHz, TDD,  55 bits)
 struct DCI2D_20MHz_TDD {
@@ -2762,7 +2732,6 @@ struct DCI2D_20MHz_TDD {
 } __attribute__ ((__packed__));
 
 typedef struct DCI2D_20MHz_TDD DCI2D_20MHz_TDD_t;
-#define sizeof_DCI2D_20MHz_TDD_t 55
 
 /// DCI Format Type 2D (1.5 MHz, FDD,  33 bits)
 struct DCI2D_1_5MHz_FDD {
@@ -2795,7 +2764,6 @@ struct DCI2D_1_5MHz_FDD {
 } __attribute__ ((__packed__));
 
 typedef struct DCI2D_1_5MHz_FDD DCI2D_1_5MHz_FDD_t;
-#define sizeof_DCI2D_1_5MHz_FDD_t 33
 
 /// DCI Format Type 2D (5 MHz, FDD,  41 bits)
 struct DCI2D_5MHz_FDD {
@@ -2829,7 +2797,6 @@ struct DCI2D_5MHz_FDD {
   uint64_t padding0:1;
 } __attribute__ ((__packed__));
 
-#define sizeof_DCI2D_5MHz_FDD_t 41
 typedef struct DCI2D_5MHz_FDD DCI2D_5MHz_FDD_t;
 
 /// DCI Format Type 2D (10 MHz, FDD,  45 bits)
@@ -2864,7 +2831,6 @@ struct DCI2D_10MHz_FDD {
   uint64_t padding0:1;
 } __attribute__ ((__packed__));
 
-#define sizeof_DCI2D_10MHz_FDD_t 45
 typedef struct DCI2D_10MHz_FDD DCI2D_10MHz_FDD_t;
 
 /// DCI Format Type 2D (20 MHz, FDD,  52 bits)
@@ -2895,7 +2861,6 @@ struct DCI2D_20MHz_FDD {
   uint64_t rah:1;
 } __attribute__ ((__packed__));
 
-#define sizeof_DCI2D_20MHz_FDD_t 52
 typedef struct DCI2D_20MHz_FDD DCI2D_20MHz_FDD_t;
 
 
@@ -2904,14 +2869,12 @@ typedef struct __attribute__ ((__packed__))
   uint32_t TPC:28;
 }
 DCI3_5MHz_TDD_0_t;
-#define sizeof_DCI3_5MHz_TDD_0_t 27
 
 typedef struct __attribute__ ((__packed__))
 {
   uint32_t TPC:28;
 }
 DCI3_5MHz_TDD_1_6_t;
-#define sizeof_DCI3_5MHz_TDD_1_6_t 27
 
 
 typedef struct __attribute__ ((__packed__))
@@ -2919,7 +2882,6 @@ typedef struct __attribute__ ((__packed__))
   uint32_t TPC:26;
 }
 DCI3_5MHz_FDD_t;
-#define sizeof_DCI3_5MHz_FDD_t 25
 
 ///  DCI Format Type 0 (1.5 MHz,9 bits)
 struct DCI0A_1_5MHz {
@@ -2932,7 +2894,6 @@ struct DCI0A_1_5MHz {
   /// Hopping flag
   uint32_t hopping:1;
 } __attribute__ ((__packed__));
-#define sizeof_DCI0A_1_5MHz 9
 
 ///  DCI Format Type 0 (5 MHz,13 bits)
 struct DCI0A_5MHz {
@@ -2945,7 +2906,6 @@ struct DCI0A_5MHz {
   /// Hopping flag
   uint32_t hopping:1;
 } __attribute__ ((__packed__));
-#define sizeof_DCI0A_5MHz 13
 
 ///  DCI Format Type 0 (10 MHz,15 bits)
 struct DCI0A_10_MHz {
@@ -2958,7 +2918,6 @@ struct DCI0A_10_MHz {
   /// Hopping flag
   uint32_t hopping:1;
 } __attribute__ ((__packed__));
-#define sizeof_DCI0A_10MHz 15
 
 ///  DCI Format Type 0 (20 MHz,17 bits)
 struct DCI0A_20_MHz {
@@ -2971,7 +2930,6 @@ struct DCI0A_20_MHz {
   /// Hopping flag
   uint32_t hopping:1;
 } __attribute__ ((__packed__));
-#define sizeof_DCI0A_20MHz 17
 
 #define MAX_DCI_SIZE_BITS 45
 

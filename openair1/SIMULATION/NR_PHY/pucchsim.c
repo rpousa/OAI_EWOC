@@ -54,7 +54,6 @@ THREAD_STRUCT thread_struct;
 PHY_VARS_gNB *gNB;
 PHY_VARS_NR_UE *UE;
 RAN_CONTEXT_t RC;
-openair0_config_t openair0_cfg[MAX_CARDS];
 int32_t uplink_frequency_offset[MAX_NUM_CCs][4];
 uint64_t downlink_frequency[MAX_NUM_CCs][4];
 
@@ -445,13 +444,10 @@ int main(int argc, char **argv)
     gNB->common_vars.rxdataF[0][i] = malloc16_clear(gNB->frame_parms.samples_per_frame_wCP * sizeof(c16_t));
 
   double fs,txbw,rxbw;
-  uint32_t samples;
-
   get_samplerate_and_bw(mu,
                         N_RB_DL,
                         frame_parms->threequarter_fs,
                         &fs,
-                        &samples,
                         &txbw,
                         &rxbw);
 

@@ -19,8 +19,6 @@
  *      contact@openairinterface.org
  */
 
-#define RRC_SL_PRECONFIG
-#define RRC_SL_PRECONFIG_C
 
 #include "oai_asn1.h"
 #include "NR_SL-PreconfigurationNR-r16.h"

@@ -149,13 +149,13 @@ Example command using rfsim:
 
 ```bash
 cd ~/openairinterface5g/cmake_targets/ran_build/build
-sudo ./nr-uesoftmodem --rfsim -r 106 --numerology 1 --band 78 -C 3319680000 --ue-nb-ant-tx 1 --ue-nb-ant-rx 1 -O ../../../ci-scripts/conf_files/nrue1.uicc.cluCN.conf --rfsimulator.serveraddr 10.201.1.100 --loader.ldpc.shlibversion _xdma --nrLDPC_coding_xdma.num_threads_prepare 2
+sudo ./nr-uesoftmodem --rfsim -r 106 --numerology 1 --band 78 -C 3319680000 --ue-nb-ant-tx 1 --ue-nb-ant-rx 1 -O ../../../ci-scripts/conf_files/nrue1.uicc.cluCN.conf --rfsimulator.[0].serveraddr 10.201.1.100 --loader.ldpc.shlibversion _xdma --nrLDPC_coding_xdma.num_threads_prepare 2
 ```
 
 or 
 
 ```bash
-sudo ./nr-uesoftmodem --rfsim -r 106 --numerology 1 --band 78 -C 3319680000 --ue-nb-ant-tx 1 --ue-nb-ant-rx 1 -O ../../../ci-scripts/conf_files/nrue1.uicc.cluCN.conf --rfsimulator.serveraddr 10.201.1.100
+sudo ./nr-uesoftmodem --rfsim -r 106 --numerology 1 --band 78 -C 3319680000 --ue-nb-ant-tx 1 --ue-nb-ant-rx 1 -O ../../../ci-scripts/conf_files/nrue1.uicc.cluCN.conf --rfsimulator.[0].serveraddr 10.201.1.100
 ```
 
 if you have added the configuration to the `.conf` file.

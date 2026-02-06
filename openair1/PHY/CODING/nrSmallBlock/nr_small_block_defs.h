@@ -41,7 +41,6 @@
 
 #define NR_SMALL_BLOCK_CODED_BITS 32
 
-#define L1d_CLS 64
 
 uint32_t encodeSmallBlock(int in, int len);
 

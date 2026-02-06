@@ -1039,6 +1039,7 @@ static void test_f1ap_ue_context_modification_request()
   orig.drbs_rel[2].id = 19;
 
   _F1_MALLOC(orig.status, LOWER_LAYERS_RESUME);
+  _F1_MALLOC(orig.gNB_DU_Configuration_Query, true);
 
   F1AP_F1AP_PDU_t *f1enc = encode_ue_context_mod_req(&orig);
   F1AP_F1AP_PDU_t *f1dec = f1ap_encode_decode(f1enc);

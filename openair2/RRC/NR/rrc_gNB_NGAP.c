@@ -1276,13 +1276,20 @@ void rrc_gNB_process_HandoverCommand(gNB_RRC_INST *rrc, const ngap_handover_comm
   }
   gNB_RRC_UE_t *UE = &ue_context_p->ue_context;
 
-  uint8_t buffer[NR_RRC_BUF_SIZE];
-  byte_array_t ba = {.buf = buffer, .len = sizeof(buffer)};
-  int enc = doRRCReconfiguration_from_HandoverCommand(&ba, msg->handoverCommand);
-  DevAssert(enc > 0);
+  byte_array_t buffer = doRRCReconfiguration_from_HandoverCommand(msg->handoverCommand);
+  if (!buffer.buf || buffer.len == 0) {
+    LOG_E(NR_RRC, "Failed to decode/encode RRCReconfiguration from HandoverCommand\n");
+    // Notify AMF that handover was cancelled
+    DevAssert(UE->ho_context);
+    DevAssert(UE->ho_context->source);
+    DevAssert(UE->ho_context->source->ho_cancel);
+    UE->ho_context->source->ho_cancel(rrc, UE);
+    return;
+  }
 
-  rrc_gNB_trigger_reconfiguration_for_handover(rrc, UE, buffer, enc);
+  rrc_gNB_trigger_reconfiguration_for_handover(rrc, UE, buffer.buf, buffer.len);
   LOG_A(NR_RRC, "Send reconfiguration (HO Command) to UE %u/RNTI %04x\n", UE->rrc_ue_id, UE->rnti);
+  free_byte_array(buffer);
 }
 
 void rrc_gNB_free_Handover_Command(ngap_handover_command_t *msg)

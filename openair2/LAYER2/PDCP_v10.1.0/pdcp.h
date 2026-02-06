@@ -355,8 +355,6 @@ uint64_t pdcp_module_init (uint64_t pdcp_optmask, int ue_id);
 void pdcp_module_cleanup (void);
 void pdcp_layer_init     (void);
 void pdcp_layer_cleanup  (void);
-#define PDCP2NW_DRIVER_FIFO 21
-#define NW_DRIVER2PDCP_FIFO 22
 
 int pdcp_fifo_flush_sdus                      ( const protocol_ctxt_t *const  ctxt_pP);
 int pdcp_fifo_read_input_sdus_remaining_bytes ( const protocol_ctxt_t *const  ctxt_pP);
@@ -440,7 +438,6 @@ typedef struct {
 /*
  * Reordering_Window: half of the PDCP SN space
  */
-#define REORDERING_WINDOW_SN_5BIT 16
 #define REORDERING_WINDOW_SN_7BIT 64
 #define REORDERING_WINDOW_SN_12BIT 2048
 

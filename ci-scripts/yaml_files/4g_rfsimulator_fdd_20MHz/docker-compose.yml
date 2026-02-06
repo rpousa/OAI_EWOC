@@ -208,9 +208,10 @@ services:
         environment:
             TZ: Europe/Paris
             ASAN_OPTIONS: detect_leaks=0
-            USE_ADDITIONAL_OPTIONS: --rfsim -C 2680000000 -r 100 --ue-rxgain 140 --ue-txgain 120 --rfsimulator.serveraddr 192.168.61.20 --log_config.global_log_options level,nocolor,time
+            USE_ADDITIONAL_OPTIONS: --rfsim -C 2680000000 -r 100 --ue-rxgain 140 --ue-txgain 120 --rfsimulator.[0].serveraddr 192.168.61.20 --log_config.global_log_options level,nocolor,time
         volumes:
             - ../../conf_files/lteue.usim-ci.conf:/opt/oai-lte-ue/etc/ue_usim.conf
+            - ../../conf_files/lteue.rfsim.conf:/opt/oai-lte-ue/etc/ue.conf
         healthcheck:
             test: /bin/bash -c "pgrep lte-uesoftmodem"
             interval: 10s

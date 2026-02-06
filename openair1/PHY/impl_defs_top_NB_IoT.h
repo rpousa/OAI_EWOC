@@ -34,7 +34,6 @@
 #define __PHY_IMPLEMENTATION_DEFS_NB_IOT_H__
 
 #include "common/openairinterface5g_limits.h"
-#define ONE_OVER_SQRT2_Q15_NB_IoT 23170
 
 #define NUMBER_OF_SUBBANDS_MAX_NB_IoT 13
 typedef enum {no_relay_NB_IoT=1,unicast_relay_type1_NB_IoT,unicast_relay_type2_NB_IoT, multicast_relay_NB_IoT} relaying_type_t_NB_IoT;

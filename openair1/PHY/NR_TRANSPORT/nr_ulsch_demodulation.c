@@ -15,7 +15,6 @@
 #include <sys/time.h>
 #include "PHY/log_tools.h"
 
-#define INVALID_VALUE 255
 
 #if T_TRACER
 static void copy_c16_data_to_slot_memory(c16_t *src, c16_t *dst_slot, int nb_re_pusch, int symbol)

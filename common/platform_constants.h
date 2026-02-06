@@ -27,39 +27,30 @@
 
 #ifdef LARGE_SCALE
 #define NB_MODULES_MAX 128
-#define NB_NODE_MAX 128
 #else
 #define NB_MODULES_MAX 32
-#define NB_NODE_MAX 32
 #endif
 
 #define MAX_IP_PACKET_SIZE 10000 // 9000
 
 #define MAX_MODULES NB_MODULES_MAX
-#define MAX_NR_RRC_UE_CONTEXTS 64
 
 #ifndef UE_EXPANSION
 #ifdef LARGE_SCALE
 #define MAX_MOBILES_PER_ENB 128
 #define MAX_MOBILES_PER_ENB_NB_IoT 128
 #define MAX_eNB 2
-#define MAX_gNB 2
 #else
 #define MAX_MOBILES_PER_ENB 40
 #define MAX_MOBILES_PER_ENB_NB_IoT 40
 #define MAX_eNB 2
-#define MAX_gNB 2
 #endif
 #else
 #define MAX_MOBILES_PER_ENB 256
 #define MAX_MOBILES_PER_ENB_NB_IoT 256
 #define MAX_eNB 2
-#define MAX_gNB 2
 #endif
 
-#define NUMBER_OF_NR_UCI_STATS_MAX 16
-#define MAX_MANAGED_ENB_PER_MOBILE 2
-#define MAX_MANAGED_GNB_PER_MOBILE 2
 
 /// NB-IOT
 #define NB_RB_MAX_NB_IOT (2 + 3) /* 2 from LTE_maxDRB_NB_r13 in LTE_asn_constant.h + 3 SRBs */
@@ -85,12 +76,10 @@
 // RLC Entity
 #define RLC_TX_MAXSIZE       10000000
 #define RLC_RX_MAXSIZE       10000000
-#define SEND_MRW_ON 240
 #define MAX_ANT 8
 // CBA constant
 #define NUM_MAX_CBA_GROUP 4
 
-#define printk printf
 #define RETURNok (0)
 #define RETURNerror (-1)
 #define DEFAULT_NAS_PATH "PWD"
@@ -99,6 +88,9 @@
 
 // SDAP
 #define MAX_QOS_FLOWS 64
+
+// SDAP/5G NAS NOS1
+#define DEFAULT_NOS1_PDU_ID 10
 
 #define SPEED_OF_LIGHT 299792458 // in m/s
 #endif /* __PLATFORM_CONSTANTS_H__ */

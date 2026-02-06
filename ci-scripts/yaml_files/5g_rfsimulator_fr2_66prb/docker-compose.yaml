@@ -121,7 +121,7 @@ services:
             - NET_RAW    # for ping
         environment:
             USE_ADDITIONAL_OPTIONS: --rfsim
-                                    --rfsimulator.serveraddr 192.168.71.140 --log_config.global_log_options level,nocolor,time
+                                    --rfsimulator.[0].serveraddr 192.168.71.140 --log_config.global_log_options level,nocolor,time
                                     -C 27975360000 -r 66 --numerology 3 --ssb 48 --band 257
             ASAN_OPTIONS: detect_leaks=0
         devices:

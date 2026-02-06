@@ -49,12 +49,6 @@
 #define SL_CONFIG_STRING_SL_NUMSSB_WITHINPERIOD_0              "sl_NumSSB_WithinPeriod_0"
 #define SL_CONFIG_STRING_SL_TIMEOFFSET_SSB_0                   "sl_TimeOffsetSSB_0"
 #define SL_CONFIG_STRING_SL_TIMEINTERVAL_0                     "sl_TimeInterval_0"
-#define SL_CONFIG_STRING_SL_NUMSSB_WITHINPERIOD_1              "sl_NumSSB_WithinPeriod_1"
-#define SL_CONFIG_STRING_SL_TIMEOFFSET_SSB_1                   "sl_TimeOffsetSSB_1"
-#define SL_CONFIG_STRING_SL_TIMEINTERVAL_1                     "sl_TimeInterval_1"
-#define SL_CONFIG_STRING_SL_NUMSSB_WITHINPERIOD_2              "sl_NumSSB_WithinPeriod_2"
-#define SL_CONFIG_STRING_SL_TIMEOFFSET_SSB_2                   "sl_TimeOffsetSSB_2"
-#define SL_CONFIG_STRING_SL_TIMEINTERVAL_2                     "sl_TimeInterval_2"
 
 
 /*Sidelink Bandwidth related parameters in SL-Preconfig */

@@ -22,11 +22,11 @@
 */
 #include <ctype.h>
 
+#include "common/platform_constants.h"
 #include <openair3/UICC/usim_interface.h>
 #include <openair3/NAS/COMMON/milenage.h>
 extern uint16_t NB_UE_INST;
 
-#define UICC_SECTION    "uicc"
 #define IMEISV_STR_MAX_LENGTH 16
 #define UICC_CONFIG_HELP_OPTIONS     " list of comma separated options to interface a simulated (real UICC to be developped). Available options: \n"\
   "        imsi: user imsi\n"\
@@ -76,10 +76,7 @@ uicc_t *init_uicc(char *sectionName) {
   // key, OPc, sqn, amf don't need to be read from the true USIM
   int ret = config_get(config_get_if(), uicc_params, sizeofArray(uicc_params), sectionName);
   AssertFatal(ret >= 0, "configuration couldn't be performed for uicc name: %s", sectionName);
-  LOG_I(SIM,
-        "UICC simulation: IMSI=%s, IMEISV=%s, Ki=%s, OPc=%s, DNN=%s, SST=0x%02x, SD=0x%06x\n",
-        uicc->imsiStr, uicc->imeisvStr, uicc->keyStr, uicc->opcStr,
-        uicc->dnnStr, uicc->nssai_sst, uicc->nssai_sd);
+  LOG_I(SIM, "UICC simulation: IMSI=%s, IMEISV=%s, Ki=%s, OPc=%s\n", uicc->imsiStr, uicc->imeisvStr, uicc->keyStr, uicc->opcStr);
   to_hex(uicc->keyStr,uicc->key, sizeof(uicc->key) );
   to_hex(uicc->opcStr,uicc->opc, sizeof(uicc->opc) );
   to_hex(uicc->sqnStr,uicc->sqn, sizeof(uicc->sqn) );
@@ -112,6 +109,36 @@ uicc_t * checkUicc(int Mod_id) {
     char uiccName[64];
     sprintf(uiccName,"uicc%d",  Mod_id);
     uiccArray[Mod_id]=(void*)init_uicc(uiccName);
+    uicc_t *uicc = uiccArray[Mod_id];
+    uicc->n_pdu_sessions = get_pdu_session_configs(uiccName, uicc->pdu_sessions, sizeof(uicc->pdu_sessions));
+    if (uicc->n_pdu_sessions > 0) {
+      LOG_I(SIM, "overriding potential %s.dnn/nssai_sst/nssai_sd from %s.pdu_sessions\n", uiccName, uiccName);
+    } else if (uicc->n_pdu_sessions < 0) {
+      // we could not load from "new" pdu_sessions list, so read from "legacy"
+      // config
+      LOG_W(SIM,
+            "loading PDU session parameters from legacy UICC configuration. Please update to use %s.pdu_sessions instead to make this warning disappear\n",
+            uiccName);
+      sleep(3);
+      uicc->n_pdu_sessions = 1;
+      pdu_session_config_t *pdu = &uicc->pdu_sessions[0];
+      AssertFatal(uicc->dnnStr != NULL, "no default DNN, cannot create\n");
+      pdu->id = DEFAULT_NOS1_PDU_ID; // any default would do
+      pdu->dnn = strdup(uicc->dnnStr);
+      pdu->nssai.sst = uicc->nssai_sst;
+      pdu->nssai.sd = uicc->nssai_sd;
+      pdu->type = 1; /* = PDU_SESSION_TYPE_IPV4 */
+    } // else: uicc->n_pdu_sessions == 0 => don't request a PDU session
+    for (int i = 0; i < uicc->n_pdu_sessions; ++i) {
+      const pdu_session_config_t *pdu = &uicc->pdu_sessions[i];
+      LOG_I(SIM,
+            "will request PDU session ID %d, type %d, DNN %s, NSSAI %d.%6x\n",
+            pdu->id,
+            pdu->type,
+            pdu->dnn,
+            pdu->nssai.sst,
+            pdu->nssai.sd);
+    }
   }
   return (uicc_t*) uiccArray[Mod_id];  
 }

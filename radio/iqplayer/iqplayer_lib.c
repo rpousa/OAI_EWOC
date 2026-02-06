@@ -23,8 +23,6 @@
  *
  * \author:FrancoisTaburet: francois.taburet@nokia-bell-labs.com
  */
-#define _LARGEFILE_SOURCE
-#define _FILE_OFFSET_BITS 64
 #include <string.h>
 #include <pthread.h>
 #include <unistd.h>
@@ -57,7 +55,8 @@ static void busy_wait(uint32_t usecs) {
   //LOG_I(HW, "Expected: %d Elapsed: %d us\n", usecs, elapsed_usecs);
 }
 
-static void parse_iqfile_header(openair0_device *device, iqfile_header_t *iq_fh) {
+static void parse_iqfile_header(openair0_device_t *device, iqfile_header_t *iq_fh)
+{
   char tmp[4]=OAIIQFILE_ID;
   AssertFatal((memcmp(iq_fh->oaiid,tmp,sizeof(iq_fh->oaiid)) == 0),
               "iqfile doesn't seem to be compatible with oai (invalid id %.4s in header)\n",
@@ -69,11 +68,11 @@ static void parse_iqfile_header(openair0_device *device, iqfile_header_t *iq_fh)
   LOG_UI(HW,"Replay iqs from %s device, bandwidth %e\n",get_devname(iq_fh->devtype),iq_fh->bw);
 }
 
-
 /*! \brief Called to start the iqplayer device. Return 0 if OK, < 0 if error
     @param device pointer to the device structure specific to the RF hardware target
 */
-static int iqplayer_loadfile(openair0_device *device, openair0_config_t *openair0_cfg) {
+static int iqplayer_loadfile(openair0_device_t *device, openair0_config_t *openair0_cfg)
+{
   recplay_state_t *s = device->recplay_state;
   recplay_conf_t  *c = openair0_cfg->recplay_conf;
 
@@ -142,7 +141,7 @@ static int iqplayer_loadfile(openair0_device *device, openair0_config_t *openair
  * \param device the hardware to use
  * \returns  0 on success
  */
-static int trx_iqplayer_get_stats(openair0_device *device)
+static int trx_iqplayer_get_stats(openair0_device_t *device)
 {
   LOG_I(HW, "trx_iqplayer_get_stats() called, not implemented\n");
   return 0;
@@ -152,7 +151,7 @@ static int trx_iqplayer_get_stats(openair0_device *device)
  * \param device the hardware to use
  * \returns 0 in success
  */
-static int trx_iqplayer_reset_stats(openair0_device *device)
+static int trx_iqplayer_reset_stats(openair0_device_t *device)
 {
   LOG_I(HW, "trx_iqplayer_reset_stats() called, not implemented\n");
   return 0;
@@ -160,7 +159,7 @@ static int trx_iqplayer_reset_stats(openair0_device *device)
 
 /*! \brief Stop operation of the transceiver
  */
-static int trx_iqplayer_stop(openair0_device *device)
+static int trx_iqplayer_stop(openair0_device_t *device)
 {
   LOG_I(HW, "trx_iqplayer_stop() called, not implemented\n");
   return 0;
@@ -171,7 +170,7 @@ static int trx_iqplayer_stop(openair0_device *device)
  * \param openair0_cfg RF frontend parameters set by application
  * \returns 0 in success
  */
-static int trx_iqplayer_set_freq(openair0_device *device, openair0_config_t *openair0_cfg)
+static int trx_iqplayer_set_freq(openair0_device_t *device, openair0_config_t *openair0_cfg)
 {
   LOG_I(HW, "trx_iqplayer_set_freq() called, not implemented\n");
   return 0;
@@ -182,7 +181,7 @@ static int trx_iqplayer_set_freq(openair0_device *device, openair0_config_t *ope
  * \param openair0_cfg RF frontend parameters set by application
  * \returns 0 in success
  */
-static int trx_iqplayer_set_gains(openair0_device *device, openair0_config_t *openair0_cfg)
+static int trx_iqplayer_set_gains(openair0_device_t *device, openair0_config_t *openair0_cfg)
 {
   LOG_I(HW, "trx_iqplayer_set_gains() called, not implemented\n");
   return 0;
@@ -191,14 +190,16 @@ static int trx_iqplayer_set_gains(openair0_device *device, openair0_config_t *op
 /*! \brief start the oai iq player
  * \param device, the hardware used
  */
-static int trx_iqplayer_start(openair0_device *device) {
+static int trx_iqplayer_start(openair0_device_t *device)
+{
   return 0;
 }
 
 /*! \brief Terminate operation of the oai iq player
  * \param device, the hardware used
  */
-static void trx_iqplayer_end(openair0_device *device) {
+static void trx_iqplayer_end(openair0_device_t *device)
+{
   if (device == NULL)
     return;
   if (device->recplay_state == NULL)
@@ -218,7 +219,6 @@ static void trx_iqplayer_end(openair0_device *device) {
     close(device->recplay_state->fd);
     device->recplay_state->fd = -1;
   }
-
 }
 /*! \brief Write iqs function when in replay mode, just introduce a delay, as configured at init time,
       @param device pointer to the device structure specific to the RF hardware target
@@ -228,7 +228,8 @@ static void trx_iqplayer_end(openair0_device *device) {
       @param antenna_id index of the antenna if the device has multiple antennas
       @param flags flags must be set to true if timestamp parameter needs to be applied
 */
-static int trx_iqplayer_write(openair0_device *device, openair0_timestamp timestamp, void **buff, int nsamps, int cc, int flags) {
+static int trx_iqplayer_write(openair0_device_t *device, openair0_timestamp_t timestamp, void **buff, int nsamps, int cc, int flags)
+{
   struct timespec req;
   req.tv_sec = 0;
   req.tv_nsec = device->openair0_cfg->recplay_conf->u_sf_write_delay * 1000;
@@ -247,7 +248,8 @@ static int trx_iqplayer_write(openair0_device *device, openair0_timestamp timest
  * \param antenna_id Index of antenna for which to receive samples
  * \returns the number of sample read
 */
-static int trx_iqplayer_read(openair0_device *device, openair0_timestamp *ptimestamp, void **buff, int nsamps, int cc) {
+static int trx_iqplayer_read(openair0_device_t *device, openair0_timestamp_t *ptimestamp, void **buff, int nsamps, int cc)
+{
   recplay_state_t *s = device->recplay_state;
   static struct timeval tprev;
   static int read_count = 0;
@@ -324,7 +326,8 @@ static int trx_iqplayer_read(openair0_device *device, openair0_timestamp *ptimes
   return nsamps;
 }
 
-int device_init(openair0_device *device, openair0_config_t *openair0_cfg) {
+int device_init(openair0_device_t *device, openair0_config_t *openair0_cfg)
+{
   device->openair0_cfg = openair0_cfg;
   device->trx_start_func = trx_iqplayer_start;
   device->trx_get_stats_func = trx_iqplayer_get_stats;

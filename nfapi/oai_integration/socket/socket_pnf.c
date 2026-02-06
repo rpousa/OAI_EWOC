@@ -78,6 +78,10 @@ static int send_p7_msg(pnf_p7_t *pnf_p7, uint8_t *msg, uint32_t len)
 
 bool pnf_nr_send_p7_message(pnf_p7_t *pnf_p7, nfapi_nr_p7_message_header_t *header, uint32_t msg_len)
 {
+  if (pnf_p7->terminate) {
+    //don't send any further P7 messages after terminating
+    return false;
+  }
   header->m_segment_sequence = NFAPI_NR_P7_SET_MSS(0, 0, pnf_p7->sequence_number);
 
   // Need to guard against different threads calling the encode function at the same time

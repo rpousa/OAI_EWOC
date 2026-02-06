@@ -51,7 +51,6 @@
 
 #define GNB_CONFIG_STRING_INITIALDLBWPLOCATIONANDBANDWIDTH      "initialDLBWPlocationAndBandwidth"
 #define GNB_CONFIG_STRING_INITIALDLBWPSUBCARRIERSPACING         "initialDLBWPsubcarrierSpacing"
-#define GNB_CONFIG_STRING_INITIALDLBWPCYCLICPREFIX              "initialDLBWPcyclicPrefix"
 
 #define GNB_CONFIG_STRING_INITIALDLBWPCONTROLRESOURCESETZERO    "initialDLBWPcontrolResourceSetZero"
 #define GNB_CONFIG_STRING_INITIALDLBWPSEARCHSPACEZERO           "initialDLBWPsearchSpaceZero"
@@ -116,7 +115,6 @@
 #define GNB_CONFIG_STRING_NROFDOWNLINKSYMBOLS                            "nrofDownlinkSymbols"
 #define GNB_CONFIG_STRING_NROFUPLINKSLOTS                                "nrofUplinkSlots"
 #define GNB_CONFIG_STRING_NROFUPLINKSYMBOLS                              "nrofUplinkSymbols"
-#define GNB_CONFIG_STRING_PATTERN2                                       "pattern2"
 #define GNB_CONFIG_STRING_DLULTRANSMISSIONPERIODICITY2                   "dl_UL_TransmissionPeriodicity2"
 #define GNB_CONFIG_STRING_NROFDOWNLINKSLOTS2                             "nrofDownlinkSlots2"
 #define GNB_CONFIG_STRING_NROFDOWNLINKSYMBOLS2                           "nrofDownlinkSymbols2"
@@ -135,7 +133,6 @@
 #define GNB_CONFIG_STRING_TA_COMMON                                      "ta-Common-r17"
 #define GNB_CONFIG_STRING_TA_COMMONDRIFT                                 "ta-CommonDrift-r17"
 
-#define CARRIERBANDWIDTH_OKVALUES {11,18,24,25,31,32,38,51,52,65,66,78,79,93,106,107,121,132,133,135,160,162,189,216,217,245,264,270,273}
 /*--------------------------------------------------------------------------------------------------------------------*/
 
 /*-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -143,11 +140,6 @@
 /*   optname                                                   helpstr   paramflags    XXXptr                                        defXXXval                    type         numelt  */
 /*-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
-#define GNB_CONFIG_PHYSCELLID_IDX 0
-#define GNB_CONFIG_ABSOLUTEFREQUENCYSSB_IDX 5
-#define GNB_CONFIG_DLFREQUENCYBAND_IDX 6
-#define GNB_CONFIG_ABSOLUTEFREQUENCYPOINTA_IDX 7
-#define GNB_CONFIG_DLCARRIERBANDWIDTH_IDX 10
 
 
 #define SCCPARAMS_DESC(scc) { \

@@ -46,8 +46,6 @@
 # error "You are compiling ngap with the wrong version of ASN1C"
 #endif
 
-#define NGAP_UE_ID_FMT  "0x%06"PRIX32
-
 # include "common/utils/LOG/log.h"
 # include "ngap_gNB_default_values.h"
 # define NGAP_ERROR(x, args...) LOG_E(NGAP, x, ##args)

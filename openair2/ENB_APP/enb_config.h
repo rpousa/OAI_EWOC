@@ -63,10 +63,6 @@
 // Hard to find a defined value for max enb...
 #define MAX_ENB 16
 
-#define MAX_DU	4
-#define CU_BALANCING_ALL		127
-#define CU_BALANCING_ROUND_ROBIN	126
-
 typedef struct mme_ip_address_s {
   unsigned  ipv4:1;
   unsigned  ipv6:1;

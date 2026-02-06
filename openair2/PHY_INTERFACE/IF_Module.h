@@ -44,13 +44,6 @@
 #define MAX_NUM_HI_DCI0_PDU 100
 #define MAX_NUM_TX_REQUEST_PDU 100
 
-#define MAX_NUM_HARQ_IND 100
-#define MAX_NUM_CRC_IND 100
-#define MAX_NUM_SR_IND 100
-#define MAX_NUM_CQI_IND 100
-#define MAX_NUM_RACH_IND 100
-#define MAX_NUM_SRS_IND 100
-
  typedef struct {
    /// Module ID
    module_id_t module_id;

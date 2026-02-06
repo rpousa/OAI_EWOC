@@ -57,6 +57,7 @@ There is some general information in the [OpenAirInterface Gitlab Wiki](https://
 - [How to do a handover](./handover-tutorial.md)
 - [How to setup gNB frequency](./gNB_frequency_setup.md)
 - [How to use the RT data recording app](./data_recording.md)
+- [How to use packages](./packages.md)
 
 Legacy unmaintained files:
 - [`L2NFAPI_NOS1.md`](./L2NFAPI_NOS1.md), [`L2NFAPI_S1.md`](./L2NFAPI_S1.md):

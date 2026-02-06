@@ -173,8 +173,7 @@ uicc0 = {
   imsi = "001010000000001";
   key = "fec86ba6eb707ed08905757b1bb44b8f";
   opc = "C42449363BBAD02B66D16BC975D77CC1";
-  dnn = "oai";
-  nssai_sst = 1;
+  pdu_sessions = ({ dnn = "oai"; nssai_sst = 1; });
 }
 ```
 
@@ -183,15 +182,30 @@ uicc0 = {
 | **IMSI** | Unique identifier for the UE within the mobile network. Used by the network to identify the UE during authentication. It ensures that the UE is correctly identified by the network. | 001010000000001 |
 | **key** | Cryptographic key shared between the UE and the network, used for encryption during the authentication process. | `fec86ba6eb707ed08905757b1bb44b8f` |
 | **OPC** | Operator key for the Milenage Authentication and Key Agreement algorithm used for encryption during the authentication process. | Ensures secure communication between the UE and the network by matching the encryption keys. | `C42449363BBAD02B66D16BC975D77CC1` |
-| **DNN** | Specifies the name of the data network the UE wishes to connect to, similar to an APN in 4G networks. | `oai` |
-| **NSSAI** | Allows the UE to select the appropriate network slice, which provides different QoS. | `1` |
+| **DNN** | _Deprecated_: Specifies the name of the data network the UE wishes to connect to, similar to an APN in 4G networks. | `oai` |
+| **NSSAI** | _Deprecated_: Allows the UE to select the appropriate network slice, which provides different QoS. | `1` |
+| **pdu_sessions** | list of PDU sessions to request | empty array (no PDU session) |
+
+Note that DNN and NSSAI parameters are deprecated, and `pdu_sessions` should be
+used. If the `pdu_sessions` array is present, DNN and NSSAI are ignored.
+
+Each element within the `pdu_sessions` array takes the following parameters.
+Multiple PDU sessions can be requested.
+
+| **Parameter** | **Description** | **Default Value** |
+|---------------|-----------------|-------------------|
+| `id`          | ID of the PDU session to request | index of the current element (1..16) |
+| `type`        | Type of the PDU session to request (allowed: `IPv4`, `IPv6`, `IPv4v6`, `Ethernet` | `IPv4` |
+| `dnn`         | Specifies the name of the data network the UE wishes to connect to | `oai` |
+| `nssai_sst`   | Slice Service Type to request (1=eMBB, 2=URLLC, 3=mMTC) | `1` |
+| `nssai_sd`   | Slice Differentiator to request | `0xffffff` (meaning "no SD") |
 
 The UE configuration must match the one of the network's AMF. The nrUE can connect by default to OAI CN5G with no need to provide the configuration file.
 
 When running the `nr-uesoftmodem`, one can specify the nrUE configuration file using the `-O` option. E.g.:
 
 ```bash
-sudo ./nr-uesoftmodem --rfsim --rfsimulator.serveraddr 127.0.0.1 -r 106 --numerology 1 --band 78 -C 3619200000 -O ~/nrue.uicc.conf
+sudo ./nr-uesoftmodem --rfsim --rfsimulator.[0].serveraddr 127.0.0.1 -r 106 --numerology 1 --band 78 -C 3619200000 -O ~/nrue.uicc.conf
 ```
 The CL option `--uicc0.imsi`  can override the IMSI value in the configuration file if necessary (e.g. when running multiple UEs): `--uicc0.imsi  001010000000001`.
 

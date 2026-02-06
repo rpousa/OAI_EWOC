@@ -212,8 +212,8 @@ void cb(void * userData, ORI_IndicationType_e type, ORI_IndicationValue_u value)
   printf("<============\n");
 }
 
-int aw2s_oricleanup(openair0_device *device) {
-
+int aw2s_oricleanup(openair0_device_t *device)
+{
   ORI_s *               ori = (ORI_s*)device->thirdparty_priv;
 
   ORI_Disconnect(ori);
@@ -222,8 +222,8 @@ int aw2s_oricleanup(openair0_device *device) {
   return(0);
 }
 
-int aw2s_startstreaming(openair0_device *device) {
-
+int aw2s_startstreaming(openair0_device_t *device)
+{
   ORI_s *               ori = (ORI_s*)device->thirdparty_priv;
   ORI_Result_e  result;
   ORI_Result_e  RE_result;
@@ -413,9 +413,8 @@ int aw2s_startstreaming(openair0_device *device) {
     printf("ORI_ObjectStateModify: %s\n", ORI_Result_Print(RE_result));
   }
 
-  device->fhstate.active=1; 
-  return(0);
-
+  device->fhstate.active = 1;
+  return (0);
 }
 
 uint32_t to_nrarfcn(int nr_bandP,
@@ -423,9 +422,8 @@ uint32_t to_nrarfcn(int nr_bandP,
                     uint8_t scs_index,
                     uint32_t bw);
 
-int aw2s_oriinit(openair0_device *device) {
-
-
+int aw2s_oriinit(openair0_device_t *device)
+{
   ORI_s * 		ori;
   ORI_Result_e	result;
   ORI_Result_e	RE_result;
@@ -892,9 +890,8 @@ int aw2s_oriinit(openair0_device *device) {
   return 0;
 }
 
-
-int transport_init(openair0_device *device, openair0_config_t *openair0_cfg, eth_params_t * eth_params ) {
-
+int transport_init(openair0_device_t *device, openair0_config_t *openair0_cfg, eth_params_t *eth_params)
+{
   printf("Initializing AW2S (%p,%p,%p)\n",aw2s_oriinit,aw2s_oricleanup,aw2s_startstreaming); 
   device->thirdparty_init           = aw2s_oriinit;
   device->thirdparty_cleanup        = aw2s_oricleanup;

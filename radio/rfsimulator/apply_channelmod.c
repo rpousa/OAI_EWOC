@@ -27,9 +27,8 @@
 #include "openair2/LAYER2/NR_MAC_gNB/mac_config.h"
 #include "rfsimulator.h"
 
-void update_channel_model(channel_desc_t *channelDesc, uint64_t TS)
+void update_channel_model(channel_desc_t *channelDesc, int nbSamples, uint64_t TS)
 {
-  static uint64_t last_TS = 0;
   if ((channelDesc->sat_height > 0)
       && (channelDesc->enable_dynamic_delay
           || channelDesc->enable_dynamic_Doppler)) { // model for transparent satellite on circular orbit
@@ -137,8 +136,7 @@ void update_channel_model(channel_desc_t *channelDesc, uint64_t TS)
       if (channelDesc->enable_dynamic_Doppler)
         channelDesc->Doppler_phase_inc = 2 * M_PI * f_Doppler_shift_ue_sat / channelDesc->sampling_rate;
 
-      if (TS - last_TS >= channelDesc->sampling_rate) {
-        last_TS = TS;
+      if (TS / (unsigned int)channelDesc->sampling_rate != (TS + nbSamples) / (unsigned int)channelDesc->sampling_rate) {
         LOG_I(HW,
               "Satellite orbit: time %f s, Position = (%f, %f, %f), Velocity = (%f, %f, %f)\n",
               t,
@@ -204,8 +202,7 @@ void update_channel_model(channel_desc_t *channelDesc, uint64_t TS)
       if (channelDesc->enable_dynamic_Doppler)
         channelDesc->Doppler_phase_inc = 2 * M_PI * f_Doppler_shift_sat_ue / channelDesc->sampling_rate;
 
-      if (TS - last_TS >= channelDesc->sampling_rate) {
-        last_TS = TS;
+      if (TS / (unsigned int)channelDesc->sampling_rate != (TS + nbSamples) / (unsigned int)channelDesc->sampling_rate) {
         LOG_I(HW,
               "Satellite orbit: time %f s, Position = (%f, %f, %f), Velocity = (%f, %f, %f)\n",
               t,

@@ -293,7 +293,6 @@ uint16_t get_dmrs_freq_idx_ul(uint16_t n, uint8_t k_prime, uint8_t delta, uint8_
 *
 *********************************************************************/
 
-#define CHECK_DMRS_PBCH_SEQUENCE
 
 /* return the position of next dmrs symbol in a slot */
 int8_t get_next_dmrs_symbol_in_slot(uint16_t  ul_dmrs_symb_pos, uint8_t counter, uint8_t end_symbol)

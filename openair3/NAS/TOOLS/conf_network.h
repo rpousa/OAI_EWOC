@@ -12,9 +12,6 @@
 #define MNC "MNC"
 #define MCC "MCC"
 
-#define MIN_TAC     0x0000
-#define MAX_TAC     0xFFFE
-
 /*
  * PLMN network operator record
  */

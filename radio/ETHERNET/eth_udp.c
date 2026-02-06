@@ -58,8 +58,8 @@ uint16_t pck_seq_num = 1;
 uint16_t pck_seq_num_cur=0;
 uint16_t pck_seq_num_prev=0;
 
-int eth_socket_init_udp(openair0_device *device) {
-
+int eth_socket_init_udp(openair0_device_t *device)
+{
   eth_state_t *eth = (eth_state_t*)device->priv;
   eth_params_t *eth_params = device->eth_params;
  
@@ -192,8 +192,8 @@ int eth_socket_init_udp(openair0_device *device) {
   return 0;
 }
 
-int trx_eth_read_udp_IF4p5(openair0_device *device, openair0_timestamp *timestamp, void **buff, int nsamps, int cc) {
-
+int trx_eth_read_udp_IF4p5(openair0_device_t *device, openair0_timestamp_t *timestamp, void **buff, int nsamps, int cc)
+{
   // Read nblocks info from packet itself
   int nblocks = nsamps;  
   int bytes_received=-1;
@@ -244,8 +244,8 @@ int trx_eth_read_udp_IF4p5(openair0_device *device, openair0_timestamp *timestam
   return(bytes_received);
 }
 
-int trx_eth_write_udp_IF4p5(openair0_device *device, openair0_timestamp timestamp, void **buff, int nsamps, int cc, int flags) {
-
+int trx_eth_write_udp_IF4p5(openair0_device_t *device, openair0_timestamp_t timestamp, void **buff, int nsamps, int cc, int flags)
+{
   int nblocks = nsamps;  
   int bytes_sent = 0;
 
@@ -294,10 +294,10 @@ int trx_eth_write_udp_IF4p5(openair0_device *device, openair0_timestamp timestam
 
 
 
-void *trx_eth_write_udp_cmd(udpTXelem_t *udpTXelem) {
-
-  openair0_device *device=udpTXelem->device;
-  openair0_timestamp timestamp = udpTXelem->timestamp;
+void *trx_eth_write_udp_cmd(udpTXelem_t *udpTXelem)
+{
+  openair0_device_t *device=udpTXelem->device;
+  openair0_timestamp_t timestamp = udpTXelem->timestamp;
   void **buff = udpTXelem->buff;
   int nsamps = udpTXelem->nsamps;
   int nant = udpTXelem->nant; 
@@ -331,7 +331,7 @@ void *trx_eth_write_udp_cmd(udpTXelem_t *udpTXelem) {
    // ECPRI Message type (1 byte)
   *(uint8_t *)(buff2 + 1) = 64;
 
-  openair0_timestamp TS = timestamp + fhstate->TS0;
+  openair0_timestamp_t TS = timestamp + fhstate->TS0;
   TS = (6*device->sampling_rate_ratio_d*TS)/device->sampling_rate_ratio_n;
   TS -= device->txrx_offset; 
   int TSinc = (6*256*device->sampling_rate_ratio_d)/device->sampling_rate_ratio_n;
@@ -386,8 +386,8 @@ void *trx_eth_write_udp_cmd(udpTXelem_t *udpTXelem) {
   return(NULL);
 }
 
-int trx_eth_write_udp(openair0_device *device, openair0_timestamp timestamp, void **buff, int fd_ind, int nsamps, int flags, int nant) {	
-
+int trx_eth_write_udp(openair0_device_t *device, openair0_timestamp_t timestamp, void **buff, int fd_ind, int nsamps, int flags, int nant)
+{
     union udpTXReqUnion id = {.s={(uint64_t)timestamp,nsamps,0}};
     notifiedFIFO_elt_t *req=newNotifiedFIFO_elt(sizeof(udpTXelem_t), id.p, device->utx[fd_ind]->resp,NULL);
     udpTXelem_t * udptxelem=(udpTXelem_t *) NotifiedFifoData(req);
@@ -425,12 +425,13 @@ void *udp_write_thread(void *arg) {
    return(NULL);
 }
 
-void *udp_read_thread(void *arg) {
-  openair0_timestamp TS;
+void *udp_read_thread(void *arg)
+{
+  openair0_timestamp_t TS;
 
   int aid;
   udp_ctx_t *u = (udp_ctx_t *)arg;
-  openair0_device *device=u->device;
+  openair0_device_t *device=u->device;
   fhstate_t *fhstate = &device->fhstate;
   char buffer[UDP_PACKET_SIZE_BYTES(256)];
   int first_read=0;
@@ -457,7 +458,7 @@ void *udp_read_thread(void *arg) {
       if (oai_exit)
         break;
       aid = *(uint16_t*)(&buffer[ECPRICOMMON_BYTES]);
-      TS  = *(openair0_timestamp *)(&buffer[ECPRICOMMON_BYTES+ECPRIPCID_BYTES]);   
+      TS  = *(openair0_timestamp_t *)(&buffer[ECPRICOMMON_BYTES+ECPRIPCID_BYTES]);
       // convert TS to samples, /6 for AW2S @ 30.72 Ms/s, this is converted for other sample rates in OAI application
       TS = (device->sampling_rate_ratio_n*TS)/(device->sampling_rate_ratio_d*6);
       AssertFatal(aid < 8,"Cannot handle more than 8 antennas, got aid %d\n",aid);
@@ -487,24 +488,24 @@ void *udp_read_thread(void *arg) {
   return(0);  
 }
 
-int trx_eth_read_udp(openair0_device *device, openair0_timestamp *timestamp, uint32_t **buff, int nsamps) {
-  
+int trx_eth_read_udp(openair0_device_t *device, openair0_timestamp_t *timestamp, uint32_t **buff, int nsamps)
+{
   fhstate_t *fhstate = &device->fhstate;
-  openair0_timestamp prev_read_TS= fhstate->TS_read;
-  volatile openair0_timestamp min_TS;
+  openair0_timestamp_t prev_read_TS= fhstate->TS_read;
+  volatile openair0_timestamp_t min_TS;
   // block until FH is ready
   while (fhstate->r[0] == 0 || fhstate->r[1] == 0 || fhstate->r[2] == 0 || fhstate->r[3] == 0 ||
          fhstate->r[4] == 0 || fhstate->r[5] == 0 || fhstate->r[6] == 0 || fhstate->r[7] == 0) usleep(100);
 
   // get minimum TS over all antennas
-  min_TS = (volatile openair0_timestamp)fhstate->TS[0];
+  min_TS = (volatile openair0_timestamp_t)fhstate->TS[0];
   for (int i=1;i<device->openair0_cfg->rx_num_channels;i++) min_TS = min(min_TS,fhstate->TS[i]);
   // poll/sleep until we accumulated enough samples on each antenna port
   int count=0;
   while (fhstate->first_read == 1 && min_TS < (fhstate->TS0+prev_read_TS + nsamps)) {
     usleep(10);
-    min_TS = (volatile openair0_timestamp)fhstate->TS[0];
-    for (int i=1;i<device->openair0_cfg->rx_num_channels;i++) min_TS = min(min_TS,(volatile openair0_timestamp)fhstate->TS[i]);
+    min_TS = (volatile openair0_timestamp_t)fhstate->TS[0];
+    for (int i=1;i<device->openair0_cfg->rx_num_channels;i++) min_TS = min(min_TS,(volatile openair0_timestamp_t)fhstate->TS[i]);
     count++;
   }
   if (fhstate->first_read == 0) {
@@ -524,8 +525,8 @@ int trx_eth_read_udp(openair0_device *device, openair0_timestamp *timestamp, uin
 
 
 
-int trx_eth_ctlsend_udp(openair0_device *device, void *msg, ssize_t msg_len) {
-
+int trx_eth_ctlsend_udp(openair0_device_t *device, void *msg, ssize_t msg_len)
+{
   return(sendto(((eth_state_t*)device->priv)->sockfdc,
 		msg,
 		msg_len,
@@ -535,8 +536,8 @@ int trx_eth_ctlsend_udp(openair0_device *device, void *msg, ssize_t msg_len) {
 }
 
 
-int trx_eth_ctlrecv_udp(openair0_device *device, void *msg, ssize_t msg_len) {
-  
+int trx_eth_ctlrecv_udp(openair0_device_t *device, void *msg, ssize_t msg_len)
+{
   return (recvfrom(((eth_state_t*)device->priv)->sockfdc,
 		   msg,
 		   msg_len,

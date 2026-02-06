@@ -561,6 +561,5 @@ do {                                                    \
 
 #define TAC_TO_ASN1 INT16_TO_OCTET_STRING
 #define GTP_TEID_TO_ASN1 INT32_TO_OCTET_STRING
-#define OCTET_STRING_TO_TAC OCTET_STRING_TO_INT16
 
 #endif /* CONVERSIONS_H_ */

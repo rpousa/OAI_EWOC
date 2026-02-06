@@ -94,7 +94,7 @@ typedef struct {
   //! number of RX count
   uint64_t rx_count;
   //! timestamp of RX packet
-  openair0_timestamp rx_timestamp;
+  openair0_timestamp_t rx_timestamp;
 
 } brf_state_t;
 /*
@@ -103,13 +103,13 @@ typedef struct {
 /*! \brief BladeRF Init function (not used at the moment)
  * \param device RF frontend parameters set by application
  */
-int trx_brf_init(openair0_device *device);
+int trx_brf_init(openair0_device_t *device);
 
 /*! \brief get current timestamp
  *\param device the hardware to use 
  *\param module the bladeRf module
  */
-openair0_timestamp trx_get_timestamp(openair0_device *device, bladerf_module module);
+openair0_timestamp_t trx_get_timestamp(openair0_device_t *device, bladerf_module module);
 
 /*! \brief bladeRF error report 
  * \param status 

@@ -38,7 +38,6 @@
 #include <dlfcn.h>
 #include "common/platform_types.h"
 
-#define CONFIG_LOADCONFIG_MAIN
 #include "config_load_configmodule.h"
 #include "config_userapi.h"
 #include "../utils/LOG/log.h"
@@ -144,7 +143,7 @@ int config_cmdlineonly_getlist(configmodule_interface_t *cfg,
                                paramlist_def_t *ParamList,
                                paramdef_t *params,
                                int numparams,
-                               char *prefix)
+                               const char *prefix)
 {
   ParamList->numelt = 0;
   return 0;

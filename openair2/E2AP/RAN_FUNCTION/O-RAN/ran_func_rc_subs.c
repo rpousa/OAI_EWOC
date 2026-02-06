@@ -26,7 +26,6 @@
 #include <assert.h>
 #include <pthread.h>
 
-#define MAX_NUM_RIC_REQ_ID 64
 
 static pthread_mutex_t rc_mutex = PTHREAD_MUTEX_INITIALIZER;
 

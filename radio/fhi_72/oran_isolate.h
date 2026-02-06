@@ -60,9 +60,13 @@ typedef struct ru_info_s {
  * @param frame output of the frame which has been read.
  * @param slot output of the slot which has been read. */
 int xran_fh_rx_read_slot(ru_info_t *ru, int *frame, int *slot);
+#ifdef F_RELEASE
 int xran_fh_rx_read_slot_BySymbol(ru_info_t *ru, int *frame, int *slot);
+#endif
 /** @brief Writes TX data (PDSCH) of given slot. */
 int xran_fh_tx_send_slot(ru_info_t *ru, int frame, int slot, uint64_t timestamp);
+#ifdef F_RELEASE
 int xran_fh_tx_send_slot_BySymbol(ru_info_t *ru, int frame, int slot, uint64_t timestamp);
+#endif
 
 #endif /* _ORAN_ISOLATE_H_ */

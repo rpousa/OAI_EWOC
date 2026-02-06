@@ -257,15 +257,15 @@ static void prepare_ue_pusch_pdu_from_matlab_vector(const bool uci_on_pusch,
   p_vec_bits += var.A;
   copy_bytes_to_packed_bits(p_vec_bits, var.oack, false, pb);
 
-  pusch_config_pdu->pusch_uci.csi_part1_bit_length = var.ocsi1;
-  pb = (uint8_t *)&pusch_config_pdu->pusch_uci.csi_part1_payload;
-  memset(pb, 0, sizeof(pusch_config_pdu->pusch_uci.csi_part1_payload));
+  pusch_config_pdu->pusch_uci.csi_payload.p1_bits = var.ocsi1;
+  pb = (uint8_t *)&pusch_config_pdu->pusch_uci.csi_payload.part1_payload;
+  memset(pb, 0, sizeof(pusch_config_pdu->pusch_uci.csi_payload.part1_payload));
   p_vec_bits += var.oack;
   copy_bytes_to_packed_bits(p_vec_bits, var.ocsi1, false, pb);
 
-  pusch_config_pdu->pusch_uci.csi_part2_bit_length = var.ocsi2;
-  pb = (uint8_t *)&pusch_config_pdu->pusch_uci.csi_part2_payload;
-  memset(pb, 0, sizeof(pusch_config_pdu->pusch_uci.csi_part2_payload));
+  pusch_config_pdu->pusch_uci.csi_payload.p2_bits = var.ocsi2;
+  pb = (uint8_t *)&pusch_config_pdu->pusch_uci.csi_payload.part2_payload;
+  memset(pb, 0, sizeof(pusch_config_pdu->pusch_uci.csi_payload.part2_payload));
   p_vec_bits += var.ocsi1;
   copy_bytes_to_packed_bits(p_vec_bits, var.ocsi2, false, pb);
 }
@@ -711,12 +711,10 @@ int main(int argc, char *argv[])
     snr1 = snr0 + 10;
 
   double sampling_frequency, tx_bandwidth, rx_bandwidth;
-  uint32_t samples;
   get_samplerate_and_bw(mu,
                         N_RB_DL,
                         threequarter_fs,
                         &sampling_frequency,
-                        &samples,
                         &tx_bandwidth,
                         &rx_bandwidth);
 
@@ -893,7 +891,7 @@ int main(int argc, char *argv[])
   init_nr_ue_transport(UE);
 
   //Configure UE
-  NR_UE_MAC_INST_t* UE_mac = nr_l2_init_ue(0);
+  NR_UE_MAC_INST_t* UE_mac = nr_l2_init_ue(0, mu);
 
   ue_init_config_request(UE_mac, get_slots_per_frame_from_scs(mu));
   
@@ -1349,9 +1347,7 @@ int main(int argc, char *argv[])
               .beta_offset_harq_ack = 11,
               .harq_ack_bit_length = 3,
               .harq_payload = 3,
-              //.csi_part1_bit_length = 4,
-              //.csi_part1_payload = 15
-          };
+              .csi_payload = {.p1_bits = 4, .part1_payload = 15, .p2_bits = 4, .part2_payload = 15}};
           pusch_config_pdu->pusch_uci = pusch_uci;
           prepare_ue_pusch_pdu_from_matlab_vector(uci_on_pusch, uci_ulsch_matlab_vec, pusch_config_pdu, cw_buf);
         }
@@ -1603,7 +1599,6 @@ int main(int argc, char *argv[])
             }
           }
         }
-        round++;
         if (uci_on_pusch && uci_ulsch_matlab_vec && (errors_scrambling[round] == 0)) {
           ret = 0;
           printf("*************\n");
@@ -1611,6 +1606,7 @@ int main(int argc, char *argv[])
           printf("*************\n");
           break;
         }
+        round++;
       } // round
 
       if (n_trials == 1 && errors_scrambling[0] > 0) {

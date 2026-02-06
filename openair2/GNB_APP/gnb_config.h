@@ -37,23 +37,11 @@
 #include "f1ap_messages_types.h"
 #include "intertask_interface.h"
 
-#define IPV4_STR_ADDR_TO_INT_NWBO(AdDr_StR,NwBo,MeSsAgE ) do {\
-            struct in_addr inp;\
-            if ( inet_aton(AdDr_StR, &inp ) < 0 ) {\
-                AssertFatal (0, MeSsAgE);\
-            } else {\
-                NwBo = inp.s_addr;\
-            }\
-        } while (0);
-
-// Hard to find a defined value for max enb...
-#define MAX_GNB 16
-
 void RCconfig_verify(configmodule_interface_t *cfg, ngran_node_t node_type);
-extern void RCconfig_nr_prs(void);
-extern void RCconfig_NR_L1(void);
-extern void RCconfig_nr_macrlc(configmodule_interface_t *cfg);
-extern void NRRCConfig(void);
+void RCconfig_nr_prs(void);
+void RCconfig_NR_L1(void);
+void RCconfig_nr_macrlc(configmodule_interface_t *cfg);
+void NRRCConfig(void);
 
 gNB_RRC_INST *RCconfig_NRRRC();
 int RCconfig_NR_NG(MessageDef *msg_p, uint32_t i);

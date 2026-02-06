@@ -36,16 +36,6 @@
 #include "RRC_paramsvalues.h"
 #include "s1ap_eNB_default_values.h"
 
-#define ENB_CONFIG_STRING_CC_NODE_FUNCTION  "node_function"
-#define ENB_CONFIG_STRING_CC_NODE_TIMING    "node_timing"
-#define ENB_CONFIG_STRING_CC_NODE_SYNCH_REF "node_synch_ref"
-
-// OTG config per ENB-UE DL
-#define ENB_CONF_STRING_OTG_CONFIG          "otg_config"
-#define ENB_CONF_STRING_OTG_UE_ID           "ue_id"
-#define ENB_CONF_STRING_OTG_APP_TYPE        "app_type"
-#define ENB_CONF_STRING_OTG_BG_TRAFFIC      "bg_traffic"
-
 #ifdef LIBCONFIG_LONG
   #define libconfig_int long
 #else
@@ -62,11 +52,9 @@ typedef enum {
 } RC_config_functions_t;
 
 
-#define CONFIG_STRING_ACTIVE_RUS                   "Active_RUs"
 /*------------------------------------------------------------------------------------------------------------------------------------------*/
 /*    RUs  configuration section name */
 #define CONFIG_STRING_RU_LIST                      "RUs"
-#define CONFIG_STRING_RU_CONFIG                   "ru_config"
 
 /*    RUs configuration parameters name   */
 #define CONFIG_STRING_RU_LOCAL_IF_NAME            "local_if_name"
@@ -86,7 +74,6 @@ typedef enum {
 #define CONFIG_STRING_RU_ATT_RX                   "att_rx"
 #define CONFIG_STRING_RU_MAX_RS_EPRE              "max_pdschReferenceSignalPower"
 #define CONFIG_STRING_RU_MAX_RXGAIN               "max_rxgain"
-#define CONFIG_STRING_RU_IF_COMPRESSION           "if_compression"
 #define CONFIG_STRING_RU_IS_SLAVE                 "is_slave"
 #define CONFIG_STRING_RU_NBIOTRRC_LIST            "NbIoT_RRC_instances"
 #define CONFIG_STRING_RU_SDR_ADDRS                "sdr_addrs"
@@ -202,7 +189,7 @@ typedef enum {
   {CONFIG_STRING_RU_END_OF_BURST_DELAY,        NULL,                              0,       .uptr=NULL,       .defuintval=400,              TYPE_UINT,        0}, \
   {CONFIG_STRING_RU_OTA_SYNC_ENABLE,           NULL,                              0,       .strptr=NULL,     .defstrval="no",              TYPE_STRING,      0}, \
   {CONFIG_STRING_RU_BF_WEIGHTS_LIST,           NULL,                              0,       .iptr=NULL,       .defintarrayval=DEFBFW,       TYPE_INTARRAY,    0}, \
-  {CONFIG_STRING_RU_IF_FREQUENCY,              NULL,                              0,       .u64ptr=NULL,     .defuintval=0,                TYPE_UINT64,      0}, \
+  {CONFIG_STRING_RU_IF_FREQUENCY,              NULL,                              0,       .u64ptr=NULL,     .defint64val=0,               TYPE_UINT64,      0}, \
   {CONFIG_STRING_RU_IF_FREQ_OFFSET,            NULL,                              0,       .iptr=NULL,       .defintval=0,                 TYPE_INT,         0}, \
   {CONFIG_STRING_RU_DO_PRECODING,              NULL,                              0,       .iptr=NULL,       .defintval=0,                 TYPE_INT,         0}, \
   {CONFIG_STRING_RU_SF_AHEAD,                  HLP_RU_SF_AHEAD,                   0,       .iptr=NULL,       .defintval=4,                 TYPE_INT,         0}, \
@@ -226,8 +213,6 @@ typedef enum {
 /*---------------------------------------------------------------------------------------------------------------------------------------*/
 /* value definitions for ASN1 verbosity parameter */
 #define ENB_CONFIG_STRING_ASN1_VERBOSITY_NONE              "none"
-#define ENB_CONFIG_STRING_ASN1_VERBOSITY_ANNOYING          "annoying"
-#define ENB_CONFIG_STRING_ASN1_VERBOSITY_INFO              "info"
 
 
 /* global parameters, not under a specific section   */
@@ -338,28 +323,6 @@ typedef enum {
 #define ENB_SCTP_REQ_COUNT_IDX          23
 
 #define TRACKING_AREA_CODE_OKRANGE {0x0001,0xFFFD}
-// clang-format off
-#define ENBPARAMS_CHECK {                                           \
-    { .s5 = { NULL } },                                             \
-    { .s5 = { NULL } },                                             \
-    { .s5 = { NULL } },                                             \
-    { .s2 = { config_check_intrange, TRACKING_AREA_CODE_OKRANGE } },\
-    { .s5 = { NULL } },                                             \
-    { .s5 = { NULL } },                                             \
-    { .s5 = { NULL } },                                             \
-    { .s5 = { NULL } },                                             \
-    { .s5 = { NULL } },                                             \
-    { .s5 = { NULL } },                                             \
-    { .s5 = { NULL } },                                             \
-    { .s5 = { NULL } },                                             \
-    { .s5 = { NULL } },                                             \
-    { .s5 = { NULL } },                                             \
-    { .s5 = { NULL } },                                             \
-    { .s5 = { NULL } },                                             \
-    { .s5 = { NULL } },                                             \
-    { .s5 = { NULL } },                                             \
-  }
-// clang-format on
 
 /*-------------------------------------------------------------------------------------------------------------------------------------------------*/
 /*-------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -401,7 +364,6 @@ typedef enum {
 
 #define ENB_CONFIG_STRING_MBMS_SYNC_AREA           "mbms_sync_area"
 
-#define ENB_MBMS_SYNC_AREA_IDX     0
 
 // clang-format off
 #define MBMS_CONFIG_PARAMS_DESC {                                                                  \
@@ -427,10 +389,6 @@ typedef enum {
 /* component carries configuration parameters name */
 
 #define ENB_CONFIG_STRING_NB_ANT_PORTS                                  "nb_antenna_ports"
-#define ENB_CONFIG_STRING_NB_ANT_TX                                     "nb_antennas_tx"
-#define ENB_CONFIG_STRING_NB_ANT_RX                                     "nb_antennas_rx"
-#define ENB_CONFIG_STRING_TX_GAIN                                       "tx_gain"
-#define ENB_CONFIG_STRING_RX_GAIN                                       "rx_gain"
 #define ENB_CONFIG_STRING_PRACH_ROOT                                    "prach_root"
 #define ENB_CONFIG_STRING_PRACH_CONFIG_INDEX                            "prach_config_index"
 #define ENB_CONFIG_STRING_PRACH_HIGH_SPEED                              "prach_high_speed"
@@ -453,7 +411,6 @@ typedef enum {
 #define ENB_CONFIG_STRING_PUCCH_NUM_REPETITION_CE_MSG4_LEVEL2    "pucch_NumRepetitionCE_Msg4_Level2_r13"
 #define ENB_CONFIG_STRING_PUCCH_NUM_REPETITION_CE_MSG4_LEVEL3    "pucch_NumRepetitionCE_Msg4_Level3_r13"
 
-#define ENB_CONFIG_STRING_FREQ_HOPPING_PARAMETERS_R13                   "sib2_freq_hoppingParameters_r13"
 
 #define ENB_CONFIG_STRING_PDSCH_RS_EPRE                                 "pdsch_referenceSignalPower"
 #define ENB_CONFIG_STRING_PDSCH_PB                                      "pdsch_p_b"
@@ -521,12 +478,9 @@ typedef enum {
 
 
 #define ENB_CONFIG_STRING_PDSCH_MAX_NUM_REPETITION_CE_MODE_A_R13        "pdsch_maxNumRepetitionCEmodeA_r13"
-#define ENB_CONFIG_STRING_PDSCH_MAX_NUM_REPETITION_CE_MODE_B_R13        "pdsch_maxNumRepetitionCEmodeB_r13"
 
 #define ENB_CONFIG_STRING_PUSCH_MAX_NUM_REPETITION_CE_MODE_A_R13        "pusch_maxNumRepetitionCEmodeA_r13"
-#define ENB_CONFIG_STRING_PUSCH_MAX_NUM_REPETITION_CE_MODE_B_R13        "pusch_maxNumRepetitionCEmodeB_r13"
 #define ENB_CONFIG_STRING_PUSCH_REPETITION_LEVEL_CE_MODE_A_R13			"pusch_repetitionLevelCEmodeA_r13"
-#define ENB_CONFIG_STRING_PUSCH_HOPPING_OFFSET_V1310                    "pusch_HoppingOffset_v1310"
 
 
 //TTN - for D2D
@@ -840,83 +794,6 @@ typedef struct ccparams_lte_s {
 // clang-format on
 
 
-#define ENB_CONFIG_FRAME_TYPE_IDX                                  0
-#define ENB_CONFIG_TDD_CONFIG_IDX                                  1
-#define ENB_CONFIG_TDD_CONFIG_S_IDX                                2
-#define ENB_CONFIG_PREFIX_TYPE_IDX                                 3
-#define ENB_CONFIG_PBCH_REPETITION_IDX                             4
-#define ENB_CONFIG_EUTRA_BAND_IDX                                  5
-#define ENB_CONFIG_DOWNLINK_FREQUENCY_IDX                          6
-#define ENB_CONFIG_UPLINK_FREQUENCY_OFFSET_IDX                     7
-#define ENB_CONFIG_NID_CELL_IDX                                    8
-#define ENB_CONFIG_N_RB_DL_IDX                                     9
-#define ENB_CONFIG_CELL_MBSFN_IDX                                  10
-#define ENB_CONFIG_NB_ANT_PORTS_IDX                                11
-#define ENB_CONFIG_PRACH_ROOT_IDX                                  12
-#define ENB_CONFIG_PRACH_CONFIG_INDEX_IDX                          13
-#define ENB_CONFIG_PRACH_HIGH_SPEED_IDX                            14
-#define ENB_CONFIG_PRACH_ZERO_CORRELATION_IDX                      15
-#define ENB_CONFIG_PRACH_FREQ_OFFSET_IDX                           16
-#define ENB_CONFIG_PUCCH_DELTA_SHIFT_IDX                           17
-#define ENB_CONFIG_PUCCH_NRB_CQI_IDX                               18
-#define ENB_CONFIG_PUCCH_NCS_AN_IDX                                19
-#define ENB_CONFIG_PUCCH_N1_AN_IDX                                 20
-#define ENB_CONFIG_PDSCH_RS_EPRE_IDX                               21
-#define ENB_CONFIG_PDSCH_PB_IDX                                    22
-#define ENB_CONFIG_PUSCH_N_SB_IDX                                  23
-#define ENB_CONFIG_PUSCH_HOPPINGMODE_IDX                           24
-#define ENB_CONFIG_PUSCH_HOPPINGOFFSET_IDX                         25
-#define ENB_CONFIG_PUSCH_ENABLE64QAM_IDX                           26
-#define ENB_CONFIG_PUSCH_GROUP_HOPPING_EN_IDX                      27
-#define ENB_CONFIG_PUSCH_GROUP_ASSIGNMENT_IDX                      28
-#define ENB_CONFIG_PUSCH_SEQUENCE_HOPPING_EN_IDX                   29
-#define ENB_CONFIG_PUSCH_NDMRS1_IDX                                30
-#define ENB_CONFIG_PHICH_DURATION_IDX                              31
-#define ENB_CONFIG_PHICH_RESOURCE_IDX                              32
-#define ENB_CONFIG_SRS_ENABLE_IDX                                  33
-#define ENB_CONFIG_SRS_BANDWIDTH_CONFIG_IDX                        34
-#define ENB_CONFIG_SRS_SUBFRAME_CONFIG_IDX                         35
-#define ENB_CONFIG_SRS_ACKNACKST_CONFIG_IDX                        36
-#define ENB_CONFIG_SRS_MAXUPPTS_IDX                                37
-#define ENB_CONFIG_PUSCH_PO_NOMINAL_IDX                            38
-#define ENB_CONFIG_PUSCH_ALPHA_IDX                                 39
-#define ENB_CONFIG_PUCCH_PO_NOMINAL_IDX                            40
-#define ENB_CONFIG_MSG3_DELTA_PREAMBLE_IDX                         41
-#define ENB_CONFIG_PUCCH_DELTAF_FORMAT1_IDX                        42
-#define ENB_CONFIG_PUCCH_DELTAF_FORMAT1b_IDX                       43
-#define ENB_CONFIG_PUCCH_DELTAF_FORMAT2_IDX                        44
-#define ENB_CONFIG_PUCCH_DELTAF_FORMAT2A_IDX                       45
-#define ENB_CONFIG_PUCCH_DELTAF_FORMAT2B_IDX                       46
-#define ENB_CONFIG_RACH_NUM_RA_PREAMBLES_IDX                       47
-#define ENB_CONFIG_RACH_PREAMBLESGROUPACONFIG_IDX                  48
-#define ENB_CONFIG_RACH_SIZEOFRA_PREAMBLESGROUPA_IDX               49
-#define ENB_CONFIG_RACH_MESSAGESIZEGROUPA_IDX                      50
-#define ENB_CONFIG_RACH_MESSAGEPOWEROFFSETGROUPB_IDX               51
-#define ENB_CONFIG_RACH_POWERRAMPINGSTEP_IDX                       52
-#define ENB_CONFIG_RACH_PREAMBLEINITIALRECEIVEDTARGETPOWER_IDX     53
-#define ENB_CONFIG_RACH_PREAMBLETRANSMAX_IDX                       54
-#define ENB_CONFIG_RACH_RARESPONSEWINDOWSIZE_IDX                   55
-#define ENB_CONFIG_RACH_MACCONTENTIONRESOLUTIONTIMER_IDX           56
-#define ENB_CONFIG_RACH_MAXHARQMSG3TX_IDX                          57
-#define ENB_CONFIG_PCCH_DEFAULT_PAGING_CYCLE_IDX                   58
-#define ENB_CONFIG_PCCH_NB_IDX                                     59
-#define ENB_CONFIG_STRING_DRX_CONFIG_PRESENT_IDX                   60
-#define ENB_CONFIG_STRING_DRX_ONDURATIONTIMER_IDX                  61
-#define ENB_CONFIG_STRING_DRX_INACTIVITYTIMER_IDX                  62
-#define ENB_CONFIG_STRING_DRX_RETRANSMISSIONTIMER_IDX              63
-#define ENB_CONFIG_STRING_DRX_LONGDRX_CYCLESTARTOFFSET_PRESENT_IDX 64
-#define ENB_CONFIG_STRING_DRX_LONGDRX_CYCLESTARTOFFSET_IDX         65
-#define ENB_CONFIG_STRING_DRX_SHORTDRX_CYCLE_IDX                   66
-#define ENB_CONFIG_STRING_DRX_SHORTDRX_SHORTCYCLETIMER_IDX         67
-#define ENB_CONFIG_BCCH_MODIFICATIONPERIODCOEFF_IDX                68
-#define ENB_CONFIG_UETIMERS_T300_IDX                               69
-#define ENB_CONFIG_UETIMERS_T301_IDX                               70
-#define ENB_CONFIG_UETIMERS_T310_IDX                               71
-#define ENB_CONFIG_UETIMERS_T311_IDX                               72
-#define ENB_CONFIG_UETIMERS_N310_IDX                               73
-#define ENB_CONFIG_UETIMERS_N311_IDX                               74
-#define ENB_CONFIG_UE_TRANSMISSION_MODE_IDX                        75
-#define ENB_CONFIG_MBMS_DEDICATED_SERVING_CELL_IDX                 76
 
 /*------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 /* SRB1 configuration parameters section name */
@@ -1119,12 +996,10 @@ typedef struct srb1_params_s {
 
 /* L1 configuration section names   */
 #define CONFIG_STRING_L1_LIST                              "L1s"
-#define CONFIG_STRING_L1_CONFIG                            "l1_config"
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------*/
 /* MACRLC configuration section names   */
 #define CONFIG_STRING_MACRLC_LIST                          "MACRLCs"
-#define CONFIG_STRING_MACRLC_CONFIG                        "macrlc_config"
 
 
 /* MACRLC configuration parameters names   */

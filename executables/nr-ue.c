@@ -23,6 +23,7 @@
 #define _GNU_SOURCE // For pthread_setname_np
 #include <pthread.h>
 #include <openair1/PHY/impl_defs_top.h>
+#include "executables/nr-ue-ru.h"
 #include "executables/nr-uesoftmodem.h"
 #include "PHY/INIT/nr_phy_init.h"
 #include "NR_MAC_UE/mac_proto.h"
@@ -201,31 +202,10 @@ typedef struct {
   int rx_offset;
 } syncData_t;
 
-static int nr_ue_adjust_rx_gain(PHY_VARS_NR_UE *UE, openair0_config_t *cfg0, int gain_change)
-{
-  // Increase the RX gain by the value determined by adjust_rxgain
-  cfg0->rx_gain[0] += gain_change;
-
-  // Set new RX gain.
-  int ret_gain = UE->rfdevice.trx_set_gains_func(&UE->rfdevice, cfg0);
-  // APPLY RX gain again if crossed the MAX RX gain threshold
-  if (ret_gain < 0) {
-    gain_change += ret_gain;
-    cfg0->rx_gain[0] += ret_gain;
-    ret_gain = UE->rfdevice.trx_set_gains_func(&UE->rfdevice, cfg0);
-  }
-
-  int applied_rxgain = cfg0->rx_gain[0] - cfg0->rx_gain_offset[0];
-  LOG_I(PHY, "Rxgain adjusted by %d dB, RX gain: %d dB \n", gain_change, applied_rxgain);
-
-  return gain_change;
-}
-
 static void UE_synch(void *arg) {
   syncData_t *syncD = (syncData_t *)arg;
   PHY_VARS_NR_UE *UE = syncD->UE;
   UE->is_synchronized = 0;
-  openair0_config_t *cfg0 = &UE->openair0_cfg[UE->rf_map.card];
 
   if (UE->target_Nid_cell != -1) {
     LOG_W(NR_PHY, "Starting re-sync detection for target Nid_cell %i\n", UE->target_Nid_cell);
@@ -259,27 +239,20 @@ static void UE_synch(void *arg) {
       UE->freq_offset = freq_offset - UE->dl_Doppler_shift;
     } else {
       // rerun with new cell parameters and frequency-offset
-      nr_rf_card_config_freq(cfg0, ul_carrier, dl_carrier, freq_offset);
-      UE->rfdevice.trx_set_freq_func(&UE->rfdevice, cfg0);
+      nrue_ru_set_freq(UE, ul_carrier, dl_carrier, freq_offset);
     }
 
     if (get_nrUE_params()->agc) {
-      nr_ue_adjust_rx_gain(UE, cfg0, UE->adjust_rxgain);
+      nrue_ru_adjust_rx_gain(UE, UE->adjust_rxgain);
     }
 
-    LOG_I(PHY,
-          "Got synch: hw_slot_offset %d, carrier off %d Hz, rxgain %f (DL %f Hz, UL %f Hz)\n",
-          hw_slot_offset,
-          freq_offset,
-          cfg0->rx_gain[0] - cfg0->rx_gain_offset[0],
-          cfg0->rx_freq[0],
-          cfg0->tx_freq[0]);
+    LOG_I(PHY, "Got synch: hw_slot_offset %d, carrier off %d Hz\n", hw_slot_offset, freq_offset);
 
     UE->is_synchronized = 1;
   } else {
     int gain_change = 0;
     if (get_nrUE_params()->agc)
-      gain_change = nr_ue_adjust_rx_gain(UE, cfg0, INCREASE_IN_RXGAIN);
+      gain_change = nrue_ru_adjust_rx_gain(UE, INCREASE_IN_RXGAIN);
     if (gain_change)
       LOG_I(PHY, "synch retry: Rx gain increased \n");
     else
@@ -334,7 +307,7 @@ static void RU_write(nr_rxtx_thread_data_t *rxtxD, bool sl_tx_action, c16_t **tx
   radio_tx_burst_flag_t flags = TX_BURST_INVALID;
 
   if (UE->received_config_request) {
-    if (UE->openair0_cfg[0].duplex_mode == duplex_mode_FDD || get_softmodem_params()->continuous_tx) {
+    if (fp->frame_type == FDD || get_softmodem_params()->continuous_tx) {
       flags = TX_BURST_MIDDLE;
     // In case of Sidelink, USRP write needed only in case transmission
     // needs to be done in this slot and not based on tdd ULDL configuration.
@@ -379,13 +352,13 @@ static void RU_write(nr_rxtx_thread_data_t *rxtxD, bool sl_tx_action, c16_t **tx
     }
   }
 
-  openair0_timestamp writeTimestamp = proc->timestamp_tx;
+  openair0_timestamp_t writeTimestamp = proc->timestamp_tx;
   int writeBlockSize = rxtxD->writeBlockSize;
   // if writeBlockSize gets longer that slot size, fill with dummy
   const int maxWriteBlockSize = get_samples_per_slot(proc->nr_slot_tx, fp);
   while (writeBlockSize > maxWriteBlockSize) {
     const int dummyBlockSize = min(writeBlockSize - maxWriteBlockSize, maxWriteBlockSize);
-    int tmp = openair0_write_reorder(&UE->rfdevice, writeTimestamp, (void **)txp, dummyBlockSize, fp->nb_antennas_tx, flags);
+    int tmp = nrue_ru_write_reorder(UE, writeTimestamp, (void **)txp, dummyBlockSize, fp->nb_antennas_tx, flags);
     AssertFatal(tmp == dummyBlockSize, "");
 
     writeTimestamp += dummyBlockSize;
@@ -408,7 +381,7 @@ static void RU_write(nr_rxtx_thread_data_t *rxtxD, bool sl_tx_action, c16_t **tx
                          writeBlockSize);
   }
 
-  int tmp = openair0_write_reorder(&UE->rfdevice, writeTimestamp, (void **)txp, writeBlockSize, fp->nb_antennas_tx, flags);
+  int tmp = nrue_ru_write_reorder(UE, writeTimestamp, (void **)txp, writeBlockSize, fp->nb_antennas_tx, flags);
   AssertFatal(tmp == writeBlockSize, "");
 }
 
@@ -523,10 +496,9 @@ static int handle_sync_req_from_mac(PHY_VARS_NR_UE *UE)
             ul_CarrierFreq,
             cfg->dl_frequency,
             UE->target_Nid_cell);
+      nrue_ru_set_freq(UE, ul_CarrierFreq, dl_CarrierFreq, 0);
       fp->dl_CarrierFreq = dl_CarrierFreq;
       fp->ul_CarrierFreq = ul_CarrierFreq;
-      nr_rf_card_config_freq(&UE->openair0_cfg[UE->rf_map.card], ul_CarrierFreq, dl_CarrierFreq, 0);
-      UE->rfdevice.trx_set_freq_func(&UE->rfdevice, &UE->openair0_cfg[UE->rf_map.card]);
       init_symbol_rotation(fp);
     }
 
@@ -647,23 +619,24 @@ void UE_dl_processing(void *arg) {
   TracyCZoneEnd(ctx);
 }
 
-void dummyWrite(PHY_VARS_NR_UE *UE,openair0_timestamp timestamp, int writeBlockSize) {
+void dummyWrite(PHY_VARS_NR_UE *UE, openair0_timestamp_t timestamp, int writeBlockSize)
+{
   NR_DL_FRAME_PARMS *fp = &UE->frame_parms;
   if (UE->sl_mode == 2)
     fp = &UE->SL_UE_PHY_PARAMS.sl_frame_params;
 
   void *dummy_tx[fp->nb_antennas_tx];
   // 2 because the function we call use pairs of int16_t implicitly as complex numbers
-  int16_t dummy_tx_data[fp->nb_antennas_tx][2 * writeBlockSize];
+  int16_t dummy_tx_data[2 * writeBlockSize];
   memset(dummy_tx_data, 0, sizeof(dummy_tx_data));
   for (int i = 0; i < fp->nb_antennas_tx; i++)
-    dummy_tx[i]=dummy_tx_data[i];
+    dummy_tx[i] = dummy_tx_data;
 
-  int tmp = UE->rfdevice.trx_write_func(&UE->rfdevice, timestamp, dummy_tx, writeBlockSize, fp->nb_antennas_tx, 4);
+  int tmp = nrue_ru_write(UE, timestamp, dummy_tx, writeBlockSize, fp->nb_antennas_tx, 4);
   AssertFatal(writeBlockSize == tmp, "");
 }
 
-void readFrame(PHY_VARS_NR_UE *UE, openair0_timestamp *timestamp, int duration_rx_to_tx, bool toTrash)
+void readFrame(PHY_VARS_NR_UE *UE, openair0_timestamp_t *timestamp, int duration_rx_to_tx, bool toTrash)
 {
   NR_DL_FRAME_PARMS *fp = &UE->frame_parms;
   // two frames for initial sync
@@ -675,9 +648,11 @@ void readFrame(PHY_VARS_NR_UE *UE, openair0_timestamp *timestamp, int duration_r
   }
 
   void *rxp[NB_ANTENNAS_RX];
-  if (toTrash)
-    for (int i = 0; i < fp->nb_antennas_rx; i++)
-      rxp[i] = malloc16(get_samples_per_slot(0, fp) * 4);
+  if (toTrash) {
+    rxp[0] = malloc16(get_samples_per_slot(0, fp) * 4);
+    for (int i = 1; i < fp->nb_antennas_rx; i++)
+      rxp[i] = rxp[0];
+  }
 
   for (int x = 0; x < num_frames * NR_NUMBER_OF_SUBFRAMES_PER_FRAME; x++) { // two frames for initial sync
     for (int slot = 0; slot < fp->slots_per_subframe; slot++) {
@@ -687,13 +662,13 @@ void readFrame(PHY_VARS_NR_UE *UE, openair0_timestamp *timestamp, int duration_r
               ((void *)&UE->common_vars.rxdata[i][0]) + 4 * ((x * fp->samples_per_subframe) + get_samples_slot_timestamp(fp, slot));
 
       int read_block_size = get_samples_per_slot(slot, fp);
-      int tmp = UE->rfdevice.trx_read_func(&UE->rfdevice, timestamp, rxp, read_block_size, fp->nb_antennas_rx);
+      int tmp = nrue_ru_read(UE, timestamp, rxp, read_block_size, fp->nb_antennas_rx);
       UEscopeCopy(UE, ueTimeDomainSamplesBeforeSync, rxp[0], sizeof(c16_t), 1, read_block_size, 0);
       AssertFatal(read_block_size == tmp, "");
 
       if (IS_SOFTMODEM_RFSIM) {
         int ta = UE->timing_advance + UE->timing_advance_ntn;
-        const openair0_timestamp writeTimestamp =
+        const openair0_timestamp_t writeTimestamp =
             *timestamp + get_samples_slot_duration(fp, slot, duration_rx_to_tx) - UE->N_TA_offset - ta;
         dummyWrite(UE, writeTimestamp, get_samples_per_slot(slot, fp));
       }
@@ -701,11 +676,10 @@ void readFrame(PHY_VARS_NR_UE *UE, openair0_timestamp *timestamp, int duration_r
   }
 
   if (toTrash)
-    for (int i = 0; i < fp->nb_antennas_rx; i++)
-      free(rxp[i]);
+    free(rxp[0]);
 }
 
-static void syncInFrame(PHY_VARS_NR_UE *UE, openair0_timestamp *timestamp, int duration_rx_to_tx, openair0_timestamp rx_offset)
+static void syncInFrame(PHY_VARS_NR_UE *UE, openair0_timestamp_t *timestamp, int duration_rx_to_tx, openair0_timestamp_t rx_offset)
 {
   NR_DL_FRAME_PARMS *fp = &UE->frame_parms;
   if (UE->sl_mode == 2)
@@ -717,11 +691,11 @@ static void syncInFrame(PHY_VARS_NR_UE *UE, openair0_timestamp *timestamp, int d
   int size = rx_offset;
   while (size > 0) {
     const int unitTransfer = min(get_samples_per_slot(slot, fp), size);
-    const int res = UE->rfdevice.trx_read_func(&UE->rfdevice, timestamp, (void **)UE->common_vars.rxdata, unitTransfer, fp->nb_antennas_rx);
+    const int res = nrue_ru_read(UE, timestamp, (void **)UE->common_vars.rxdata, unitTransfer, fp->nb_antennas_rx);
     DevAssert(unitTransfer == res);
     if (IS_SOFTMODEM_RFSIM) {
       int ta = UE->timing_advance + UE->timing_advance_ntn;
-      const openair0_timestamp writeTimestamp =
+      const openair0_timestamp_t writeTimestamp =
           *timestamp + get_samples_slot_duration(fp, slot, duration_rx_to_tx) - UE->N_TA_offset - ta;
       dummyWrite(UE, writeTimestamp, unitTransfer);
     }
@@ -745,13 +719,11 @@ static inline int get_readBlockSize(uint16_t slot, NR_DL_FRAME_PARMS *fp) {
 void *UE_thread(void *arg)
 {
   //this thread should be over the processing thread to keep in real time
-  PHY_VARS_NR_UE *UE = (PHY_VARS_NR_UE *) arg;
+  PHY_VARS_NR_UE *UE = (PHY_VARS_NR_UE *)arg;
   //  int tx_enabled = 0;
   void *rxp[NB_ANTENNAS_RX];
   enum stream_status_e stream_status = STREAM_STATUS_UNSYNC;
   fapi_nr_config_request_t *cfg = &UE->nrUE_config;
-  int tmp = openair0_device_load(&(UE->rfdevice), &UE->openair0_cfg[0]);
-  AssertFatal(tmp == 0, "Could not load the device\n");
   NR_DL_FRAME_PARMS *fp = &UE->frame_parms;
   sl_nr_phy_config_request_t *sl_cfg = NULL;
   if (UE->sl_mode == 2) {
@@ -759,13 +731,7 @@ void *UE_thread(void *arg)
     sl_cfg = &UE->SL_UE_PHY_PARAMS.sl_config;
   }
 
-  UE->rfdevice.host_type = RAU_HOST;
   UE->is_synchronized = 0;
-  int tmp2 = UE->rfdevice.trx_start_func(&UE->rfdevice);
-  AssertFatal(tmp2 == 0, "Could not start the device\n");
-  if (usrp_tx_thread == 1)
-    UE->rfdevice.trx_write_init(&UE->rfdevice);
-
   InitSinLUT();
 
   notifiedFIFO_t nf;
@@ -798,14 +764,14 @@ void *UE_thread(void *arg)
   }
   int shiftForNextFrame = 0;
   int intialSyncOffset = 0;
-  openair0_timestamp sync_timestamp;
+  openair0_timestamp_t sync_timestamp;
   bool stats_printed = false;
 
   if (get_softmodem_params()->sync_ref && UE->sl_mode == 2) {
     UE->is_synchronized = 1;
   } else {
     //warm up the RF board
-    int64_t tmp;
+    openair0_timestamp_t tmp;
     for (int i = 0; i < 50; i++)
       readFrame(UE, &tmp, duration_rx_to_tx, true);
   }
@@ -845,7 +811,9 @@ void *UE_thread(void *arg)
           /* For IQ recorder-player we force synchronization to happen in a fixed duration so that
              the replay runs in sync with recorded samples.
           */
-          const unsigned int sync_in_frames = UE->rfdevice.openair0_cfg->recplay_conf->u_f_sync;
+          extern openair0_config_t openair0_cfg[MAX_CARDS];
+          openair0_config_t *cfg0 = &openair0_cfg[UE->rf_map.card];
+          const unsigned int sync_in_frames = cfg0->recplay_conf->u_f_sync;
           while (trashed_frames != sync_in_frames) {
             readFrame(UE, &sync_timestamp, duration_rx_to_tx, true);
             trashed_frames += 2;
@@ -886,16 +854,16 @@ void *UE_thread(void *arg)
     if (stream_status == STREAM_STATUS_UNSYNC) {
       stream_status = STREAM_STATUS_SYNCING;
       syncInFrame(UE, &sync_timestamp, duration_rx_to_tx, intialSyncOffset);
-      openair0_write_reorder_clear_context(&UE->rfdevice);
+      nrue_ru_write_reorder_clear_context(UE);
       shiftForNextFrame = -(UE->init_sync_frame + trashed_frames + 2) * UE->max_pos_acc * get_nrUE_params()->time_sync_I; // compensate for the time drift that happened during initial sync
       LOG_I(PHY, "max_pos_acc = %d, shiftForNextFrame = %d\n", UE->max_pos_acc, shiftForNextFrame);
       // read in first symbol
       AssertFatal(fp->ofdm_symbol_size + fp->nb_prefix_samples0
-                      == UE->rfdevice.trx_read_func(&UE->rfdevice,
-                                                    &sync_timestamp,
-                                                    (void **)UE->common_vars.rxdata,
-                                                    fp->ofdm_symbol_size + fp->nb_prefix_samples0,
-                                                    fp->nb_antennas_rx),
+                      == nrue_ru_read(UE,
+                                      &sync_timestamp,
+                                      (void **)UE->common_vars.rxdata,
+                                      fp->ofdm_symbol_size + fp->nb_prefix_samples0,
+                                      fp->nb_antennas_rx),
                   "");
       // we have the decoded frame index in the return of the synch process
       // and we shifted above to the first slot of next frame
@@ -995,8 +963,8 @@ void *UE_thread(void *arg)
     }
 
     const int readBlockSize = get_readBlockSize(slot_nr, fp) - iq_shift_to_apply;
-    openair0_timestamp rx_timestamp;
-    int tmp = UE->rfdevice.trx_read_func(&UE->rfdevice, &rx_timestamp, rxp, readBlockSize, fp->nb_antennas_rx);
+    openair0_timestamp_t rx_timestamp;
+    int tmp = nrue_ru_read(UE, &rx_timestamp, rxp, readBlockSize, fp->nb_antennas_rx);
     metadata meta = {.slot =  curMsg.proc.nr_slot_rx, .frame =  curMsg.proc.frame_rx};
     UEscopeCopyWithMetadata(UE, ueTimeDomainSamples, rxp[0] - firstSymSamp * sizeof(c16_t), sizeof(c16_t), 1, readBlockSize, 0, &meta);
     AssertFatal(readBlockSize == tmp, "");
@@ -1010,12 +978,8 @@ void *UE_thread(void *arg)
       int first_symbols = fp->ofdm_symbol_size + fp->nb_prefix_samples0; // first symbol of every frames
 
       if (first_symbols > 0) {
-        openair0_timestamp ignore_timestamp;
-        int tmp = UE->rfdevice.trx_read_func(&UE->rfdevice,
-                                             &ignore_timestamp,
-                                             (void **)UE->common_vars.rxdata,
-                                             first_symbols,
-                                             fp->nb_antennas_rx);
+        openair0_timestamp_t ignore_timestamp;
+        int tmp = nrue_ru_read(UE, &ignore_timestamp, (void **)UE->common_vars.rxdata, first_symbols, fp->nb_antennas_rx);
         AssertFatal(first_symbols == tmp, "");
 
       } else
@@ -1023,13 +987,13 @@ void *UE_thread(void *arg)
     }
 
     // use previous timing_advance value to compute writeTimestamp
-    const openair0_timestamp writeTimestamp =
+    const openair0_timestamp_t writeTimestamp =
         rx_timestamp + get_samples_slot_duration(fp, slot_nr, duration_rx_to_tx) - firstSymSamp - UE->N_TA_offset - timing_advance;
 
     // Calculate TX deadline, approximately 1 symbol before the first sample should be written
     const uint64_t samples_diff = writeTimestamp - rx_timestamp - fp->ofdm_symbol_size;
-    const float deadline_us = samples_diff / UE->rfdevice.openair0_cfg->sample_rate * 1e6;
-    const uint64_t absolute_deadline_us = current_time.tv_sec * 1e6 + current_time.tv_nsec / 1e3 + deadline_us;
+    const float deadline_us = samples_diff * 1e3 / fp->samples_per_subframe;
+    const uint64_t absolute_deadline_us = current_time.tv_sec * 1e6 + current_time.tv_nsec * 1e-3 + deadline_us;
 
     // but use current UE->timing_advance value to compute writeBlockSize
     int writeBlockSize = get_samples_per_slot((slot_nr + duration_rx_to_tx) % nb_slot_frame, fp) - iq_shift_to_apply;
@@ -1106,11 +1070,11 @@ void *UE_thread(void *arg)
   return NULL;
 }
 
-void init_NR_UE(int nb_inst, char *uecap_file, char *reconfig_file, char *rbconfig_file)
+void init_NR_UE(int nb_inst, char *uecap_file, char *reconfig_file, char *rbconfig_file, int numerology)
 {
   for (int instance_id = 0; instance_id < nb_inst; instance_id++) {
     NR_UE_RRC_INST_t* rrc = nr_rrc_init_ue(uecap_file, instance_id, get_nrUE_params()->nb_antennas_tx);
-    NR_UE_MAC_INST_t *mac = nr_l2_init_ue(instance_id);
+    NR_UE_MAC_INST_t *mac = nr_l2_init_ue(instance_id, numerology);
 
     nr_rrc_set_mac_queue(instance_id, &mac->input_nf);
     mac->if_module = nr_ue_if_module_init(instance_id);

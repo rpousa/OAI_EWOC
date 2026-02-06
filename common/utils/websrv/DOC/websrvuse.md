@@ -275,9 +275,9 @@ The web server back-end is using the [oai configuration module](Config/Rtusage).
 ## running the back-end
 To trigger the back-end use the `--websrv` option, possibly modifying the parameters as explained in the [previous section](./websrvuse.md#web-server-parameters).  The two following commands allow starting the oai gNB and the oai 5G UE on the same computer, starting the telnet server and the web interface on both executables.
 
-`./nr-softmodem -O  /usr/local/oai/conf/gnb.band78.sa.fr1.106PRB.usrpb210.conf --rfsim --rfsimulator.serveraddr server --telnetsrv  --telnetsrv.listenstdin --websrv   --rfsimulator.options chanmod`
+`./nr-softmodem -O  /usr/local/oai/conf/gnb.band78.sa.fr1.106PRB.usrpb210.conf --rfsim --rfsimulator.[0].serveraddr server --telnetsrv --telnetsrv.listenstdin --websrv --rfsimulator.[0].options chanmod`
 
-`./nr-uesoftmodem -O /usr/local/oai/conf/nrue_sim.conf --numerology 1 -r 106 -C 3649440000 --rfsim --rfsimulator.serveraddr 127.0.0.1 --websrv --telnetsrv --websrv.listenport 8092 --telnetsrv.listenport 8091`
+`./nr-uesoftmodem -O /usr/local/oai/conf/nrue_sim.conf --numerology 1 -r 106 -C 3649440000 --rfsim --rfsimulator.[0].serveraddr 127.0.0.1 --websrv --telnetsrv --websrv.listenport 8092 --telnetsrv.listenport 8091`
 
 
 

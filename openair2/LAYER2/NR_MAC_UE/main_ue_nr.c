@@ -97,7 +97,7 @@ void nr_ue_mac_default_configs(NR_UE_MAC_INST_t *mac)
   // default values as defined in 38.331 sec 9.2.2
 
   // sf80 default for retxBSR_Timer sf10 for periodicBSR_Timer
-  int mu = mac->current_UL_BWP ? mac->current_UL_BWP->scs : get_softmodem_params()->numerology;
+  int mu = mac->current_UL_BWP ? mac->current_UL_BWP->scs : mac->numerology;
   int subframes_per_slot = get_slots_per_frame_from_scs(mu) / 10;
   nr_timer_setup(&mac->scheduling_info.retxBSR_Timer, 80 * subframes_per_slot, 1); // 1 slot update rate
   nr_timer_setup(&mac->scheduling_info.periodicBSR_Timer, 10 * subframes_per_slot, 1); // 1 slot update rate
@@ -130,7 +130,7 @@ NR_UE_L2_STATE_t nr_ue_get_sync_state(module_id_t mod_id)
   return mac->state;
 }
 
-NR_UE_MAC_INST_t *nr_l2_init_ue(int instance_id)
+NR_UE_MAC_INST_t *nr_l2_init_ue(int instance_id, int numerology)
 {
   AssertFatal(instance_id < MAX_NUM_NR_UE_INST, "instance_id %d is out of range\n", instance_id);
   AssertFatal(nr_ue_mac_inst[instance_id] == NULL, "MAC instance %d already initialized\n", instance_id);
@@ -138,12 +138,13 @@ NR_UE_MAC_INST_t *nr_l2_init_ue(int instance_id)
 
   NR_UE_MAC_INST_t *mac = nr_ue_mac_inst[instance_id];
   mac->ue_id = instance_id;
+  mac->numerology = numerology;
   nr_ue_init_mac(mac);
   int ret = pthread_mutex_init(&mac->if_mutex, NULL);
   AssertFatal(ret == 0, "Mutex init failed\n");
   nr_ue_mac_default_configs(mac);
   if (IS_SA_MODE(get_softmodem_params()))
-    ue_init_config_request(mac, get_slots_per_frame_from_scs(get_softmodem_params()->numerology));
+    ue_init_config_request(mac, get_slots_per_frame_from_scs(numerology));
 
   static bool initialized = false;
   if (!initialized) {

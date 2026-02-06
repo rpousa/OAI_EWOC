@@ -46,23 +46,16 @@
 #define NR_SYMBOLS_PER_SLOT NR_NUMBER_OF_SYMBOLS_PER_SLOT
 
 #define ONE_OVER_SQRT2_Q15 23170
-#define ONE_OVER_TWO_Q15 16384
 
 #define NR_MOD_TABLE_SIZE_SHORT 686
-#define NR_MOD_TABLE_BPSK_OFFSET 1
-#define NR_MOD_TABLE_QAM16_OFFSET 7
-#define NR_MOD_TABLE_QAM64_OFFSET 23
-#define NR_MOD_TABLE_QAM256_OFFSET 87
 
 #define NR_PSS_LENGTH 127
 #define NR_SSS_LENGTH 127
 
 #define NR_MAX_PRS_LENGTH 3264 //272*6(max allocation per RB)*2(QPSK)
 #define NR_MAX_PRS_INIT_LENGTH_DWORD 102 // ceil(NR_MAX_CSI_RS_LENGTH/32)
-#define NR_MAX_NUM_PRS_SYMB 12
 #define NR_MAX_PRS_COMB_SIZE 12
 #define NR_MAX_PRS_RESOURCES_PER_SET 64
-#define NR_MAX_PRS_MUTING_PATTERN_LENGTH 32
 
 #define NR_PBCH_DMRS_LENGTH 144 // in mod symbols
 #define NR_PBCH_DMRS_LENGTH_DWORD 10 // ceil(2(QPSK)*NR_PBCH_DMRS_LENGTH/32)
@@ -70,7 +63,6 @@
 /*used for the resource mapping*/
 #define NR_MAX_PDCCH_DMRS_LENGTH 576 // 16(L)*2(QPSK)*3(3 DMRS symbs per REG)*6(REG per CCE)
 #define NR_MAX_PDCCH_SIZE 8192 // It seems it is the max polar coded block size
-#define NR_MAX_DCI_PAYLOAD_SIZE 64
 #define NR_MAX_DCI_SIZE 1728 //16(L)*2(QPSK)*9(12 RE per REG - 3(DMRS))*6(REG per CCE)
 #define NR_MAX_DCI_SIZE_DWORD 54 // ceil(NR_MAX_DCI_SIZE/32)
 
@@ -87,7 +79,6 @@
 #define MAX_NUM_NR_SRS_SYMBOLS 4
 #define MAX_NUM_NR_SRS_AP 4
 
-#define NR_NB_NSCID 2
 
 #define MAX_DELAY_COMP 20
 
@@ -334,7 +325,7 @@ uint32_t get_samples_slot_duration(const NR_DL_FRAME_PARMS *fp, unsigned int sta
 // Get timestamp of slot from start of frame
 uint32_t get_samples_slot_timestamp(const NR_DL_FRAME_PARMS *fp, unsigned int slot);
 // Get slot from timestamp
-uint32_t get_slot_from_timestamp(openair0_timestamp timestamp_rx, const NR_DL_FRAME_PARMS *fp);
+uint32_t get_slot_from_timestamp(openair0_timestamp_t timestamp_rx, const NR_DL_FRAME_PARMS *fp);
 // Get number of samples in the slot
 uint32_t get_samples_per_slot(int slot, const NR_DL_FRAME_PARMS *fp);
 

@@ -302,22 +302,6 @@ void close_log_mem(void);
 @param multiVec create new file or append to existing (useful for writing multiple vectors to same file. Just call the function multiple times with same file name and with this parameter set to 1)
 */
 #define MATLAB_RAW (1U<<31)
-#define MATLAB_SHORT 0
-#define MATLAB_CSHORT 1
-#define MATLAB_INT 2
-#define MATLAB_CINT 3
-#define MATLAB_INT8 4
-#define MATLAB_CINT8 5
-#define MATLAB_LLONG 6
-#define MATLAB_DOUBLE 7
-#define MATLAB_CDOUBLE 8
-#define MATLAB_UINT8 9
-#define MATLEB_EREN1 10
-#define MATLEB_EREN2 11
-#define MATLEB_EREN3 12
-#define MATLAB_CSHORT_BRACKET1 13
-#define MATLAB_CSHORT_BRACKET2 14
-#define MATLAB_CSHORT_BRACKET3 15
 
 int32_t write_file_matlab(const char *fname,
                           const char *vname,
@@ -333,7 +317,6 @@ int32_t write_file_matlab(const char *fname,
 
 #define LOG_CONFIG_STRING_GLOBAL_LOG_LEVEL                 "global_log_level"
 #define LOG_CONFIG_STRING_GLOBAL_LOG_ONLINE                "global_log_online"
-#define LOG_CONFIG_STRING_GLOBAL_LOG_INFILE                "global_log_infile"
 #define LOG_CONFIG_STRING_GLOBAL_LOG_OPTIONS               "global_log_options"
 
 #define LOG_CONFIG_LEVEL_FORMAT                            "%s_log_level"

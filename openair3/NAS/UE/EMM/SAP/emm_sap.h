@@ -123,7 +123,6 @@ typedef enum {
 #define EMMREG_PRIMITIVE_MIN    _EMMREG_START
 #define EMMESM_PRIMITIVE_MIN    _EMMESM_START
 #define EMMAS_PRIMITIVE_MIN     _EMMAS_START
-#define EMMCN_PRIMITIVE_MIN     _EMMCN_START
 
 /*
  * Maximal identifier for EMM-SAP primitives
@@ -131,7 +130,6 @@ typedef enum {
 #define EMMREG_PRIMITIVE_MAX    _EMMREG_END
 #define EMMESM_PRIMITIVE_MAX    _EMMESM_END
 #define EMMAS_PRIMITIVE_MAX     _EMMAS_END
-#define EMMCN_PRIMITIVE_MAX     _EMMCN_END
 
 /****************************************************************************/
 /************************  G L O B A L    T Y P E S  ************************/

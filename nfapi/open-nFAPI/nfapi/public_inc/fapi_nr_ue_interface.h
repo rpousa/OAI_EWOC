@@ -260,6 +260,13 @@ typedef struct
 
 } nfapi_nr_ue_pusch_data_t;
 
+typedef struct csi_payload {
+  uint64_t part1_payload;
+  uint64_t part2_payload;
+  int p1_bits;
+  int p2_bits;
+} nfapi_nr_ue_csi_payload_t;
+
 typedef struct
 {
   // payloads with fixed array size
@@ -267,10 +274,7 @@ typedef struct
   // vector without L1 implementation
   uint16_t harq_ack_bit_length;
   uint64_t harq_payload;
-  uint16_t csi_part1_bit_length;
-  uint64_t csi_part1_payload;
-  uint16_t csi_part2_bit_length;
-  uint64_t csi_part2_payload;
+  nfapi_nr_ue_csi_payload_t csi_payload;
   uint8_t  alpha_scaling; // 0 = 0.5, 1 = 0.65, 2 = 0.8, 3 = 1
   uint8_t  beta_offset_harq_ack;
   uint8_t  beta_offset_csi1;

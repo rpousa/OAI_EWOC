@@ -32,8 +32,6 @@
 #include "assertions.h"
 #include "conversions.h"
 
-#define SECU_DEBUG
-
 /*!
  * @brief Create integrity cmac t for a given message.
  * @param[in] stream_cipher Structure containing various variables to setup encoding

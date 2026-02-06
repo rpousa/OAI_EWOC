@@ -39,7 +39,7 @@ Important notes:
 2. After entering the bash environment, run the following command to deploy your first UE
 
    ```bash
-   sudo ./nr-uesoftmodem -O ../../../targets/PROJECTS/GENERIC-NR-5GC/CONF/ue.conf -r 106 --numerology 1 --band 78 -C 3619200000    --rfsim --uicc0.imsi 001010000000001 --rfsimulator.options chanmod --rfsimulator.serveraddr 10.201.1.100 --telnetsrv    --telnetsrv.listenport 9095
+   sudo ./nr-uesoftmodem -O ../../../targets/PROJECTS/GENERIC-NR-5GC/CONF/ue.conf -r 106 --numerology 1 --band 78 -C 3619200000 --rfsim --uicc0.imsi 001010000000001 --rfsimulator.[0].options chanmod --rfsimulator.[0].serveraddr 10.201.1.100 --telnetsrv --telnetsrv.listenport 9095
    ```
 
 3. For the second UE, create the namespace ue2 (`-c2`), then execute shell inside (`-o2`, "open"):
@@ -52,7 +52,7 @@ Important notes:
 4. After entering the bash environment, run the following command to deploy your second UE:
 
    ```bash
-   sudo ./nr-uesoftmodem -O ../../../targets/PROJECTS/GENERIC-NR-5GC/CONF/ue.conf -r 106 --numerology 1 --band 78 -C 3619200000    --rfsim --uicc0.imsi 001010000000002 --rfsimulator.options chanmod --rfsimulator.serveraddr 10.202.1.100 --telnetsrv    --telnetsrv.listenport 9096
+   sudo ./nr-uesoftmodem -O ../../../targets/PROJECTS/GENERIC-NR-5GC/CONF/ue.conf -r 106 --numerology 1 --band 78 -C 3619200000 --rfsim --uicc0.imsi 001010000000002 --rfsimulator.[0].options chanmod --rfsimulator.[0].serveraddr 10.202.1.100 --telnetsrv --telnetsrv.listenport 9096
    ```
 
 in the command above, please note that the IMSI and the telnet port changed.

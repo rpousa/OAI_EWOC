@@ -175,6 +175,12 @@ with the reestablishment procedure; if any check fails, the CU-CP tries to
 release the old UE at the AMF, and continues with the "normal" connection setup
 (registration/service request) described above.
 
+The re-establishment flow implements transparent forwarding of CellGroupConfig
+per TS 38.473: the CU requests CellGroupConfig from the DU via UE Context
+Modification Request with `gNB_DU_Configuration_Query=true`, and the DU responds
+with an encoded CellGroupConfig that the CU forwards to the UE without
+decode/re-encode cycles.
+
 ```mermaid
 sequenceDiagram
   participant ue as UE
@@ -185,30 +191,59 @@ sequenceDiagram
 
   ue->>du: Msg1/Preamble
   du->>ue: Msg2/RAR
-  ue->>du: Msg3 w/ RRC Reestabishment Request (old C-RNTI/PCI)
+  ue->>du: Msg3 w/ RRC Reestablishment Request (old C-RNTI/PCI)
   Note over du: DU creates UE context for new RNTI
   du->>cucp: F1AP Initial UL RRC Msg Tr (RRC Reestab Req, in Msg3)
   Note over cucp: rrc_handle_RRCReestablishmentRequest()
-  alt UE known and at the original DU
-      Note over cucp: rrc_gNB_generate_RRCReestablishment()<br />SRB1 PDCP reestablishment
-      cucp->>du: F1AP DL RRC Msg Tr (old gNB-DU-UE ID)
-      Note over du: Reuse configuration of and delete old UE<br />(in dl_rrc_message_transfer())
+  alt UE known
+      opt PCI mismatch AND Association ID mismatch
+        Note over cucp: Detect different DU (assoc_id != du_assoc_id)<br/>Update du_assoc_id, set f1_ue_context_active=false
+      end
+      Note over cucp: rrc_gNB_generate_RRCReestablishment()<br/>SRB1 PDCP reestablishment
+      cucp->>du: F1AP DL RRC Msg Tr (gNB-DU-UE ID)
+      Note over du: dl_rrc_message_transfer()
+        alt Old UE found
+          Note over du: Reuse configuration of and delete old UE
+        else Old UE not found
+          Note over du: do nothing
+        end
+      Note over du: Set reestablishRLC=true
+      Note over du: - Store CellGroup in reconfigCellGroup<br/>- Remove spCellConfig from CellGroup
       du->>ue: RRC Reestablishment
       ue->>du: RRC Reestablishment Complete
       du->>cucp: F1AP UL RRC Msg Tr (RRC Reestab Complete)
       Note over cucp: handle_rrcReestablishmentComplete()
-      Note over cucp: cuup_notify_reestablishment()
-        cucp->>cuup: E1AP Bearer Context Modification Req
-      cucp->>ue: F1AP DL RRC Msg Transfer (RRC Reconfiguration)
-        cuup->>cucp: E1AP Bearer Context Modification Resp
+      Note over cucp: rrc_gNB_process_RRCReestablishmentComplete()<br/>Re-establish SRB2 PDCP
+      Note over cucp: cuup_notify_reestablishment()<br/>Notify CU-UP for DRB re-establishment
+      cucp->>cuup: E1AP Bearer Context Modification Req
+      cuup->>cucp: E1AP Bearer Context Modification Resp (asynchronous)
+      alt on the original DU
+          Note over cucp: Send UE Context Modification Request<br/>with gNB_DU_Configuration_Query=true
+          cucp->>du: F1AP UE Context Modification Req
+          du->>cucp: F1AP UE Context Modification Resp<br/>(CellGroupConfig with spCellConfig and reestablishRLC flags)
+      else on a different DU
+          Note over cucp: Detect different DU (!f1_ue_context_active)<br/>Trigger UE Context Setup on new DU
+          cucp->>du: F1AP UE Context Setup Request<br/>
+          du->>cucp: F1AP UE Context Setup Response<br/>(CellGroupConfig with spCellConfig and reestablishRLC flags)
+      end
+      Note over cucp: rrc_CU_process_ue_context_setup/modification_response()<br/>Detect re-establishment via rrc_detect_reestablishment()<br/>rrc_gNB_generate_dedicatedRRCReconfiguration()<br/>(with is_reestablishment=true)
+      cucp->>ue: F1AP DL RRC Msg Transfer (RRC Reconfiguration<br/>with transparent CellGroupConfig)
       ue->>cucp: F1AP UL RRC Msg Transfer (RRC Reconfiguration Complete)
-      Note over cucp: handle_rrcReestablishmentComplete()
+      Note over cucp: handle_rrcReconfigurationComplete()
   else Fallback*
       cucp->>amf: NGAP UE Context Release Request
       Note over cucp: rrc_gNB_generate_RRCSetup()
       Note over ue,amf: Continue with connection setup (registration/service request)
   end
 ```
+
+Note on re-establishment on different DU: The "UE known and on a different DU"
+case is shown in the sequence diagram above. When a UE re-establishes on a
+different DU than the original one (detected by comparing `du_assoc_id` at
+RRCReestablishmentRequest), the CU updates `du_assoc_id` and sets
+`f1_ue_context_active=false`. At RRCReestablishmentComplete, if
+`f1_ue_context_active` is false, the CU triggers UE Context Setup on the new
+DU per TS 38.401 §8.7.
 
 ### Inter-DU Handover (F1)
 

@@ -325,8 +325,7 @@ int main(int argc, char *argv[])
     snr1 = snr0 + 10;
 
   double sampling_rate, tx_bandwidth, rx_bandwidth;
-  uint32_t samples;
-  get_samplerate_and_bw(mu, N_RB_DL, threequarter_fs, &sampling_rate, &samples, &tx_bandwidth, &rx_bandwidth);
+  get_samplerate_and_bw(mu, N_RB_DL, threequarter_fs, &sampling_rate, &tx_bandwidth, &rx_bandwidth);
 
   // Initialize gNB
   gNB = calloc_or_fail(1, sizeof(PHY_VARS_gNB));

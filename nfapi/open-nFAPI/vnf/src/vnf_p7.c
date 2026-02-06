@@ -2130,6 +2130,10 @@ void vnf_dispatch_p7_message(void *pRecvMsg, int recvMsgLen, vnf_p7_t* vnf_p7)
 
 void vnf_nr_handle_p7_message(void *pRecvMsg, int recvMsgLen, vnf_p7_t* vnf_p7)
 {
+  if (vnf_p7->terminate) {
+    // VNF already terminated, ignore messages ( shouldn't get here, since the PNF doesn't send further messages after terminating as well )
+    return;
+  }
 	nfapi_nr_p7_message_header_t header;
 
 	// validate the input params

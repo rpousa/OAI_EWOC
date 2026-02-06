@@ -60,8 +60,8 @@ void sdap_data_ind(int pdcp_entity,
                    char *buf,
                    int size);
 
-void start_sdap_tun_ue(ue_id_t ue_id, int pdu_session_id, int sock);
-void start_sdap_tun_gnb_first_ue_default_pdu_session(ue_id_t ue_id);
-void create_ue_ip_if(const char *ipv4, const char *ipv6, int ue_id, int pdu_session_id);
+void start_sdap_tun_gnb_first_ue_default_pdu_session(ue_id_t ue_id, int pdu_session_id);
+void create_ue_ip_if(const char *ipv4, const char *ipv6, int ue_id, int pdu_session_id, bool is_default);
+void create_ue_eth_if(int ue_id, int pdu_session_id, bool is_default);
 
 #endif

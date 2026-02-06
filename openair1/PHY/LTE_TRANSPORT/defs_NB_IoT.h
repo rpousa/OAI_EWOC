@@ -29,14 +29,10 @@
 //#include "dci_nb_iot.h"
 
 //#define MOD_TABLE_QPSK_OFFSET 1
-//#define MOD_TABLE_16QAM_OFFSET 5
-//#define MOD_TABLE_64QAM_OFFSET 21
-//#define MOD_TABLE_PSS_OFFSET 85
 //
 //// structures below implement 36-211 and 36-212
 //
 //#define NSOFT 1827072
-#define LTE_NULL_NB_IoT 2
 //
 //// maximum of 3 segments before each coding block if data length exceeds 6144 bits.
 //

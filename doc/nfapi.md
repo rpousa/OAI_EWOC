@@ -238,7 +238,7 @@ Run cu_stu and ric_stub in separate terminals
 
 Run the OAI PNF first, as it is the WLS memory master
 
-    sudo NFAPI_TRACE_LEVEL=info ./nr-softmodem -O ../../../targets/PROJECTS/GENERIC-NR-5GC/CONF/gnb-pnf.band78.rfsim.2x2.conf --nfapi PNF --rfsim --rfsimulator.serveraddr server
+    sudo NFAPI_TRACE_LEVEL=info ./nr-softmodem -O ../../../targets/PROJECTS/GENERIC-NR-5GC/CONF/gnb-pnf.band78.rfsim.2x2.conf --nfapi PNF --rfsim --rfsimulator.[0].serveraddr server
 
 Run the O-DU over GDB
 

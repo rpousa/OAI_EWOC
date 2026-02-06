@@ -222,9 +222,6 @@ typedef struct IttiMsgText_s {
 
 #include <openair3/NAS/COMMON/API/NETWORK/nas_message.h>
 #include <openair2/COMMON/nas_messages_types.h>
-#if ENABLE_RAL
-  #include <ral_messages_types.h>
-#endif
 #include <openair2/COMMON/s1ap_messages_types.h>
 #include <openair2/COMMON/x2ap_messages_types.h>
 #include <openair2/COMMON/m2ap_messages_types.h>

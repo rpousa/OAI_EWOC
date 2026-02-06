@@ -23,7 +23,6 @@
 #include <arpa/inet.h>
 #include "PduSessionEstablishmentAccept.h"
 #include "common/utils/LOG/log.h"
-#include "common/utils/tun_if.h"
 #include "fgs_nas_utils.h"
 
 /**

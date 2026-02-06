@@ -29,10 +29,6 @@
   #include "x2ap_eNB.h"
   #include "s1ap_eNB.h"
   #include "openair3/ocp-gtpu/gtp_itf.h"
-  #if ENABLE_RAL
-    #include "lteRALue.h"
-    #include "lteRALenb.h"
-  #endif
   #include "RRC/LTE/rrc_defs.h"
 # include "enb_app.h"
 # include "openair2/LAYER2/MAC/mac_proto.h"

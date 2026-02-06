@@ -19,14 +19,18 @@
  *      contact@openairinterface.org
  */
 
-#ifndef _RTOS_HEADER_H_
-#define _RTOS_HEADER_H_
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <math.h>
-#include <pthread.h>
-#include <assert.h>
-#define rtf_get    read
-#define rtf_put    write
-#endif
+#ifndef PDU_SESSION_H_
+#define PDU_SESSION_H_
+
+#include "common/5g_platform_types.h"
+
+typedef struct {
+  int id;
+  int type;
+  nssai_t nssai;
+  char *dnn; // [103]?
+} pdu_session_config_t;
+
+int get_pdu_session_configs(const char *uiccName, pdu_session_config_t *configs, int max_len);
+
+#endif /* PDU_SESSION_H_ */

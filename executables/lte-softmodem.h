@@ -53,13 +53,10 @@
 #define CMDLINE_DEBUGUEPRACH_IDX                3
 #define CMDLINE_NOL2CONNECT_IDX                 4
 #define CMDLINE_CALIBPRACHTX_IDX                5
-#define CMDLINE_MEMLOOP_IDX                     6
-#define CMDLINE_DUMPMEMORY_IDX                  7
+
 /*------------------------------------------------------------------------------------------------------------------------------------------*/
 /* help strings definition for command line options, used in CMDLINE_XXX_DESC macros and printed when -h option is used */
 
-
-#define CONFIG_HLP_SIML1         "activate RF simulator instead of HW\n"
 #define CONFIG_HLP_NUMUE         "number of UE instances\n"
 #define CONFIG_HLP_UERXG         "set UE RX gain\n"
 #define CONFIG_HLP_UERXGOFF      "external UE amplifier offset\n"
@@ -125,7 +122,6 @@ extern pthread_cond_t sync_cond;
 extern pthread_mutex_t sync_mutex;
 extern int sync_var;
 extern int transmission_mode;
-extern double cpuf;
 
 extern int numerology;
 extern int usrp_tx_thread;

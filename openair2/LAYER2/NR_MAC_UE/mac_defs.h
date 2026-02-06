@@ -310,10 +310,8 @@ typedef struct {
   NR_PUCCH_Resource_t *pucch_resource;
   uint32_t ack_payload;
   uint8_t sr_payload;
-  uint64_t csi_part1_payload;
-  uint64_t csi_part2_payload;
+  nfapi_nr_ue_csi_payload_t csi_payload;
   int n_sr;
-  int n_csi;
   int n_harq;
   int n_CCE;
   int N_CCE;
@@ -490,13 +488,6 @@ typedef struct {
   A_SEQUENCE_OF(NR_SearchSpace_t) list_SS;
 } NR_BWP_PDCCH_t;
 
-typedef struct csi_payload {
-  uint64_t part1_payload;
-  uint64_t part2_payload;
-  int p1_bits;
-  int p2_bits;
-} csi_payload_t;
-
 typedef enum {
   WIDEBAND_ON_PUCCH,
   SUBBAND_ON_PUCCH,
@@ -615,6 +606,8 @@ typedef struct NR_UE_MAC_INST_s {
   uint16_t nr_band;
   uint8_t ssb_subcarrier_offset;
   int ssb_start_subcarrier;
+  uint64_t dl_frequency;
+  int numerology;
 
   NR_SSB_meas_t ssb_measurements[MAX_NB_SSB];
   NR_CSIRS_meas_t csirs_measurements;

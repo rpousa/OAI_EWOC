@@ -121,7 +121,6 @@ typedef struct {
 #define NFAPI_NR_P7_SET_MSS(_more, _segm, _sequ) ( (((_more) & 0x1) << 15) | (((_segm) & 0x7F) << 8) | ((_sequ) & 0xFF) )
 #define NFAPI_P7_SET_MSS(_more, _segm, _sequ) ( (((_more) & 0x1) << 7) | (((_segm) & 0x7F) << 4) | ((_sequ) & 0xF) )
 
-#define NFAPI_TAG_LENGTH_PACKED_LEN 4
 
 // Convenience methods to convert between SFN/SLOT formats
 #define NFAPI_SLOTNUM(_mu) (10 << (_mu))
@@ -563,7 +562,6 @@ typedef struct {
   uint16_t number_of_phys;
   nfapi_pnf_phy_rel15_info_t phy[NFAPI_MAX_PNF_PHY];
 } nfapi_pnf_phy_rel15_t;
-#define NFAPI_PNF_PHY_REL15_TAG 0x100H
 
 
 typedef struct {
@@ -3053,7 +3051,6 @@ typedef struct {
 
 #define NFAPI_LTE_RSSI_REQUEST_TAG 0x3000
 
-#define NFAPI_P4_START_TAG NFAPI_LTE_RSSI_REQUEST_TAG
 
 typedef struct {
 	nfapi_tl_t tl;

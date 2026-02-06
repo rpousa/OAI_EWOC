@@ -27,10 +27,9 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <linux/ipv6.h>
-#include <linux/if_tun.h>
 #include <linux/netlink.h>
 
-#include "tun_if.h"
+#include "tuntap_if.h"
 #include "common/platform_constants.h"
 #include "common/utils/LOG/log.h"
 #include "common/utils/system.h"
@@ -38,7 +37,7 @@
 int nas_sock_fd[MAX_MOBILES_PER_ENB * 2]; // Allocated for both LTE UE and NR UE.
 int nas_sock_mbms_fd;
 
-int tun_alloc(const char *dev)
+int tuntap_alloc(int flag, const char *dev)
 {
   struct ifreq ifr;
   int fd, err;
@@ -54,7 +53,8 @@ int tun_alloc(const char *dev)
    *
    *        IFF_NO_PI - Do not provide packet information
    */
-  ifr.ifr_flags = IFF_TUN | IFF_NO_PI;
+  DevAssert(flag == IFF_TUN || flag == IFF_TAP);
+  ifr.ifr_flags = flag | IFF_NO_PI;
   strncpy(ifr.ifr_name, dev, sizeof(ifr.ifr_name) - 1);
   if ((err = ioctl(fd, TUNSETIFF, (void *)&ifr)) < 0) {
     close(fd);
@@ -76,7 +76,7 @@ int tun_alloc(const char *dev)
 
 int tun_init_mbms(char *ifname)
 {
-  nas_sock_mbms_fd = tun_alloc(ifname);
+  nas_sock_mbms_fd = tuntap_alloc(IFF_TUN, ifname);
 
   if (nas_sock_mbms_fd == -1) {
     LOG_E(UTIL, "Error opening mbms socket %s (%d:%s)\n", ifname, errno, strerror(errno));
@@ -96,7 +96,7 @@ int tun_init_mbms(char *ifname)
 
 int tun_init(const char *ifname, int instance_id)
 {
-  nas_sock_fd[instance_id] = tun_alloc(ifname);
+  nas_sock_fd[instance_id] = tuntap_alloc(IFF_TUN, ifname);
 
   if (nas_sock_fd[instance_id] == -1) {
     LOG_E(UTIL, "Error opening socket %s (%d:%s)\n", ifname, errno, strerror(errno));
@@ -158,42 +158,47 @@ static bool setInterfaceParameter(int sock_fd, const char *ifn, int af, const ch
 }
 
 
-typedef enum { INTERFACE_DOWN, INTERFACE_UP } if_action_t;
 /*
-* \brief bring interface up (up != 0) or down (up == 0)
+* \brief Get an interface's flags.
+* \param[in]  sock_fd socket to use for getting the flags
+* \param[in]  ifn the interface name for which to get flags
+* \param[out] flags the flags of the interface
+* \return true on success, false otherwise
 */
-static bool change_interface_state(int sock_fd, const char *ifn, if_action_t if_action)
+static bool get_if_flags(int sock_fd, const char *ifn, short *flags)
 {
-  const char *action = if_action == INTERFACE_DOWN ? "DOWN" : "UP";
-
   struct ifreq ifr = {0};
   strncpy(ifr.ifr_name, ifn, sizeof(ifr.ifr_name) - 1);
 
   /* get flags of this interface: see netdevice(7) */
-  bool success = ioctl(sock_fd, SIOCGIFFLAGS, (caddr_t)&ifr) == 0;
-  if (!success && if_action == INTERFACE_DOWN && errno == ENODEV) {
-    LOG_W(OIP, "trying to remove non-existant device %s\n", ifn);
-    return true;
+  int success = ioctl(sock_fd, SIOCGIFFLAGS, (caddr_t)&ifr) == 0;
+  if (!success) {
+    LOG_W(OIP, "On interface %s: ioctl() failed: %d, %s\n", ifn, errno, strerror(errno));
+    return false;
   }
-  LOG_D(OIP, "Got flags for %s: 0x%x (action: %s)\n", ifn, ifr.ifr_flags, action);
-
-  if (if_action == INTERFACE_UP) {
-    ifr.ifr_flags |= IFF_UP | IFF_NOARP | IFF_POINTOPOINT;
-    ifr.ifr_flags &= ~IFF_MULTICAST;
-  } else {
-    ifr.ifr_flags &= ~IFF_UP;
-  }
-
-  success = ioctl(sock_fd, SIOCSIFFLAGS, (caddr_t)&ifr) == 0;
-  if (!success)
-    goto fail_interface_state;
-  LOG_D(OIP, "Interface %s successfully set %s\n", ifn, action);
-
+  *flags = ifr.ifr_flags;
   return true;
+}
 
-fail_interface_state:
-  LOG_E(OIP, "Bringing interface %s for %s: ioctl call failed: %d, %s\n", action, ifn, errno, strerror(errno));
-  return false;
+/*
+ * \brief Set an interface's flags.
+* \param[in]  sock_fd socket to use for setting the flags
+* \param[in]  ifn the interface name for which to set flags
+* \param[in]  flags the flags to set for the interface
+* \return true on success, false otherwise
+ */
+static bool set_if_flags(int sock_fd, const char *ifn, short flags)
+{
+  struct ifreq ifr = {0};
+  strncpy(ifr.ifr_name, ifn, sizeof(ifr.ifr_name) - 1);
+  ifr.ifr_flags = flags;
+
+  int success = ioctl(sock_fd, SIOCSIFFLAGS, (caddr_t)&ifr) == 0;
+  if (!success) {
+    LOG_W(OIP, "On interface %s: ioctl() failed: %d, %s\n", ifn, errno, strerror(errno));
+    return false;
+  }
+  return true;
 }
 
 
@@ -227,13 +232,34 @@ bool tun_config(const char* ifname, const char *ipv4, const char *ipv6)
     close(sock_fd);
   }
 
+  // if successfully set IP addresses: set iterface up, disable ARP, no
+  // multicast, point-to-point
   if (success)
-    success = change_interface_state(sock_fd, ifname, INTERFACE_UP);
+    success = set_if_flags(sock_fd, ifname, (IFF_UP | IFF_NOARP | IFF_POINTOPOINT) & ~IFF_MULTICAST);
 
   if (success)
-    LOG_I(OIP, "Interface %s successfully configured, IPv4 %s, IPv6 %s\n", ifname, ipv4, ipv6);
+    LOG_A(OIP, "TUN Interface %s successfully configured, IPv4 %s, IPv6 %s\n", ifname, ipv4, ipv6);
   else
     LOG_E(OIP, "Interface %s couldn't be configured (IPv4 %s, IPv6 %s)\n", ifname, ipv4, ipv6);
+
+  close(sock_fd);
+  return success;
+}
+
+bool tap_config(const char* ifname)
+{
+  int sock_fd = socket(AF_INET, SOCK_DGRAM, 0);
+  if (sock_fd < 0) {
+    LOG_E(UTIL, "Failed creating socket for interface management: %d, %s\n", errno, strerror(errno));
+    return false;
+  }
+
+  bool success = set_if_flags(sock_fd, ifname, IFF_UP);
+
+  if (success)
+    LOG_A(OIP, "TAP interface %s successfully configured\n", ifname);
+  else
+    LOG_E(OIP, "Tap interface %s couldn't be configured\n", ifname);
 
   close(sock_fd);
   return success;
@@ -267,14 +293,16 @@ int tun_generate_ifname(char *ifname, const char *ifprefix, int instance_id)
   return snprintf(ifname, IFNAMSIZ, "%s%d", ifprefix, instance_id + 1);
 }
 
-int tun_generate_ue_ifname(char *ifname, int instance_id, int pdu_session_id)
+int tuntap_generate_ue_ifname(char *ifname, int flag, int instance_id, int pdu_session_id)
 {
+  DevAssert(flag == IFF_TUN || flag == IFF_TAP);
   char pdu_session_string[10];
   snprintf(pdu_session_string, sizeof(pdu_session_string), "p%d", pdu_session_id);
-  return snprintf(ifname, IFNAMSIZ, "%s%d%s", "oaitun_ue", instance_id + 1, pdu_session_id == -1 ? "" : pdu_session_string);
+  const char *basename = flag == IFF_TUN ? "oaitun_ue" : "oaitap_ue";
+  return snprintf(ifname, IFNAMSIZ, "%s%d%s", basename, instance_id + 1, pdu_session_id == -1 ? "" : pdu_session_string);
 }
 
-void tun_destroy(const char *dev)
+void tuntap_destroy(const char *dev)
 {
   // Use a new socket for ioctl operations
   int fd = socket(AF_INET, SOCK_DGRAM, 0);
@@ -283,11 +311,12 @@ void tun_destroy(const char *dev)
     return;
   }
 
-  bool success = change_interface_state(fd, dev, INTERFACE_DOWN);
+  // interface not up => down
+  short flags;
+  bool success = get_if_flags(fd, dev, &flags);
+  success = success && set_if_flags(fd, dev, flags & ~IFF_UP);
   if (success) {
     LOG_I(UTIL, "Interface %s is now down.\n", dev);
-  } else {
-    LOG_E(UTIL, "Could not bring interface %s down.\n", dev);
-  }
+  } // no else: get_if_flags()/set_if_flags() should have printed error
   close(fd);
 }

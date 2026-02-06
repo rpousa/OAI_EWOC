@@ -129,7 +129,7 @@
     <class>Custom_Command</class>
     <desc>UE connected to DU1?</desc>
     <node>groot</node>
-    <command>echo ci fetch_du_by_ue_id 1 | ncat 127.0.0.1 9090 | grep "3585"</command>
+    <command>echo ci fetch_du_by_ue_id | ncat 127.0.0.1 9090 | grep "3585"</command>
   </testCase>
 
   <testCase>
@@ -152,7 +152,7 @@
     <class>Custom_Command</class>
     <desc>UE connected to DU0?</desc>
     <node>groot</node>
-    <command>echo ci fetch_du_by_ue_id 1 | ncat 127.0.0.1 9090 | grep "3584"</command>
+    <command>echo ci fetch_du_by_ue_id | ncat 127.0.0.1 9090 | grep "3584"</command>
   </testCase>
 
   <testCase>
@@ -175,7 +175,7 @@
     <class>Custom_Command</class>
     <desc>UE connected to DU1?</desc>
     <node>groot</node>
-    <command>echo ci fetch_du_by_ue_id 1 | ncat 127.0.0.1 9090 | grep "3585"</command>
+    <command>echo ci fetch_du_by_ue_id | ncat 127.0.0.1 9090 | grep "3585"</command>
   </testCase>
 
   <testCase>

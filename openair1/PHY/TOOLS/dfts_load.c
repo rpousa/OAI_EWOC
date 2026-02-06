@@ -35,7 +35,6 @@
 #include <malloc.h>
 #include "assertions.h"
 #include "common/utils/LOG/log.h"
-#define OAIDFTS_LOADER
 #include "tools_defs.h"
 #include "common/config/config_userapi.h" 
 #include "common/utils/load_module_shlib.h" 

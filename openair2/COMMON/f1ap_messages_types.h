@@ -74,7 +74,6 @@
  */
 #define F1AP_TRANSPORT_LAYER_ADDRESS_SIZE (160 / 8)
 
-#define F1AP_MAX_NB_CU_IP_ADDRESS 10
 
 // Note this should be 512 from maxval in 38.473
 #define F1AP_MAX_NB_CELLS 2
@@ -82,7 +81,6 @@
 #define F1AP_MAX_NO_OF_TNL_ASSOCIATIONS 32
 #define F1AP_MAX_NO_UE_ID 1024
 
-#define F1AP_MAX_NO_OF_INDIVIDUAL_CONNECTIONS_TO_RESET 65536
 /* 9.3.1.42 of 3GPP TS 38.473 - gNB-CU System Information */
 #define F1AP_MAX_NO_SIB_TYPES 32
 
@@ -551,6 +549,9 @@ typedef struct f1ap_ue_context_mod_req_t {
   ReconfigurationCompl_t *reconfig_compl;
 
   byte_array_t *rrc_container;
+
+  // gNB-DU Configuration Query
+  bool *gNB_DU_Configuration_Query;
 
   int srbs_len;
   f1ap_srb_to_setup_t *srbs; // reuse the same type as for setup; there is a

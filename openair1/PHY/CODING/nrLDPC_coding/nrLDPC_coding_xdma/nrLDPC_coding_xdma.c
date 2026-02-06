@@ -53,8 +53,6 @@
 #define PRINT_CRC_CHECK(a)
 #endif
 
-// extern double cpuf;
-
 #include "nfapi/open-nFAPI/nfapi/public_inc/nfapi_interface.h"
 #include "nfapi/open-nFAPI/nfapi/public_inc/nfapi_nr_interface.h"
 

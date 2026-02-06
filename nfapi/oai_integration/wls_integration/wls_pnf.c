@@ -201,7 +201,10 @@ bool wls_pnf_nr_send_p5_message(pnf_t *pnf, nfapi_nr_p4_p5_message_header_t *msg
 bool wls_pnf_nr_send_p7_message(pnf_p7_t *pnf_p7, nfapi_nr_p7_message_header_t *msg, uint32_t msg_len)
 {
   UNUSED_VARIABLE(msg_len);
-
+  if (pnf_p7->terminate) {
+    // don't send any further P7 messages after terminating
+    return false;
+  }
   if (!isFAPIMessageIDValid(msg->message_id)) {
     return false;
   }

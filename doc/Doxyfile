@@ -866,8 +866,8 @@ INPUT                  = \
 @CMAKE_CURRENT_SOURCE_DIR@/../common/config/config_cmdline.c \
 @CMAKE_CURRENT_SOURCE_DIR@/../common/utils/time_meas.c \
 @CMAKE_CURRENT_SOURCE_DIR@/../common/utils/time_meas.h \
-@CMAKE_CURRENT_SOURCE_DIR@/../common/utils/tun_if.h \
-@CMAKE_CURRENT_SOURCE_DIR@/../common/utils/tun_if.c \
+@CMAKE_CURRENT_SOURCE_DIR@/../common/utils/tuntap_if.h \
+@CMAKE_CURRENT_SOURCE_DIR@/../common/utils/tuntap_if.c \
 @CMAKE_CURRENT_SOURCE_DIR@/../common/utils/utils.c \
 @CMAKE_CURRENT_SOURCE_DIR@/../common/utils/oai_asn1.h \
 @CMAKE_CURRENT_SOURCE_DIR@/../common/utils/system.h \
@@ -1892,7 +1892,6 @@ INPUT                  = \
 @CMAKE_CURRENT_SOURCE_DIR@/../openair2/RRC/LTE/rrc_eNB_S1AP.h \
 @CMAKE_CURRENT_SOURCE_DIR@/../openair2/ENB_APP/enb_paramdef_emtc.h \
 @CMAKE_CURRENT_SOURCE_DIR@/../openair2/ENB_APP/enb_config.c \
-@CMAKE_CURRENT_SOURCE_DIR@/../openair2/ENB_APP/enb_paramdef_mme.h \
 @CMAKE_CURRENT_SOURCE_DIR@/../openair2/ENB_APP/enb_paramdef_mce.h \
 @CMAKE_CURRENT_SOURCE_DIR@/../openair2/ENB_APP/L1_paramdef.h \
 @CMAKE_CURRENT_SOURCE_DIR@/../openair2/ENB_APP/enb_app.h \

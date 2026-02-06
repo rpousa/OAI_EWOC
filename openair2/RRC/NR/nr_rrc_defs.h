@@ -186,7 +186,8 @@ typedef struct gNB_RRC_UE_s {
   NR_UE_MRDC_Capability_t*           UE_Capability_MRDC;
   int                                UE_MRDC_Capability_size;
 
-  NR_CellGroupConfig_t               *masterCellGroup;
+  // Transparent forwarding of CellGroupConfig
+  byte_array_t mcg;
   NR_RadioBearerConfig_t             *rb_config;
 
   /* KgNB as derived from KASME received from EPC */

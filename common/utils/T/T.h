@@ -14,7 +14,6 @@
 /* T message IDs */
 #include "T_IDs.h"
 
-#define T_ACTIVE_STDOUT  2
 
 /* known type - this is where you add new types */
 #define T_INT(x) int, (x)

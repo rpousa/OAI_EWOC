@@ -78,7 +78,8 @@ int read_recplayconfig(recplay_conf_t **recplay_conf, recplay_state_t **recplay_
  * used in record mode
  * \param device the hardware used
  */
-void iqrecorder_end(openair0_device *device) {
+void iqrecorder_end(openair0_device_t *device)
+{
   if (device->recplay_state != NULL) { // subframes store
     iqfile_header_t fh = {device->type,device->openair0_cfg->tx_sample_advance, device->openair0_cfg->rx_bw,0,OAIIQFILE_ID};
     recplay_state_t *rs = device->recplay_state;

@@ -33,20 +33,23 @@ void nr_phy_init_RU(RU_t *ru)
 
   LOG_D(PHY, "Initializing RU signal buffers (if_south %s) nb_tx %d, nb_rx %d\n", ru_if_types[ru->if_south], ru->nb_tx, ru->nb_rx);
 
-  nfapi_nr_config_request_scf_t *cfg = &ru->config;
-  ru->nb_log_antennas = 0;
-  for (int n = 0; n < ru->num_gNB; n++) {
-    if (cfg->carrier_config.num_tx_ant.value > ru->nb_log_antennas)
-      ru->nb_log_antennas = cfg->carrier_config.num_tx_ant.value;
+  ru->num_beams_period = 1;
+  if (ru->num_gNB > 0) {
+    nfapi_nr_config_request_scf_t *cfg = &ru->config;
+    ru->nb_log_antennas = 0;
+    for (int n = 0; n < ru->num_gNB; n++) {
+      if (cfg->carrier_config.num_tx_ant.value > ru->nb_log_antennas)
+        ru->nb_log_antennas = cfg->carrier_config.num_tx_ant.value;
+    }
+    nfapi_nr_analog_beamforming_ve_t *analog_config = &cfg->analog_beamforming_ve;
+    ru->num_beams_period = analog_config->analog_bf_vendor_ext.value ? analog_config->num_beams_period_vendor_ext.value : 1;
   }
+  else ru->nb_log_antennas = ru->nb_tx;
 
   // copy configuration from gNB[0] in to RU, assume that all gNB instances sharing RU use the same configuration
   // (at least the parts that are needed by the RU, numerology and PRACH)
 
   AssertFatal(ru->nb_log_antennas > 0 && ru->nb_log_antennas < 13, "ru->nb_log_antennas %d ! \n",ru->nb_log_antennas);
-
-  nfapi_nr_analog_beamforming_ve_t *analog_config = &cfg->analog_beamforming_ve;
-  ru->num_beams_period = analog_config->analog_bf_vendor_ext.value ? analog_config->num_beams_period_vendor_ext.value : 1;
   int nb_tx_streams = ru->nb_tx * ru->num_beams_period;
   int nb_rx_streams = ru->nb_rx * ru->num_beams_period;
   LOG_I(NR_PHY, "nb_tx_streams %d, nb_rx_streams %d, num_Beams_period %d\n", nb_tx_streams, nb_rx_streams, ru->num_beams_period);

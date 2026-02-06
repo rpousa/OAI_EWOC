@@ -278,7 +278,7 @@ check_install_usrp_uhd_driver(){
             x=$((x + 1))
         done
         $SUDO apt-get update
-        $SUDO apt-get -y install python-tk  $boost_libs_ubuntu libusb-1.0-0-dev
+        $SUDO apt-get -y install python3-tk  $boost_libs_ubuntu libusb-1.0-0-dev
         case "$(get_distribution_release)" in
           "ubuntu20.04" | "ubuntu22.04")
             $SUDO apt-get -y install libuhd-dev libuhd4.5.0 uhd-host
@@ -288,7 +288,7 @@ check_install_usrp_uhd_driver(){
         boost_libs_fedora="boost-chrono boost-date-time boost-filesystem boost-program-options boost-thread boost-test boost-regex boost-devel"
         if [ $IS_CONTAINER -eq 0 ]
         then
-            $SUDO $INSTALLER -y install python3 $boost_libs_fedora libusb-devel libusbx-devel  python3-mako python3-docutils python3-pip $CMAKE
+            $SUDO $INSTALLER -y install python3 $boost_libs_fedora libusb1-devel libusbx-devel  python3-mako python3-docutils python3-pip $CMAKE
             $SUDO pip3 install requests
         else
             $SUDO $INSTALLER -y install $boost_libs_fedora $CMAKE

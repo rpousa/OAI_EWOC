@@ -328,8 +328,8 @@ typedef struct {
   int RU_output_mask[NUMBER_OF_UE_MAX];
   pthread_mutex_t RU_output_mutex[NUMBER_OF_UE_MAX];
   pthread_mutex_t UE_output_mutex[NUMBER_OF_RU_MAX];
-  openair0_timestamp current_ru_rx_timestamp[NUMBER_OF_RU_MAX][MAX_NUM_CCs];
-  openair0_timestamp current_UE_rx_timestamp[MAX_MOBILES_PER_ENB][MAX_NUM_CCs];
+  openair0_timestamp_t current_ru_rx_timestamp[NUMBER_OF_RU_MAX][MAX_NUM_CCs];
+  openair0_timestamp_t current_UE_rx_timestamp[MAX_MOBILES_PER_ENB][MAX_NUM_CCs];
   double ru_amp[NUMBER_OF_RU_MAX];
 } sim_t;
 

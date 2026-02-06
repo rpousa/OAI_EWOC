@@ -51,6 +51,8 @@
 //#define DEBUG_MEAS_UE
 //#define DEBUG_RANK_EST
 
+extern openair0_config_t openair0_cfg[MAX_CARDS];
+
 void nr_ue_measurements(PHY_VARS_NR_UE *ue,
                         const UE_nr_rxtx_proc_t *proc,
                         int number_rbs,
@@ -133,9 +135,10 @@ void nr_ue_measurements(PHY_VARS_NR_UE *ue,
     ue->measurements.n0_power_avg_dB = dB_fixed(ue->measurements.n0_power_avg);
     ue->measurements.wideband_cqi_tot[gNB_id] = ue->measurements.rx_power_tot_dB[gNB_id] - ue->measurements.n0_power_tot_dB;
     ue->measurements.wideband_cqi_avg[gNB_id] = ue->measurements.rx_power_avg_dB[gNB_id] - ue->measurements.n0_power_avg_dB;
-    ue->measurements.rx_rssi_dBm[gNB_id] = ue->measurements.rx_power_avg_dB[gNB_id] + 30 - SQ15_SQUARED_NORM_FACTOR_DB
-                                           - ((int)ue->openair0_cfg[0].rx_gain[0] - (int)ue->openair0_cfg[0].rx_gain_offset[0])
-                                           - dB_fixed(ue->frame_parms.ofdm_symbol_size);
+    ue->measurements.rx_rssi_dBm[gNB_id] =
+        ue->measurements.rx_power_avg_dB[gNB_id] + 30 - SQ15_SQUARED_NORM_FACTOR_DB
+        - ((int)openair0_cfg[ue->rf_map.card].rx_gain[0] - (int)openair0_cfg[ue->rf_map.card].rx_gain_offset[0])
+        - dB_fixed(ue->frame_parms.ofdm_symbol_size);
 
     LOG_D(PHY, "[gNB %d] Slot %d, RSSI %d dB (%d dBm/RE), WBandCQI %d dB, rxPwrAvg %d, n0PwrAvg %d\n",
       gNB_id,
@@ -242,11 +245,14 @@ void nr_ue_ssb_rsrp_measurements(PHY_VARS_NR_UE *ue,
   uint32_t rsrp_avg = nr_ue_calculate_ssb_rsrp(fp, proc, rxdataF, symbol_offset, fp->ssb_start_subcarrier);
   float rsrp_db_per_re = 10 * log10(rsrp_avg);
 
-  openair0_config_t *cfg0 = &ue->openair0_cfg[0];
+  openair0_config_t *cfg0 = &openair0_cfg[ue->rf_map.card];
 
-  ue->measurements.ssb_rsrp_dBm[ssb_index] = rsrp_db_per_re + 30 - SQ15_SQUARED_NORM_FACTOR_DB
-                                             - ((int)cfg0->rx_gain[0] - (int)cfg0->rx_gain_offset[0])
-                                             - dB_fixed(fp->ofdm_symbol_size);
+  if (rsrp_avg == 0)
+    ue->measurements.ssb_rsrp_dBm[ssb_index] = -200; // lower than any value to be reported per Table 10.1.6.1-1 of 38.133
+  else
+    ue->measurements.ssb_rsrp_dBm[ssb_index] = rsrp_db_per_re + 30 - SQ15_SQUARED_NORM_FACTOR_DB
+                                               - ((int)cfg0->rx_gain[0] - (int)cfg0->rx_gain_offset[0])
+                                               - dB_fixed(fp->ofdm_symbol_size);
 
   // to obtain non-integer dB value with a resoluion of 0.5dB
   uint32_t signal_pwr = rsrp_avg > ue->measurements.n0_power_avg ? rsrp_avg - ue->measurements.n0_power_avg : 0;
@@ -485,9 +491,10 @@ void do_neighboring_cell_measurements(UE_nr_rxtx_proc_t *proc, PHY_VARS_NR_UE *u
     // RSRP measurements
     neighboring_cell_info->ssb_rsrp = nr_ue_calculate_ssb_rsrp(frame_parms, proc, rxdataF, 0, frame_parms->ssb_start_subcarrier);
 
-    neighboring_cell_info->ssb_rsrp_dBm = 10 * log10(neighboring_cell_info->ssb_rsrp) + 30 - SQ15_SQUARED_NORM_FACTOR_DB
-                                          - ((int)ue->openair0_cfg[0].rx_gain[0] - (int)ue->openair0_cfg[0].rx_gain_offset[0])
-                                          - dB_fixed(ue->frame_parms.ofdm_symbol_size);
+    neighboring_cell_info->ssb_rsrp_dBm =
+        10 * log10(neighboring_cell_info->ssb_rsrp) + 30 - SQ15_SQUARED_NORM_FACTOR_DB
+        - ((int)openair0_cfg[ue->rf_map.card].rx_gain[0] - (int)openair0_cfg[ue->rf_map.card].rx_gain_offset[0])
+        - dB_fixed(ue->frame_parms.ofdm_symbol_size);
 
     // Send SS measurements to MAC
     send_ssb_rsrp_meas(ue, proc, neighbor_cell->Nid_cell, neighboring_cell_info->ssb_rsrp_dBm, true, -1, 0.0);
@@ -519,8 +526,8 @@ void nr_ue_rrc_measurements(PHY_VARS_NR_UE *ue,
   const uint8_t k_length = 8;
   uint8_t l_sss = (ue->symbol_offset + 2) % ue->frame_parms.symbols_per_slot;
   unsigned int ssb_offset = ue->frame_parms.first_carrier_offset + ue->frame_parms.ssb_start_subcarrier;
-  double rx_gain = ue->openair0_cfg[0].rx_gain[0];
-  double rx_gain_offset = ue->openair0_cfg[0].rx_gain_offset[0];
+  double rx_gain = openair0_cfg[ue->rf_map.card].rx_gain[0];
+  double rx_gain_offset = openair0_cfg[ue->rf_map.card].rx_gain_offset[0];
 
   ue->measurements.n0_power_tot = 0;
 
@@ -589,11 +596,11 @@ void nr_ue_rrc_measurements(PHY_VARS_NR_UE *ue,
 // Measurement units:
 // - RSRP:    W (dBW)
 // returns RXgain to be adjusted based on target rx power (50db) - received digital power in db/RE
-int nr_sl_psbch_rsrp_measurements(sl_nr_ue_phy_params_t *sl_phy_params,
+int nr_sl_psbch_rsrp_measurements(PHY_VARS_NR_UE *ue,
+                                  sl_nr_ue_phy_params_t *sl_phy_params,
                                   NR_DL_FRAME_PARMS *fp,
                                   c16_t rxdataF[][fp->samples_per_slot_wCP],
-                                  bool use_SSS,
-                                  openair0_config_t *openair0_cfg)
+                                  bool use_SSS)
 {
   SL_NR_UE_PSBCH_t *psbch_rx = &sl_phy_params->psbch;
   uint8_t numsym = (fp->Ncp) ? SL_NR_NUM_SYMBOLS_SSB_EXT_CP : SL_NR_NUM_SYMBOLS_SSB_NORMAL_CP;
@@ -626,9 +633,10 @@ int nr_sl_psbch_rsrp_measurements(sl_nr_ue_phy_params_t *sl_phy_params,
   }
 
   psbch_rx->rsrp_dB_per_RE = 10 * log10(rsrp / num_re);
-  psbch_rx->rsrp_dBm_per_RE = psbch_rx->rsrp_dB_per_RE + 30 - SQ15_SQUARED_NORM_FACTOR_DB
-                              - ((int)openair0_cfg[0].rx_gain[0] - (int)openair0_cfg[0].rx_gain_offset[0])
-                              - dB_fixed(fp->ofdm_symbol_size);
+  psbch_rx->rsrp_dBm_per_RE =
+      psbch_rx->rsrp_dB_per_RE + 30 - SQ15_SQUARED_NORM_FACTOR_DB
+      - ((int)openair0_cfg[ue->rf_map.card].rx_gain[0] - (int)openair0_cfg[ue->rf_map.card].rx_gain_offset[0])
+      - dB_fixed(fp->ofdm_symbol_size);
 
   int adjust_rxgain = TARGET_RX_POWER - psbch_rx->rsrp_dB_per_RE;
 

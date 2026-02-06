@@ -64,10 +64,7 @@
 #include "LTE_UECapabilityEnquiry.h"
 #include "LTE_UE-CapabilityRequest.h"
 
-#include "common/utils/tun_if.h"
-#if ENABLE_RAL
-  #include "rrc_UE_ral.h"
-#endif
+#include "common/utils/tuntap_if.h"
 
 #include "openair3/SECU/key_nas_deriver.h"
 
@@ -1234,11 +1231,6 @@ rrc_ue_process_radioResourceConfigDedicated(
                             (LTE_PMCH_InfoList_r9_t *)NULL,
                             0, 0
                            );
-#if ENABLE_RAL
-    // first msg that includes srb config
-    UE_rrc_inst[ctxt_pP->module_id].num_srb=radioResourceConfigDedicated->srb_ToAddModList->list.count;
-#endif
-
     for (cnt=0; cnt<radioResourceConfigDedicated->srb_ToAddModList->list.count; cnt++) {
       //  connection_reestablishment_ind.num_srb+=1;
       SRB_id = radioResourceConfigDedicated->srb_ToAddModList->list.array[cnt]->srb_Identity;
@@ -1829,49 +1821,6 @@ static void rrc_ue_process_rrcConnectionReconfiguration(const protocol_ctxt_t *c
         free (r_r8->dedicatedInfoNASList);
       }
 
-#if ENABLE_RAL
-      {
-        MessageDef                                 *message_ral_p = NULL;
-        rrc_ral_connection_reestablishment_ind_t    connection_reestablishment_ind;
-        int                                         i;
-        message_ral_p = itti_alloc_new_message (TASK_RRC_UE, 0, RRC_RAL_CONNECTION_REESTABLISHMENT_IND);
-        memset(&connection_reestablishment_ind, 0, sizeof(rrc_ral_connection_reestablishment_ind_t));
-        // TO DO ral_si_ind.plmn_id        = 0;
-        connection_reestablishment_ind.ue_id = ctxt_pP->rntiMaybeUEid;
-
-        if (rrcConnectionReconfiguration->criticalExtensions.choice.c1.choice.rrcConnectionReconfiguration_r8.radioResourceConfigDedicated->drb_ToAddModList != NULL) {
-          connection_reestablishment_ind.num_drb      =
-            rrcConnectionReconfiguration->criticalExtensions.choice.c1.choice.rrcConnectionReconfiguration_r8.radioResourceConfigDedicated->drb_ToAddModList->list.count;
-
-          for (i=0; (
-                 i<rrcConnectionReconfiguration->criticalExtensions.choice.c1.choice.rrcConnectionReconfiguration_r8.radioResourceConfigDedicated->drb_ToAddModList->list.count)
-               && (i < LTE_maxDRB); i++) {
-            // why minus 1 in RRC code for drb_identity ?
-            connection_reestablishment_ind.drb_id[i]   =
-              rrcConnectionReconfiguration->criticalExtensions.choice.c1.choice.rrcConnectionReconfiguration_r8.radioResourceConfigDedicated->drb_ToAddModList->list.array[i]->drb_Identity;
-          }
-        } else {
-          connection_reestablishment_ind.num_drb      = 0;
-        }
-
-        if (rrcConnectionReconfiguration->criticalExtensions.choice.c1.choice.rrcConnectionReconfiguration_r8.radioResourceConfigDedicated->srb_ToAddModList != NULL) {
-          connection_reestablishment_ind.num_srb      =
-            rrcConnectionReconfiguration->criticalExtensions.choice.c1.choice.rrcConnectionReconfiguration_r8.radioResourceConfigDedicated->srb_ToAddModList->list.count +
-            UE_rrc_inst[ctxt_pP->module_id].num_srb;
-        } else {
-          connection_reestablishment_ind.num_srb      += UE_rrc_inst[ctxt_pP->module_id].num_srb;
-        }
-
-        if (connection_reestablishment_ind.num_srb > 2) { // fixme: only 2 srbs can exist, adjust the value
-          connection_reestablishment_ind.num_srb =2;
-        }
-
-        memcpy (&message_ral_p->ittiMsg, (void *) &connection_reestablishment_ind, sizeof(rrc_ral_connection_reestablishment_ind_t));
-        //#warning "ue_mod_idP ? for instance ? => YES"
-        LOG_I(RRC, "Sending RRC_RAL_CONNECTION_REESTABLISHMENT_IND to mRAL\n");
-        itti_send_msg_to_task (TASK_RAL_UE, ctxt_pP->instance, message_ral_p);
-      }
-#endif
     } // c1 present
   } // critical extensions present
 }
@@ -2102,51 +2051,6 @@ static void rrc_ue_decode_dcch(const protocol_ctxt_t *const ctxt_pP,
             UE_rrc_inst[ctxt_pP->module_id].Info[target_eNB_index].State = RRC_RECONFIGURED;
             LOG_I(RRC, "[UE %d] State = RRC_RECONFIGURED during HO (eNB %d)\n",
                   ctxt_pP->module_id, target_eNB_index);
-#if ENABLE_RAL
-            {
-              MessageDef                                 *message_ral_p = NULL;
-              rrc_ral_connection_reconfiguration_ho_ind_t connection_reconfiguration_ho_ind;
-              int                                         i;
-              message_ral_p = itti_alloc_new_message (TASK_RRC_UE, 0, RRC_RAL_CONNECTION_RECONFIGURATION_HO_IND);
-              memset(&connection_reconfiguration_ho_ind, 0, sizeof(rrc_ral_connection_reconfiguration_ho_ind_t));
-              connection_reconfiguration_ho_ind.ue_id = ctxt_pP->module_id;
-
-              if (dl_dcch_msg->message.choice.c1.choice.rrcConnectionReconfiguration.criticalExtensions.choice.c1.choice.rrcConnectionReconfiguration_r8.radioResourceConfigDedicated->drb_ToAddModList
-                  != NULL) {
-                connection_reconfiguration_ho_ind.num_drb      =
-                  dl_dcch_msg->message.choice.c1.choice.rrcConnectionReconfiguration.criticalExtensions.choice.c1.choice.rrcConnectionReconfiguration_r8.radioResourceConfigDedicated->drb_ToAddModList->list.count;
-
-                for (i=0; (
-                       i<dl_dcch_msg->message.choice.c1.choice.rrcConnectionReconfiguration.criticalExtensions.choice.c1.choice.rrcConnectionReconfiguration_r8.radioResourceConfigDedicated->drb_ToAddModList->list.count)
-                     && (i < LTE_maxDRB); i++) {
-                  // why minus 1 in RRC code for drb_identity ?
-                  connection_reconfiguration_ho_ind.drb_id[i]   =
-                    dl_dcch_msg->message.choice.c1.choice.rrcConnectionReconfiguration.criticalExtensions.choice.c1.choice.rrcConnectionReconfiguration_r8.radioResourceConfigDedicated->drb_ToAddModList->list.array[i]->drb_Identity;
-                }
-              } else {
-                connection_reconfiguration_ho_ind.num_drb      = 0;
-              }
-
-              if (dl_dcch_msg->message.choice.c1.choice.rrcConnectionReconfiguration.criticalExtensions.choice.c1.choice.rrcConnectionReconfiguration_r8.radioResourceConfigDedicated->srb_ToAddModList
-                  != NULL) {
-                connection_reconfiguration_ho_ind.num_srb      =
-                  dl_dcch_msg->message.choice.c1.choice.rrcConnectionReconfiguration.criticalExtensions.choice.c1.choice.rrcConnectionReconfiguration_r8.radioResourceConfigDedicated->srb_ToAddModList->list.count
-                  +
-                  UE_rrc_inst[ctxt_pP->module_id].num_srb;
-              } else {
-                connection_reconfiguration_ho_ind.num_srb      += UE_rrc_inst[ctxt_pP->module_id].num_srb;
-              }
-
-              if (connection_reconfiguration_ho_ind.num_srb > 2 ) {
-                connection_reconfiguration_ho_ind.num_srb =2;
-              }
-
-              memcpy (&message_ral_p->ittiMsg, (void *) &connection_reconfiguration_ho_ind, sizeof(rrc_ral_connection_reconfiguration_ho_ind_t));
-              //#warning "ue_mod_idP ? for instance ? => YES"
-              LOG_I(RRC, "Sending RRC_RAL_CONNECTION_RECONFIGURATION_HO_IND to mRAL\n");
-              itti_send_msg_to_task (TASK_RAL_UE, ctxt_pP->instance, message_ral_p);
-            }
-#endif
           } else {
             rrc_ue_generate_RRCConnectionReconfigurationComplete(
               ctxt_pP,
@@ -2157,51 +2061,6 @@ static void rrc_ue_decode_dcch(const protocol_ctxt_t *const ctxt_pP,
             LOG_I(RRC, "[UE %d] State = RRC_RECONFIGURED (eNB %d)\n",
                   ctxt_pP->module_id,
                   eNB_indexP);
-#if ENABLE_RAL
-            {
-              MessageDef                                 *message_ral_p = NULL;
-              rrc_ral_connection_reconfiguration_ind_t    connection_reconfiguration_ind;
-              int                                         i;
-              message_ral_p = itti_alloc_new_message (TASK_RRC_UE, 0, RRC_RAL_CONNECTION_RECONFIGURATION_IND);
-              memset(&connection_reconfiguration_ind, 0, sizeof(rrc_ral_connection_reconfiguration_ind_t));
-              connection_reconfiguration_ind.ue_id = ctxt_pP->module_id;
-
-              if (dl_dcch_msg->message.choice.c1.choice.rrcConnectionReconfiguration.criticalExtensions.choice.c1.choice.rrcConnectionReconfiguration_r8.radioResourceConfigDedicated->drb_ToAddModList
-                  != NULL) {
-                connection_reconfiguration_ind.num_drb      =
-                  dl_dcch_msg->message.choice.c1.choice.rrcConnectionReconfiguration.criticalExtensions.choice.c1.choice.rrcConnectionReconfiguration_r8.radioResourceConfigDedicated->drb_ToAddModList->list.count;
-
-                for (i=0; (
-                       i<dl_dcch_msg->message.choice.c1.choice.rrcConnectionReconfiguration.criticalExtensions.choice.c1.choice.rrcConnectionReconfiguration_r8.radioResourceConfigDedicated->drb_ToAddModList->list.count)
-                     && (i < LTE_maxDRB); i++) {
-                  // why minus 1 in RRC code for drb_identity ?
-                  connection_reconfiguration_ind.drb_id[i]   =
-                    dl_dcch_msg->message.choice.c1.choice.rrcConnectionReconfiguration.criticalExtensions.choice.c1.choice.rrcConnectionReconfiguration_r8.radioResourceConfigDedicated->drb_ToAddModList->list.array[i]->drb_Identity;
-                }
-              } else {
-                connection_reconfiguration_ind.num_drb      = 0;
-              }
-
-              if (dl_dcch_msg->message.choice.c1.choice.rrcConnectionReconfiguration.criticalExtensions.choice.c1.choice.rrcConnectionReconfiguration_r8.radioResourceConfigDedicated->srb_ToAddModList
-                  != NULL) {
-                connection_reconfiguration_ind.num_srb      =
-                  dl_dcch_msg->message.choice.c1.choice.rrcConnectionReconfiguration.criticalExtensions.choice.c1.choice.rrcConnectionReconfiguration_r8.radioResourceConfigDedicated->srb_ToAddModList->list.count
-                  +
-                  UE_rrc_inst[ctxt_pP->module_id].num_srb;
-              } else {
-                connection_reconfiguration_ind.num_srb      +=UE_rrc_inst[ctxt_pP->module_id].num_srb;
-              }
-
-              if (connection_reconfiguration_ind.num_srb > 2 ) {
-                connection_reconfiguration_ind.num_srb =2;
-              }
-
-              memcpy (&message_ral_p->ittiMsg, (void *) &connection_reconfiguration_ind, sizeof(rrc_ral_connection_reconfiguration_ind_t));
-              //#warning "ue_mod_idP ? for instance ? => YES"
-              LOG_I(RRC, "Sending RRC_RAL_CONNECTION_RECONFIGURATION_IND to mRAL\n");
-              itti_send_msg_to_task (TASK_RAL_UE, ctxt_pP->instance, message_ral_p);
-            }
-#endif
           }
 
           //TTN test D2D (should not be here - in reality, this message will be triggered from ProSeApp)
@@ -2241,11 +2100,6 @@ static void rrc_ue_decode_dcch(const protocol_ctxt_t *const ctxt_pP,
           }
 
           itti_send_msg_to_task(TASK_NAS_UE, ctxt_pP->instance, msg_p);
-#if ENABLE_RAL
-          msg_p = itti_alloc_new_message(TASK_RRC_UE, 0, RRC_RAL_CONNECTION_RELEASE_IND);
-          RRC_RAL_CONNECTION_RELEASE_IND(msg_p).ue_id = ctxt_pP->module_id;
-          itti_send_msg_to_task(TASK_RAL_UE, ctxt_pP->instance, msg_p);
-#endif
           break;
 
         case LTE_DL_DCCH_MessageType__c1_PR_securityModeCommand:
@@ -3656,31 +3510,6 @@ int decode_SI( const protocol_ctxt_t *const ctxt_pP, const uint8_t eNB_index ) {
           if (UE_rrc_inst[ctxt_pP->module_id].Info[eNB_index].State == RRC_IDLE) {
             LOG_I( RRC, "[UE %d] Received SIB1/SIB2/SIB3 Switching to RRC_SI_RECEIVED\n", ctxt_pP->module_id );
             UE_rrc_inst[ctxt_pP->module_id].Info[eNB_index].State = RRC_SI_RECEIVED;
-#if ENABLE_RAL
-            {
-              MessageDef                            *message_ral_p = NULL;
-              rrc_ral_system_information_ind_t       ral_si_ind;
-              message_ral_p = itti_alloc_new_message (TASK_RRC_UE, 0, RRC_RAL_SYSTEM_INFORMATION_IND);
-              memset(&ral_si_ind, 0, sizeof(rrc_ral_system_information_ind_t));
-              ral_si_ind.plmn_id.MCCdigit2 = '0';
-              ral_si_ind.plmn_id.MCCdigit1 = '2';
-              ral_si_ind.plmn_id.MNCdigit3 = '0';
-              ral_si_ind.plmn_id.MCCdigit3 = '8';
-              ral_si_ind.plmn_id.MNCdigit2 = '9';
-              ral_si_ind.plmn_id.MNCdigit1 = '9';
-              ral_si_ind.cell_id        = 1;
-              ral_si_ind.dbm            = 0;
-              //ral_si_ind.dbm            = fifo_dump_emos_UE.PHY_measurements->rx_rssi_dBm[eNB_index];
-              // TO DO
-              ral_si_ind.sinr           = 0;
-              //ral_si_ind.sinr           = fifo_dump_emos_UE.PHY_measurements->subband_cqi_dB[eNB_index][phy_vars_ue->lte_frame_parms.nb_antennas_rx][0];
-              // TO DO
-              ral_si_ind.link_data_rate = 0;
-              memcpy (&message_ral_p->ittiMsg, (void *) &ral_si_ind, sizeof(rrc_ral_system_information_ind_t));
-#warning "ue_mod_idP ? for instance ?"
-              itti_send_msg_to_task (TASK_RAL_UE, UE_MODULE_ID_TO_INSTANCE(ctxt_pP->module_id), message_ral_p);
-            }
-#endif
           }
         }else{
                        //LOG_W( RRC, "[UE %d] Received new SIB1/SIB2/SIB3 with MBMSs %d\n", ctxt_pP->module_id, ((&typeandinfo->choice.sib2)->mbsfn_SubframeConfigList == NULL ? 0:1) );
@@ -4740,146 +4569,6 @@ void *rrc_ue_task( void *args_p ) {
 
         break;
       }
-
-# if ENABLE_RAL
-
-      case RRC_RAL_SCAN_REQ:
-        LOG_D(RRC, "[UE %d] Received %s: state %d\n", ue_mod_id,ITTI_MSG_NAME (msg_p) );
-
-        switch (rrc_get_state(ue_mod_id)) {
-          case RRC_STATE_INACTIVE: {
-            rrc_set_state (ue_mod_id, RRC_STATE_IDLE);
-            /* Fall through to next case */
-          }
-
-          case RRC_STATE_IDLE: {
-            if (rrc_get_sub_state(ue_mod_id) != RRC_SUB_STATE_IDLE_SEARCHING) {
-              /* Ask to layer 1 to find a cell matching the criterion */
-              MessageDef *message_p;
-              message_p = itti_alloc_new_message(TASK_RRC_UE, 0, PHY_FIND_CELL_REQ);
-              rrc_set_sub_state (ue_mod_id, RRC_SUB_STATE_IDLE_SEARCHING);
-              PHY_FIND_CELL_REQ (message_p).transaction_id = RRC_RAL_SCAN_REQ (msg_p).transaction_id;
-              PHY_FIND_CELL_REQ (message_p).earfcn_start   = 1;
-              PHY_FIND_CELL_REQ (message_p).earfcn_end     = 1; //44
-              itti_send_msg_to_task(TASK_PHY_UE, instance, message_p);
-            }
-
-            break;
-          }
-
-          case RRC_STATE_CONNECTED:
-            /* should not happen */
-            LOG_E(RRC, "[UE %d] request %s in RRC state %d\n", ue_mod_id, ITTI_MSG_NAME (msg_p), rrc_get_state(ue_mod_id));
-            break;
-
-          default:
-            LOG_E(RRC, "[UE %d] Invalid RRC state %d\n", ue_mod_id, rrc_get_state(ue_mod_id));
-            break;
-        }
-
-        break;
-
-      case PHY_FIND_CELL_IND:
-        LOG_D(RRC, "[UE %d] Received %s: state %d\n", ue_mod_id, ITTI_MSG_NAME (msg_p), rrc_get_state(ue_mod_id));
-
-        switch (rrc_get_state(ue_mod_id)) {
-          case RRC_STATE_IDLE:
-            switch (rrc_get_sub_state(ue_mod_id)) {
-              case RRC_SUB_STATE_IDLE_SEARCHING: {
-                MessageDef *message_p;
-                int         i;
-                message_p = itti_alloc_new_message(TASK_RRC_UE, 0, RRC_RAL_SCAN_CONF);
-                RRC_RAL_SCAN_CONF (message_p).transaction_id = PHY_FIND_CELL_IND(msg_p).transaction_id;
-                RRC_RAL_SCAN_CONF (message_p).num_scan_resp  = PHY_FIND_CELL_IND(msg_p).cell_nb;
-
-                for (i = 0 ; i < PHY_FIND_CELL_IND(msg_p).cell_nb; i++) {
-                  // TO DO
-                  memset(&RRC_RAL_SCAN_CONF (message_p).link_scan_resp[i].link_addr,  0, sizeof(ral_link_addr_t));
-                  // TO DO
-                  memset(&RRC_RAL_SCAN_CONF (message_p).link_scan_resp[i].network_id, 0, sizeof(ral_network_id_t));
-                  RRC_RAL_SCAN_CONF (message_p).link_scan_resp[i].sig_strength.choice     = RAL_SIG_STRENGTH_CHOICE_DBM;
-                  RRC_RAL_SCAN_CONF (message_p).link_scan_resp[i].sig_strength._union.dbm = PHY_FIND_CELL_IND(msg_p).cells[i].rsrp;
-                }
-
-                rrc_set_sub_state (ue_mod_id, RRC_SUB_STATE_IDLE);
-                itti_send_msg_to_task(TASK_RAL_UE, instance, message_p);
-                break;
-              }
-
-              default:
-                LOG_E(RRC, "[UE %d] Invalid RRC state %d substate %d\n",
-                      ue_mod_id,
-                      rrc_get_state(ue_mod_id),
-                      rrc_get_sub_state(ue_mod_id));
-            }
-
-            break;
-
-          case RRC_STATE_INACTIVE:
-          case RRC_STATE_CONNECTED:
-            /* should not happen */
-            LOG_E(RRC, "[UE %d] indication %s in RRC state %d\n", ue_mod_id, ITTI_MSG_NAME (msg_p), rrc_get_state(ue_mod_id));
-            break;
-
-          default:
-            LOG_E(RRC, "[UE %d] Invalid RRC state %d\n", ue_mod_id, rrc_get_state(ue_mod_id));
-            break;
-        }
-
-        break; // PHY_FIND_CELL_IND
-
-      case PHY_MEAS_REPORT_IND: {
-        LOG_D(RRC, "[UE %d] Received %s\n", ue_mod_id, ITTI_MSG_NAME (msg_p));
-        MessageDef *message_p;
-        message_p = itti_alloc_new_message(TASK_RRC_UE, 0, RRC_RAL_MEASUREMENT_REPORT_IND);
-        memcpy(&RRC_RAL_MEASUREMENT_REPORT_IND (message_p).threshold,
-               &PHY_MEAS_REPORT_IND(msg_p).threshold,
-               sizeof(RRC_RAL_MEASUREMENT_REPORT_IND (message_p).threshold));
-        memcpy(&RRC_RAL_MEASUREMENT_REPORT_IND (message_p).link_param,
-               &PHY_MEAS_REPORT_IND(msg_p).link_param,
-               sizeof(RRC_RAL_MEASUREMENT_REPORT_IND (message_p).link_param));
-        LOG_D(RRC, "[UE %d] PHY_MEAS_REPORT_IN: sending msg %s to %s \n", ue_mod_id, "RRC_RAL_MEASUREMENT_REPORT_IND", "TASK_RAL_UE");
-        itti_send_msg_to_task(TASK_RAL_UE, instance, message_p);
-        break;
-      }
-
-      case RRC_RAL_CONFIGURE_THRESHOLD_REQ:
-        LOG_D(RRC, "[UE %d] Received %s\n", ue_mod_id, ITTI_MSG_NAME (msg_p));
-        rrc_ue_ral_handle_configure_threshold_request(ue_mod_id, msg_p);
-        break;
-
-      case RRC_RAL_CONNECTION_ESTABLISHMENT_REQ:
-        LOG_D(RRC, "[UE %d] Received %s\n", ue_mod_id, ITTI_MSG_NAME (msg_p));
-
-        switch (rrc_get_state(ue_mod_id)) {
-          case RRC_STATE_IDLE: {
-            if (rrc_get_sub_state(ue_mod_id) == RRC_SUB_STATE_IDLE_SIB_COMPLETE) {
-              PROTOCOL_CTXT_SET_BY_MODULE_ID(&ctxt, ue_mod_id, ENB_FLAG_NO, UE_rrc_inst[ue_mod_id].Info[0].rnti, 0, 0, 0);
-              rrc_ue_generate_RRCConnectionRequest(&ctxt, 0);
-              LOG_D(RRC, "not sending connection request\n");
-              rrc_set_sub_state (ue_mod_id, RRC_SUB_STATE_IDLE_CONNECTING);
-            }
-
-            break;
-          }
-
-          case RRC_STATE_INACTIVE:
-          case RRC_STATE_CONNECTED:
-            /* should not happen */
-            LOG_E(RRC, "[UE %d] request %s in RRC state %d\n", ue_mod_id, ITTI_MSG_NAME (msg_p), rrc_get_state(ue_mod_id));
-            break;
-
-          default:
-            LOG_E(RRC, "[UE %d] Invalid RRC state %d\n", ue_mod_id, rrc_get_state(ue_mod_id));
-            break;
-        }
-
-        break;
-
-      case RRC_RAL_CONNECTION_RELEASE_REQ:
-        LOG_D(RRC, "[UE %d] Received %s\n", ue_mod_id, ITTI_MSG_NAME (msg_p));
-        break;
-#endif
 
       default:
         LOG_E(RRC, "[UE %d] Received unexpected message %s\n", ue_mod_id, ITTI_MSG_NAME (msg_p));

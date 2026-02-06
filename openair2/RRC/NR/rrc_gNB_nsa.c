@@ -201,7 +201,7 @@ void rrc_add_nsa_user(gNB_RRC_INST *rrc, x2ap_ENDC_sgnb_addition_req_t *m, sctp_
   byte_array_t cgci = {0};
   if (get_softmodem_params()->phy_test == 1 || get_softmodem_params()->do_ra == 1) {
     DevAssert(m == NULL);
-    UE->rb_config = get_default_rbconfig(10 /* EPS bearer ID */, 1 /* drb ID */, NR_CipheringAlgorithm_nea0, NR_SecurityConfig__keyToUse_master, &rrc->pdcp_config);
+    UE->rb_config = get_default_rbconfig(DEFAULT_NOS1_PDU_ID, 1 /* drb ID */, NR_CipheringAlgorithm_nea0, NR_SecurityConfig__keyToUse_master, &rrc->pdcp_config);
     int len = cg_config_info_from_ue_cap_file(sizeof tmp, tmp);
     DevAssert(len > 0);
     cgci = create_byte_array(len, tmp);
@@ -386,18 +386,15 @@ void rrc_add_nsa_user(gNB_RRC_INST *rrc, x2ap_ENDC_sgnb_addition_req_t *m, sctp_
   free_ue_context_setup_req(&req);
 }
 
-static NR_RRCReconfiguration_IEs_t *get_default_reconfig(const NR_CellGroupConfig_t *secondaryCellGroup)
+static NR_RRCReconfiguration_IEs_t *get_default_reconfig(const byte_array_t cgc)
 {
   NR_RRCReconfiguration_IEs_t *reconfig = calloc(1, sizeof(NR_RRCReconfiguration_IEs_t));
   AssertFatal(reconfig != NULL, "out of memory\n");
-  AssertFatal(secondaryCellGroup != NULL, "secondaryCellGroup is null\n");
+  AssertFatal(cgc.buf != NULL, "cgc is null\n");
   reconfig->radioBearerConfig = NULL;
-
-  char scg_buffer[1024];
-  asn_enc_rval_t enc_rval = uper_encode_to_buffer(&asn_DEF_NR_CellGroupConfig, NULL, (void *)secondaryCellGroup, scg_buffer, 1024);
-  AssertFatal(enc_rval.encoded > 0, "ASN1 message encoding failed (%s, %jd)!\n", enc_rval.failed_type->name, enc_rval.encoded);
-  reconfig->secondaryCellGroup = calloc(1, sizeof(*reconfig->secondaryCellGroup));
-  OCTET_STRING_fromBuf(reconfig->secondaryCellGroup, (const char *)scg_buffer, (enc_rval.encoded + 7) >> 3);
+  // Copy the stored CellGroupConfig to the RRCReconfiguration message
+  reconfig->secondaryCellGroup = calloc_or_fail(1, sizeof(*reconfig->secondaryCellGroup));
+  OCTET_STRING_fromBuf(reconfig->secondaryCellGroup, (const char *)cgc.buf, cgc.len);
   reconfig->measConfig = NULL;
   reconfig->lateNonCriticalExtension = NULL;
   reconfig->nonCriticalExtension = NULL;
@@ -469,7 +466,7 @@ void rrc_add_nsa_user_resp(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE, const f1ap_ue_co
   NR_RRCReconfiguration_t *reconfig = calloc(1, sizeof(NR_RRCReconfiguration_t));
   reconfig->rrc_TransactionIdentifier = 0;
   reconfig->criticalExtensions.present = NR_RRCReconfiguration__criticalExtensions_PR_rrcReconfiguration;
-  reconfig->criticalExtensions.choice.rrcReconfiguration = get_default_reconfig(UE->masterCellGroup);
+  reconfig->criticalExtensions.choice.rrcReconfiguration = get_default_reconfig(UE->mcg);
 
   NR_CG_Config_t *CG_Config = generate_CG_Config(reconfig, UE->rb_config);
   ASN_STRUCT_FREE(asn_DEF_NR_RRCReconfiguration, reconfig);

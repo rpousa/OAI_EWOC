@@ -45,18 +45,6 @@
 #define NR_SHORT_BSR_TABLE_SIZE 32
 #define NR_LONG_BSR_TABLE_SIZE 256
 
-#define TABLE_38213_13_1_NUM_INDEXES 15
-#define TABLE_38213_13_2_NUM_INDEXES 14
-#define TABLE_38213_13_3_NUM_INDEXES 9
-#define TABLE_38213_13_4_NUM_INDEXES 16
-#define TABLE_38213_13_5_NUM_INDEXES 9
-#define TABLE_38213_13_6_NUM_INDEXES 10
-#define TABLE_38213_13_7_NUM_INDEXES 12
-#define TABLE_38213_13_8_NUM_INDEXES 8
-#define TABLE_38213_13_9_NUM_INDEXES 4
-#define TABLE_38213_13_10_NUM_INDEXES 8
-#define TABLE_38213_13_11_NUM_INDEXES 16
-#define TABLE_38213_13_12_NUM_INDEXES 14
 
 // Definitions for MAC control and data
 #define NR_BCCH_DL_SCH 3 // SI
@@ -432,7 +420,6 @@ typedef struct {
 #define UL_SCH_LCID_PADDING                        0x3F
 
 #define NR_MAX_NUM_LCGID              8
-#define MAX_RLC_SDU_SUBHEADER_SIZE          3
 
 //=========
 // DCI defs

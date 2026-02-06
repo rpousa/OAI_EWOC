@@ -54,16 +54,6 @@
 
 #define MCE_MCE_ID_IDX                  0
 #define MCE_MCE_NAME_IDX                1
-#define MCE_ENABLE_MCE_M2_IDX           2
-#define MCE_ENABLE_MCE_M3_IDX           3
-
-#define MCE_PARAMS_CHECK {                                         \
-  { .s5 = { NULL } },                                             \
-  { .s5 = { NULL } },                                             \
-  { .s5 = { NULL } },                                             \
-  { .s5 = { NULL } },                                             \
-}
-
 
 #define MCE_CONFIG_STRING_NETWORK_INTERFACES_CONFIG     "NETWORK_INTERFACES"
 

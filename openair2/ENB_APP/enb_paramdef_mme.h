@@ -36,36 +36,7 @@
 #include "common/config/config_paramdesc.h"
 #include "RRC_paramsvalues.h"
 
-
-
-/* mme configuration parameters names */
-
-#define MME_CONFIG_STRING_MME_ID                        "MME_ID"
-#define MME_CONFIG_STRING_MME_NAME                      "MME_name"
-#define MME_CONFIG_STRING_MME_M3                        "enable_mme_m3"
-
-#define MMEPARAMS_DESC {\
-{MME_CONFIG_STRING_MME_ID,                       NULL,   0,           .uptr=NULL,   .defintval=0,                 TYPE_UINT,      0},  \
-{MME_CONFIG_STRING_MME_NAME,                     NULL,   0,           .strptr=NULL, .defstrval="OAIMME",       TYPE_STRING,    0},  \
-{MME_CONFIG_STRING_MME_M3,                       NULL,   0,           .strptr=NULL, .defstrval="no",              TYPE_STRING,    0},  \
-}  
-
-#define MME_MME_ID_IDX                  0
-#define MME_MME_NAME_IDX                1
-#define MME_ENABLE_MME_M3_IDX           2
-
-#define MMEPARAMS_CHECK {                                         \
-  { .s5 = { NULL } },                                             \
-  { .s5 = { NULL } },                                             \
-  { .s5 = { NULL } },                                             \
-}
-
-
 #define MME_CONFIG_STRING_NETWORK_INTERFACES_CONFIG     "NETWORK_INTERFACES"
-
-#define MME_INTERFACE_NAME_FOR_M3_MME_IDX       0
-#define MME_IPV4_ADDRESS_FOR_M3C_IDX            1
-#define MME_PORT_FOR_M3C_IDX                	2
 
 /* interface configuration parameters names   */
 /* M3 interface configuration parameters names */

@@ -102,9 +102,9 @@ void dump_cu_info(const gNB_RRC_INST *rrc, FILE *f);
 
 /* UE Management Procedures */
 
-void rrc_gNB_generate_UeContextSetupRequest(const gNB_RRC_INST *rrc,
-                                            rrc_gNB_ue_context_t *const ue_context_pP,
-                                            const e1ap_bearer_setup_resp_t *resp);
+void rrc_f1_ue_context_setup_from_e1_response(const gNB_RRC_INST *rrc,
+                                              rrc_gNB_ue_context_t *const ue_context_pP,
+                                              const e1ap_bearer_setup_resp_t *resp);
 
 void rrc_gNB_generate_UeContextModificationRequest(const gNB_RRC_INST *rrc,
                                                    rrc_gNB_ue_context_t *const ue_context_pP,
@@ -125,5 +125,15 @@ NR_DRB_ToAddModList_t *createDRBlist(gNB_RRC_UE_t *ue, bool reestablish, bool do
 void activate_srb(gNB_RRC_UE_t *UE, int srb_id);
 void e1_notify_pdcp_status(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE, const ngap_drb_status_t *drb_status);
 void init_delayed_action(delayed_action_state_t *delayed_action);
+
+/** @brief Prepare and send F1AP UE Context Setup Request for a target DU
+ * @param rrc RRC instance
+ * @param ue UE context
+ * @param du Target DU container containing cell and setup information
+ * @param ho_prep_info Optional handover preparation information (NULL if not provided) */
+void rrc_f1_ue_context_setup_for_target_du(const gNB_RRC_INST *rrc,
+                                           gNB_RRC_UE_t *ue,
+                                           const nr_rrc_du_container_t *du,
+                                           const byte_array_t *ho_prep_info);
 
 #endif

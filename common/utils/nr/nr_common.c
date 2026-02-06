@@ -866,7 +866,6 @@ void get_samplerate_and_bw(int mu,
                            int n_rb,
                            int8_t threequarter_fs,
                            double *sample_rate,
-                           unsigned int *samples_per_frame,
                            double *tx_bw,
                            double *rx_bw) {
 
@@ -876,12 +875,10 @@ void get_samplerate_and_bw(int mu,
       if (threequarter_fs) {
         warn_higher_threequarter_fs(n_rb, mu);
         *sample_rate=92.16e6;
-        *samples_per_frame = 921600;
         *tx_bw = 50e6;
         *rx_bw = 50e6;
       } else {
         *sample_rate=61.44e6;
-        *samples_per_frame = 614400;
         *tx_bw = 50e6;
         *rx_bw = 50e6;
       }
@@ -890,10 +887,8 @@ void get_samplerate_and_bw(int mu,
     case 188: // 35Mhz
       if (threequarter_fs) {
         *sample_rate = 46.08e6;
-        *samples_per_frame = 460800;
       } else {
         *sample_rate = 61.44e6;
-        *samples_per_frame = 614400;
       }
       *tx_bw = (n_rb == 242) ? 45e6 : 35e6;
       *rx_bw = (n_rb == 242) ? 45e6 : 35e6;
@@ -901,13 +896,11 @@ void get_samplerate_and_bw(int mu,
     case 216:
       if (threequarter_fs) {
         *sample_rate=46.08e6;
-        *samples_per_frame = 460800;
         *tx_bw = 40e6;
         *rx_bw = 40e6;
       }
       else {
         *sample_rate=61.44e6;
-        *samples_per_frame = 614400;
         *tx_bw = 40e6;
         *rx_bw = 40e6;
       }
@@ -919,7 +912,6 @@ void get_samplerate_and_bw(int mu,
       }
       else {
         *sample_rate=30.72e6;
-        *samples_per_frame = 307200;
         *tx_bw = 20e6;
         *rx_bw = 20e6;
       }
@@ -927,13 +919,11 @@ void get_samplerate_and_bw(int mu,
     case 106:
       if (threequarter_fs) {
         *sample_rate=23.04e6;
-        *samples_per_frame = 230400;
         *tx_bw = 20e6;
         *rx_bw = 20e6;
       }
       else {
         *sample_rate=30.72e6;
-        *samples_per_frame = 307200;
         *tx_bw = 20e6;
         *rx_bw = 20e6;
       }
@@ -941,13 +931,11 @@ void get_samplerate_and_bw(int mu,
     case 52:
       if (threequarter_fs) {
         *sample_rate=11.52e6;
-        *samples_per_frame = 115200;
         *tx_bw = 10e6;
         *rx_bw = 10e6;
       }
       else {
         *sample_rate=15.36e6;
-        *samples_per_frame = 153600;
         *tx_bw = 10e6;
         *rx_bw = 10e6;
       }
@@ -955,13 +943,11 @@ void get_samplerate_and_bw(int mu,
     case 25:
       if (threequarter_fs) {
         *sample_rate=5.76e6;
-        *samples_per_frame = 57600;
         *tx_bw = 5e6;
         *rx_bw = 5e6;
       }
       else {
         *sample_rate=7.68e6;
-        *samples_per_frame = 76800;
         *tx_bw = 5e6;
         *rx_bw = 5e6;
       }
@@ -976,12 +962,10 @@ void get_samplerate_and_bw(int mu,
       if (threequarter_fs) {
         warn_higher_threequarter_fs(n_rb, mu);
         *sample_rate=184.32e6;
-        *samples_per_frame = 1843200;
         *tx_bw = 100e6;
         *rx_bw = 100e6;
       } else {
         *sample_rate=122.88e6;
-        *samples_per_frame = 1228800;
         *tx_bw = 100e6;
         *rx_bw = 100e6;
       }
@@ -989,12 +973,10 @@ void get_samplerate_and_bw(int mu,
     case 217:
       if (threequarter_fs) {
         *sample_rate=92.16e6;
-        *samples_per_frame = 921600;
         *tx_bw = 80e6;
         *rx_bw = 80e6;
       } else {
         *sample_rate=122.88e6;
-        *samples_per_frame = 1228800;
         *tx_bw = 80e6;
         *rx_bw = 80e6;
       }
@@ -1002,10 +984,8 @@ void get_samplerate_and_bw(int mu,
     case 189:
       if (threequarter_fs) {
         *sample_rate = 92.16e6;
-        *samples_per_frame = 921600;
       } else {
         *sample_rate = 122.88e6;
-        *samples_per_frame = 1228800;
       }
       *tx_bw = 70e6;
       *rx_bw = 70e6;
@@ -1016,7 +996,6 @@ void get_samplerate_and_bw(int mu,
       }
       else {
         *sample_rate=61.44e6;
-        *samples_per_frame = 614400;
         *tx_bw = 60e6;
         *rx_bw = 60e6;
       }
@@ -1029,7 +1008,6 @@ void get_samplerate_and_bw(int mu,
       }
       else {
         *sample_rate=61.44e6;
-        *samples_per_frame = 614400;
         *tx_bw = 50e6;
         *rx_bw = 50e6;
       }
@@ -1040,10 +1018,8 @@ void get_samplerate_and_bw(int mu,
     case 92: // 35Mhz
       if (threequarter_fs) {
         *sample_rate = 46.08e6;
-        *samples_per_frame = 460800;
       } else {
         *sample_rate = 61.44e6;
-        *samples_per_frame = 614400;
       }
       *tx_bw = (n_rb == 119) ? 45e6 : 35e6;
       *rx_bw = (n_rb == 119) ? 45e6 : 35e6;
@@ -1052,13 +1028,11 @@ void get_samplerate_and_bw(int mu,
     case 106:
       if (threequarter_fs) {
         *sample_rate=46.08e6;
-        *samples_per_frame = 460800;
         *tx_bw = 40e6;
         *rx_bw = 40e6;
       }
       else {
         *sample_rate=61.44e6;
-        *samples_per_frame = 614400;
         *tx_bw = 40e6;
         *rx_bw = 40e6;
       }
@@ -1066,13 +1040,11 @@ void get_samplerate_and_bw(int mu,
     case 51:
       if (threequarter_fs) {
         *sample_rate=23.04e6;
-        *samples_per_frame = 230400;
         *tx_bw = 20e6;
         *rx_bw = 20e6;
       }
       else {
         *sample_rate=30.72e6;
-        *samples_per_frame = 307200;
         *tx_bw = 20e6;
         *rx_bw = 20e6;
       }
@@ -1080,13 +1052,11 @@ void get_samplerate_and_bw(int mu,
     case 24:
       if (threequarter_fs) {
         *sample_rate=11.52e6;
-        *samples_per_frame = 115200;
         *tx_bw = 10e6;
         *rx_bw = 10e6;
       }
       else {
         *sample_rate=15.36e6;
-        *samples_per_frame = 153600;
         *tx_bw = 10e6;
         *rx_bw = 10e6;
       }
@@ -1100,12 +1070,10 @@ void get_samplerate_and_bw(int mu,
       case 128:
         if (threequarter_fs) {
           *sample_rate=184.32e6;
-          *samples_per_frame = 1843200;
           *tx_bw = 200e6;
           *rx_bw = 200e6;
         } else {
           *sample_rate = 245.76e6;
-          *samples_per_frame = 2457600;
           *tx_bw = 200e6;
           *rx_bw = 200e6;
         }
@@ -1115,12 +1083,10 @@ void get_samplerate_and_bw(int mu,
       case 64:
         if (threequarter_fs) {
           *sample_rate=92.16e6;
-          *samples_per_frame = 921600;
           *tx_bw = 100e6;
           *rx_bw = 100e6;
         } else {
           *sample_rate = 122.88e6;
-          *samples_per_frame = 1228800;
           *tx_bw = 100e6;
           *rx_bw = 100e6;
         }
@@ -1129,12 +1095,10 @@ void get_samplerate_and_bw(int mu,
       case 32:
         if (threequarter_fs) {
           *sample_rate=92.16e6;
-          *samples_per_frame = 921600;
           *tx_bw = 50e6;
           *rx_bw = 50e6;
         } else {
           *sample_rate=61.44e6;
-          *samples_per_frame = 614400;
           *tx_bw = 50e6;
           *rx_bw = 50e6;
         }

@@ -42,7 +42,6 @@
 #endif
 
 #define NR_LDPC_PROFILER_DETAIL
-#define NR_LDPC_ENABLE_PARITY_CHECK
 ldpc_interface_t ldpc_orig, ldpc_toCompare;
 
 // 4-bit quantizer

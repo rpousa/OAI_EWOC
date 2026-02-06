@@ -65,8 +65,6 @@
 #endif
 
 #define NR_NBR_CORESET_ACT_BWP 3 // The number of CoreSets per BWP is limited to 3 (including initial CORESET: ControlResourceId 0)
-#define NR_NBR_SEARCHSPACE_ACT_BWP \
-  10 // The number of SearSpaces per BWP is limited to 10 (including initial SEARCHSPACE: SearchSpaceId 0)
 
 #define RE_PER_RB 12
 // after removing the 3 DMRS RE, the RB contains 9 RE with PDCCH

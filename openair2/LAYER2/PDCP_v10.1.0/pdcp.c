@@ -49,7 +49,7 @@
 #include "common/ngran_types.h"
 #include "common/openairinterface5g_limits.h"
 #include "executables/lte-softmodem.h"
-#include "common/utils/tun_if.h"
+#include "common/utils/tuntap_if.h"
 #include "intertask_interface.h"
 #include "openair3/S1AP/s1ap_eNB.h"
 #include <pthread.h>

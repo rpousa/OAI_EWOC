@@ -123,7 +123,7 @@ services:
             - NET_ADMIN  # for interface bringup
             - NET_RAW    # for ping
         environment:
-            USE_ADDITIONAL_OPTIONS: --band 254 -C 2488400000 --CO -873500000 -r 25 --numerology 0 --ssb 60 --rfsim --rfsimulator.prop_delay 238.74 --rfsimulator.serveraddr 192.168.71.140 --num-ul-actors 1 --log_config.global_log_options level,nocolor,time
+            USE_ADDITIONAL_OPTIONS: --band 254 -C 2488400000 --CO -873500000 -r 25 --numerology 0 --ssb 60 --rfsim --rfsimulator.[0].prop_delay 238.74 --rfsimulator.[0].serveraddr 192.168.71.140 --num-ul-actors 1 --log_config.global_log_options level,nocolor,time
         depends_on:
             - oai-gnb
         networks:

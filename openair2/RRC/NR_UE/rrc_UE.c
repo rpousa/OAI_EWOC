@@ -2617,7 +2617,7 @@ static int nr_rrc_ue_decode_dcch(NR_UE_RRC_INST_t *rrc,
                 set_DRB_status(rrc, i, RB_ESTABLISHED);
                 nr_mac_rrc_message_t rrc_msg = {0};
                 rrc_msg.payload_type = NR_MAC_RRC_RESUME_RB;
-                rrc_msg.payload.resume_rb.is_srb = true;
+                rrc_msg.payload.resume_rb.is_srb = false;
                 rrc_msg.payload.resume_rb.rb_id = i;
                 nr_rrc_send_msg_to_mac(rrc, &rrc_msg);
               }

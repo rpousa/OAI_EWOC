@@ -4,9 +4,6 @@
 #include "openair2/COMMON/pdcp_messages_def.h"
 #include "openair2/COMMON/rrc_messages_def.h"
 #include "openair2/COMMON/nas_messages_def.h"
-#if ENABLE_RAL
-  #include "openair2/COMMON/ral_messages_def.h"
-#endif
 #include "openair2/COMMON/s1ap_messages_def.h"
 #include "openair2/COMMON/x2ap_messages_def.h"
 #include "openair2/COMMON/m2ap_messages_def.h"

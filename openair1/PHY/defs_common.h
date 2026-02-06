@@ -75,7 +75,6 @@
 
 #define RX_NB_TH_MAX 2
 #define RX_NB_TH 2
-#define RX_NB_TH_DL 14
 
 #define LTE_SLOTS_PER_SUBFRAME 2
 
@@ -96,7 +95,6 @@
 
 #define MAX_MBSFN_AREA 8
 
-#define NB_RX_ANTENNAS_MAX 64
 
 #define TC_NSEC_x32768 16667
 
@@ -936,13 +934,11 @@ typedef enum {SF_DL, SF_UL, SF_S} lte_subframe_t;
 #define MAX_FRAME_NUMBER 0x400
 
 
-#define NUMBER_OF_RN_MAX 3
 typedef enum {no_relay=1,unicast_relay_type1,unicast_relay_type2, multicast_relay} relaying_type_t;
 
 
 
 #define MCS_COUNT 29
-#define MCS_TABLE_LENGTH_MAX 64
 
 
 #define NUM_DCI_MAX 32

@@ -110,9 +110,6 @@
 /*!\brief MAX MCCH payload size  */
 #define MCCH_PAYLOAD_SIZE_MAX 128
 //#define MCH_PAYLOAD_SIZE_MAX 16384// this value is using in case mcs and TBS index are hi
-
-#define printk printf
-
 /*!\brief Maximum number of logical channl group IDs */
 #define MAX_NUM_LCGID 4
 /*!\brief logical channl group ID 0 */
@@ -213,7 +210,6 @@ typedef struct {
   uint64_t t_crnti:16;
   } __attribute__((__packed__))RAR_PDU;
 
-#define sizeof_RAR_PDU 6
 */
 /*!\brief  MAC subheader short with 7bit Length field */
 typedef struct {
@@ -402,8 +398,6 @@ typedef struct {
   uint8_t lcid:5;   // octet 2 MSB
   uint8_t stop_sf_LSB:8;
 } __attribute__ ((__packed__)) MSI_ELEMENT;
-/*! \brief Values of CCCH LCID for DLSCH */
-#define CCCH_LCHANID 0
 /*!\brief Values of BCCH logical channel (fake)*/
 #define BCCH 3      // SI
 /*!\brief Values of PCCH logical channel (fake)*/
@@ -448,8 +442,6 @@ typedef struct {
 #define MCCH_LCHANID 0
 /*!\brief LCID of MCH scheduling info for DL */
 #define MCH_SCHDL_INFO 30
-/*!\brief LCID of Carrier component activation/deactivation */
-#define CC_ACT_DEACT 27
 //TTN (for D2D)
 #define SL_DISCOVERY 8 //LCID (fake)
 #define MAX_NUM_DEST 10

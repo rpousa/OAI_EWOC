@@ -1666,6 +1666,15 @@ F1AP_F1AP_PDU_t *encode_ue_context_mod_req(const f1ap_ue_context_mod_req_t *req)
     OCTET_STRING_fromBuf(&ie81->value.choice.RRCContainer, (const char *)req->rrc_container->buf, req->rrc_container->len);
   }
 
+  /* optional: gNB-DU Configuration Query */
+  if (req->gNB_DU_Configuration_Query && *req->gNB_DU_Configuration_Query) {
+    asn1cSequenceAdd(out->protocolIEs.list, F1AP_UEContextModificationRequestIEs_t, ie82);
+    ie82->id = F1AP_ProtocolIE_ID_id_GNB_DUConfigurationQuery;
+    ie82->criticality = F1AP_Criticality_ignore;
+    ie82->value.present = F1AP_UEContextModificationRequestIEs__value_PR_GNB_DUConfigurationQuery;
+    ie82->value.choice.GNB_DUConfigurationQuery = F1AP_GNB_DUConfigurationQuery_true;
+  }
+
   /* optional: SRBs_ToBeSetupMod */
   if (req->srbs_len > 0) {
     DevAssert(req->srbs);
@@ -1777,6 +1786,13 @@ bool decode_ue_context_mod_req(const F1AP_F1AP_PDU_t *pdu, f1ap_ue_context_mod_r
           *out->rrc_container = create_byte_array(os->size, os->buf);
         }
         break;
+      case F1AP_ProtocolIE_ID_id_GNB_DUConfigurationQuery:
+        _F1_EQ_CHECK_INT(ie->value.present, F1AP_UEContextModificationRequestIEs__value_PR_GNB_DUConfigurationQuery);
+        {
+          bool v = ie->value.choice.GNB_DUConfigurationQuery == F1AP_GNB_DUConfigurationQuery_true;
+          _F1_MALLOC(out->gNB_DU_Configuration_Query, v);
+        }
+        break;
       case F1AP_ProtocolIE_ID_id_SRBs_ToBeSetupMod_List:
         _F1_EQ_CHECK_INT(ie->value.present, F1AP_UEContextModificationRequestIEs__value_PR_SRBs_ToBeSetupMod_List);
         _F1_CHECK_EXP(decode_srbs_to_setupmod(&ie->value.choice.SRBs_ToBeSetupMod_List, &out->srbs_len, &out->srbs));
@@ -1862,6 +1878,8 @@ f1ap_ue_context_mod_req_t cp_ue_context_mod_req(const f1ap_ue_context_mod_req_t 
   }
   if (orig->status)
     _F1_MALLOC(cp.status, *orig->status);
+  if (orig->gNB_DU_Configuration_Query)
+    _F1_MALLOC(cp.gNB_DU_Configuration_Query, *orig->gNB_DU_Configuration_Query);
   return cp;
 }
 
@@ -1898,6 +1916,7 @@ bool eq_ue_context_mod_req(const f1ap_ue_context_mod_req_t *a, const f1ap_ue_con
     _F1_CHECK_EXP(eq_drb_to_release(&a->drbs_rel[i], &b->drbs_rel[i]));
 
   _F1_EQ_CHECK_OPTIONAL_IE(a, b, status, _F1_EQ_CHECK_INT);
+  _F1_EQ_CHECK_OPTIONAL_IE(a, b, gNB_DU_Configuration_Query, _F1_EQ_CHECK_INT);
   return true;
 }
 
@@ -1925,6 +1944,7 @@ void free_ue_context_mod_req(f1ap_ue_context_mod_req_t *req)
     free_drb_to_release(&req->drbs_rel[i]);
   free(req->drbs_rel);
   free(req->status);
+  free(req->gNB_DU_Configuration_Query);
 }
 
 /**

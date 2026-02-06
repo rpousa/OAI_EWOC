@@ -33,10 +33,6 @@
     #include "m2ap_MCE.h"
     #include "m3ap_MME.h"
     #include "m3ap_MCE.h"
-  #if ENABLE_RAL
-    #include "lteRALue.h"
-    #include "lteRALenb.h"
-  #endif
   #include "RRC/LTE/rrc_defs.h"
 # include "enb_app.h"
 # include "mce_app.h"

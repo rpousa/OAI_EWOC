@@ -25,8 +25,6 @@
 #include <stdint.h>
 #include "OctetString.h"
 
-#define FGS_DEREGISTRATION_TYPE_MINIMUM_LENGTH 1
-#define FGS_DEREGISTRATION_TYPE_MAXIMUM_LENGTH 1
 
 typedef struct FGSDeregistrationType_tag {
 #define NORMAL_DEREGISTRATION 0

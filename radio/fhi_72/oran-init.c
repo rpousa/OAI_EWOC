@@ -92,7 +92,7 @@ static struct xran_prb_map get_xran_prb_map(const struct xran_fh_config *f, cons
       .cc_id = 0,
       .ru_port_id = 0,
       .tti_id = 0,
-      .nPrbElm = 1,
+      .nPrbElm = 1, // represents the number of fragments on DL only; calculated in xran_init_PrbMap_from_cfg()/xran_init_PrbMap_by_symbol_from_cfg()
   };
   struct xran_prb_elm *e = &prbmap.prbMap[0];
   e->nStartSymb = start_sym;

@@ -41,8 +41,6 @@
 #include "openair1/PHY/phy_extern.h"
 
 
-#define TELNETVAR_PHYCC0    0
-#define TELNETVAR_PHYCC1    1
 
 telnetshell_vardef_t phy_vardef[] = {{"", 0, 0, NULL}};
 

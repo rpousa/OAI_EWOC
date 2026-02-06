@@ -149,7 +149,7 @@ services:
                                     --gNBs.[0].nr_cellid 0
                                     --telnetsrv --telnetsrv.listenaddr 192.168.71.171
                                     --telnetsrv.shrmod ci
-                                    --rfsimulator.serveraddr 192.168.71.190
+                                    --rfsimulator.[0].serveraddr 192.168.71.190
             ASAN_OPTIONS: detect_leaks=0:detect_odr_violation=0
         depends_on:
             - oai-cucp-0
@@ -176,7 +176,7 @@ services:
             - NET_ADMIN  # for interface bringup
             - NET_RAW    # for ping
         environment:
-            USE_ADDITIONAL_OPTIONS: --rfsim --rfsimulator.serveraddr server
+            USE_ADDITIONAL_OPTIONS: --rfsim --rfsimulator.[0].serveraddr server
                                     --band 78 -C 3619200000 -r 106 --numerology 1 --ssb 516
                                     --uicc0.imsi 208990100001100
                                     --log_config.global_log_options level,nocolor,time
@@ -259,7 +259,7 @@ services:
             - ALL
         environment:
             USE_ADDITIONAL_OPTIONS: --rfsim
-                                    --rfsimulator.serveraddr 192.168.71.190
+                                    --rfsimulator.[0].serveraddr 192.168.71.190
                                     --log_config.global_log_options level,nocolor,time
                                     --gNBs.[0].gNB_DU_ID 1234
                                     --gNBs.[0].gNB_ID 0xb00

@@ -50,26 +50,17 @@
 #include "LAYER2/MAC/mac.h"
 #include "openair2/RRC/common.h"
 // for D2D
-#define DEBUG_CTRL_SOCKET
 
 #define CONTROL_SOCKET_PORT_NO 8888
 #define MAX_NUM_DEST           10
 //netlink
 //#define DEBUG_PDCP
-#define UE_IP_PDCP_NETLINK_ID  31
-#define PDCP_PID               1
-#define NETLINK_HEADER_SIZE    16
-#define SL_DEFAULT_RAB_ID      3
-#define SLRB_ID                3
 
 #define MAX_PAYLOAD 1024 /* maximum payload size*/
 
 #define MAX_NUM_NEIGH_CELLs 6 /* maximum neighbouring cells number */
 
 #define MAX_NUM_GNB_CELLs 1   /* maximum gNB cells number */
-
-#define UE_STATE_NOTIFICATION_INTERVAL      50
-
 #define IPV4_ADDR    "%u.%u.%u.%u"
 #define IPV4_ADDR_FORMAT(aDDRESS)                 \
   (uint8_t)((aDDRESS)  & 0x000000ff),         \
@@ -307,9 +298,6 @@ typedef enum SL_TRIGGER_e {
 #define RRC_BUF_SIZE 1024
 #define UNDEF_SECURITY_MODE 0xff
 #define NO_SECURITY_MODE 0x20
-
-#define CBA_OFFSET        0xfff4
-// #define NUM_MAX_CBA_GROUP 4 // in the platform_constants
 
 /* TS 36.331: RRC-TransactionIdentifier ::= INTEGER (0..3) */
 #define RRC_TRANSACTION_IDENTIFIER_NUMBER  3

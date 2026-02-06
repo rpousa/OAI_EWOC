@@ -33,9 +33,7 @@
 #ifndef WEBSRV_H
 #define WEBSRV_H
 
-#define WEBSRV_MODNAME "websrv"
 
-#define WEBSRV_PORT 8090
 
 /* websrv_params_t is an internal structure storing all the current parameters and */
 /* global variables used by the web server                                        */

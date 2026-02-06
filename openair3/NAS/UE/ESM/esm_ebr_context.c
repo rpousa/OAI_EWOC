@@ -45,7 +45,7 @@ Description Defines functions used to handle EPS bearer contexts.
 #include "esm_ebr.h"
 
 #include "esm_ebr_context.h"
-#include "common/utils/tun_if.h"
+#include "common/utils/tuntap_if.h"
 
 #include "emm_sap.h"
 #include "system.h"

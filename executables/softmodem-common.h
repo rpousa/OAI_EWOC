@@ -41,13 +41,12 @@ extern "C"
 
 /* help strings definition for command line options, used in CMDLINE_XXX_DESC macros and printed when -h option is used */
 #define CONFIG_HLP_RFCFGF        "Configuration file for front-end (e.g. LMS7002M)\n"
-#define CONFIG_HLP_SPLIT73       "Split 7.3 (below rate matching) option: <cu|du>:<remote ip address>:<remote port>\n"
-#define CONFIG_HLP_TPOOL         "Thread pool configuration: \n\
+#define CONFIG_HLP_TPOOL \
+  "Thread pool configuration: \n\
   list of cores, comma separated (negative value is no core affinity)\n\
   example: -1,3 launches two working threads one floating, the second set on core 3\n\
   default 8 floating threads\n\
   use N for no pool (runs in calling thread) recommended with rfsim.\n"
-#define CONFIG_HLP_ULMAXE        "set the eNodeB max ULSCH erros\n"
 #define CONFIG_HLP_CALUER        "set UE RX calibration\n"
 #define CONFIG_HLP_CALUERM       ""
 #define CONFIG_HLP_CALUERB       ""
@@ -59,40 +58,29 @@ extern "C"
 #define CONFIG_HLP_DUMPFRAME     "dump UE received frame to rxsig_frame0.dat and exit\n"
 #define CONFIG_HLP_PHYTST        "test UE phy layer, mac disabled\n"
 #define CONFIG_HLP_DORA          "test gNB  and UE with RA procedures\n"
-#define CONFIG_HLP_SA            "run gNB in standalone mode\n"
 #define CONFIG_HLP_SL_MODE       "sets the NR sidelink mode (0: not in sidelink mode, 1: in-coverage/gNB, 2: out-of-coverage/no gNB)\n"
-#define CONFIG_HLP_EXTS          "tells hardware to use an external timing reference\n"
-#define CONFIG_HLP_DMRSSYNC      "tells RU to insert DMRS in subframe 1 slot 0"
 #define CONFIG_HLP_CLK           "tells hardware to use a clock reference (0:internal, 1:external, 2:gpsdo)\n"
 #define CONFIG_HLP_TME           "tells hardware to use a time reference (0:internal, 1:external, 2:gpsdo)\n"
 #define CONFIG_HLP_TUNE_OFFSET   "LO tuning offset to use in Hz\n"
-#define CONFIG_HLP_NOSNGLT       "Disables single-thread mode in lte-softmodem\n"
 #define CONFIG_HLP_DLF           "Set the downlink frequency for all component carriers\n"
 #define CONFIG_HLP_ULF           "Set the uplink frequency offset for all component carriers\n"
 #define CONFIG_HLP_SLF           "Set the sidelink frequency for all component carriers\n"
 #define CONFIG_HLP_CHOFF         "Channel id offset\n"
 #define CONFIG_HLP_SOFTS         "Enable soft scope and L1 and L2 stats (Xforms)\n"
-#define CONFIG_HLP_ITTIL         "Generate ITTI analyzser logs (similar to wireshark logs but with more details)\n"
 #define CONFIG_HLP_DLMCS         "Set the maximum downlink MCS\n"
 #define CONFIG_HLP_STMON         "Enable processing timing measurement of lte softmodem on per subframe basis \n"
-#define CONFIG_HLP_256QAM        "Use the 256 QAM mcs table for PDSCH\n"
 #define CONFIG_HLP_CHESTFREQ     "Set channel estimation type in frequency domain. 0-Linear interpolation (default). 1-PRB based averaging of channel estimates in frequency. \n"
 #define CONFIG_HLP_CHESTTIME     "Set channel estimation type in time domain. 0-Symbols take estimates of the last preceding DMRS symbol (default). 1-Symbol based averaging of channel estimates in time. \n"
 #define CONFIG_HLP_IMSCOPE       "Enable phy scope based on imgui and implot"
 #define CONFIG_HLP_IMSCOPE_RECORD "Enable recording scope data to filesystem"
 
 #define CONFIG_HLP_NONSTOP       "Go back to frame sync mode after 100 consecutive PBCH failures\n"
-//#define CONFIG_HLP_NUMUES        "Set the number of UEs for the emulation"
-#define CONFIG_HLP_MSLOTS        "Skip the missed slots/subframes \n"
-#define CONFIG_HLP_ULMCS         "Set the maximum uplink MCS\n"
 
-#define CONFIG_HLP_UE            "Set the lte softmodem as a UE\n"
 #define CONFIG_HLP_TQFS                                                                                                          \
   "Apply three-quarter of sampling frequency, (example 23.04 Msps for LTE 20MHz) to reduce the data rate on USB/PCIe transfers " \
   "(only valid for some bandwidths)\n"
 #define CONFIG_HLP_TPORT         "tracer port\n"
 #define CONFIG_HLP_NOTWAIT       "don't wait for tracer, start immediately\n"
-#define CONFIG_HLP_TNOFORK       "to ease debugging with gdb\n"
 
 #define CONFIG_HLP_NUMEROLOGY    "adding numerology for 5G\n"
 #define CONFIG_HLP_BAND          "band index\n"
@@ -129,7 +117,6 @@ extern "C"
 #define CLOCK_SOURCE        softmodem_params.clock_source
 #define TIMING_SOURCE       softmodem_params.timing_source
 #define TUNE_OFFSET         softmodem_params.tune_offset
-#define SEND_DMRSSYNC       softmodem_params.send_dmrs_sync
 #define CHEST_FREQ          softmodem_params.chest_freq
 #define CHEST_TIME          softmodem_params.chest_time
 #define NFAPI               softmodem_params.nfapi
@@ -139,8 +126,6 @@ extern "C"
 #define CONTINUOUS_TX       softmodem_params.continuous_tx
 #define SYNC_REF            softmodem_params.sync_ref
 #define DEFAULT_PDU_ID      softmodem_params.default_pdu_session_id
-
-#define DEFAULT_RFCONFIG_FILE    "/usr/local/etc/syriq/ue.band7.tm1.PRB100.NR40.dat";
 
 extern int usrp_tx_thread;
 // clang-format off
@@ -153,7 +138,7 @@ extern int usrp_tx_thread;
   {"clock-source",          CONFIG_HLP_CLK,           0,              .uptr=&CLOCK_SOURCE,                    .defintval=0,             TYPE_UINT,   0},  \
   {"time-source",           CONFIG_HLP_TME,           0,              .uptr=&TIMING_SOURCE,                   .defintval=0,             TYPE_UINT,   0},  \
   {"tune-offset",           CONFIG_HLP_TUNE_OFFSET,   0,              .dblptr=&TUNE_OFFSET,                   .defintval=0,             TYPE_DOUBLE, 0},  \
-  {"C" ,                    CONFIG_HLP_DLF,           0,              .u64ptr=&(downlink_frequency[0][0]),    .defuintval=0,            TYPE_UINT64, 0},  \
+  {"C" ,                    CONFIG_HLP_DLF,           0,              .u64ptr=&(downlink_frequency[0][0]),    .defint64val=0,           TYPE_UINT64, 0},  \
   {"CO" ,                   CONFIG_HLP_ULF,           0,              .iptr=&(uplink_frequency_offset[0][0]), .defintval=0,             TYPE_INT,    0},  \
   {"a" ,                    CONFIG_HLP_CHOFF,         0,              .iptr=&CHAIN_OFFSET,                    .defintval=0,             TYPE_INT,    0},  \
   {"d" ,                    CONFIG_HLP_SOFTS,         PARAMFLAG_BOOL, .uptr=&do_forms,                        .defintval=0,             TYPE_UINT,   0},  \
@@ -180,7 +165,7 @@ extern int usrp_tx_thread;
   {"E" ,                    CONFIG_HLP_TQFS,          PARAMFLAG_BOOL, .iptr=&softmodem_params.threequarter_fs, .defintval=0,            TYPE_INT,    0}, \
   {"imscope" ,              CONFIG_HLP_IMSCOPE,       PARAMFLAG_BOOL, .uptr=&enable_imscope,                   .defintval=0,            TYPE_UINT,   0}, \
   {"imscope-record" ,       CONFIG_HLP_IMSCOPE_RECORD,PARAMFLAG_BOOL, .uptr=&enable_imscope_record,            .defintval=0,            TYPE_UINT,   0}, \
-  {"default-pdu-id",        NULL,                     0,              .iptr=&DEFAULT_PDU_ID,                   .defintval=10,           TYPE_INT,    0}, \
+  {"default-pdu-id",        NULL,                     0,              .iptr=&DEFAULT_PDU_ID,                   .defintval=-1,           TYPE_INT,    0}, \
 }
 // clang-format on
 
@@ -358,6 +343,8 @@ struct timespec timespec_sub(struct timespec lhs, struct timespec rhs);
 extern uint8_t nfapi_mode;
 extern char *parallel_config;
 extern char *worker_config;
+extern double cpuf;
+
 #ifdef __cplusplus
 }
 #endif

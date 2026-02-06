@@ -88,9 +88,6 @@ typedef struct PhyDeactivateReq_s {
 } PhyDeactivateReq;
 
 typedef struct PhyFindCellReq_s {
-#   if ENABLE_RAL
-  ral_transaction_id_t    transaction_id;
-#   endif
   Earfcn                  earfcn_start;
   Earfcn                  earfcn_end;
 } PhyFindCellReq;
@@ -105,27 +102,16 @@ typedef struct PhyMeasThresholdReq_s {
   // This dummy element is to avoid CLANG warning: empty struct has size 0 in C, size 1 in C++
   // To be removed if the structure is filled
   uint32_t dummy;
-#   if ENABLE_RAL
-  ral_transaction_id_t    transaction_id;
-  ral_link_cfg_param_t    cfg_param;
-#endif
 } PhyMeasThresholdReq;
 
 typedef struct PhyMeasReportInd_s {
   // This dummy element is to avoid CLANG warning: empty struct has size 0 in C, size 1 in C++
   // To be removed if the structure is filled
   uint32_t dummy;
-#   if ENABLE_RAL
-  ral_threshold_t         threshold;
-  ral_link_param_t        link_param;
-#endif
 } PhyMeasReportInd;
 
 // UE: PHY -> RRC messages
 typedef struct PhyFindCellInd_s {
-#   if ENABLE_RAL
-  ral_transaction_id_t    transaction_id;
-#   endif
   uint8_t                  cell_nb;
   CellInfo                 cells[MAX_REPORTED_CELL];
 } PhyFindCellInd;
@@ -134,11 +120,5 @@ typedef struct PhyMeasThresholdConf_s {
   // This dummy element is to avoid CLANG warning: empty struct has size 0 in C, size 1 in C++
   // To be removed if the structure is filled
   uint32_t dummy;
-#   if ENABLE_RAL
-  ral_transaction_id_t    transaction_id;
-  ral_status_t            status;
-  uint8_t                 num_link_cfg_params;
-  ral_link_cfg_status_t   cfg_status[RAL_MAX_LINK_CFG_PARAMS];
-#endif
 } PhyMeasThresholdConf;
 #endif /* PHY_MESSAGES_TYPES_H_ */

@@ -74,7 +74,6 @@ typedef struct __attribute__((packed))
   uint32_t cqi1:4;
 }
 HLC_subband_cqi_rank1_2A_1_5MHz;
-#define sizeof_HLC_subband_cqi_rank1_2A_1_5MHz 18
 
 typedef struct __attribute__((packed))
 {
@@ -86,7 +85,6 @@ typedef struct __attribute__((packed))
   uint64_t cqi1:4;
 }
 HLC_subband_cqi_rank2_2A_1_5MHz;
-#define sizeof_HLC_subband_cqi_rank2_2A_1_5MHz 33
 
 typedef struct __attribute__((packed))
 {
@@ -95,7 +93,6 @@ typedef struct __attribute__((packed))
   uint32_t cqi1:4;
 }
 HLC_subband_cqi_modes123_1_5MHz;
-#define sizeof_HLC_subband_cqi_modes123_1_5MHz 16
 
 typedef struct __attribute__((packed))
 {
@@ -144,7 +141,6 @@ typedef struct __attribute__((packed))
   uint32_t cqi1:4;
 }
 HLC_subband_cqi_rank1_2A_5MHz;
-#define sizeof_HLC_subband_cqi_rank1_2A_5MHz 20
 
 typedef struct __attribute__((packed))
 {
@@ -156,7 +152,6 @@ typedef struct __attribute__((packed))
   uint64_t cqi1:4;
 }
 HLC_subband_cqi_rank2_2A_5MHz;
-#define sizeof_HLC_subband_cqi_rank2_2A_5MHz 37
 
 typedef struct __attribute__((packed))
 {
@@ -165,7 +160,6 @@ typedef struct __attribute__((packed))
   uint32_t cqi1:4;
 }
 HLC_subband_cqi_modes123_5MHz;
-#define sizeof_HLC_subband_cqi_modes123_5MHz 18
 
 typedef struct __attribute__((packed))
 {
@@ -213,7 +207,6 @@ typedef struct __attribute__((packed))
   uint32_t cqi1:4;
 }
 HLC_subband_cqi_rank1_2A_10MHz;
-#define sizeof_HLC_subband_cqi_rank1_2A_10MHz 24
 
 typedef struct __attribute__((packed))
 {
@@ -225,7 +218,6 @@ typedef struct __attribute__((packed))
   uint64_t cqi1:4;
 }
 HLC_subband_cqi_rank2_2A_10MHz;
-#define sizeof_HLC_subband_cqi_rank2_2A_10MHz 45
 
 typedef struct __attribute__((packed))
 {
@@ -234,7 +226,6 @@ typedef struct __attribute__((packed))
   uint32_t cqi1:4;
 }
 HLC_subband_cqi_modes123_10MHz;
-#define sizeof_HLC_subband_cqi_modes123_10MHz 22
 
 typedef struct __attribute__((packed))
 {
@@ -282,7 +273,6 @@ typedef struct __attribute__((packed))
   uint32_t cqi1:4;
 }
 HLC_subband_cqi_rank1_2A_20MHz;
-#define sizeof_HLC_subband_cqi_rank1_2A_20MHz 32
 
 typedef struct __attribute__((packed))
 {
@@ -294,7 +284,6 @@ typedef struct __attribute__((packed))
   uint64_t cqi1:4;
 }
 HLC_subband_cqi_rank2_2A_20MHz;
-#define sizeof_HLC_subband_cqi_rank2_2A_20MHz 61
 
 typedef struct __attribute__((packed))
 {
@@ -303,7 +292,6 @@ typedef struct __attribute__((packed))
   uint32_t cqi1:4;
 }
 HLC_subband_cqi_modes123_20MHz;
-#define sizeof_HLC_subband_cqi_modes123_20MHz 30
 
 typedef struct __attribute__((packed))
 {

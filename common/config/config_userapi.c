@@ -142,7 +142,7 @@ int config_get(configmodule_interface_t *cfgif, paramdef_t *params, int numparam
   return ret;
 }
 
-int config_getlist(configmodule_interface_t *cfg, paramlist_def_t *ParamList, paramdef_t *params, int numparams, char *prefix)
+int config_getlist(configmodule_interface_t *cfg, paramlist_def_t *ParamList, paramdef_t *params, int numparams, const char *prefix)
 {
   if (CONFIG_ISFLAGSET(CONFIG_ABORT)) {
     fprintf(stderr,"[CONFIG] config_get skipped, config module not properly initialized\n");

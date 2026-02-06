@@ -32,10 +32,6 @@
 
 #include "LAYER2/MAC/mac.h"
 
-
-#define MAX_NUMBER_OF_MAC_INSTANCES 16
-
-#define NULL_PDU 255
 #define DCI 0
 #define DLSCH 1
 #define ULSCH 2

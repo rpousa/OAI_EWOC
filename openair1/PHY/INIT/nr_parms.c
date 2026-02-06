@@ -320,7 +320,7 @@ uint32_t get_samples_symbol_timestamp(const NR_DL_FRAME_PARMS *fp, int slot, int
   return get_samples_symbol_duration(fp, slot, 0, symbol);
 }
 
-uint32_t get_slot_from_timestamp(openair0_timestamp timestamp_rx, const NR_DL_FRAME_PARMS *fp)
+uint32_t get_slot_from_timestamp(openair0_timestamp_t timestamp_rx, const NR_DL_FRAME_PARMS *fp)
 {
   timestamp_rx = timestamp_rx % fp->samples_per_frame;
   if (timestamp_rx < fp->samples_per_slot0)
@@ -525,13 +525,20 @@ int nr_init_frame_parms_ue(NR_DL_FRAME_PARMS *fp,
   return 0;
 }
 
-void nr_init_frame_parms_ue_sa(NR_DL_FRAME_PARMS *frame_parms, uint64_t downlink_frequency, int32_t delta_duplex, uint8_t mu, uint16_t nr_band) {
+void nr_init_frame_parms_ue_sa(NR_DL_FRAME_PARMS *frame_parms, const nrUE_cell_params_t *cell)
+{
+  const uint64_t downlink_frequency = cell->rf_frequency;
+  const int64_t delta_duplex = cell->rf_freq_offset;
+  const uint8_t mu = cell->numerology;
+  const int N_RB_DL = cell->N_RB_DL;
+  const int ssb_start_subcarrier = cell->ssb_start;
+  const uint16_t nr_band = cell->band;
 
-  LOG_I(PHY,"SA init parameters. DL freq %lu UL offset %d SSB numerology %d N_RB_DL %d\n",
+  LOG_I(PHY,"SA init parameters. DL freq %lu UL offset %ld SSB numerology %d N_RB_DL %d\n",
         downlink_frequency,
         delta_duplex,
         mu,
-        frame_parms->N_RB_DL);
+        N_RB_DL);
 
   frame_parms->numerology_index = mu;
   frame_parms->dl_CarrierFreq = downlink_frequency;
@@ -539,6 +546,7 @@ void nr_init_frame_parms_ue_sa(NR_DL_FRAME_PARMS *frame_parms, uint64_t downlink
   if (get_softmodem_params()->sl_mode == 0) {
     frame_parms->freq_range = get_freq_range_from_freq(frame_parms->dl_CarrierFreq);
   }
+  frame_parms->N_RB_DL = N_RB_DL;
   frame_parms->N_RB_UL = frame_parms->N_RB_DL;
 
   frame_parms->nr_band = nr_band;
@@ -564,8 +572,9 @@ void nr_init_frame_parms_ue_sa(NR_DL_FRAME_PARMS *frame_parms, uint64_t downlink
                                              + (frame_parms->symbols_per_slot * frame_parms->ofdm_symbol_size);
   frame_parms->samples_per_frame = 10 * frame_parms->samples_per_subframe;
 
-  LOG_W(PHY, "samples_per_subframe %d/per second %d, wCP %d\n", frame_parms->samples_per_subframe, 1000*frame_parms->samples_per_subframe, frame_parms->samples_per_subframe_wCP);
+  frame_parms->ssb_start_subcarrier = ssb_start_subcarrier;
 
+  LOG_W(PHY, "samples_per_subframe %d/per second %d, wCP %d\n", frame_parms->samples_per_subframe, 1000*frame_parms->samples_per_subframe, frame_parms->samples_per_subframe_wCP);
 }
 
 void nr_dump_frame_parms(NR_DL_FRAME_PARMS *fp)

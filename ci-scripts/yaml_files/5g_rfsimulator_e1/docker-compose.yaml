@@ -309,7 +309,7 @@ services:
             USE_ADDITIONAL_OPTIONS: --rfsim --log_config.global_log_options level,nocolor,time
                                     -r 106 --numerology 1 -C 3619200000
                                     --uicc0.imsi 208990100001100
-                                    --rfsimulator.serveraddr oai-du
+                                    --rfsimulator.[0].serveraddr oai-du
         depends_on:
             - oai-du
         networks:
@@ -338,8 +338,8 @@ services:
         environment:
             USE_ADDITIONAL_OPTIONS: --rfsim --log_config.global_log_options level,nocolor,time
                                     -r 106 --numerology 1 -C 3619200000
-                                    --uicc0.imsi 208990100001101 --uicc0.nssai_sst 2
-                                    --rfsimulator.serveraddr 192.168.78.3
+                                    --uicc0.imsi 208990100001101 --uicc0.pdu_sessions.[0].nssai_sst 2
+                                    --rfsimulator.[0].serveraddr 192.168.78.3
         depends_on:
             - oai-du2
         networks:
@@ -368,8 +368,8 @@ services:
         environment:
             USE_ADDITIONAL_OPTIONS: --rfsim --log_config.global_log_options level,nocolor,time
                                     -r 106 --numerology 1 -C 3619200000
-                                    --uicc0.imsi 208990100001102 --uicc0.nssai_sst 3
-                                    --rfsimulator.serveraddr 192.168.78.4
+                                    --uicc0.imsi 208990100001102 --uicc0.pdu_sessions.[0].nssai_sst 3
+                                    --rfsimulator.[0].serveraddr 192.168.78.4
             ASAN_OPTIONS: detect_leaks=0
         depends_on:
             - oai-du3

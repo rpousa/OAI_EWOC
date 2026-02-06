@@ -66,13 +66,6 @@
 # include "intertask_interface.h"
 # include "commonDef.h"
 
-
-#if ENABLE_RAL
-  #include "collection/hashtable/obj_hashtable.h"
-#endif
-
-
-
 /*I will change the name of the structure for compile purposes--> hope not to undo this process*/
 
 typedef unsigned int uid_NB_IoT_t;
@@ -442,7 +435,6 @@ typedef struct eNB_RRC_INST_NB_IoT_s {
 
 } eNB_RRC_INST_NB_IoT;
 
-#define RRC_HEADER_SIZE_MAX_NB_IoT 64
 #define MAX_UE_CAPABILITY_SIZE_NB_IoT 255
 
 //not needed for the moment
@@ -452,10 +444,6 @@ typedef struct OAI_UECapability_NB_IoT_s {
   ////NB-IoT------
   LTE_UE_Capability_NB_r13_t  UE_Capability_NB_IoT; //replace the UE_EUTRA_Capability of LTE
 } OAI_UECapability_NB_IoT_t;
-
-#define RRC_BUFFER_SIZE_MAX_NB_IoT 1024
-
-
 
 typedef struct UE_RRC_INST_NB_IoT_s {
   Rrc_State_NB_IoT_t     RrcState;

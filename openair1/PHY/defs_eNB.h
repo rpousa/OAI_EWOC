@@ -218,8 +218,8 @@ typedef struct {
   /// Component Carrier index
   uint8_t              CC_id;
   /// timestamp transmitted to HW
-  openair0_timestamp timestamp_tx;
-  openair0_timestamp timestamp_rx;
+  openair0_timestamp_t timestamp_tx;
+  openair0_timestamp_t timestamp_rx;
   /// subframe to act upon for transmission
   int subframe_tx;
   /// subframe to act upon for reception
@@ -285,9 +285,9 @@ typedef struct L1_proc_t_s {
   /// thread index
   int thread_index;
   /// timestamp received from HW
-  openair0_timestamp timestamp_rx;
+  openair0_timestamp_t timestamp_rx;
   /// timestamp to send to "slave rru"
-  openair0_timestamp timestamp_tx;
+  openair0_timestamp_t timestamp_tx;
   /// subframe to act upon for reception
   int subframe_rx;
   /// subframe to act upon for PRACH

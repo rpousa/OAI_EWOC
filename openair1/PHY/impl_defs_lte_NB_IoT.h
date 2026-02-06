@@ -489,10 +489,6 @@ typedef struct {
 	uint16_t	 dl_GapDurationCoeff;
 } DL_GapConfig_NB_IoT;
 
-#define NBIOT_INBAND_LTEPCI 0
-#define NBIOT_INBAND_IOTPCI 1
-#define NBIOT_INGUARD       2
-#define NBIOT_STANDALONE    3
 
 
 typedef struct {

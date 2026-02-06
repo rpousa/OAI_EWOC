@@ -156,6 +156,10 @@ void get_common_options(configmodule_interface_t *cfg)
   nfapi_setmode(nfapi_mode);
   if (stats_disabled)
     IS_SOFTMODEM_NOSTATS = true;
+
+  // To be removed in a future release (after 1 month)
+  AssertFatal(get_softmodem_params()->default_pdu_session_id == -1,
+              "Use uicc0.pdu_sessions.[0].id to change the requested PDU session ID (is %d)\n", get_softmodem_params()->default_pdu_session_id);
 }
 
 void softmodem_verify_mode(const softmodem_params_t *p)

@@ -45,7 +45,6 @@ typedef struct __attribute__((packed))
   uint32_t cqi1:4;
 }
 wideband_cqi_rank1_2A_1_5MHz_NB_IoT ;
-#define sizeof_wideband_cqi_rank1_2A_1_5MHz_NB_IoT 16
 
 typedef struct __attribute__((packed))
 {
@@ -55,7 +54,6 @@ typedef struct __attribute__((packed))
   uint16_t cqi1:4;
 }
 wideband_cqi_rank2_2A_1_5MHz_NB_IoT ;
-#define sizeof_wideband_cqi_rank2_2A_1_5MHz_NB_IoT 14
 
 typedef struct __attribute__((packed))
 {
@@ -64,7 +62,6 @@ typedef struct __attribute__((packed))
   uint32_t cqi1:4;
 }
 HLC_subband_cqi_nopmi_1_5MHz_NB_IoT;
-#define sizeof_HLC_subband_cqi_nopmi_1_5MHz_NB_IoT 16
 
 typedef struct __attribute__((packed))
 {
@@ -74,7 +71,6 @@ typedef struct __attribute__((packed))
   uint32_t cqi1:4;
 }
 HLC_subband_cqi_rank1_2A_1_5MHz_NB_IoT;
-#define sizeof_HLC_subband_cqi_rank1_2A_1_5MHz_NB_IoT 18
 
 typedef struct __attribute__((packed))
 {
@@ -86,7 +82,6 @@ typedef struct __attribute__((packed))
   uint64_t cqi1:4;
 }
 HLC_subband_cqi_rank2_2A_1_5MHz_NB_IoT;
-#define sizeof_HLC_subband_cqi_rank2_2A_1_5MHz_NB_IoT 33
 
 typedef struct __attribute__((packed))
 {
@@ -95,7 +90,6 @@ typedef struct __attribute__((packed))
   uint32_t cqi1:4;
 }
 HLC_subband_cqi_modes123_1_5MHz_NB_IoT;
-#define sizeof_HLC_subband_cqi_modes123_1_5MHz_NB_IoT 16
 
 typedef struct __attribute__((packed))
 {
@@ -104,7 +98,6 @@ typedef struct __attribute__((packed))
   uint32_t mcs:5;
 }
 HLC_subband_cqi_mcs_CBA_1_5MHz_NB_IoT;
-#define sizeof_HLC_subband_cqi_mcs_CBA_1_5MHz_NB_IoT 21
 
 
 // **********************************************5 MHz***************************************************************************
@@ -115,7 +108,6 @@ typedef struct __attribute__((packed))
   uint32_t cqi1:4;
 }
 wideband_cqi_rank1_2A_5MHz_NB_IoT ;
-#define sizeof_wideband_cqi_rank1_2A_5MHz_NB_IoT 18
 
 typedef struct __attribute__((packed))
 {
@@ -125,7 +117,6 @@ typedef struct __attribute__((packed))
   uint16_t cqi1:4;
 }
 wideband_cqi_rank2_2A_5MHz_NB_IoT ;
-#define sizeof_wideband_cqi_rank2_2A_5MHz_NB_IoT 15
 
 typedef struct __attribute__((packed))
 {
@@ -134,7 +125,6 @@ typedef struct __attribute__((packed))
   uint32_t cqi1:4;
 }
 HLC_subband_cqi_nopmi_5MHz_NB_IoT;
-#define sizeof_HLC_subband_cqi_nopmi_5MHz_NB_IoT 18
 
 typedef struct __attribute__((packed))
 {
@@ -144,7 +134,6 @@ typedef struct __attribute__((packed))
   uint32_t cqi1:4;
 }
 HLC_subband_cqi_rank1_2A_5MHz_NB_IoT;
-#define sizeof_HLC_subband_cqi_rank1_2A_5MHz_NB_IoT 20
 
 typedef struct __attribute__((packed))
 {
@@ -156,7 +145,6 @@ typedef struct __attribute__((packed))
   uint64_t cqi1:4;
 }
 HLC_subband_cqi_rank2_2A_5MHz_NB_IoT;
-#define sizeof_HLC_subband_cqi_rank2_2A_5MHz_NB_IoT 37
 
 typedef struct __attribute__((packed))
 {
@@ -165,7 +153,6 @@ typedef struct __attribute__((packed))
   uint32_t cqi1:4;
 }
 HLC_subband_cqi_modes123_5MHz_NB_IoT;
-#define sizeof_HLC_subband_cqi_modes123_5MHz_NB_IoT 18
 
 typedef struct __attribute__((packed))
 {
@@ -174,7 +161,6 @@ typedef struct __attribute__((packed))
   uint32_t mcs:5;
 }
 HLC_subband_cqi_mcs_CBA_5MHz_NB_IoT;
-#define sizeof_HLC_subband_cqi_mcs_CBA_5MHz_NB_IoT 21
 
 // **********************************************10 MHz***************************************************************************
 typedef struct __attribute__((packed))
@@ -184,7 +170,6 @@ typedef struct __attribute__((packed))
   uint32_t cqi1:4;
 }
 wideband_cqi_rank1_2A_10MHz_NB_IoT ;
-#define sizeof_wideband_cqi_rank1_2A_10MHz_NB_IoT 22
 
 typedef struct __attribute__((packed))
 {
@@ -194,7 +179,6 @@ typedef struct __attribute__((packed))
   uint32_t cqi1:4;
 }
 wideband_cqi_rank2_2A_10MHz_NB_IoT ;
-#define sizeof_wideband_cqi_rank2_2A_10MHz_NB_IoT 17
 
 typedef struct __attribute__((packed))
 {
@@ -203,7 +187,6 @@ typedef struct __attribute__((packed))
   uint32_t cqi1:4;
 }
 HLC_subband_cqi_nopmi_10MHz_NB_IoT;
-#define sizeof_HLC_subband_cqi_nopmi_10MHz_NB_IoT 22
 
 typedef struct __attribute__((packed))
 {
@@ -213,7 +196,6 @@ typedef struct __attribute__((packed))
   uint32_t cqi1:4;
 }
 HLC_subband_cqi_rank1_2A_10MHz_NB_IoT;
-#define sizeof_HLC_subband_cqi_rank1_2A_10MHz_NB_IoT 24
 
 typedef struct __attribute__((packed))
 {
@@ -225,7 +207,6 @@ typedef struct __attribute__((packed))
   uint64_t cqi1:4;
 }
 HLC_subband_cqi_rank2_2A_10MHz_NB_IoT;
-#define sizeof_HLC_subband_cqi_rank2_2A_10MHz_NB_IoT 45
 
 typedef struct __attribute__((packed))
 {
@@ -234,7 +215,6 @@ typedef struct __attribute__((packed))
   uint32_t cqi1:4;
 }
 HLC_subband_cqi_modes123_10MHz_NB_IoT;
-#define sizeof_HLC_subband_cqi_modes123_10MHz_NB_IoT 22
 
 typedef struct __attribute__((packed))
 {
@@ -243,7 +223,6 @@ typedef struct __attribute__((packed))
   uint32_t mcs:5;
 }
 HLC_subband_cqi_mcs_CBA_10MHz_NB_IoT;
-#define sizeof_HLC_subband_cqi_mcs_CBA_10MHz_NB_IoT 21
 
 // **********************************************20 MHz***************************************************************************
 typedef struct __attribute__((packed))
@@ -253,7 +232,6 @@ typedef struct __attribute__((packed))
   uint32_t cqi1:4;
 }
 wideband_cqi_rank1_2A_20MHz_NB_IoT ;
-#define sizeof_wideband_cqi_rank1_2A_20MHz_NB_IoT 20
 
 typedef struct __attribute__((packed))
 {
@@ -263,7 +241,6 @@ typedef struct __attribute__((packed))
   uint32_t cqi1:4;
 }
 wideband_cqi_rank2_2A_20MHz_NB_IoT ;
-#define sizeof_wideband_cqi_rank2_2A_20MHz_NB_IoT 21
 
 typedef struct __attribute__((packed))
 {
@@ -272,7 +249,6 @@ typedef struct __attribute__((packed))
   uint32_t cqi1:4;
 }
 HLC_subband_cqi_nopmi_20MHz_NB_IoT;
-#define sizeof_HLC_subband_cqi_nopmi_20MHz_NB_IoT 30
 
 typedef struct __attribute__((packed))
 {
@@ -282,7 +258,6 @@ typedef struct __attribute__((packed))
   uint32_t cqi1:4;
 }
 HLC_subband_cqi_rank1_2A_20MHz_NB_IoT;
-#define sizeof_HLC_subband_cqi_rank1_2A_20MHz_NB_IoT 32
 
 typedef struct __attribute__((packed))
 {
@@ -294,7 +269,6 @@ typedef struct __attribute__((packed))
   uint64_t cqi1:4;
 }
 HLC_subband_cqi_rank2_2A_20MHz_NB_IoT;
-#define sizeof_HLC_subband_cqi_rank2_2A_20MHz_NB_IoT 61
 
 typedef struct __attribute__((packed))
 {
@@ -303,7 +277,6 @@ typedef struct __attribute__((packed))
   uint32_t cqi1:4;
 }
 HLC_subband_cqi_modes123_20MHz_NB_IoT;
-#define sizeof_HLC_subband_cqi_modes123_20MHz_NB_IoT 30
 
 typedef struct __attribute__((packed))
 {
@@ -313,7 +286,6 @@ typedef struct __attribute__((packed))
 }
 HLC_subband_cqi_mcs_CBA_20MHz_NB_IoT;
 
-#define sizeof_HLC_subband_cqi_mcs_CBA_20MHz_NB_IoT 21
 
 #define MAX_CQI_PAYLOAD_NB_IoT (sizeof(HLC_subband_cqi_rank2_2A_20MHz_NB_IoT)*8*20)
 #define MAX_CQI_BITS_NB_IoT (sizeof(HLC_subband_cqi_rank2_2A_20MHz_NB_IoT)*8)

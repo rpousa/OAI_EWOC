@@ -168,7 +168,7 @@ RUs:
     sdr_addrs: serial=XXXXXXX
 
 rfsimulator:
-  serveraddr: server
+  - serveraddr: server
 
 security:
   # preferred ciphering algorithms

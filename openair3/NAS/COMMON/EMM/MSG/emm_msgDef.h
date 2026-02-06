@@ -45,7 +45,6 @@ Description Defines identifiers of the EPS Mobility Management messages.
 
 /* Header length boundaries of EPS Mobility Management messages  */
 #define EMM_HEADER_LENGTH   sizeof(emm_msg_header_t)
-#define EMM_HEADER_MINIMUM_LENGTH EMM_HEADER_LENGTH
 #define EMM_HEADER_MAXIMUM_LENGTH EMM_HEADER_LENGTH
 
 /* EPS Mobility Management Security header type */

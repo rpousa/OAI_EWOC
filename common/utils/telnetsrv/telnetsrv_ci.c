@@ -154,10 +154,17 @@ int fetch_du_by_ue_id(char *buf, int debug, telnet_printfunc_t prnt)
   if (!RC.nrrrc)
     ERROR_MSG_RET("no RRC present, cannot list counts\n");
 
-  ue_id_t ue_id = 1;
+  ue_id_t ue_id;
   if (buf) {
     ue_id = strtol(buf, NULL, 10);
+  } else {
+    // No UE ID provided: find the connected UE first
+    rrc_gNB_ue_context_t *ue = get_single_rrc_ue();
+    if (!ue)
+      ERROR_MSG_RET("no single UE in RRC present\n");
+    ue_id = ue->ue_context.rrc_ue_id;
   }
+
   nr_rrc_du_container_t *du = get_du_for_ue(RC.nrrrc[0], ue_id);
 
   if (du) {

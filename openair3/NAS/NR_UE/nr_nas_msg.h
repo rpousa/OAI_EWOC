@@ -32,6 +32,7 @@
 #define __NR_NAS_MSG_SIM_H__
 
 #include <common/utils/assertions.h>
+#include "common/5g_platform_types.h"
 #include <openair3/UICC/usim_interface.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -42,10 +43,7 @@
 
 #define INITIAL_REGISTRATION 0b001
 
-#define PLAIN_5GS_NAS_MESSAGE_HEADER_LENGTH 3
 #define SECURITY_PROTECTED_5GS_NAS_MESSAGE_HEADER_LENGTH 7
-#define PAYLOAD_CONTAINER_LENGTH_MIN 3
-#define PAYLOAD_CONTAINER_LENGTH_MAX 65537
 #define NAS_INTEGRITY_SIZE 4
 
 /* 3GPP TS 24.501: 9.11.3.50 Service type */
@@ -113,6 +111,6 @@ void *nas_nrue_task(void *args_p);
 void *nas_nrue(void *args_p);
 void nas_init_nrue(int num_ues);
 void nr_ue_create_ip_if(const char *ifnameprefix, const char *ipv4, const char *ipv6, int ue_id, int pdu_session_id);
-void request_pdusession(nr_ue_nas_t *nas, int pdusession_id);
+void request_pdusession(nr_ue_nas_t *nas, const pdu_session_config_t *pdu);
 
 #endif /* __NR_NAS_MSG_SIM_H__*/

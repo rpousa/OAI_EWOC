@@ -437,9 +437,7 @@ int main(int argc, char **argv)
   double fs=0, eps;
   double scs = 30000;
   double txbw, rxbw;
-  uint32_t samples;
-
-  get_samplerate_and_bw(mu, N_RB_DL, frame_parms->threequarter_fs, &fs, &samples, &txbw, &rxbw);
+  get_samplerate_and_bw(mu, N_RB_DL, frame_parms->threequarter_fs, &fs, &txbw, &rxbw);
 
   // cfo with respect to sub-carrier spacing
   eps = cfo/scs;

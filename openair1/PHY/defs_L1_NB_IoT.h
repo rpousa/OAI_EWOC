@@ -45,11 +45,6 @@
 #include "defs_eNB.h"
 //#include <complex.h>
 #include "assertions.h"
-#if ENABLE_RAL
-#include "collection/hashtable/hashtable.h"
-#include "COMMON/ral_messages_types.h"
-#include "UTIL/queue.h"
-#endif
 #include "common/utils/LOG/log.h"
 #define msg(aRGS...) LOG_D(PHY, ##aRGS)
 //use msg in the real-time thread context
@@ -59,8 +54,6 @@
     #define malloc16(x) memalign(32,x)
 #endif
 #define free16(y,x) free(y)
-#define bigmalloc malloc
-#define bigmalloc16 malloc16
 #define openair_free(y,x) free((y))
 #define PAGE_SIZE 4096
 
@@ -86,7 +79,6 @@ static inline void* malloc16_clear( size_t size )
 */
 
 
-// #define PAGE_MASK 0xfffff000
 // #define virt_to_phys(x) (x)
 
 // #define openair_sched_exit() exit(-1)
@@ -222,7 +214,7 @@ typedef struct {
 /// Context data structure for RX/TX portion of subframe processing
 typedef struct {
   /// timestamp transmitted to HW
-  openair0_timestamp    timestamp_tx;
+  openair0_timestamp_t  timestamp_tx;
   /// subframe to act upon for transmission
   int                   subframe_tx;
   /// subframe to act upon for reception
@@ -273,9 +265,9 @@ typedef struct eNB_proc_NB_IoT_t_s {
   /// thread index
   int                     thread_index;
   /// timestamp received from HW
-  openair0_timestamp      timestamp_rx;
+  openair0_timestamp_t    timestamp_rx;
   /// timestamp to send to "slave rru"
-  openair0_timestamp      timestamp_tx;
+  openair0_timestamp_t    timestamp_tx;
   /// subframe to act upon for reception
   int                     subframe_rx;
   /// symbol mask for IF4p5 reception per subframe
@@ -414,7 +406,7 @@ typedef struct {
   /// index of the current UE RX/TX proc
   int                   proc_id;
   /// timestamp transmitted to HW
-  openair0_timestamp    timestamp_tx;
+  openair0_timestamp_t  timestamp_tx;
   /// subframe to act upon for transmission
   int                   subframe_tx;
   /// subframe to act upon for reception
@@ -445,7 +437,7 @@ typedef struct {
 /// Context data structure for eNB subframe processing
 typedef struct {
   /// Last RX timestamp
-  openair0_timestamp      timestamp_rx;
+  openair0_timestamp_t    timestamp_rx;
   /// pthread attributes for main UE thread
   pthread_attr_t          attr_ue;
   /// scheduling parameters for main UE thread
@@ -484,9 +476,9 @@ typedef struct PHY_VARS_eNB_NB_IoT_s {
   eth_params_t         eth_params_n;
   /// Ethernet parameters for fronthaul interface (upper L1 to Radio head)
   eth_params_t         eth_params;
-  openair0_rf_map               rf_map;
+  openair0_rf_map_t             rf_map;
   int                           abstraction_flag;
-  openair0_timestamp            ts_offset;
+  openair0_timestamp_t          ts_offset;
   // indicator for synchronization state of eNB
   int                           in_synch;
   // indicator for master/slave (RRU)
@@ -672,8 +664,8 @@ typedef struct PHY_VARS_eNB_NB_IoT_s {
   int32_t                                   pusch_stats_BO[NUMBER_OF_UE_MAX][10240];
 
   /// RF and Interface devices per CC
-  openair0_device                           rfdevice;
-  openair0_device                           ifdevice;
+  openair0_device_t                         rfdevice;
+  openair0_device_t                         ifdevice;
   /// Pointer for ifdevice buffer struct
   if_buffer_t                               ifbuffer;
 
@@ -731,7 +723,7 @@ typedef struct {
   /// \brief Module ID indicator for this instance
   uint8_t                       Mod_id;
   /// \brief Mapping of CC_id antennas to cards
-  openair0_rf_map               rf_map;
+  openair0_rf_map_t             rf_map;
   //uint8_t local_flag;
   /// \brief Indicator of current run mode of UE (normal_txrx, rx_calib_ue, no_L2_connect, debug_prach)
   runmode_NB_IoT_t              mode;
@@ -956,18 +948,13 @@ typedef struct {
     time_stats_t tx_prach;
 
     /// RF and Interface devices per CC
-    openair0_device rfdevice;
+    openair0_device_t rfdevice;
     time_stats_t dlsch_encoding_SIC_stats;
     time_stats_t dlsch_scrambling_SIC_stats;
     time_stats_t dlsch_modulation_SIC_stats;
     time_stats_t dlsch_llr_stripping_unit_SIC_stats;
     time_stats_t dlsch_unscrambling_SIC_stats;
 
-  #if ENABLE_RAL
-    hash_table_t    *ral_thresholds_timed;
-    SLIST_HEAD(ral_thresholds_gen_poll_s, ral_threshold_phy_t) ral_thresholds_gen_polled[RAL_LINK_PARAM_GEN_MAX];
-    SLIST_HEAD(ral_thresholds_lte_poll_s, ral_threshold_phy_t) ral_thresholds_lte_polled[RAL_LINK_PARAM_LTE_MAX];
-  #endif
   */
 } PHY_VARS_UE_NB_IoT;
 

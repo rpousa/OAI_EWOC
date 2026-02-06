@@ -36,7 +36,6 @@
 #include "oai_asn1.h"
 #include <openair2/RRC/NR/MESSAGES/asn1_msg.h>
 
-#define F1AP_UE_IDENTIFIER_NUMBER 3
 #define F1AP_TRANSACTION_IDENTIFIER_NUMBER 3
 
 #include "F1AP_RAT-FrequencyPriorityInformation.h"
@@ -357,7 +356,6 @@
   # error "You are compiling f1ap with the wrong version of ASN1C"
 #endif
 
-#define F1AP_UE_ID_FMT  "0x%06"PRIX32
 
 #include "assertions.h"
 

@@ -12,8 +12,6 @@
 #        define NUMBER_OF_SRS_MAX 16
 #        define NUMBER_OF_SCH_STATS_MAX 16
 
-#define MAX_MANAGED_ENB_PER_MOBILE  2
-#define MAX_MANAGED_GNB_PER_MOBILE  2
 
 #        ifndef PHYSIM
 #            ifndef UE_EXPANSION

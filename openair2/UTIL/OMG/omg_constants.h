@@ -69,9 +69,6 @@ typedef enum {
 #define omg_eps 0.10 //10.99
 
 #define SLEEP 1
-#define GET_DATA 0
-#define GET_DATA_UPDATE 1
-
 
 #endif /* __OMG_H_ */
 

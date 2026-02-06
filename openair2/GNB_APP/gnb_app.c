@@ -55,9 +55,6 @@
 #include "openair2/LAYER2/NR_MAC_gNB/mac_proto.h"
 
 extern RAN_CONTEXT_t RC;
-
-#define GNB_REGISTER_RETRY_DELAY 10
-
 /*------------------------------------------------------------------------------*/
 
 

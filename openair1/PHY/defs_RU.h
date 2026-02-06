@@ -196,9 +196,9 @@ typedef struct RU_proc_t_s {
   /// Pointer to associated RU descriptor
   struct RU_t_s *ru;
   /// timestamp received from HW
-  openair0_timestamp timestamp_rx;
+  openair0_timestamp_t timestamp_rx;
   /// timestamp to send to "slave rru"
-  openair0_timestamp timestamp_tx;
+  openair0_timestamp_t timestamp_tx;
   /// subframe (LTE) / slot (NR) to act upon for reception
   int tti_rx;
   /// subframe (LTE) / slot (NR) to act upon for transmission
@@ -354,7 +354,7 @@ typedef struct RU_proc_t_s {
   /// subframe to act upon for transmission
   int subframe_phy_tx;
   /// timestamp to send to "slave rru"
-  openair0_timestamp timestamp_phy_tx;
+  openair0_timestamp_t timestamp_phy_tx;
   /// pthread structure for RF TX thread
   pthread_t pthread_rf_tx;
   pthread_mutex_t mutex_rf_tx;
@@ -500,7 +500,7 @@ typedef struct RU_t_s {
   /// "end of burst delay" used in TDD (unit: number of samples at 30.72MHz) (this is an expert option)
   int end_of_burst_delay;
   /// RF device descriptor
-  openair0_device rfdevice;
+  openair0_device_t rfdevice;
   /// HW configuration
   openair0_config_t openair0_cfg;
   /// Number of NBs using this RU
@@ -510,9 +510,9 @@ typedef struct RU_t_s {
   struct PHY_VARS_eNB_s *eNB_list[NUMBER_OF_eNB_MAX];
   struct PHY_VARS_gNB_s *gNB_list[NUMBER_OF_gNB_MAX];
   /// Mapping of antenna ports to RF chain index
-  openair0_rf_map rf_map;
+  openair0_rf_map_t rf_map;
   /// IF device descriptor
-  openair0_device ifdevice;
+  openair0_device_t ifdevice;
   /// Pointer for ifdevice buffer struct
   if_buffer_t ifbuffer;
   /// if prach processing is to be performed in RU
@@ -599,7 +599,7 @@ typedef struct RU_t_s {
   /// sequence number for IF5
   uint8_t seqno;
   /// initial timestamp used as an offset make first real timestamp 0
-  openair0_timestamp ts_offset;
+  openair0_timestamp_t ts_offset;
   /// Current state of the RU
   rru_state_t state;
   /// Command to do
@@ -758,7 +758,7 @@ typedef struct processingData_RU {
   int frame_tx;
   int slot_tx;
   int next_slot;
-  openair0_timestamp timestamp_tx;
+  openair0_timestamp_t timestamp_tx;
   RU_t *ru;
 } processingData_RU_t;
 #endif //__PHY_DEFS_RU__H__

@@ -53,12 +53,9 @@ Description Contains global security definitions
  * Size of the authentication challenge parameters in bytes
  */
 #define AUTH_SQN_SIZE   6  /* Sequence number:          48 bits  */
-#define AUTH_AK_SIZE    6  /* Anonymity key:            48 bits  */
 #define AUTH_AMF_SIZE   2  /* Authentication Management Field:  16 bits  */
-#define AUTH_MAC_SIZE   8  /* Message Authentication Code:  64 bits  */
 #define AUTH_AUTN_SIZE  16 /* Authentication token:     128 bits
                 AUTN = (SQN ⊕ AK) || AMF || MAC        */
-#define AUTH_MACS_SIZE  8  /* Re-synchronization MAC:       64 bits  */
 #define AUTH_AUTS_SIZE  16 /* Re-synchronization AUT:       128 bits */
 #define AUTH_RAND_SIZE  16 /* Random challenge:         128 bits     */
 #define AUTH_CK_SIZE    16 /* Ciphering key:            128 bits     */

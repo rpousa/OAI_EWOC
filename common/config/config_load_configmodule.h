@@ -61,7 +61,7 @@
 struct configmodule_interface;
 typedef int (*configmodule_getfunc_t)(struct configmodule_interface *, paramdef_t *, int numparams, const char *prefix);
 typedef int (
-    *configmodule_getlistfunc_t)(struct configmodule_interface *, paramlist_def_t *, paramdef_t *, int numparams, char *prefix);
+    *configmodule_getlistfunc_t)(struct configmodule_interface *, paramlist_def_t *, paramdef_t *, int numparams, const char *prefix);
 typedef int (*configmodule_setfunc_t)(paramdef_t *cfgoptions, int numoptions, const char *prefix);
 typedef void (*configmodule_endfunc_t)(struct configmodule_interface *cfg);
 

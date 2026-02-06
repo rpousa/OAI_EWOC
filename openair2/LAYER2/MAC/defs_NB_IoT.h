@@ -22,15 +22,12 @@
 //  MAC definition
 #define MAX_FRAME 0xfffff
 #define NUM_FRAME 0x100000
-#define MAX_SUBFRAME 10485760
 
 #define MAX(a, b) (((a)>(b))?(a):(b))
 
 //  RA-RNTI: 1+SFN_id>>2
 #define RA_RNTI_LOW   0x0001  //  SFN_id = 0
 #define RA_RNTI_HIGH  0x0100  //  SFN_id = 1023
-#define C_RNTI_LOW  0x0101
-#define C_RNTI_HIGH 
 
 // ULSCH LCHAN IDs
 /*!\brief LCID of extended power headroom for ULSCH */
@@ -46,7 +43,6 @@
 /*!\brief LCID of long BSR for ULSCH */
 #define LONG_BSR 30
 /*! \brief Values of CCCH LCID for DLSCH */ 
-#define CCCH_LCHANID 0
 /*!\brief Values of BCCH logical channel */
 #define BCCH 3  // SI 
 /*!\brief Values of PCCH logical channel */
@@ -107,7 +103,6 @@ typedef enum{
 #define BCCH1_NB_IoT 12 // SI-SIB-NB_IoTs
 /*!\brief Values of PCCH logical channel */
 #define PCCH_NB_IoT 13  // Paging XXX not used for the moment
-#define MCCH_NB_IoT 14
 /*!\brief Value of CCCH / SRB0 logical channel */
 #define CCCH_NB_IoT 0  // srb0 ---> XXX exactly the same as in LTE (commented for compilation purposes)
 /*!\brief DCCH0 / SRB1bis logical channel */
@@ -119,7 +114,6 @@ typedef enum{
 /*!\brief DTCH1 DRB1  logical channel */
 #define DTCH1_NB_IoT 5 // DRB1
 /*Index of UE contention resoulution logical channel*/
-#define UE_CONTENTION_RESOLUTION 28
 /*Index of TIMING_ADVANCE logical channel*/
 #define TIMING_ADVANCE 29
 /*Index of DRX_COMMAND logical channel*/

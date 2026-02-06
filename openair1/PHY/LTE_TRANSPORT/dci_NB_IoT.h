@@ -203,7 +203,6 @@ typedef union DCI_CONTENT {
  } __attribute__ ((__packed__));
 
  typedef struct DCIN0 DCIN0_t;
-#define sizeof_DCIN0_t 23
 
 struct DCIN1_RAR{
   // DCI subframe repetition Number, 2 bits
@@ -227,7 +226,6 @@ struct DCIN1_RAR{
  } __attribute__ ((__packed__));
 
  typedef struct DCIN1_RAR DCIN1_RAR_t;
-#define sizeof_DCIN1_RAR_t 23
 
 struct DCIN1{
   // DCI subframe repetition Number, 2 bits
@@ -251,7 +249,6 @@ struct DCIN1{
  } __attribute__ ((__packed__));
 
  typedef struct DCIN1 DCIN1_t;
-#define sizeof_DCIN1_t 23
 
 //  DCI Format Type N2 for direct indication, 15 bits
 struct DCIN2_Ind{
@@ -264,7 +261,6 @@ struct DCIN2_Ind{
 } __attribute__ ((__packed__));;
 
 typedef struct DCIN2_Ind DCIN2_Ind_t;
-#define sizeof_DCIN2_Ind_t 15
 
 //  DCI Format Type N2 for Paging, 15 bits
 struct DCIN2_Pag{
@@ -282,8 +278,6 @@ struct DCIN2_Pag{
 
 typedef struct DCIN2_Pag DCIN2_Pag_t;
 
-#define sizeof_DCIN2_Pag_t 15
 
-#define MAX_DCI_SIZE_BITS_NB_IoT 23
 
 #endif

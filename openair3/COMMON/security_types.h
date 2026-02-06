@@ -62,9 +62,6 @@ typedef struct {
 } res_t;
 
 #define FORMAT_128BITS "%02x,%02x,%02x,%02x,%02x,%02x,%02x,%02x,%02x,%02x,%02x,%02x,%02x,%02x,%02x,%02x"
-#define RAND_FORMAT  FORMAT_128BITS
-#define AUTN_FORMAT  FORMAT_128BITS
-#define KASME_FORMAT FORMAT_128BITS
 
 #define DISPLAY_128BITS(bUFFER) \
 bUFFER[0], bUFFER[1], bUFFER[2], bUFFER[3], bUFFER[4], bUFFER[5], bUFFER[6], bUFFER[7],  \

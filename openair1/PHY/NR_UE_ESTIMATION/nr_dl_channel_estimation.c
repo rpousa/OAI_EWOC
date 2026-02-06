@@ -46,6 +46,8 @@
 #define CH_INTERP 0
 #define NO_INTERP 1
 
+extern openair0_config_t openair0_cfg[MAX_CARDS];
+
 /* Generic function to find the peak of channel estimation buffer */
 void peak_estimator(c16_t *buffer, int32_t buf_len, int32_t *peak_idx, int32_t *peak_val, int32_t mean_val)
 {
@@ -461,12 +463,13 @@ int nr_prs_channel_estimation(uint8_t gNB_id,
 
     // adjusting the rx_gains for channel peak power
     ch_pwr_dbm = 10 * log10(ch_pwr) + 30 - SQ15_SQUARED_NORM_FACTOR_DB
-                 - ((int)ue->openair0_cfg[0].rx_gain[0] - (int)ue->openair0_cfg[0].rx_gain_offset[0])
+                 - ((int)openair0_cfg[ue->rf_map.card].rx_gain[0] - (int)openair0_cfg[ue->rf_map.card].rx_gain_offset[0])
                  - dB_fixed(frame_params->ofdm_symbol_size);
 
-    prs_meas[rxAnt]->rsrp_dBm = 10 * log10(prs_meas[rxAnt]->rsrp) + 30 - SQ15_SQUARED_NORM_FACTOR_DB
-                                - ((int)ue->openair0_cfg[0].rx_gain[0] - (int)ue->openair0_cfg[0].rx_gain_offset[0])
-                                - dB_fixed(ue->frame_parms.ofdm_symbol_size);
+    prs_meas[rxAnt]->rsrp_dBm =
+        10 * log10(prs_meas[rxAnt]->rsrp) + 30 - SQ15_SQUARED_NORM_FACTOR_DB
+        - ((int)openair0_cfg[ue->rf_map.card].rx_gain[0] - (int)openair0_cfg[ue->rf_map.card].rx_gain_offset[0])
+        - dB_fixed(ue->frame_parms.ofdm_symbol_size);
 
     // prs measurements
     prs_meas[rxAnt]->gNB_id     = gNB_id;

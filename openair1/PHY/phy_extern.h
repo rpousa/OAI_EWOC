@@ -176,7 +176,5 @@ static const int8_t delta_PUSCH_abs[4] = {-4, -1, 1, 4};
 static const int8_t delta_PUSCH_acc[4] = {-1, 0, 1, 3};
 
 extern uint8_t max_turbo_iterations;
-extern double cpuf;
-
 #endif /*__PHY_EXTERN_H__ */
 

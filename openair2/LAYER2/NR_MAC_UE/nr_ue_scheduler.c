@@ -341,6 +341,26 @@ void ul_layers_config(NR_UE_MAC_INST_t *mac, nfapi_nr_ue_pusch_pdu_t *pusch_conf
   }
 }
 
+static void fill_pusch_uci_struct(const NR_PUSCH_Config_t *pusch_Config,
+                                  const nfapi_nr_ue_csi_payload_t *csi_payload,
+                                  nfapi_nr_ue_pusch_pdu_t *pusch_config_pdu)
+{
+  pusch_config_pdu->pusch_uci.csi_payload = *csi_payload;
+  AssertFatal(pusch_Config && pusch_Config->uci_OnPUSCH, "UCI on PUSCH need to be configured\n");
+  NR_UCI_OnPUSCH_t *onPusch = pusch_Config->uci_OnPUSCH->choice.setup;
+  AssertFatal(onPusch && onPusch->betaOffsets && onPusch->betaOffsets->present == NR_UCI_OnPUSCH__betaOffsets_PR_semiStatic,
+              "Only semistatic beta offset is supported\n");
+  NR_BetaOffsets_t *beta_offsets = onPusch->betaOffsets->choice.semiStatic;
+
+  pusch_config_pdu->pusch_uci.beta_offset_csi1 = pusch_config_pdu->pusch_uci.csi_payload.p1_bits < 12
+                                                     ? *beta_offsets->betaOffsetCSI_Part1_Index1
+                                                     : *beta_offsets->betaOffsetCSI_Part1_Index2;
+  pusch_config_pdu->pusch_uci.beta_offset_csi2 = pusch_config_pdu->pusch_uci.csi_payload.p2_bits < 12
+                                                     ? *beta_offsets->betaOffsetCSI_Part2_Index1
+                                                     : *beta_offsets->betaOffsetCSI_Part2_Index2;
+  pusch_config_pdu->pusch_uci.alpha_scaling = onPusch->scaling;
+}
+
 // Configuration of Msg3 PDU according to clauses:
 // - 8.3 of 3GPP TS 38.213 version 16.3.0 Release 16
 // - 6.1.2.2 of TS 38.214
@@ -353,7 +373,7 @@ int nr_config_pusch_pdu(NR_UE_MAC_INST_t *mac,
                         NR_tda_info_t *tda_info,
                         nfapi_nr_ue_pusch_pdu_t *pusch_config_pdu,
                         dci_pdu_rel15_t *dci,
-                        csi_payload_t *csi_report,
+                        nfapi_nr_ue_csi_payload_t *csi_report,
                         RAR_grant_t *rar_grant,
                         rnti_t rnti,
                         int ss_type,
@@ -534,29 +554,10 @@ int nr_config_pusch_pdu(NR_UE_MAC_INST_t *mac,
     pusch_config_pdu->ulsch_indicator = dci->ulsch_indicator;
     if (dci->csi_request.nbits > 0 && dci->csi_request.val > 0) {
       AssertFatal(csi_report, "CSI report needs to be present in case of CSI request\n");
-      pusch_config_pdu->pusch_uci.csi_part1_bit_length = csi_report->p1_bits;
-      pusch_config_pdu->pusch_uci.csi_part1_payload = csi_report->part1_payload;
-      pusch_config_pdu->pusch_uci.csi_part2_bit_length = csi_report->p2_bits;
-      pusch_config_pdu->pusch_uci.csi_part2_payload = csi_report->part2_payload;
-      AssertFatal(pusch_Config && pusch_Config->uci_OnPUSCH, "UCI on PUSCH need to be configured\n");
-      NR_UCI_OnPUSCH_t *onPusch = pusch_Config->uci_OnPUSCH->choice.setup;
-      AssertFatal(onPusch &&
-                  onPusch->betaOffsets &&
-                  onPusch->betaOffsets->present == NR_UCI_OnPUSCH__betaOffsets_PR_semiStatic,
-                  "Only semistatic beta offset is supported\n");
-      NR_BetaOffsets_t *beta_offsets = onPusch->betaOffsets->choice.semiStatic;
-
-      pusch_config_pdu->pusch_uci.beta_offset_csi1 = pusch_config_pdu->pusch_uci.csi_part1_bit_length < 12 ?
-                                                     *beta_offsets->betaOffsetCSI_Part1_Index1 :
-                                                     *beta_offsets->betaOffsetCSI_Part1_Index2;
-      pusch_config_pdu->pusch_uci.beta_offset_csi2 = pusch_config_pdu->pusch_uci.csi_part2_bit_length < 12 ?
-                                                     *beta_offsets->betaOffsetCSI_Part2_Index1 :
-                                                     *beta_offsets->betaOffsetCSI_Part2_Index2;
-      pusch_config_pdu->pusch_uci.alpha_scaling = onPusch->scaling;
-    }
-    else {
-      pusch_config_pdu->pusch_uci.csi_part1_bit_length = 0;
-      pusch_config_pdu->pusch_uci.csi_part2_bit_length = 0;
+      fill_pusch_uci_struct(pusch_Config, csi_report, pusch_config_pdu);
+    } else {
+      pusch_config_pdu->pusch_uci.csi_payload.p1_bits = 0;
+      pusch_config_pdu->pusch_uci.csi_payload.p2_bits = 0;
     }
 
     pusch_config_pdu->pusch_uci.harq_ack_bit_length = 0;
@@ -864,13 +865,13 @@ int nr_config_pusch_pdu(NR_UE_MAC_INST_t *mac,
   return 0;
 }
 
-csi_payload_t nr_ue_aperiodic_csi_reporting(NR_UE_MAC_INST_t *mac, dci_field_t csi_request, int tda, long *k2)
+nfapi_nr_ue_csi_payload_t nr_ue_aperiodic_csi_reporting(NR_UE_MAC_INST_t *mac, dci_field_t csi_request, int tda, long *k2)
 {
   NR_CSI_AperiodicTriggerStateList_t *aperiodicTriggerStateList = mac->sc_info.aperiodicTriggerStateList;
   AssertFatal(aperiodicTriggerStateList, "Received CSI request via DCI but aperiodicTriggerStateList is not present\n");
   int n_states = aperiodicTriggerStateList->list.count;
   int n_ts = csi_request.nbits;
-  csi_payload_t csi = {0};
+  nfapi_nr_ue_csi_payload_t csi = {0};
   AssertFatal(n_states <= ((1 << n_ts) - 1), "Case of subselection indication of trigger states not supported yet\n");
   int num_trig = 0;
   for (int i = 0; i < n_ts; i++) {
@@ -891,8 +892,8 @@ csi_payload_t nr_ue_aperiodic_csi_reporting(NR_UE_MAC_INST_t *mac, dci_field_t c
         if (report_config->reportConfigId == id) {
           struct NR_CSI_ReportConfig__reportConfigType__aperiodic__reportSlotOffsetList *offset_list = &report_config->reportConfigType.choice.aperiodic->reportSlotOffsetList;
           AssertFatal(tda < offset_list->list.count, "TDA index from DCI %d exceeds slot offset list %d\n", tda, offset_list->list.count);
-          if (k2 == NULL || *k2 < *offset_list->list.array[tda])
-            k2 = offset_list->list.array[tda];
+          if (*k2 < *offset_list->list.array[tda])
+            *k2 = *offset_list->list.array[tda];
           found = c;
           break;
         }
@@ -1791,9 +1792,17 @@ static bool schedule_uci_on_pusch(NR_UE_MAC_INST_t *mac,
       LOG_E(NR_MAC, "UCI on PUSCH need to be configured to schedule UCI on PUSCH\n");
     }
   }
-  if (pusch_pdu->pusch_uci.csi_part1_bit_length == 0 && pusch_pdu->pusch_uci.csi_part2_bit_length == 0) {
-    // To support this we would need to shift some bits into CSI part2 -> need to change the logic
-    AssertFatal(pucch->n_csi == 0, "Multiplexing periodic CSI on PUSCH not supported\n");
+
+  AssertFatal(pusch_pdu->pusch_uci.csi_payload.p1_bits == 0, "PUSCH already has CSI report\n");
+
+  // Check if this PUCCH has CSI report to send. If so, multiplex it on PUSCH
+  if (pucch->csi_payload.p1_bits > 0) {
+    nfapi_nr_ue_csi_payload_t csi_payload = {0};
+    NR_PUSCH_Config_t *pusch_Config = mac->current_UL_BWP->pusch_Config;
+    NR_PUCCH_Resource_t *csi_pucch = NULL;
+    nr_get_csi_measurements(mac, frame_tx, slot_tx, &csi_payload, &csi_pucch, true);
+    fill_pusch_uci_struct(pusch_Config, &csi_payload, pusch_pdu);
+    mux_done = true;
   }
 
   release_ul_config(ulcfg_pdu, false);
@@ -1824,7 +1833,7 @@ static void nr_ue_pucch_scheduler(NR_UE_MAC_INST_t *mac, frame_t frame, int slot
     // CSI
     int csi_res = 0;
     if (mac->state == UE_CONNECTED)
-      csi_res = nr_get_csi_measurements(mac, frame, slot, &pucch[num_res]);
+      csi_res = nr_get_csi_measurements(mac, frame, slot, &pucch[num_res].csi_payload, &pucch[num_res].pucch_resource, false);
     if (csi_res > 0) {
       num_res += csi_res;
     }
@@ -1845,14 +1854,14 @@ static void nr_ue_pucch_scheduler(NR_UE_MAC_INST_t *mac, frame_t frame, int slot
   }
 
   for (int j = 0; j < num_res; j++) {
-    if (pucch[j].n_harq + pucch[j].n_sr + pucch[j].n_csi != 0) {
+    if (pucch[j].n_harq + pucch[j].n_sr + pucch[j].csi_payload.p1_bits != 0) {
       LOG_D(NR_MAC,
             "%d.%d configure pucch, O_ACK %d, O_SR %d, O_CSI %d\n",
             frame,
             slot,
             pucch[j].n_harq,
             pucch[j].n_sr,
-            pucch[j].n_csi);
+            pucch[j].csi_payload.p1_bits);
 
       // checking if we need to schedule pucch[j] on PUSCH
       if (schedule_uci_on_pusch(mac, frame, slot, &pucch[j], mac->current_UL_BWP))
@@ -2696,6 +2705,18 @@ void nr_ue_ul_scheduler(NR_UE_MAC_INST_t *mac, nr_uplink_indication_t *ul_info)
   }
 }
 
+static void get_pusch_frame_slot(const int current_frame,
+                                 const int current_slot,
+                                 const int k2,
+                                 const int delta,
+                                 const int slots_per_frame,
+                                 frame_t *frame_tx,
+                                 int *slot_tx)
+{
+  *slot_tx = (current_slot + k2 + delta) % slots_per_frame;
+  *frame_tx = (current_frame + (current_slot + k2 + delta) / slots_per_frame) % MAX_FRAME_NUMBER;
+}
+
 // PUSCH scheduler:
 // - Calculate the slot in which ULSCH should be scheduled. This is current slot + K2,
 // - where K2 is the offset between the slot in which UL DCI is received and the slot
@@ -2734,8 +2755,7 @@ int nr_ue_pusch_scheduler(const NR_UE_MAC_INST_t *mac,
                 GET_DURATION_RX_TO_TX(&mac->phy_config.config_req.ntn_config, mu));
 
 
-    *slot_tx = (current_slot + k2 + delta) % slots_per_frame;
-    *frame_tx = (current_frame + (current_slot + k2 + delta) / slots_per_frame) % MAX_FRAME_NUMBER;
+    get_pusch_frame_slot(current_frame, current_slot, k2, delta, slots_per_frame, frame_tx, slot_tx);
   } else {
     AssertFatal(k2 >= GET_DURATION_RX_TO_TX(&mac->phy_config.config_req.ntn_config, mu),
                 "Slot offset K2 (%ld) needs to be higher than DURATION_RX_TO_TX (%ld). Please set min_rxtxtime at least to %ld in "
@@ -2752,8 +2772,7 @@ int nr_ue_pusch_scheduler(const NR_UE_MAC_INST_t *mac,
     }
 
     // Calculate TX slot and frame
-    *slot_tx = (current_slot + k2) % slots_per_frame;
-    *frame_tx = (current_frame + (current_slot + k2) / slots_per_frame) % MAX_FRAME_NUMBER;
+    get_pusch_frame_slot(current_frame, current_slot, k2, 0, slots_per_frame, frame_tx, slot_tx);
   }
 
   LOG_D(NR_MAC, "[%04d.%02d] UL transmission in [%04d.%02d] (k2 %ld delta %d)\n", current_frame, current_slot, *frame_tx, *slot_tx, k2, delta);

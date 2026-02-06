@@ -501,7 +501,7 @@ nr_initial_sync_t sl_nr_slss_search(PHY_VARS_NR_UE *UE, UE_nr_rxtx_proc_t *proc,
                 sync_params->DFN,
                 sync_params->slot_offset);
 
-          UE->adjust_rxgain = nr_sl_psbch_rsrp_measurements(sl_ue, frame_parms, rxdataF, false, UE->openair0_cfg);
+          UE->adjust_rxgain = nr_sl_psbch_rsrp_measurements(UE, sl_ue, frame_parms, rxdataF, false);
 
           UE->init_sync_frame = sync_params->remaining_frames;
           result.rx_offset = sync_params->rx_offset;

@@ -59,11 +59,7 @@
 #include "common/config/config_userapi.h"
 #include "T.h"
 
-extern double cpuf;
-
-
 #define FRAME_PERIOD    100000000ULL
-#define DAQ_PERIOD      66667ULL
 #define FIFO_PRIORITY   40
 #define NB_THREAD_INST 1
 typedef enum {
@@ -1686,7 +1682,8 @@ static void *UE_phy_stub_thread_rxn_txnp4(void *arg)
  * \param arg unused
  * \returns a pointer to an int. The storage is not on the heap and must not be freed.
  */
-void write_dummy(PHY_VARS_UE *UE,  openair0_timestamp timestamp) {
+void write_dummy(PHY_VARS_UE *UE, openair0_timestamp_t timestamp)
+{
   // we have to write to tell explicitly to the eNB, else it will wait for us forever
   // we write the next subframe (always write in future of what we received)
   //
@@ -1709,7 +1706,7 @@ void *UE_thread(void *arg) {
   PHY_VARS_UE *UE = (PHY_VARS_UE *) arg;
   //  int tx_enabled = 0;
   int dummy_rx[UE->frame_parms.nb_antennas_rx][UE->frame_parms.samples_per_tti] __attribute__((aligned(32)));
-  openair0_timestamp timestamp,timestamp1;
+  openair0_timestamp_t timestamp, timestamp1;
   void *rxp[NB_ANTENNAS_RX], *txp[NB_ANTENNAS_TX];
   int start_rx_stream = 0;
   int i;

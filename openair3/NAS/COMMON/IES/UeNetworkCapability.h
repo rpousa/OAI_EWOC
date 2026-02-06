@@ -78,19 +78,14 @@ typedef struct UeNetworkCapability_tag {
   /* Bits 8 to 6 of octet 7 are spare and shall be coded as zero */
   uint8_t  spare:3;
   /* eNodeB-based access class control for CSFB capability */
-#define UE_NETWORK_CAPABILITY_CSFB  1
   uint8_t  csfb:1;
   /* LTE Positioning Protocol capability */
-#define UE_NETWORK_CAPABILITY_LPP 1
   uint8_t  lpp:1;
   /* Location services notification mechanisms capability */
-#define UE_NETWORK_CAPABILITY_LCS 1
   uint8_t  lcs:1;
   /* 1xSRVCC capability */
-#define UE_NETWORK_CAPABILITY_SRVCC 1
   uint8_t  srvcc:1;
   /* NF notification procedure capability */
-#define UE_NETWORK_CAPABILITY_NF  1
   uint8_t  nf:1;
 
   uint8_t  umts_present;

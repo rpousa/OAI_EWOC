@@ -56,11 +56,6 @@
 #include "actor.h"
 //#include "openair1/SCHED_NR_UE/defs.h"
 
-#if ENABLE_RAL
-#include "common/utils/hashtable/hashtable.h"
-#include "COMMON/ral_messages_types.h"
-#include "UTIL/queue.h"
-#endif
 #define msg(aRGS...) LOG_D(PHY, ##aRGS)
 // use msg in the real-time thread context
 #define msg_nrt printf
@@ -69,12 +64,9 @@
     #define malloc16(x) memalign(32,x)
 #endif
 #define free16(y,x) free(y)
-#define bigmalloc malloc
-#define bigmalloc16 malloc16
 #define openair_free(y,x) free((y))
 #define PAGE_SIZE 4096
 
-#define PAGE_MASK 0xfffff000
 #define virt_to_phys(x) (x)
 #define openair_sched_exit() exit(-1)
 
@@ -113,7 +105,7 @@ typedef struct {
   /// Component Carrier index
   uint8_t              CC_id;
   /// Last RX timestamp
-  openair0_timestamp timestamp_rx;
+  openair0_timestamp_t timestamp_rx;
 } UE_nr_proc_t;
 
 typedef enum {
@@ -266,7 +258,6 @@ typedef struct {
 
 #define NR_PDCCH_DEFS_NR_UE
 #define NR_NBR_CORESET_ACT_BWP      3  // The number of CoreSets per BWP is limited to 3 (including initial CORESET: ControlResourceId 0)
-#define NR_NBR_SEARCHSPACE_ACT_BWP  10 // The number of SearchSpaces per BWP is limited to 10 (including initial SEARCHSPACE: SearchSpaceId 0)
 #ifdef NR_PDCCH_DEFS_NR_UE
 
 #define MAX_NR_DCI_DECODED_SLOT     10    // This value is not specified
@@ -288,8 +279,6 @@ typedef struct {
   fapi_nr_dl_config_dci_dl_pdu_rel15_t pdcch_config[FAPI_NR_MAX_SS];
 } NR_UE_PDCCH_CONFIG;
 
-#define NR_PSBCH_MAX_NB_CARRIERS 132
-#define NR_PSBCH_MAX_NB_MOD_SYMBOLS 99
 #define NR_PSBCH_DMRS_LENGTH 297 // in mod symbols
 #define NR_PSBCH_DMRS_LENGTH_DWORD 20 // ceil(2(QPSK)*NR_PBCH_DMRS_LENGTH/32)
 
@@ -342,15 +331,42 @@ typedef struct UE_NR_SCAN_INFO_s {
   int32_t freq_offset_Hz[3][10];
 } UE_NR_SCAN_INFO_t;
 
+typedef struct {
+  unsigned int nb_tx;
+  unsigned int nb_rx;
+  unsigned int att_tx;
+  unsigned int att_rx;
+  int max_rxgain;
+  char *sdr_addrs;
+  char *tx_subdev;
+  char *rx_subdev;
+  clock_source_t clock_source;
+  clock_source_t time_source;
+  double tune_offset;
+  uint64_t if_frequency;
+  int if_freq_offset;
+  int used_by_cell;
+} nrUE_RU_params_t;
+
+typedef struct {
+  int ru_id;
+  int band;
+  uint64_t rf_frequency;
+  int64_t rf_freq_offset;
+  int numerology;
+  int N_RB_DL;
+  int ssb_start;
+  int used_by_ue;
+} nrUE_cell_params_t;
+
 /// Top-level PHY Data Structure for UE
 typedef struct PHY_VARS_NR_UE_s {
-  openair0_config_t openair0_cfg[MAX_CARDS];
   /// \brief Module ID indicator for this instance
   uint8_t Mod_id;
   /// \brief Component carrier ID for this PHY instance
   uint8_t CC_id;
   /// \brief Mapping of CC_id antennas to cards
-  openair0_rf_map      rf_map;
+  openair0_rf_map_t rf_map;
   /// \brief Indicator that UE should perform band scanning
   int UE_scan;
   /// \brief Indicator that UE should perform coarse scanning around carrier
@@ -507,9 +523,6 @@ typedef struct PHY_VARS_NR_UE_s {
   time_stats_t ue_ul_indication_stats;
   nr_ue_phy_cpu_stat_t phy_cpu_stats;
 
-  /// RF and Interface devices per CC
-  openair0_device rfdevice;
-
   /// Phase precompensation flag
   bool no_phase_pre_comp;
 
@@ -540,7 +553,7 @@ typedef struct PHY_VARS_NR_UE_s {
 } PHY_VARS_NR_UE;
 
 typedef struct {
-  openair0_timestamp timestamp_tx;
+  openair0_timestamp_t timestamp_tx;
   int gNB_id;
   /// NR slot index within frame_tx [0 .. slots_per_frame - 1] to act upon for transmission
   int nr_slot_tx;

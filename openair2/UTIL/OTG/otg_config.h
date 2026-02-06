@@ -36,7 +36,6 @@
 
 
 /*!\brief It indicates that: the payload and the transport header (not otg header) are copied from static strings (HEADER_STRING and PAYLOAD_STRING) */
-#define STRING_STATIC 1
 
 /*!\brief Define the max number of states*/
 #define MAX_NUM_TRAFFIC_STATE 4 //  we have 4 state: OFF, PU, ED, PE
@@ -50,8 +49,6 @@
 /*!\brief Define the max number of traffic runing in the  same time - using their ID in the customized traffic*/
 #define MAX_EMU_TRAFFIC 10
 
-#define OTG_FLAG_SIZE 3
-#define OTG_FLAG "OTG"
 
 #define IDT_TH 100
 #define SIZE_COEF 1000
@@ -74,7 +71,6 @@
 
 /*!\brief Define the size of IP version header, in bytes*/
 #define HDR_IP_v4_MIN 20
-#define HDR_IP_v4_MAX 60
 #define HDR_IP_v6 60
 
 /*!\brief Define the size of TCP header, in bytes*/
@@ -87,16 +83,12 @@
 #define RTP_HEADER 12
 
 /*!\brief Define the max size of the header*/
-#define MAX_HEADER_SIZE  80
 
 
 /*!\brief Define the Alphabet string to generate the payload of the packet*/
-#define ALPHABET_NUM_LETTER "abcdefghijklmnopqrstuvwyzABCDEFGHIGKLMNOPQRSTUVWXYZ0123456789"
 
-#define ALPHABET_LETTER "abcdefghijklmnopqrstuvwyzABCDEFGHIGKLMNOPQRSTUVWXZ"
 
 /*!\brief Define the Alphabet string to generate the header of the packet*/
-#define ALPHABET_NUM "0123456789"
 
 /*!\brief Define the static string to generate the header of the packet*/
 //#define HEADER_STRING "5048717272261061594909177115977673656394812939088509638561159848103044447631759621785741859753883189"
@@ -108,7 +100,6 @@
 /*!\brief We describe below different M2M domains and we present their associated latencies in LTE/LTE-A network REF: "Latency for Real-Time Machine-to-Machine Communication in LTE-Based System Architecture"*/
 
 /*!\brief Latency budget for M2M capillary domain(unit millisecond)*/
-#define APPLICATION_PROCESSING_DEVICE_DELAY 1
 #define MIN_APPLICATION_PROCESSING_GATEWAY_DELAY 1
 #define MAX_APPLICATION_PROCESSING_GATEWAY_DELAY 3
 #define MIN_FORMATING_TRANSFERRING_DELAY 1
@@ -118,8 +109,6 @@
 #define TERMINAL_ACCESS_DELAY 1
 
 /*!\brief Latency budget for access domain(unit millisecond)*/
-#define MIN_U_PLANE_GW_PROCESSING_DELAY 1
-#define MAX_U_PLANE_GW_PROCESSING_DELAY 4
 #define MIN_U_PLANE_CORE_IP_ACCESS_DELAY 1
 #define MAX_U_PLANE_CORE_IP_ACCESS_DELAY 2
 #define MIN_FW_PROXY_DELAY 1
@@ -128,8 +117,6 @@
 /*!\brief Latency budget for core and application domain(unit millisecond)*/
 #define MIN_NETWORK_ACCESS_DELAY 15
 #define MAX_NETWORK_ACCESS_DELAY 150
-#define MIN_SERVICE_ENABLERS_DELAY 300
-#define MAX_SERVICE_ENABLERS_DELAY 500
 #define MIN_APPLICATION_ACESS_DELAY 1
 #define MAX_APPLICATION_ACESS_DELAY 3
 

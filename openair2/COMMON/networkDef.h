@@ -228,9 +228,6 @@ typedef struct {
  */
 typedef struct {
   unsigned char id;       /* Packet filter identifier */
-#define NET_PACKET_FILTER_DOWNLINK  0x01
-#define NET_PACKET_FILTER_UPLINK    0x02
-#define NET_PACKET_FILTER_BIDIR     0x03
   unsigned char dir;      /* Packet filter direction  */
   unsigned char precedence;   /* Evaluation precedence    */
   union {

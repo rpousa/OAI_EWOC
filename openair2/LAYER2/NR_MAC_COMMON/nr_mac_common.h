@@ -285,9 +285,10 @@ unsigned int get_N_RA_RB(const unsigned int delta_f_RA_PRACH, const unsigned int
 
 void find_period_offset_SR(const NR_SchedulingRequestResourceConfig_t *SchedulingReqRec, int *period, int *offset);
 
-void csi_period_offset(NR_CSI_ReportConfig_t *csirep,
-                       struct NR_CSI_ResourcePeriodicityAndOffset *periodicityAndOffset,
-                       int *period, int *offset);
+void csi_period_offset(const NR_CSI_ReportConfig_t *csirep,
+                       const struct NR_CSI_ResourcePeriodicityAndOffset *periodicityAndOffset,
+                       int *period,
+                       int *offset);
 
 bool set_dl_ptrs_values(NR_PTRS_DownlinkConfig_t *ptrs_config,
                         uint16_t rbSize, uint8_t mcsIndex, uint8_t mcsTable,

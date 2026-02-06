@@ -24,6 +24,7 @@
 
 #include <stdbool.h>
 #include <net/if.h>
+#include <linux/if_tun.h>
 
 /*!
  * \brief This function generates the name of the interface based on the prefix and
@@ -34,7 +35,17 @@
  * \param[in] instance_id unique instance number
  */
 int tun_generate_ifname(char *ifname, const char *ifprefix, int instance_id);
-int tun_generate_ue_ifname(char *ifname, int instance_id, int pdu_session_id);
+
+/*!
+ * \brief This function generates the name of the interface based on the prefix and
+ * the instance id for a UE.
+ *
+ * \param[in,out] ifname name of the interface
+ * \param[in] flag IFF_TUN (for TUN device) or IFF_TAP (for TAP device)
+ * \param[in] ifprefix prefix of the interface
+ * \param[in] instance_id unique instance number
+ */
+int tuntap_generate_ue_ifname(char *ifname, int flag, int instance_id, int pdu_session_id);
 
 /*!
  * \brief This function initializes the TUN interface
@@ -50,9 +61,8 @@ int tun_init(const char *ifname, int instance_id);
 int tun_init_mbms(char *ifname);
 
 /*!
- * \brief This function initializes the nasmesh interface using the basic values,
- * basic address, network mask and broadcast address, as the default configured
- * ones
+ * \brief Initializes the TUN interface with an IPv4 or IPv6 address and
+ * activates the interface.
  * \param[in] ifname name of the interface
  * \param[in] ipv4 IPv4 address of this interface as a string
  * \param[in] ipv6 IPv6 address of this interface as a string
@@ -61,6 +71,15 @@ int tun_init_mbms(char *ifname);
  * @ingroup  _nas
  */
 bool tun_config(const char* ifname, const char *ipv4, const char *ipv6);
+
+/*!
+ * \brief Initializes and activates the TAP interface.
+ * \param[in] ifname name of the interface
+ * \return true on success, otherwise false
+ * \note
+ * @ingroup  _nas
+ */
+bool tap_config(const char* ifname);
 
 /*!
  * \brief Setup a IPv4 rule in table (interface_id - 1 + 10000) and route to
@@ -75,16 +94,17 @@ bool tun_config(const char* ifname, const char *ipv4, const char *ipv6);
 void setup_ue_ipv4_route(const char* ifname, int instance_id, const char *ipv4);
 
 /*!
- * \brief This function allocates a TUN interface
+ * \brief This function allocates a TUN or TAP interface
+ * \param[in] flag IFF_TUN (for TUN device) or IFF_TAP (for TAP device)
  * \param[in] dev name of the interface
  * \return file descriptor of the allocated interface
  */
-int tun_alloc(const char *dev);
+int tuntap_alloc(int flag, const char *dev);
 
 /*!
- * \brief This function destroys the TUN interface
+ * \brief This function destroys the TUN or TAP interface
  * \param[in] dev name of the interface
  */
-void tun_destroy(const char *dev);
+void tuntap_destroy(const char *dev);
 
 #endif /*TUN_IF_H_*/

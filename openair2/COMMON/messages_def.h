@@ -30,9 +30,6 @@
 #include "pdcp_messages_def.h"
 #include "rrc_messages_def.h"
 #include "nas_messages_def.h"
-#if ENABLE_RAL
-#include "ral_messages_def.h"
-#endif
 #include "s1ap_messages_def.h"
 #include "f1ap_messages_def.h"
 #include "x2ap_messages_def.h"

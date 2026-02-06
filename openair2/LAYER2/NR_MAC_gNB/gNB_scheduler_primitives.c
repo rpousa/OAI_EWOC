@@ -54,7 +54,6 @@
 #include "SIMULATION/TOOLS/sim.h" // for taus
 
 #define ENABLE_MAC_PAYLOAD_DEBUG
-#define DEBUG_gNB_SCHEDULER 1
 
 #include "common/ran_context.h"
 #include "nfapi/oai_integration/vendor_ext.h"
@@ -62,7 +61,6 @@
 #include "common/utils/alg/find.h"
 
 // 3GPP TS 38.331 Section 12 Table 12.1-1: UE performance requirements for RRC procedures for UEs
-#define NR_RRC_SETUP_DELAY_MS           10
 #define NR_RRC_RECONFIGURATION_DELAY_MS 10
 #define NR_RRC_BWP_SWITCHING_DELAY_MS   6
 

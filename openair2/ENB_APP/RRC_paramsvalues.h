@@ -35,7 +35,6 @@
 #define ENB_CONFIG_STRING_ENB_LIST                      "eNBs"
 /* component carriers configuration section name */		
 #define ENB_CONFIG_STRING_COMPONENT_CARRIERS                            "component_carriers"		 
-#define ENB_CONFIG_STRING_COMPONENT_BR_PARAMETERS                       "br_parameters"
 
 
 #define ENB_CONFIG_STRING_FRAME_TYPE                                    "frame_type"
@@ -43,7 +42,6 @@
 #define ENB_CONFIG_STRING_TDD_CONFIG                                    "tdd_config"
 #define ENB_CONFIG_STRING_TDD_CONFIG_S                                  "tdd_config_s"
 #define ENB_CONFIG_STRING_PREFIX_TYPE                                   "prefix_type"
-#define ENB_CONFIG_STRING_PREFIX_TYPE_UL                                "prefix_type_UL"
 #define ENB_CONFIG_STRING_EUTRA_BAND                                    "eutra_band"
 #define ENB_CONFIG_STRING_DOWNLINK_FREQUENCY                            "downlink_frequency"
 #define ENB_CONFIG_STRING_UPLINK_FREQUENCY_OFFSET                       "uplink_frequency_offset"
@@ -51,23 +49,11 @@
 #define ENB_CONFIG_STRING_N_RB_DL                                       "N_RB_DL"
 #define ENB_CONFIG_STRING_CELL_MBSFN                                    "Nid_cell_mbsfn"
 
-
-#define FRAMETYPE_OKVALUES                                      {"FDD","TDD"}
-#define FRAMETYPE_MODVALUES                                     { FDD, TDD} 
-
 #define TDDCFG(A)                                               TDD_Config__subframeAssignment_ ## A
 #define TDDCONFIG_OKRANGE                                       { TDDCFG(sa0), TDDCFG(sa6)}   
 
 #define TDDCFGS(A)                                              TDD_Config__specialSubframePatterns_ ## A
 #define TDDCONFIGS_OKRANGE                                      { TDDCFGS(ssp0), TDDCFGS(ssp8)}   
-
-#define PREFIX_OKVALUES                                         {"NORMAL","EXTENDED"}
-#define PREFIX_MODVALUES                                        { NORMAL, EXTENDED} 
-
-#define PREFIXUL_OKVALUES                                       {"NORMAL","EXTENDED"}
-#define PREFIXUL_MODVALUES                                      { NORMAL, EXTENDED} 
-
-#define NRBDL_OKVALUES                                          {6,15,25,50,75,100}
 
 #define UETIMER_T300_OKVALUES                                   {100,200,300,400,600,1000,1500,2000}
 #define UETT300(A)                                              LTE_UE_TimersAndConstants__t300_ ## A

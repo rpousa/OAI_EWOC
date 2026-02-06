@@ -48,7 +48,6 @@
 #include <stdarg.h>
 #include <dirent.h>
 
-#define READCFG_DYNLOAD
 
 #define TELNETSERVERCODE
 #include "telnetsrv.h"

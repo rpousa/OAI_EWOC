@@ -83,11 +83,6 @@ result could be based on an event-driven measurement report.
 
 #define NUMBER_OF_MEASUREMENT_SUBBANDS 16
 
-#define RRC_RACH_ASS_REQ 0
-#define MAC_RACH_BW_REQ 1
-
-
-
 /*! MAC/PHY Measurement Structure*/
 /*! \brief Logical Channel ID structure */
 typedef struct {
@@ -325,20 +320,11 @@ typedef struct {  //RRC_INTERFACE_FUNCTIONS
 } RRC_XFACE;
 
 //#define IDLE 0
-#define NEED_RADIO_CONFIG 3
 #define RADIO_CONFIG_TX 2
 #define RADIO_CONFIG_OK 1
 
-#define MEAS_CONFIGURED 4
-#define MEAS_OK 5
-#define MEAS_TRIGGER 6
-#define RRC_MEAS_REPORT_REQ 7
 #define MEAS_REPORT 8
 
-#define RAB_MEAS_IND 0
-#define DEF_MEAS_IND 1
 
-#define ADD_LC 0
-#define REMOVE_LC 1
 
 #endif

@@ -34,7 +34,6 @@
 typedef struct {
   uint8_t  spare:4;
 #define EPS_MOBILE_IDENTITY_EVEN  0
-#define EPS_MOBILE_IDENTITY_ODD   1
   uint8_t  oddeven:1;
   uint8_t  typeofidentity:3;
   uint8_t  mccdigit2:4;

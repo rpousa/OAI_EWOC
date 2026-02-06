@@ -267,7 +267,6 @@ struct DCI6_0B_5MHz {
 } __attribute__ ((__packed__));
 
 typedef struct DCI6_0B_5MHz DCI6_0B_5MHz_t; 
-#define sizeof_DCI6_0B_5MHz_t 17
 
 /// basic DCI Format Type 6-1B (5 MHz)
 struct DCI6_1B_5MHz {
@@ -315,7 +314,6 @@ struct DCI6_0B_10MHz {
 } __attribute__ ((__packed__));
 
 typedef struct DCI6_0B_10MHz DCI6_0B_10MHz_t; 
-#define sizeof_DCI6_0B_10MHz_t 18
 
 /// basic DCI Format Type 6-1B (10 MHz)
 struct DCI6_1B_10MHz {
@@ -363,7 +361,6 @@ struct DCI6_0B_20MHz {
 } __attribute__ ((__packed__));
 
 typedef struct DCI6_0B_20MHz DCI6_0B_20MHz_t; 
-#define sizeof_DCI6_0B_20MHz_t 18
 
 /// basic DCI Format Type 6-1B (10 MHz)
 struct DCI6_1B_20MHz {

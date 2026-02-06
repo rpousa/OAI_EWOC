@@ -62,7 +62,7 @@ int config_assign_ipv4addr(configmodule_interface_t *cfg, paramdef_t *cfgoptions
 #define CONFIG_CHECKALLSECTIONS "ALLSECTIONS"
 int config_check_unknown_cmdlineopt(configmodule_interface_t *cfg, char *prefix);
 int config_get(configmodule_interface_t *cfg, paramdef_t *params, int numparams, const char *prefix);
-int config_getlist(configmodule_interface_t *cfg, paramlist_def_t *ParamList, paramdef_t *params, int numparams, char *prefix);
+int config_getlist(configmodule_interface_t *cfg, paramlist_def_t *ParamList, paramdef_t *params, int numparams, const char *prefix);
 
 /* apis to set some of the paramdef_t fields before using the get/getlist api's */
 void config_set_checkfunctions(paramdef_t *params, checkedparam_t *checkfunctions, int numparams);

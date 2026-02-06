@@ -42,7 +42,6 @@
 
 
 #define TELNET_MAXMEASURNAME_LEN 30
-#define TELNET_MAXMEASURGROUPS 10
 
 #define PRINT_CPUMEAS_STATE  ((cpumeas(CPUMEAS_GETSTATE))?"enabled":"disabled")
 typedef struct cpumeasurdef {
@@ -77,8 +76,6 @@ typedef struct mesurgroupdef {
 } telnet_measurgroupdef_t;
 
 #define MACSTATS_NAME(valptr) #valptr
-#define LTEMAC_MEASURGROUP_NAME  "ltemac"
-#define PHYCPU_MEASURGROUP_NAME  "phycpu"
 
 #ifdef TELNETSRV_MEASURMENTS_MAIN
 int measurcmd_show(char *buf, int debug, telnet_printfunc_t prnt);

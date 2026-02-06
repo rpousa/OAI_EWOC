@@ -71,14 +71,15 @@ extern "C" {
     //! rx count
     int64_t rx_count;
     //! timestamp of RX packet
-    openair0_timestamp rx_timestamp;
+    openair0_timestamp_t rx_timestamp;
 
   } iris_state_t;
 }
 /*! \brief Called to start the Iris lime transceiver. Return 0 if OK, < 0 if error
     @param device pointer to the device structure specific to the RF hardware target
 */
-static int trx_iris_start(openair0_device *device) {
+static int trx_iris_start(openair0_device_t *device)
+{
     iris_state_t *s = (iris_state_t *) device->priv;
 
     long long timeNs = s->iris[0]->getHardwareTime("") + 500000;
@@ -97,7 +98,8 @@ static int trx_iris_start(openair0_device *device) {
 /*! \brief Stop Iris
  * \param card refers to the hardware index to use
  */
-int trx_iris_stop(openair0_device *device) {
+int trx_iris_stop(openair0_device_t *device)
+{
     iris_state_t *s = (iris_state_t *) device->priv;
     int r;
     for (r = 0; r < s->device_num; r++) {
@@ -110,7 +112,8 @@ int trx_iris_stop(openair0_device *device) {
 /*! \brief Terminate operation of the Iris lime transceiver -- free all associated resources
  * \param device the hardware to use
  */
-static void trx_iris_end(openair0_device *device) {
+static void trx_iris_end(openair0_device_t *device)
+{
     LOG_I(HW, "Closing Iris device.\n");
     trx_iris_stop(device);
     iris_state_t *s = (iris_state_t *) device->priv;
@@ -133,7 +136,7 @@ static void trx_iris_end(openair0_device *device) {
 
 
 static int
-trx_iris_write(openair0_device *device, openair0_timestamp timestamp, void **buff, int nsamps, int cc, int flags)
+trx_iris_write(openair0_device_t *device, openair0_timestamp_t timestamp, void **buff, int nsamps, int cc, int flags)
 {
     using namespace std::chrono;
 
@@ -209,7 +212,8 @@ trx_iris_write(openair0_device *device, openair0_timestamp timestamp, void **buf
  * \param antenna_id Index of antenna for which to receive samples
  * \returns the number of sample read
 */
-static int trx_iris_read(openair0_device *device, openair0_timestamp *ptimestamp, void **buff, int nsamps, int cc) {
+static int trx_iris_read(openair0_device_t *device, openair0_timestamp_t *ptimestamp, void **buff, int nsamps, int cc)
+{
     int ret = 0;
     static long long nextTime;
     static bool nextTimeValid = false;
@@ -304,7 +308,8 @@ static int trx_iris_read(openair0_device *device, openair0_timestamp *ptimestamp
 /*! \brief Get current timestamp of Iris
  * \param device the hardware to use
 */
-openair0_timestamp get_iris_time(openair0_device *device) {
+openair0_timestamp_t get_iris_time(openair0_device_t *device)
+{
     iris_state_t *s = (iris_state_t *) device->priv;
     return SoapySDR::timeNsToTicks(s->iris[0]->getHardwareTime(""), s->sample_rate);
 }
@@ -317,9 +322,9 @@ static bool is_equal(double a, double b) {
     return std::fabs(a - b) < std::numeric_limits<double>::epsilon();
 }
 
-void *set_freq_thread(void *arg) {
-
-    openair0_device *device = (openair0_device *) arg;
+void *set_freq_thread(void *arg)
+{
+    openair0_device_t *device = (openair0_device_t *) arg;
     iris_state_t *s = (iris_state_t *) device->priv;
     int r, i;
     printf("Setting Iris TX Freq %f, RX Freq %f\n", device->openair0_cfg[0].tx_freq[0],
@@ -344,7 +349,7 @@ void *set_freq_thread(void *arg) {
  * \param dummy dummy variable not used
  * \returns 0 in success
  */
-int trx_iris_set_freq(openair0_device *device, openair0_config_t *openair0_cfg)
+int trx_iris_set_freq(openair0_device_t *device, openair0_config_t *openair0_cfg)
 {
   iris_state_t *s = (iris_state_t *)device->priv;
   int r, i;
@@ -369,7 +374,7 @@ int trx_iris_set_freq(openair0_device *device, openair0_config_t *openair0_cfg)
  * \param openair0_cfg RF frontend parameters set by application
  * \returns 0 in success
  */
-int trx_iris_set_gains(openair0_device *device,
+int trx_iris_set_gains(openair0_device_t *device,
                        openair0_config_t *openair0_cfg) {
     iris_state_t *s = (iris_state_t *) device->priv;
     int r;
@@ -448,23 +453,21 @@ void set_rx_gain_offset(openair0_config_t *openair0_cfg, int chain_index, int bw
 * \param device the hardware to use
 * \returns  0 on success
 */
-int trx_iris_get_stats(openair0_device *device) {
-
+int trx_iris_get_stats(openair0_device_t *device)
+{
     return (0);
-
 }
 
 /*! \brief Reset the Iris statistics
 * \param device the hardware to use
 * \returns  0 on success
 */
-int trx_iris_reset_stats(openair0_device *device) {
-
+int trx_iris_reset_stats(openair0_device_t *device)
+{
     return (0);
-
 }
 
-int trx_iris_write_init(openair0_device *device)
+int trx_iris_write_init(openair0_device_t *device)
 {
     return 0;
 }
@@ -475,8 +478,8 @@ extern "C" {
 * \param device the hardware to use
 * \param openair0_cfg RF frontend parameters set by application
 */
-int device_init(openair0_device *device, openair0_config_t *openair0_cfg) {
-
+int device_init(openair0_device_t *device, openair0_config_t *openair0_cfg)
+{
     int bw_gain_adjust = 0;
     openair0_cfg[0].rx_gain_calib_table = calib_table_iris;
     iris_state_t *s = (iris_state_t *) calloc(1, sizeof(*s));

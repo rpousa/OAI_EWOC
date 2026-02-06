@@ -1,5 +1,5 @@
 % ulsim command for same pusch config
-% ./nr_ulsim -m 27 -u 1 -R 51 -r 51 -s 300 -o uci_on_pusch_7.bin
+% ./nr_ulsim -m 27 -u 1 -R 51 -r 51 -s 300 -ouci_on_pusch_oack3_ocsi14_ocsi20.bin
 
 carrier = nrCarrierConfig;
 carrier.NSizeGrid = 51;
@@ -32,7 +32,7 @@ pusch.DMRS.SequenceHopping = 0;
 
 pusch.BetaOffsetACK = 20;
 pusch.BetaOffsetCSI1 = 6.25;
-pusch.BetaOffsetCSI2 = 1;
+pusch.BetaOffsetCSI2 = 6.25;
 pusch.UCIScaling = 1;
 
 A = 37896;
@@ -41,17 +41,17 @@ rv = 0;
 modulation = pusch.Modulation;
 nlayers = pusch.NumLayers; % Number of layers for decoding
 
-oack = 7;
-ocsi1 = 0;
-ocsi2 = 0;
+oack = 3;
+ocsi1 = 4;
+ocsi2 = 4;
 cbsInfo = nrULSCHInfo(pusch, rate, A, oack, ocsi1, ocsi2); % Get ULSCH information
 
 ack = randi([0 1],oack,1);
 csi1 = randi([0 1],ocsi1,1);
 csi2 = randi([0 1],ocsi2,1);
 cack = nrUCIEncode(ack,cbsInfo.GACK,pusch.Modulation);
-ccsi1 = [];
-ccsi2 = [];
+ccsi1 = nrUCIEncode(csi1,cbsInfo.GCSI1,pusch.Modulation);
+ccsi2 = nrUCIEncode(csi2,cbsInfo.GCSI2,pusch.Modulation);
 
 tb_data = randi([0 1],A,1);
 % Transport block CRC attachment
@@ -73,7 +73,8 @@ culsch = chIn;
 cw_scr = nrPUSCHScramble(cw,pusch.NID,pusch.RNTI);
 
 % Write to bin file
-fid = fopen('uci_on_pusch_7.bin', 'wb');
+file_name = sprintf('uci_on_pusch_oack%d_ocsi1%d_ocsi2%d.bin', oack, ocsi1, ocsi2);
+fid = fopen(file_name, 'wb');
 to_write = [A,oack,ocsi1,ocsi2,length(cw),length(cw_scr)];
 fwrite(fid, to_write, 'uint32'); % Write the data to the binary file
 fwrite(fid, tb_data, "uint8");

@@ -317,7 +317,6 @@ void get_samplerate_and_bw(int mu,
                            int n_rb,
                            int8_t threequarter_fs,
                            double *sample_rate,
-                           unsigned int *samples_per_frame,
                            double *tx_bw,
                            double *rx_bw);
 uint32_t get_ssb_offset_to_pointA(uint32_t absoluteFrequencySSB,

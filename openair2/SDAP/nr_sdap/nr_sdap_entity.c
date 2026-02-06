@@ -31,7 +31,7 @@
 #include "gtpv1_u_messages_types.h"
 #include "intertask_interface.h"
 #include "rlc.h"
-#include "tun_if.h"
+#include "tuntap_if.h"
 #include "nr_sdap.h"
 
 #define NO_SDAP_HEADER 0
@@ -534,7 +534,7 @@ static void nr_sdap_add_entity(const int is_gnb, const ue_id_t ue_id, const sdap
   if (IS_SOFTMODEM_NOS1 && is_gnb) {
     // In NOS1 mode, terminate SDAP for the first UE on the gNB. This allows injecting/receiving
     // PDCP SDUs to/from the TUN interface.
-    start_sdap_tun_gnb_first_ue_default_pdu_session(ue_id);
+    start_sdap_tun_gnb_first_ue_default_pdu_session(ue_id, sdap_entity->pdusession_id);
   }
 }
 

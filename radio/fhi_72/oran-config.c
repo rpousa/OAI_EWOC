@@ -184,7 +184,8 @@ void print_fh_init(const struct xran_fh_init *fh_init)
       fh_init->filePrefix,
       fh_init->mtu,
       fh_init->p_o_du_addr);
-  print_ether_addr("  p_o_ru_addr", fh_init->xran_ports * fh_init->io_cfg.num_vfs, (struct rte_ether_addr *)fh_init->p_o_ru_addr);
+  if (fh_init->p_o_ru_addr) print_ether_addr("  p_o_ru_addr", fh_init->xran_ports * fh_init->io_cfg.num_vfs, (struct rte_ether_addr *)fh_init->p_o_ru_addr);
+  else if (fh_init->p_o_du_addr) print_ether_addr("  p_o_du_addr", fh_init->xran_ports * fh_init->io_cfg.num_vfs, (struct rte_ether_addr *)fh_init->p_o_du_addr);
   printf("\
   totalBfWeights %d\n",
       fh_init->totalBfWeights);
@@ -460,14 +461,14 @@ char bbdev_dev[32] = "";
 char bbdev_vfio_vf_token[64] = "";
 #endif
 
-static bool set_fh_io_cfg(struct xran_io_cfg *io_cfg, const paramdef_t *fhip, int nump, const int num_rus)
+static bool set_fh_io_cfg(struct xran_io_cfg *io_cfg, const paramdef_t *fhip, int nump, const int num_rus, const int is_du)
 {
   DevAssert(fhip != NULL);
   int num_dev = gpd(fhip, nump, ORAN_CONFIG_DPDK_DEVICES)->numelt;
   AssertFatal(num_dev > 0, "need to provide DPDK devices for O-RAN 7.2 Fronthaul\n");
   AssertFatal(num_dev < 17, "too many DPDK devices for O-RAN 7.2 Fronthaul\n");
 
-  io_cfg->id = 0; // 0 -> xran as O-DU; 1 -> xran as O-RU
+  io_cfg->id = 1 - is_du; // 0 -> xran as O-DU; 1 -> xran as O-RU
   io_cfg->num_vfs = num_dev; // number of VFs for C-plane and U-plane (should be even); max = XRAN_VF_MAX
   io_cfg->num_rxq = 1; // number of RX queues per VF
   for (int i = 0; i < num_dev; ++i) {
@@ -540,7 +541,7 @@ static bool set_fh_io_cfg(struct xran_io_cfg *io_cfg, const paramdef_t *fhip, in
   /* if RU does support, io_cfg->eowd_cmn[0] should only be filled as id = O_DU; io_cfg->eowd_cmn[1] only used if id = O_RU */
   const uint16_t owdm_enable = *gpd(fhip, nump, ORAN_CONFIG_ECPRI_OWDM)->uptr;
   if (owdm_enable) {
-    io_cfg->eowd_cmn[0].initiator_en = 1; // 1 -> initiator (always O-DU), 0 -> recipient (always O-RU)
+    io_cfg->eowd_cmn[0].initiator_en = is_du ? 1 : 0; // 1 -> initiator (always O-DU), 0 -> recipient (always O-RU)
     io_cfg->eowd_cmn[0].numberOfSamples = 8; // total number of samples to be collected and averaged per port
     io_cfg->eowd_cmn[0].filterType = 0; // 0 -> simple average based on number of measurements; not used in xran in both E and F releases
     io_cfg->eowd_cmn[0].responseTo = 10000000; // response timeout in [ns]
@@ -678,6 +679,19 @@ static bool set_fh_init(void *mplane_api, struct xran_fh_init *fh_init, enum xra
   const int nfh = sizeofArray(FHconfigs);
   config_getlist(config_get_if(), &FH_ConfigList, FHconfigs, nfh, aprefix);
 
+  int num_rus = FH_ConfigList.numelt; // based on the number of fh_config sections -> number of RUs
+  int is_du = 0;
+
+  int num_ru_addr = gpd(fhip, nump, ORAN_CONFIG_RU_ADDR)->numelt;
+  int num_du_addr = gpd(fhip, nump, ORAN_CONFIG_DU_ADDR)->numelt;
+  if (num_ru_addr > 0 && num_du_addr == 0)
+    is_du = 1;
+  else if (num_du_addr > 0 && num_ru_addr == 0)
+    is_du = 0;
+  else
+    AssertFatal(false, "Illegal node configuration, num_du_addr %d, num_ru_addr %d\n", num_du_addr, num_ru_addr);
+  fh_init->xran_ports = is_du == 1 ? num_rus : num_du_addr;
+
 #ifdef OAI_MPLANE
   ru_session_list_t *ru_session_list = (ru_session_list_t *)mplane_api;
   int num_rus = ru_session_list->num_rus;
@@ -687,8 +701,8 @@ static bool set_fh_init(void *mplane_api, struct xran_fh_init *fh_init, enum xra
   if (!set_fh_eaxcid_conf_mplane(&fh_init->eAxCId_conf, xran_cat, ru_session_list))
     return false;
   /* maximum transmission unit (MTU) is the size of the largest protocol data unit (PDU) that can be
-    communicated in a single xRAN network layer transaction. Supported 1500 bytes and 9600 bytes (Jumbo Frame);
-    xran only checks if (MTU <= 1500), therefore setting any value > 1500, xran assumes 9600 value is used */
+    communicated in a single xRAN network layer transaction. Based on the MTU size, xran calculates the number
+    of DL fragments (nPrbElm) needed for transmission of one symbol. */
   fh_init->mtu = ru_session_list->ru_session[0].xran_mplane.mtu; // we suppose that each RU supports the same MTU size
 
   int num_ru_addr = (fh_init->io_cfg.one_vf_cu_plane) ? num_rus : 2*num_rus;
@@ -704,26 +718,44 @@ static bool set_fh_init(void *mplane_api, struct xran_fh_init *fh_init, enum xra
     }
   }
 #else
-  int num_rus = FH_ConfigList.numelt; // based on the number of fh_config sections -> number of RUs
-  fh_init->xran_ports = num_rus; // since we use xran as O-DU, xran_ports is set to the number of RUs
-  if (!set_fh_io_cfg(&fh_init->io_cfg, fhip, nump, num_rus))
+
+  if (!set_fh_io_cfg(&fh_init->io_cfg, fhip, nump, num_rus, is_du))
     return false;
   if (!set_fh_eaxcid_conf(&fh_init->eAxCId_conf, xran_cat))
     return false;
   /* maximum transmission unit (MTU) is the size of the largest protocol data unit (PDU) that can be
-    communicated in a single xRAN network layer transaction. Supported 1500 bytes and 9600 bytes (Jumbo Frame);
-    xran only checks if (MTU <= 1500), therefore setting any value > 1500, xran assumes 9600 value is used */
+    communicated in a single xRAN network layer transaction. Based on the MTU size, xran calculates the number
+    of DL fragments (nPrbElm) needed for transmission of one symbol. */
   fh_init->mtu = *gpd(fhip, nump, ORAN_CONFIG_MTU)->uptr;
-  int num_ru_addr = gpd(fhip, nump, ORAN_CONFIG_RU_ADDR)->numelt;
-  fh_init->p_o_ru_addr = calloc(num_ru_addr, sizeof(struct rte_ether_addr));
-  AssertFatal(fh_init->p_o_ru_addr != NULL, "out of memory\n");
-  char **ru_addrs = gpd(fhip, nump, ORAN_CONFIG_RU_ADDR)->strlistptr;
-  for (int i = 0; i < num_ru_addr; ++i) {
-    struct rte_ether_addr *ea = (struct rte_ether_addr *)fh_init->p_o_ru_addr;
-    if (get_ether_addr(ru_addrs[i], &ea[i]) == NULL) {
-      printf("could not read ethernet address '%s' for RU!\n", ru_addrs[i]);
-      return false;
+
+  fh_init->p_o_du_addr = NULL; // DPDK retreives DU MAC address within the xran library with rte_eth_macaddr_get() function
+
+  char **ru_addrs,**du_addrs;
+
+  if (is_du > 0) {
+    fh_init->p_o_ru_addr = calloc(num_ru_addr, sizeof(struct rte_ether_addr));
+    ru_addrs = gpd(fhip, nump, ORAN_CONFIG_RU_ADDR)->strlistptr;
+    AssertFatal(fh_init->p_o_ru_addr != NULL, "out of memory\n");
+    for (int i = 0; i < num_ru_addr; ++i) {
+      struct rte_ether_addr *ea = (struct rte_ether_addr *)fh_init->p_o_ru_addr;
+      if (get_ether_addr(ru_addrs[i], &ea[i]) == NULL) {
+        printf("could not read ethernet address '%s' for RU!\n", ru_addrs[i]);
+        return false;
+      }
     }
+    fh_init->p_o_du_addr = NULL;
+  } else {
+    fh_init->p_o_du_addr = calloc(num_du_addr, sizeof(struct rte_ether_addr));
+    du_addrs = gpd(fhip, nump, ORAN_CONFIG_DU_ADDR)->strlistptr;
+    AssertFatal(fh_init->p_o_du_addr != NULL, "out of memory\n");
+    for (int i = 0; i < num_du_addr; ++i) {
+      struct rte_ether_addr *ea = (struct rte_ether_addr *)fh_init->p_o_du_addr;
+      if (get_ether_addr(du_addrs[i], &ea[i]) == NULL) {
+        printf("could not read ethernet address '%s' for DU!\n", du_addrs[i]);
+        return false;
+      }
+    }
+    fh_init->p_o_ru_addr = NULL;
   }
 #endif
 
@@ -732,7 +764,6 @@ static bool set_fh_init(void *mplane_api, struct xran_fh_init *fh_init, enum xra
   /* used to specify a unique prefix for shared memory, and files created by multiple DPDK processes;
     it is necessary */
   fh_init->filePrefix = strdup(*gpd(fhip, nump, ORAN_CONFIG_FILE_PREFIX)->strptr);
-  fh_init->p_o_du_addr = NULL; // DPDK retreives DU MAC address within the xran library with rte_eth_macaddr_get() function
   fh_init->totalBfWeights = 0; // only used if id = O_RU (for emulation); C-plane extension types; section 5.4.6 of CUS spec
 
 #ifdef F_RELEASE

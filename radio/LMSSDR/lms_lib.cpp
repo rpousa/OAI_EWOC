@@ -72,7 +72,8 @@ int write_output(const char *fname,const char *vname,void *data,int length,int d
       \param flags Ignored for the moment
       \returns 0 on success
 */
-int trx_lms_write(openair0_device *device, openair0_timestamp timestamp, void **buff, int nsamps, int antenna_id, int flags) {
+int trx_lms_write(openair0_device_t *device, openair0_timestamp_t timestamp, void **buff, int nsamps, int antenna_id, int flags)
+{
   timestamp -= device->openair0_cfg->command_line_sample_advance - device->openair0_cfg->tx_sample_advance;
   lms_stream_meta_t meta;
   meta.waitForTimestamp = true;
@@ -93,8 +94,8 @@ int trx_lms_write(openair0_device *device, openair0_timestamp timestamp, void **
  * \param antenna_id  Index of antenna port
  * \returns number of samples read
 */
-int trx_lms_read(openair0_device *device, openair0_timestamp *ptimestamp, void **buff, int nsamps, int antenna_id) {
-
+int trx_lms_read(openair0_device_t *device, openair0_timestamp_t *ptimestamp, void **buff, int nsamps, int antenna_id)
+{
     lms_stream_meta_t meta;
     meta.waitForTimestamp = false;
     meta.flushPartialPacket = false;
@@ -140,7 +141,8 @@ void set_rx_gain_offset(openair0_config_t *openair0_cfg, int chain_index) {
  * \param openair0_cfg openair0 Config structure
  * \returns 0 in success, -1 on error
  */
-int trx_lms_set_gains(openair0_device* device, openair0_config_t *openair0_cfg) {
+int trx_lms_set_gains(openair0_device_t* device, openair0_config_t *openair0_cfg)
+{
   int ret = 0;
 
   if (openair0_cfg->rx_gain[0] > 70+openair0_cfg->rx_gain_offset[0]) {
@@ -158,8 +160,8 @@ int trx_lms_set_gains(openair0_device* device, openair0_config_t *openair0_cfg) 
  * \param device the hardware to use
  * \returns 0 on success
  */
-int trx_lms_start(openair0_device *device){
-
+int trx_lms_start(openair0_device_t *device)
+{
     lms_info_str_t list[16]={0};
 
     int n= LMS_GetDeviceList(list);
@@ -269,7 +271,8 @@ int trx_lms_start(openair0_device *device){
  * \param card Index of the RF card to use
  * \returns 0 on success
  */
-int trx_lms_stop(openair0_device *device) {
+int trx_lms_stop(openair0_device_t *device)
+{
     LMS_StopStream(&rx_stream);
     LMS_StopStream(&tx_stream);
     LMS_DestroyStream(lms_device,&rx_stream);
@@ -283,7 +286,8 @@ int trx_lms_stop(openair0_device *device) {
  * \param openair0_cfg openair0 Config structure (ignored. It is there to comply with RF common API)
  * \returns 0 in success
  */
-int trx_lms_set_freq(openair0_device* device, openair0_config_t *openair0_cfg) {
+int trx_lms_set_freq(openair0_device_t* device, openair0_config_t *openair0_cfg)
+{
   //Control port must be connected
   LMS_SetLOFrequency(lms_device,LMS_CH_TX,0,openair0_cfg->tx_freq[0]);
   LMS_SetLOFrequency(lms_device,LMS_CH_RX,0,openair0_cfg->rx_freq[0]);
@@ -322,45 +326,43 @@ rx_gain_calib_table_t calib_table_lmssdr[] = {
  * \returns 0 in success
  */
 
-int trx_lms_get_stats(openair0_device* device) {
-
+int trx_lms_get_stats(openair0_device_t* device)
+{
   return(0);
-
 }
 
 /*! \brief Reset LMSSDR Statistics
  * \param device the hardware to use
  * \returns 0 in success
  */
-int trx_lms_reset_stats(openair0_device* device) {
-
+int trx_lms_reset_stats(openair0_device_t* device)
+{
   return(0);
-
 }
 
 
 /*! \brief Terminate operation of the LMSSDR transceiver -- free all associated resources
  * \param device the hardware to use
  */
-void trx_lms_end(openair0_device *device) {
-
-
+void trx_lms_end(openair0_device_t *device)
+{
 }
 
-int trx_lms_write_init(openair0_device *device)
+int trx_lms_write_init(openair0_device_t *device)
 {
     return 0;
 }
+
 extern "C" {
 /*! \brief Initialize Openair LMSSDR target. It returns 0 if OK
 * \param device the hardware to use
 * \param openair0_cfg RF frontend parameters set by application
 */
-int device_init(openair0_device *device, openair0_config_t *openair0_cfg){
-
+int device_init(openair0_device_t *device, openair0_config_t *openair0_cfg)
+{
   device->type=LMSSDR_DEV;
 
-  printf("LMSSDR: Initializing openair0_device for %s ...\n", ((device->host_type == RAU_HOST) ? "RAU": "RRU"));
+  printf("LMSSDR: Initializing openair0_device_t for %s ...\n", ((device->host_type == RAU_HOST) ? "RAU": "RRU"));
 
   switch ((int)openair0_cfg[0].sample_rate) {
   case 30720000:

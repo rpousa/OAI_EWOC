@@ -72,7 +72,6 @@
 #include <socket/include/socket_pnf.h>
 #endif
 
-#define NUM_P5_PHY 2
 
 #define _GNU_SOURCE
 
@@ -1801,6 +1800,9 @@ int nr_stop_request(nfapi_pnf_config_t *config, nfapi_pnf_phy_config_t *phy, nfa
                                          .header.phy_id = req->header.phy_id};
   nfapi_nr_stop_indication(config, &resp);
   has_sent_stop_ind = true;
+  // Upon sending the STOP.indication mark P7 PNF to terminate, to not send any further messages to the VNF
+  pnf_p7_t *pnf_p7 = (pnf_p7_t *)(p7_config_g);
+  pnf_p7->terminate = 1;
 #ifdef ENABLE_WLS
   wls_pnf_close(pnf_p5_init_and_receive_pthread);
 #endif

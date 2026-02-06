@@ -387,7 +387,6 @@ void sr(void *_d, event e)
 #define MAC_NR_HARQID         0x06
 #define MAC_NR_FRAME_SLOT_TAG 0x07
 
-#define NR_FDD_RADIO 1
 #define NR_TDD_RADIO 2
 
 #define NR_DIRECTION_UPLINK   0

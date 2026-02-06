@@ -52,8 +52,8 @@
 //int addr_len[MAX_INST];
 //struct ifreq if_index[MAX_INST];
 
-int eth_socket_init_raw(openair0_device *device) {
- 
+int eth_socket_init_raw(openair0_device_t *device)
+{
   eth_state_t *eth = (eth_state_t*)device->priv;
   const char *local_mac, *remote_mac;
   int sock_dom=0;
@@ -125,8 +125,8 @@ int eth_socket_init_raw(openair0_device *device) {
 }
 
 /* 09/03/2019: fix obvious inconsistencies, but this code hasn't be tested for sure */
-int trx_eth_write_raw(openair0_device *device, openair0_timestamp timestamp, void **buff, int nsamps,int cc, int flags) {
-  
+int trx_eth_write_raw(openair0_device_t *device, openair0_timestamp_t timestamp, void **buff, int nsamps, int cc, int flags)
+{
   int bytes_sent=0;
   eth_state_t *eth = (eth_state_t*)device->priv;
   int sendto_flag =0;
@@ -148,12 +148,12 @@ int trx_eth_write_raw(openair0_device *device, openair0_timestamp timestamp, voi
     /* we don't want to ovewrite with the header info the previous tx buffer data so we store it*/
     struct ether_header temp =  *(struct ether_header *)buff2;
     int32_t temp0 = *(int32_t *)(buff2 + MAC_HEADER_SIZE_BYTES);
-    openair0_timestamp  temp1 = *(openair0_timestamp *)(buff2 + MAC_HEADER_SIZE_BYTES + sizeof(int32_t));
-    
+    openair0_timestamp_t temp1 = *(openair0_timestamp_t *)(buff2 + MAC_HEADER_SIZE_BYTES + sizeof(int32_t));
+
     bytes_sent = 0;
     memcpy(buff2,(void*)&eth->ehd,MAC_HEADER_SIZE_BYTES);
     *(int16_t *)(buff2 + MAC_HEADER_SIZE_BYTES + sizeof(int16_t))=1+(i<<1);
-    *(openair0_timestamp *)(buff2 + MAC_HEADER_SIZE_BYTES + sizeof(int32_t)) = timestamp;  
+    *(openair0_timestamp_t *)(buff2 + MAC_HEADER_SIZE_BYTES + sizeof(int32_t)) = timestamp;
 
     /*printf("[RRU]write mod_%d %d , len %d, buff %p \n",
       Mod_id,eth->sockfd[Mod_id],RAW_PACKET_SIZE_BYTES(nsamps), buff2);*/
@@ -180,15 +180,13 @@ int trx_eth_write_raw(openair0_device *device, openair0_timestamp timestamp, voi
   /* tx buffer values restored */  
     *(struct ether_header *)buff2 = temp;
     *(int32_t *)(buff2 + MAC_HEADER_SIZE_BYTES) = temp0;
-    *(openair0_timestamp *)(buff2 + MAC_HEADER_SIZE_BYTES + sizeof(int32_t)) = temp1;
+    *(openair0_timestamp_t *)(buff2 + MAC_HEADER_SIZE_BYTES + sizeof(int32_t)) = temp1;
   }
   return (bytes_sent-APP_HEADER_SIZE_BYTES-MAC_HEADER_SIZE_BYTES)>>2;
 }
 
-
-
-int trx_eth_write_raw_IF4p5(openair0_device *device, openair0_timestamp timestamp, void **buff, int nsamps, int cc, int flags) {
-
+int trx_eth_write_raw_IF4p5(openair0_device_t *device, openair0_timestamp_t timestamp, void **buff, int nsamps, int cc, int flags)
+{
   int nblocks = nsamps;  
   int bytes_sent = 0;
   
@@ -225,13 +223,11 @@ int trx_eth_write_raw_IF4p5(openair0_device *device, openair0_timestamp timestam
     eth->tx_count++;
   }
   
-  return (bytes_sent-MAC_HEADER_SIZE_BYTES);  	  
+  return (bytes_sent-MAC_HEADER_SIZE_BYTES);
 }
 
-
-
-int trx_eth_read_raw(openair0_device *device, openair0_timestamp *timestamp, void **buff, int nsamps, int cc) {
-
+int trx_eth_read_raw(openair0_device_t *device, openair0_timestamp_t *timestamp, void **buff, int nsamps, int cc)
+{
   int ret;
   int bytes_received=0;
   int i=0;
@@ -251,7 +247,7 @@ int trx_eth_read_raw(openair0_device *device, openair0_timestamp *timestamp, voi
       /* we don't want to ovewrite with the header info the previous rx buffer data so we store it*/
       struct ether_header temp =  *(struct ether_header *)buff2;
       int32_t temp0 = *(int32_t *)(buff2 + MAC_HEADER_SIZE_BYTES);
-      openair0_timestamp  temp1 = *(openair0_timestamp *)(buff2 + MAC_HEADER_SIZE_BYTES + sizeof(int32_t));
+      openair0_timestamp_t temp1 = *(openair0_timestamp_t *)(buff2 + MAC_HEADER_SIZE_BYTES + sizeof(int32_t));
 
       bytes_received=0;
       int receive_bytes;
@@ -299,18 +295,18 @@ int trx_eth_read_raw(openair0_device *device, openair0_timestamp *timestamp, voi
 	} else {
 	  bytes_received+=ret;
 	  /* store the timestamp value from packet's header */
-	  *timestamp =  *(openair0_timestamp *)(buff2 + MAC_HEADER_SIZE_BYTES + sizeof(int32_t));  
+	  *timestamp = *(openair0_timestamp_t *)(buff2 + MAC_HEADER_SIZE_BYTES + sizeof(int32_t));
 	  eth->rx_actual_nsamps=bytes_received>>2;   
 	  eth->rx_count++;
 	}
       }
       
-#if DEBUG   
+#if DEBUG
       printf("------- RX------: nu=%x an_id=%d ts%d bytes_recv=%d \n",
-	     *(uint8_t *)(buff2+ETH_ALEN),
-	     *(int16_t *)(buff2 + MAC_HEADER_SIZE_BYTES + sizeof(int16_t)),
-	     *(openair0_timestamp *)(buff2 + MAC_HEADER_SIZE_BYTES + sizeof(int32_t)),
-	     bytes_received);
+             *(uint8_t *)(buff2 + ETH_ALEN),
+             *(int16_t *)(buff2 + MAC_HEADER_SIZE_BYTES + sizeof(int16_t)),
+             *(openair0_timestamp_t *)(buff2 + MAC_HEADER_SIZE_BYTES + sizeof(int32_t)),
+             bytes_received);
 
       dump_packet((device->host_type == RAU_HOST)? "RAU":"RRU", buff2, RAW_PACKET_SIZE_BYTES(nsamps),RX_FLAG);	  
 
@@ -319,15 +315,13 @@ int trx_eth_read_raw(openair0_device *device, openair0_timestamp *timestamp, voi
      /* tx buffer values restored */  
       *(struct ether_header *)buff2 = temp;
       *(int32_t *)(buff2 + MAC_HEADER_SIZE_BYTES) = temp0;
-      *(openair0_timestamp *)(buff2 + MAC_HEADER_SIZE_BYTES + sizeof(int32_t)) = temp1;
+      *(openair0_timestamp_t *)(buff2 + MAC_HEADER_SIZE_BYTES + sizeof(int32_t)) = temp1;
     }
   return (bytes_received-APP_HEADER_SIZE_BYTES-MAC_HEADER_SIZE_BYTES)>>2;
 }
 
-
-
-int trx_eth_read_raw_IF4p5(openair0_device *device, openair0_timestamp *timestamp, void **buff, int nsamps, int cc) {
-
+int trx_eth_read_raw_IF4p5(openair0_device_t *device, openair0_timestamp_t *timestamp, void **buff, int nsamps, int cc)
+{
   int ret;
   // Read nblocks info from packet itself
   int nblocks = nsamps;  
@@ -413,9 +407,8 @@ int trx_eth_read_raw_IF4p5(openair0_device *device, openair0_timestamp *timestam
   return(bytes_received);
 }
 
-
-int eth_set_dev_conf_raw(openair0_device *device) {
-
+int eth_set_dev_conf_raw(openair0_device_t *device)
+{
   eth_state_t *eth = (eth_state_t*)device->priv;
   void 	      *msg;
   ssize_t      msg_len;
@@ -443,9 +436,8 @@ int eth_set_dev_conf_raw(openair0_device *device) {
   return 0;
 }
 
-
-
-int eth_set_dev_conf_raw_IF4p5(openair0_device *device) {  
+int eth_set_dev_conf_raw_IF4p5(openair0_device_t *device)
+{
   // use for cc_id info
 
   eth_state_t *eth = (eth_state_t*)device->priv;
@@ -475,9 +467,8 @@ int eth_set_dev_conf_raw_IF4p5(openair0_device *device) {
   return 0;
 }
 
-
-int eth_get_dev_conf_raw(openair0_device *device) {
-
+int eth_get_dev_conf_raw(openair0_device_t *device)
+{
   eth_state_t   *eth = (eth_state_t*)device->priv;
   void 		*msg;
   ssize_t	msg_len;
@@ -503,8 +494,8 @@ int eth_get_dev_conf_raw(openair0_device *device) {
   return 0;
 }
 
-
-int eth_get_dev_conf_raw_IF4p5(openair0_device *device) {
+int eth_get_dev_conf_raw_IF4p5(openair0_device_t *device)
+{
   // use for cc_id info
 
   eth_state_t   *eth = (eth_state_t*)device->priv;

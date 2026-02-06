@@ -474,6 +474,7 @@ typedef struct nas_pdu_session_req_s {
   int pdusession_type;
   int sst;
   int sd;
+  char dnn[103]; /* 24.501 §9.11.2.1A: max length 102 + 0-byte */
 } nas_pdu_session_req_t;
 
 /*

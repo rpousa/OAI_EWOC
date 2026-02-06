@@ -46,7 +46,7 @@ int num_devices=0;
  * \param device RF frontend parameters set by application
  * \returns 0 on success
  */
-int trx_brf_init(openair0_device *device)
+int trx_brf_init(openair0_device_t *device)
 {
     return 0;
 }
@@ -57,8 +57,7 @@ int trx_brf_init(openair0_device *device)
  *\param module the bladeRf module
  *\returns timestamp of BladeRF
  */
-openair0_timestamp trx_get_timestamp(openair0_device *device,
-                                     bladerf_module module)
+openair0_timestamp_t trx_get_timestamp(openair0_device_t *device, bladerf_module module)
 {
     int status;
     struct bladerf_metadata meta;
@@ -78,7 +77,7 @@ openair0_timestamp trx_get_timestamp(openair0_device *device,
  * \param device the hardware to use
  * \returns 0 on success
  */
-int trx_brf_start(openair0_device *device)
+int trx_brf_start(openair0_device_t *device)
 {
     brf_state_t *brf = (brf_state_t*)device->priv;
     int status;
@@ -127,12 +126,7 @@ int trx_brf_start(openair0_device *device)
       \param flags Ignored for the moment
       \returns 0 on success
 */
-static int trx_brf_write(openair0_device *device,
-                         openair0_timestamp ptimestamp,
-                         void **buff,
-                         int nsamps,
-                         int cc,
-                         int flags)
+static int trx_brf_write(openair0_device_t *device, openair0_timestamp_t ptimestamp, void **buff, int nsamps, int cc, int flags)
 {
     int status;
     brf_state_t *brf = (brf_state_t*)device->priv;
@@ -185,11 +179,7 @@ static int trx_brf_write(openair0_device *device,
  * \param cc  Index of component carrier
  * \returns number of samples read
 */
-static int trx_brf_read(openair0_device *device,
-                        openair0_timestamp *ptimestamp,
-                        void **buff,
-                        int nsamps,
-                        int cc)
+static int trx_brf_read(openair0_device_t *device, openair0_timestamp_t *ptimestamp, void **buff, int nsamps, int cc)
 {
     int status=0;
     brf_state_t *brf = (brf_state_t*)device->priv;
@@ -235,7 +225,7 @@ static int trx_brf_read(openair0_device *device,
 /*! \brief Terminate operation of the BladeRF transceiver -- free all associated resources
  * \param device the hardware to use
  */
-void trx_brf_end(openair0_device *device)
+void trx_brf_end(openair0_device_t *device)
 {
     int status;
     brf_state_t *brf = (brf_state_t*)device->priv;
@@ -255,7 +245,7 @@ void trx_brf_end(openair0_device *device)
 * \param device the hardware to use
 * \returns  0 on success
 */
-int trx_brf_get_stats(openair0_device* device)
+int trx_brf_get_stats(openair0_device_t *device)
 {
     return(0);
 }
@@ -265,7 +255,7 @@ int trx_brf_get_stats(openair0_device* device)
 * \param device the hardware to use
 * \returns  0 on success
 */
-int trx_brf_reset_stats(openair0_device* device)
+int trx_brf_reset_stats(openair0_device_t *device)
 {
     return(0);
 }
@@ -275,7 +265,7 @@ int trx_brf_reset_stats(openair0_device* device)
  * \param card the hardware to use
  * \returns 0 in success
  */
-int trx_brf_stop(openair0_device* device)
+int trx_brf_stop(openair0_device_t *device)
 {
     return(0);
 }
@@ -286,7 +276,7 @@ int trx_brf_stop(openair0_device* device)
  * \param openair0_cfg1 openair0 Config structure (ignored. It is there to comply with RF common API)
  * \returns 0 in success
  */
-int trx_brf_set_freq(openair0_device* device, openair0_config_t *openair0_cfg1)
+int trx_brf_set_freq(openair0_device_t *device, openair0_config_t *openair0_cfg1)
 {
     int status;
     brf_state_t *brf = (brf_state_t *)device->priv;
@@ -315,12 +305,11 @@ int trx_brf_set_freq(openair0_device* device, openair0_config_t *openair0_cfg1)
  * \param openair0_cfg openair0 Config structure
  * \returns 0 in success
  */
-int trx_brf_set_gains(openair0_device* device,
-                      openair0_config_t *openair0_cfg)
+int trx_brf_set_gains(openair0_device_t *device, openair0_config_t *openair0_cfg)
 {
     return(0);
 }
-int trx_brf_write_init(openair0_device *device)
+int trx_brf_write_init(openair0_device_t *device)
 {
     return 0;
 }
@@ -368,13 +357,13 @@ void set_rx_gain_offset(openair0_config_t *openair0_cfg,
 /*! \brief Calibrate LMSSDR RF
  * \param device the hardware to use
  */
-void calibrate_rf(openair0_device *device)
+void calibrate_rf(openair0_device_t *device)
 {
     /* TODO: this function does not seem to work. Disabled until fixed. */
     return;
 
     brf_state_t *brf = (brf_state_t *)device->priv;
-    openair0_timestamp ptimestamp;
+    openair0_timestamp_t ptimestamp;
     int16_t *calib_buffp,*calib_tx_buffp;
     int16_t calib_buff[2*RXDCLENGTH];
     int16_t calib_tx_buff[2*RXDCLENGTH];
@@ -948,8 +937,7 @@ void calibrate_rf(openair0_device *device)
  * \param openair0_cfg RF frontend parameters set by application
  * \returns 0 on success
  */
-int device_init(openair0_device *device,
-                openair0_config_t *openair0_cfg)
+int device_init(openair0_device_t *device, openair0_config_t *openair0_cfg)
 {
     int status;
     brf_state_t *brf = (brf_state_t*)malloc(sizeof(brf_state_t));
@@ -1138,7 +1126,7 @@ int device_init(openair0_device *device,
      */
     bladerf_log_set_verbosity(BLADERF_LOG_LEVEL_INFO);
 
-    printf("BLADERF: Initializing openair0_device\n");
+    printf("BLADERF: Initializing openair0_device_t\n");
     device->Mod_id         = num_devices++;
     device->type             = BLADERF_DEV;
     device->trx_start_func = trx_brf_start;

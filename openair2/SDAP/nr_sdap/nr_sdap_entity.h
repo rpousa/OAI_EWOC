@@ -102,6 +102,7 @@ typedef struct nr_sdap_entity_s {
   bool enable_sdap;
   int pdusession_id;
   int pdusession_sock;
+  char *pdusession_if_name;
   pthread_t pdusession_thread;
   bool stop_thread;
   int qfi;

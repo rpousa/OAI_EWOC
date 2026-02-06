@@ -46,7 +46,7 @@
 #include "common/platform_constants.h"
 #include "common/ran_context.h"
 #include "common/utils/T/T.h"
-#include "common/utils/tun_if.h"
+#include "common/utils/tuntap_if.h"
 #include "cuup_cucp_if.h"
 #include "executables/lte-softmodem.h"
 #include "executables/softmodem-common.h"
@@ -405,7 +405,7 @@ void nr_pdcp_layer_init(void)
 
 #include "nfapi/oai_integration/vendor_ext.h"
 #include "executables/lte-softmodem.h"
-#include "common/utils/tun_if.h"
+#include "common/utils/tuntap_if.h"
 #include "openair2/SDAP/nr_sdap/nr_sdap.h"
 
 static void deliver_sdu_drb(void *_ue, nr_pdcp_entity_t *entity,
@@ -506,6 +506,7 @@ srb_found:
      * RRC, the RLC-PDCP interface does not transport this information */
     f1_ue_data_t ue_data = cu_get_f1_ue_data(ue->ue_id);
     ul_rrc->gNB_DU_ue_id = ue_data.secondary_ue;
+    message_p->ittiMsgHeader.originInstance = ue_data.du_assoc_id;
     ul_rrc->srb_id = srb_id;
     ul_rrc->rrc_container = malloc(size);
     AssertFatal(ul_rrc->rrc_container != NULL, "OUT OF MEMORY\n");

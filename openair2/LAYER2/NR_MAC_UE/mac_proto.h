@@ -106,7 +106,7 @@ typedef struct nr_neighbor_cell_info {
 void nr_rrc_mac_config_req_meas(module_id_t module_id, const nr_neighbor_cell_info_t *neighbor_cells, int num_neighbors);
 
 /**\brief initialization NR UE MAC instance(s)*/
-NR_UE_MAC_INST_t * nr_l2_init_ue(int nb_inst);
+NR_UE_MAC_INST_t * nr_l2_init_ue(int nb_inst, int numerology);
 
 /**\brief fetch MAC instance by module_id
    \param module_id index of MAC instance(s)*/
@@ -124,7 +124,7 @@ void release_mac_configuration(NR_UE_MAC_INST_t *mac,
 void nr_ue_ul_scheduler(NR_UE_MAC_INST_t *mac, nr_uplink_indication_t *ul_info);
 void nr_ue_dl_scheduler(NR_UE_MAC_INST_t *mac, nr_downlink_indication_t *dl_info);
 
-csi_payload_t nr_ue_aperiodic_csi_reporting(NR_UE_MAC_INST_t *mac, dci_field_t csi_request, int tda, long *K2);
+nfapi_nr_ue_csi_payload_t nr_ue_aperiodic_csi_reporting(NR_UE_MAC_INST_t *mac, dci_field_t csi_request, int tda, long *K2);
 
 nr_dci_format_t nr_ue_process_dci_indication_pdu(NR_UE_MAC_INST_t *mac, frame_t frame, int slot, fapi_nr_dci_indication_pdu_t *dci);
 
@@ -137,12 +137,17 @@ bool trigger_periodic_scheduling_request(NR_UE_MAC_INST_t *mac,
                                          frame_t frame,
                                          int slot);
 
-int nr_get_csi_measurements(NR_UE_MAC_INST_t *mac, frame_t frame, int slot, PUCCH_sched_t *pucch);
+int nr_get_csi_measurements(NR_UE_MAC_INST_t *mac,
+                            frame_t frame,
+                            int slot,
+                            nfapi_nr_ue_csi_payload_t *csi_payload,
+                            NR_PUCCH_Resource_t **csi_pucch,
+                            bool csi_on_pusch);
 
-csi_payload_t nr_get_csi_payload(NR_UE_MAC_INST_t *mac,
+nfapi_nr_ue_csi_payload_t nr_get_csi_payload(NR_UE_MAC_INST_t *mac,
                                  int csi_report_id,
                                  CSI_mapping_t mapping_type,
-                                 NR_CSI_MeasConfig_t *csi_MeasConfig);
+                                 const NR_CSI_MeasConfig_t *csi_MeasConfig);
 
 /* \brief Get payload (MAC PDU) from UE PHY
 @param dl_info            pointer to dl indication
@@ -330,7 +335,7 @@ int nr_config_pusch_pdu(NR_UE_MAC_INST_t *mac,
                         NR_tda_info_t *tda_info,
                         nfapi_nr_ue_pusch_pdu_t *pusch_config_pdu,
                         dci_pdu_rel15_t *dci,
-                        csi_payload_t *csi_report,
+                        nfapi_nr_ue_csi_payload_t *csi_report,
                         RAR_grant_t *rar_grant,
                         rnti_t rnti,
                         int ss_type,

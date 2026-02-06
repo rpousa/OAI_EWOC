@@ -3399,11 +3399,11 @@ uint16_t get_ssb_start_symbol(const long band, NR_SubcarrierSpacing_t scs, int i
   }
 }
 
-
-void csi_period_offset(NR_CSI_ReportConfig_t *csirep,
-                       struct NR_CSI_ResourcePeriodicityAndOffset *periodicityAndOffset,
-                       int *period, int *offset) {
-
+void csi_period_offset(const NR_CSI_ReportConfig_t *csirep,
+                       const struct NR_CSI_ResourcePeriodicityAndOffset *periodicityAndOffset,
+                       int *period,
+                       int *offset)
+{
   if(periodicityAndOffset != NULL) {
 
     NR_CSI_ResourcePeriodicityAndOffset_PR p_and_o = periodicityAndOffset->present;

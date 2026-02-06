@@ -39,7 +39,6 @@
 #include <dlfcn.h>
 #include "openair1/PHY/defs_common.h"
 #include "common/oai_version.h"
-#define LOAD_MODULE_SHLIB_MAIN
 
 #include "common/config/config_userapi.h"
 #include "load_module_shlib.h"

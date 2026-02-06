@@ -82,6 +82,8 @@ Options:
   Makes the NR softmodem
 --RU
   Makes the OAI RRU
+--nrRU
+  Makes the NR RRU
 --UE
    Makes the UE specific parts (usim, nvram) from the given configuration file
 --nrUE
@@ -226,6 +228,11 @@ function main() {
             RU=1
             TARGET_LIST="$TARGET_LIST oairu"
             echo_info "Will compile RRU"
+            shift;;
+       --nrRU)
+            NRRU=1
+            TARGET_LIST="$TARGET_LIST nr-oru"
+            echo_info "Will compile NR O-RU"
             shift;;
        --UE)
             UE=1
@@ -452,7 +459,7 @@ function main() {
   if [[ $TARGET_LIST != "" ]] && [[ -f $OPENAIR_DIR/CMakeLists.txt ]]; then
     # add some default libraries that should always be built
     # for eNB, gNB, UEs, simulators
-    if [[ $gNB == 1 || $eNB == 1 || $UE == 1 || $nrUE == 1 || $SIMUS_PHY == 1 || $RU == 1 ]]; then
+    if [[ $gNB == 1 || $eNB == 1 || $UE == 1 || $nrUE == 1 || $SIMUS_PHY == 1 || $RU == 1 || $NRRU == 1 ]]; then
       TARGET_LIST="$TARGET_LIST params_libconfig coding rfsimulator dfts params_yaml vrtsim rf_emulator"
     fi
 

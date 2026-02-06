@@ -1,5 +1,5 @@
 diff --git a/fhi_lib/app/src/common.h b/fhi_lib/app/src/common.h
-index ac5f471..94c2d7c 100644
+index ac5f471..ed9ab7d 100644
 --- a/fhi_lib/app/src/common.h
 +++ b/fhi_lib/app/src/common.h
 @@ -28,7 +28,7 @@
@@ -7,7 +7,7 @@ index ac5f471..94c2d7c 100644
  #include <rte_mbuf.h>
  
 -#define VERSIONX                "oran_f_release_v1.0"
-+#define VERSIONX                "oran_f_release_v1.6"
++#define VERSIONX                "oran_f_release_v1.7"
  
  #define APP_O_DU  0
  #define APP_O_RU  1
@@ -173,7 +173,7 @@ index eccc4ae..a97fdc6 100644
  CPP_FLAGS_FULL := $(CPP_FLAGS) $(CPP_COMP) $(INC) $(DEF)
  CPP_FLAGS_FULL_SNC := $(CPP_FLAGS) $(CPP_COMP_SNC) $(INC) $(DEF)
 diff --git a/fhi_lib/lib/api/xran_fh_o_du.h b/fhi_lib/lib/api/xran_fh_o_du.h
-index bacf597..2aeaaae 100644
+index bacf597..18597d6 100644
 --- a/fhi_lib/lib/api/xran_fh_o_du.h
 +++ b/fhi_lib/lib/api/xran_fh_o_du.h
 @@ -141,8 +141,8 @@ extern "C" {
@@ -182,7 +182,7 @@ index bacf597..2aeaaae 100644
  
 -#define XRAN_MAX_FRAGMENT            (4)   /**< Max number of fragmentations in single symbol */
 -#define XRAN_MAX_SET_BFWS            (64)  /**< Assumed 64Ant, BFP 9bit with 9K jumbo frame */
-+#define XRAN_MAX_FRAGMENT            (6)   /**< Max number of fragmentations in single symbol */
++#define XRAN_MAX_FRAGMENT            (7)   /**< Max number of fragmentations in single symbol */
 +#define XRAN_MAX_SET_BFWS            (1) //(64)  /**< Assumed 64Ant, BFP 9bit with 9K jumbo frame */
  
  #define XRAN_MAX_PKT_BURST (448+4) /**< 4x14x8 symbols per ms */

@@ -80,9 +80,6 @@
 #include "common/ran_context.h"
 extern RAN_CONTEXT_t RC;
 
-//#define DEBUG_THREADS 1
-
-//#define USRP_DEBUG 1
 struct timing_info_t {
   //unsigned int frame, hw_slot, last_slot, next_slot;
   //unsigned int mbox0, mbox1, mbox2, mbox_target;
@@ -115,10 +112,6 @@ static struct {
   volatile uint8_t phy_proc_CC_id;
 } sync_phy_proc;
 
-extern double cpuf;
-
-
-void init_eNB();
 void stop_eNB(int nb_inst);
 
 int wakeup_tx(PHY_VARS_eNB *eNB, int frame_rx, int subframe_rx, int frame_tx, int subframe_tx, uint64_t timestamp_tx);

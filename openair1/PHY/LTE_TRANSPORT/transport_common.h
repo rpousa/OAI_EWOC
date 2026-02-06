@@ -40,9 +40,6 @@
 //#endif
 
 #define MOD_TABLE_QPSK_OFFSET 1
-#define MOD_TABLE_16QAM_OFFSET 5
-#define MOD_TABLE_64QAM_OFFSET 21
-#define MOD_TABLE_PSS_OFFSET 85
 
 // structures below implement 36-211 and 36-212
 
@@ -72,7 +69,6 @@
 #define PMI_2A_1j  2
 #define PMI_2A_1mj 3
 //2 layers
-#define PMI_2A_R1_10 0
 #define PMI_2A_R1_11 1
 #define PMI_2A_R1_1j 2
 

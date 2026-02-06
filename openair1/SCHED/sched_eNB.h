@@ -38,10 +38,6 @@ enum THREAD_INDEX { OPENAIR_THREAD_INDEX = 0,
                     openair_SCHED_NB_THREADS
                   }; // do not modify this line
 
-
-#define OPENAIR_THREAD_PRIORITY        255
-
-
 #define OPENAIR_THREAD_STACK_SIZE     PTHREAD_STACK_MIN //4096 //RTL_PTHREAD_STACK_MIN*6
 //#define DLC_THREAD_STACK_SIZE        4096 //DLC stack size
 //#define UE_SLOT_PARALLELISATION
@@ -76,10 +72,6 @@ enum openair_HARQ_TYPE {
   openair_harq_UL,
   openair_harq_RA
 };
-
-#define DAQ_AGC_ON 1
-#define DAQ_AGC_OFF 0
-
 
 /** @addtogroup _PHY_PROCEDURES_
  * @{

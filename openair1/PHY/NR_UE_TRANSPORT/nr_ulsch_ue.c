@@ -517,6 +517,51 @@ static void map_symbols(const nr_phy_pxsch_params_t p,
   }
 }
 
+// Function to lookup beta offset value from Table 9.3-2 in TS 38.213
+static double get_beta_offset_csi(const uint8_t beta_offset_idx)
+{
+  static const double beta_offset_values[19] = {1.125,
+                                                1.250,
+                                                1.375,
+                                                1.625,
+                                                1.750,
+                                                2.000,
+                                                2.250,
+                                                2.500,
+                                                2.875,
+                                                3.125,
+                                                3.500,
+                                                4.000,
+                                                5.000,
+                                                6.250,
+                                                8.000,
+                                                10.000,
+                                                12.625,
+                                                15.875,
+                                                20.000};
+
+  if (beta_offset_idx >= sizeofArray(beta_offset_values)) {
+    LOG_E(PHY, "Invalid beta_offset_index %d, using default value\n", beta_offset_idx);
+    return beta_offset_values[9];
+  }
+
+  return beta_offset_values[beta_offset_idx];
+}
+
+static uint32_t get_d_factor_re(const uint32_t a, const uint32_t b)
+{
+  uint32_t d_factor_re;
+  if (a >= b) {
+    d_factor_re = 1;
+  } else {
+    d_factor_re = floor((double)b / a);
+    if (d_factor_re == 0) {
+      d_factor_re = 1;
+    }
+  }
+  return d_factor_re;
+}
+
 // Function to lookup beta offset value from Table 9.3-1 in TS 38.213
 static double get_beta_offset_harq_ack(uint8_t beta_offset_index)
 {
@@ -586,13 +631,19 @@ static int get_crc_uci(const uint16_t ouci)
   return L;
 }
 
-static uint16_t get_Qd(const uint16_t oack, double beta, double alpha, const uint32_t sumKr, const uint32_t s1, const uint32_t s2)
+static uint16_t get_Qd(const uint16_t oack,
+                       double beta,
+                       double alpha,
+                       const uint32_t sumKr,
+                       const uint32_t s1,
+                       const uint32_t s2,
+                       const uint32_t sub)
 {
   if (oack == 0)
     return 0;
 
   uint16_t first_term = ceil(((double)oack + get_crc_uci(oack)) * (double)beta * s1 / sumKr);
-  uint16_t second_term = ceil(alpha * s2);
+  uint16_t second_term = ceil(alpha * s2) - sub;
 
   return (first_term < second_term) ? first_term : second_term;
 }
@@ -661,26 +712,41 @@ static rate_match_info_uci_t calc_rate_match_info_uci(const nfapi_nr_ue_pusch_pd
   rate_match_info_uci_t rminfo = {0};
 
   // get the number of coded HARQ-ACK symbols and bits, TS 38.212 section 6.3.2.4.1.1
-  rminfo.Q_dash_ACK = get_Qd(oack, beta, alpha, sumKr, s1, s2);
+  rminfo.Q_dash_ACK = get_Qd(oack, beta, alpha, sumKr, s1, s2, 0);
   rminfo.E_uci_ACK = rminfo.Q_dash_ACK * nlqm;
 
   if (oack_rvd > 0) {
-    rminfo.Q_dash_ACK_rvd = get_Qd(oack_rvd, beta, alpha, sumKr, s1, s2);
+    rminfo.Q_dash_ACK_rvd = get_Qd(oack_rvd, beta, alpha, sumKr, s1, s2, 0);
     rminfo.E_uci_ACK_rvd = rminfo.Q_dash_ACK_rvd * nlqm;
   }
 
+  // get beta offset for csi
+  const double beta_csi1 = get_beta_offset_csi(pusch_pdu->pusch_uci.beta_offset_csi1);
+
+  // get the number of coded CSI part 1 symbols and bits, TS 38.212 section 6.3.2.4.1.2
+  const uint16_t ocsi1 = pusch_pdu->pusch_uci.csi_payload.p1_bits;
+  rminfo.Q_dash_CSI1 = get_Qd(ocsi1, beta_csi1, alpha, sumKr, s1, s1, rminfo.Q_dash_ACK);
+  rminfo.E_uci_CSI1 = rminfo.Q_dash_CSI1 * nlqm;
+
+  // get the number of coded CSI part 2 symbols and bits, TS 38.212 section 6.3.2.4.1.3
+  const double beta_csi2 = get_beta_offset_csi(pusch_pdu->pusch_uci.beta_offset_csi2);
+  const uint16_t ocsi2 = pusch_pdu->pusch_uci.csi_payload.p2_bits;
+  rminfo.Q_dash_CSI2 = get_Qd(ocsi2, beta_csi2, alpha, sumKr, s1, s1, rminfo.Q_dash_ACK + rminfo.Q_dash_CSI1);
+  rminfo.E_uci_CSI2 = rminfo.Q_dash_CSI2 * nlqm;
+
+  rminfo.G_ulsch = *G - (rminfo.E_uci_CSI1 + rminfo.E_uci_CSI2);
   if (oack_rvd == 0) {
-    rminfo.G_ulsch = *G - rminfo.E_uci_ACK;
-  } else {
-    rminfo.G_ulsch = *G;
+    rminfo.G_ulsch -= rminfo.E_uci_ACK;
   }
 
   *G = rminfo.G_ulsch;
   LOG_D(PHY, "[UCI_RATE_MATCH] sumKr=%u, s1=%u, s2=%u, Final G_ulsch (output G): %u\n", sumKr, s1, s2, *G);
   LOG_D(PHY,
-        "[UCI_RATE_MATCH] rate matching info returned: E_uci_ACK=%u, E_uci_ACK_rvd=%u, G_ulsch=%u\n",
+        "[UCI_RATE_MATCH] rate matching info returned: E_uci_ACK=%u, E_uci_ACK_rvd=%u, E_uci_CSI1=%u, E_uci_CSI2=%u, G_ulsch=%u\n",
         rminfo.E_uci_ACK,
         rminfo.E_uci_ACK_rvd,
+        rminfo.E_uci_CSI1,
+        rminfo.E_uci_CSI2,
         rminfo.G_ulsch);
 
   return rminfo;
@@ -747,115 +813,93 @@ static void get_first_uci_symbol(const uint8_t start_symbol,
   *dmrs_p1 -= start_symbol;
 }
 
-/*
- * This function builds the initial template by reserving positions for HARQ-ACK.
- */
-static void build_template_reserve_ack(uci_on_pusch_bit_type_t *template,
-                                       const nfapi_nr_ue_pusch_pdu_t *pusch_pdu,
-                                       uint32_t G_ack_rvd,
-                                       uint8_t l1_c,
-                                       const uint32_t *m_uci_current,
-                                       const uint32_t *m_ulsch_initial,
-                                       uint32_t positions_by_sym[][MAX_UCI_CODED_BITS],
-                                       uint32_t *count_by_sym)
+static inline bool skip_mapping_current_uci(const uci_on_pusch_bit_type_t template, const uci_on_pusch_bit_type_t uci_type_to_map)
 {
-  const uint8_t n_symbols = pusch_pdu->nr_of_symbols;
-  const uint32_t nlqm = pusch_pdu->qam_mod_order * pusch_pdu->nrOfLayers;
+  bool ret = false;
+  switch (uci_type_to_map) {
+    case BIT_TYPE_ACK_RESERVED:
+    case BIT_TYPE_ACK:
+      // ACK bits get the highest priority. Don't skip
+      ret = false;
+      break;
 
-  memset(count_by_sym, 0, n_symbols * sizeof(uint32_t));
+    case BIT_TYPE_CSI1:
+      // Skip if already occupied by ACK and reserved ACK. Template is initialized with ULSCH
+      ret = (template != BIT_TYPE_ULSCH);
+      break;
 
-  uint32_t symbol_start_bit_idx[14] = {0};
-  for (uint8_t s = 1; s < n_symbols; s++) {
-    symbol_start_bit_idx[s] = symbol_start_bit_idx[s - 1] + (m_ulsch_initial[s - 1] * nlqm);
+    case BIT_TYPE_CSI2:
+      // Skip if already occupied by ACK but not reserved ACK
+      ret = (template != BIT_TYPE_ACK_RESERVED && template != BIT_TYPE_ULSCH);
+      break;
+
+    default:
+      AssertFatal(0, "Mapping called with incorrect UCI type\n");
   }
-
-  // Reserve Positions using RE-level D-Factor Distribution
-  uint32_t total_reserved = 0;
-
-  for (uint8_t sym = l1_c; sym < n_symbols && total_reserved < G_ack_rvd; sym++) {
-    const uint32_t uci_re_on_sym = m_uci_current[sym];
-
-    if (uci_re_on_sym > 0) {
-      const uint32_t remaining_to_reserve = G_ack_rvd - total_reserved;
-      uint32_t d_factor_re;
-      const uint32_t num_re_to_select = ceil((double)remaining_to_reserve / nlqm);
-      if (num_re_to_select >= uci_re_on_sym) {
-        d_factor_re = 1;
-      } else {
-        d_factor_re = floor((double)uci_re_on_sym / num_re_to_select);
-        if (d_factor_re == 0) {
-          d_factor_re = 1;
-        }
-      }
-
-      for (uint32_t re_offset = 0; re_offset < uci_re_on_sym && total_reserved < G_ack_rvd; re_offset += d_factor_re) {
-        for (uint32_t bit_in_re = 0; bit_in_re < nlqm; bit_in_re++) {
-          if (total_reserved >= G_ack_rvd) {
-            break;
-          }
-
-          uint32_t bit_offset_in_sym = (re_offset * nlqm) + bit_in_re;
-          uint32_t cw_idx = symbol_start_bit_idx[sym] + bit_offset_in_sym;
-          template[cw_idx] = BIT_TYPE_ACK_RESERVED;
-          positions_by_sym[sym][count_by_sym[sym]] = cw_idx;
-          count_by_sym[sym]++;
-
-          total_reserved++;
-        }
-      }
-    }
-  }
+  return ret;
 }
 
-/*
- * This function maps the HARQ-ACK bits when O_ACK > 2
- */
-static void map_non_overlapped_ack(uci_on_pusch_bit_type_t *template,
-                                   const nfapi_nr_ue_pusch_pdu_t *pusch_pdu,
-                                   uint16_t G_ack,
-                                   uint8_t l1_c,
-                                   const uint32_t *m_uci_current,
-                                   const uint32_t *m_ulsch_initial)
-{
-  const uint8_t n_symbols = pusch_pdu->nr_of_symbols;
-  const uint32_t nlqm = pusch_pdu->qam_mod_order * pusch_pdu->nrOfLayers;
+struct map_uci_common_arg {
+  uci_on_pusch_bit_type_t *template;
+  uci_on_pusch_bit_type_t uci_type_to_map;
+  uint32_t n_symbols;
+  uint32_t nlqm;
+  uint16_t G_uci;
+  uint8_t l1_c;
+  uint32_t *m_uci_current;
+  uint32_t *m_ulsch_initial;
+  uint32_t (*resv_ack_pos_symb)[MAX_UCI_CODED_BITS];
+  uint32_t *resv_ack_count_symb;
+};
 
-  uint32_t symbol_start_bit_idx[14] = {0};
-  for (uint8_t s = 1; s < n_symbols; s++) {
-    symbol_start_bit_idx[s] = symbol_start_bit_idx[s - 1] + (m_ulsch_initial[s - 1] * nlqm);
+static void map_uci_common(struct map_uci_common_arg p)
+{
+  DevAssert((p.resv_ack_count_symb && p.resv_ack_pos_symb && (p.uci_type_to_map == BIT_TYPE_ACK_RESERVED))
+            || (!p.resv_ack_count_symb && !p.resv_ack_pos_symb && (p.uci_type_to_map != BIT_TYPE_ACK_RESERVED)));
+
+  uint32_t symbol_start_bit_idx[NR_SYMBOLS_PER_SLOT] = {0};
+  for (uint8_t s = 1; s < p.n_symbols; s++) {
+    symbol_start_bit_idx[s] = symbol_start_bit_idx[s - 1] + (p.m_ulsch_initial[s - 1] * p.nlqm);
   }
 
+  if (p.uci_type_to_map == BIT_TYPE_ACK_RESERVED)
+    memset(p.resv_ack_count_symb, 0, sizeof(*p.resv_ack_count_symb) * NR_SYMBOLS_PER_SLOT);
+
   uint32_t total_placed = 0;
-  for (uint8_t sym = l1_c; sym < n_symbols && total_placed < G_ack; sym++) {
-    const uint32_t uci_re_on_sym = m_uci_current[sym];
+  for (uint8_t sym = p.l1_c; sym < p.n_symbols && total_placed < p.G_uci; sym++) {
+    const uint32_t uci_re_on_sym = p.m_uci_current[sym];
 
-    if (uci_re_on_sym > 0) {
-      const uint32_t remaining_to_place = G_ack - total_placed;
-      uint32_t d_factor_re;
-      const uint32_t num_re_to_select = ceil((double)remaining_to_place / nlqm);
+    if (uci_re_on_sym <= 0) {
+      continue;
+    }
 
-      if (num_re_to_select >= uci_re_on_sym) {
-        d_factor_re = 1;
-      } else {
-        d_factor_re = floor((double)uci_re_on_sym / num_re_to_select);
-        if (d_factor_re == 0) {
-          d_factor_re = 1;
-        }
+    const uint32_t remaining_to_place = p.G_uci - total_placed;
+    const uint32_t num_re_to_select = ceil((double)remaining_to_place / p.nlqm);
+
+    uint32_t d_factor_re = get_d_factor_re(num_re_to_select, uci_re_on_sym);
+    uint32_t re_offset = 0;
+    uint32_t *cur_sym_resv_ack_pos = p.resv_ack_pos_symb[sym];
+    while (re_offset < uci_re_on_sym && total_placed < p.G_uci) {
+      uci_on_pusch_bit_type_t cur_template = p.template[symbol_start_bit_idx[sym] + (re_offset * p.nlqm)];
+      if (skip_mapping_current_uci(cur_template, p.uci_type_to_map)) {
+        re_offset++;
+        continue; // if RE already allocated to UCI or reserved for ACK
       }
-
-      for (uint32_t re_offset = 0; re_offset < uci_re_on_sym && total_placed < G_ack; re_offset += d_factor_re) {
-        for (uint32_t bit_in_re = 0; bit_in_re < nlqm; bit_in_re++) {
-          if (total_placed >= G_ack) {
-            break;
-          }
-
-          uint32_t bit_offset_in_sym = (re_offset * nlqm) + bit_in_re;
-          uint32_t cw_idx = symbol_start_bit_idx[sym] + bit_offset_in_sym;
-          template[cw_idx] = BIT_TYPE_ACK;
-
-          total_placed++;
+      for (uint32_t bit_in_re = 0; bit_in_re < p.nlqm; bit_in_re++) {
+        if (total_placed >= p.G_uci) {
+          break;
         }
+
+        uint32_t bit_offset_in_sym = (re_offset * p.nlqm) + bit_in_re;
+        uint32_t cw_idx = symbol_start_bit_idx[sym] + bit_offset_in_sym;
+        p.template[cw_idx] = p.uci_type_to_map;
+        if (p.uci_type_to_map == BIT_TYPE_ACK_RESERVED) {
+          cur_sym_resv_ack_pos[p.resv_ack_count_symb[sym]++] = cw_idx;
+        }
+
+        total_placed++;
       }
+      re_offset += d_factor_re;
     }
   }
 }
@@ -877,21 +921,13 @@ static void map_overlapped_ack(uci_on_pusch_bit_type_t *template,
 
     if (num_reserved_bits_on_sym > 0) {
       const uint32_t num_ack_remaining = G_ack - ack_bits_marked;
-      uint32_t d_factor;
 
       // This d-factor is calculated for stepping through the list of *reserved bits*.
-      if (num_ack_remaining >= num_reserved_bits_on_sym) {
-        d_factor = 1;
-      } else {
-        d_factor = floor((double)num_reserved_bits_on_sym / num_ack_remaining);
-        if (d_factor == 0) {
-          d_factor = 1;
-        }
-      }
+      const uint32_t d_factor_re = get_d_factor_re(num_ack_remaining, num_reserved_bits_on_sym);
 
       const uint32_t *reserved_indices_on_this_sym = positions_by_sym[sym_iter];
 
-      for (uint32_t i = 0; i < num_reserved_bits_on_sym && ack_bits_marked < G_ack; i += d_factor) {
+      for (uint32_t i = 0; i < num_reserved_bits_on_sym && ack_bits_marked < G_ack; i += d_factor_re) {
         uint32_t pos_to_mark = reserved_indices_on_this_sym[i];
         template[pos_to_mark] = BIT_TYPE_ACK_ULSCH;
 
@@ -909,11 +945,17 @@ static void apply_template_to_codeword(uint8_t *codeword,
                                        uint32_t codeword_len,
                                        const uint8_t *ulsch_bits,
                                        const uint64_t *cack,
+                                       const uint64_t *csi1,
+                                       const uint64_t *csi2,
                                        uint16_t G_ack,
+                                       uint32_t G_csi1,
+                                       uint32_t G_csi2,
                                        uint32_t G_ulsch)
 {
   uint32_t ulsch_idx = 0;
   uint32_t ack_idx = 0;
+  uint32_t csi1_idx = 0;
+  uint32_t csi2_idx = 0;
 
   for (uint32_t i = 0; i < codeword_len; i++) {
     switch (template[i]) {
@@ -932,6 +974,24 @@ static void apply_template_to_codeword(uint8_t *codeword,
           if (G_ulsch > 0 && ulsch_idx < G_ulsch) {
             ulsch_idx++;
           }
+        }
+        break;
+
+      case BIT_TYPE_CSI1:
+        if (G_csi1 > 0 && csi1_idx < G_csi1) {
+          uint32_t word_idx = csi1_idx / 64;
+          uint32_t bit_in_word_idx = csi1_idx % 64;
+          codeword[i] = (csi1[word_idx] >> bit_in_word_idx) & 1;
+          csi1_idx++;
+        }
+        break;
+
+      case BIT_TYPE_CSI2:
+        if (G_csi2 > 0 && csi2_idx < G_csi2) {
+          uint32_t word_idx = csi2_idx / 64;
+          uint32_t bit_in_word_idx = csi2_idx % 64;
+          codeword[i] = (csi2[word_idx] >> bit_in_word_idx) & 1;
+          csi2_idx++;
         }
         break;
 
@@ -957,10 +1017,14 @@ static uci_on_pusch_bit_type_t *nr_data_control_mapping(const nfapi_nr_ue_pusch_
                                                         unsigned int G_ulsch,
                                                         uint16_t G_ack,
                                                         uint32_t G_ack_rvd,
+                                                        uint32_t G_csi1,
+                                                        uint32_t G_csi2,
                                                         uint8_t *codeword,
                                                         uint32_t codeword_len,
                                                         const uint8_t *ulsch_bits,
-                                                        const uint64_t *cack)
+                                                        const uint64_t *cack,
+                                                        const uint64_t *csi1,
+                                                        const uint64_t *csi2)
 {
   if (!pusch_pdu || !codeword || codeword_len == 0 || !template)
     return NULL;
@@ -989,24 +1053,40 @@ static uci_on_pusch_bit_type_t *nr_data_control_mapping(const nfapi_nr_ue_pusch_
   uint32_t positions_by_sym[NR_NUMBER_OF_SYMBOLS_PER_SLOT][MAX_UCI_CODED_BITS] = {0};
   uint32_t count_by_sym[NR_NUMBER_OF_SYMBOLS_PER_SLOT] = {0};
 
+  struct map_uci_common_arg map_arg = {.template = template,
+                                       .n_symbols = pusch_pdu->nr_of_symbols,
+                                       .nlqm = pusch_pdu->qam_mod_order * pusch_pdu->nrOfLayers,
+                                       .l1_c = l1_c,
+                                       .m_uci_current = m_uci_current,
+                                       .m_ulsch_initial = m_ulsch_initial};
   if (G_ack_rvd > 0) {
-    build_template_reserve_ack(template,
-                               pusch_pdu,
-                               G_ack_rvd,
-                               l1_c,
-                               m_uci_current,
-                               m_ulsch_initial,
-                               positions_by_sym,
-                               count_by_sym);
+    map_arg.uci_type_to_map = BIT_TYPE_ACK_RESERVED;
+    map_arg.G_uci = G_ack_rvd;
+    map_arg.resv_ack_pos_symb = positions_by_sym;
+    map_arg.resv_ack_count_symb = count_by_sym;
+    map_uci_common(map_arg);
   } else if (G_ack > 0) {
-    map_non_overlapped_ack(template, pusch_pdu, G_ack, l1_c, m_uci_current, m_ulsch_initial);
+    map_arg.uci_type_to_map = BIT_TYPE_ACK;
+    map_arg.G_uci = G_ack;
+    map_uci_common(map_arg);
   }
+
+  // CSI part 1
+  map_arg.uci_type_to_map = BIT_TYPE_CSI1;
+  map_arg.G_uci = G_csi1;
+  map_arg.resv_ack_pos_symb = NULL;
+  map_arg.resv_ack_count_symb = NULL;
+  map_uci_common(map_arg);
+  // CSI part 2
+  map_arg.uci_type_to_map = BIT_TYPE_CSI2;
+  map_arg.G_uci = G_csi2;
+  map_uci_common(map_arg);
 
   if (G_ack > 0 && G_ack_rvd > 0) {
     map_overlapped_ack(template, G_ack, l1_c, n_symbols, positions_by_sym, count_by_sym);
   }
 
-  apply_template_to_codeword(codeword, template, codeword_len, ulsch_bits, cack, G_ack, G_ulsch);
+  apply_template_to_codeword(codeword, template, codeword_len, ulsch_bits, cack, csi1, csi2, G_ack, G_csi1, G_csi2, G_ulsch);
 
   return template;
 }
@@ -1106,7 +1186,8 @@ void nr_ue_ulsch_procedures(PHY_VARS_NR_UE *UE,
     return;
   }
 
-  if (pusch_pdu->pusch_uci.harq_ack_bit_length != 0) {
+  bool uci_present = (pusch_pdu->pusch_uci.harq_ack_bit_length != 0) || (pusch_pdu->pusch_uci.csi_payload.p1_bits != 0);
+  if (uci_present) {
     rm_info = calc_rate_match_info_uci(pusch_pdu, harq_process_ul_ue, nl_qm, &G[pusch_id]);
   }
 
@@ -1123,12 +1204,10 @@ void nr_ue_ulsch_procedures(PHY_VARS_NR_UE *UE,
 
   int N_PRB_oh = 0; // higher layer (RRC) parameter xOverhead in PUSCH-ServingCellConfig
 
-  if (pusch_pdu->pusch_uci.harq_ack_bit_length != 0) {
-    LOG_D(PHY, "[UCI_ON_PUSCH] Original HARQ-ACK bit length: %u\n", pusch_pdu->pusch_uci.harq_ack_bit_length);
-    LOG_D(PHY, "[UCI_ON_PUSCH] Initial G: %u\n", G_initial_total_pusch_bits);
-    // b is the block of bits transmitted on the physical channel after payload coding
-    uint64_t b[16] = {0}; // limit to 1024-bit encoded length
+  // b is the block of bits transmitted on the physical channel after payload coding
+  uint64_t b_ack[16] = {0}; // limit to 1024-bit encoded length
 
+  if (pusch_pdu->pusch_uci.harq_ack_bit_length != 0) {
     if (pucch_pdu == NULL) {
       LOG_E(PHY, "nr_ue_ulsch_procedures: pucch_pdu is NULL but HARQ-ACK is present. Cannot proceed with UCI encoding.\n");
       stop_meas_nr_ue_phy(UE, PUSCH_PROC_STATS);
@@ -1141,7 +1220,7 @@ void nr_ue_ulsch_procedures(PHY_VARS_NR_UE *UE,
                     true,
                     rm_info.E_uci_ACK,
                     mod_order,
-                    &b[0]);
+                    &b_ack[0]);
 
     LOG_D(PHY,
           "[UCI_ON_PUSCH] G_ulsch=%u (updated G[pusch_id]), G_ack=%u (M_bit), G_ack_rvd=%u, total_len=%u "
@@ -1150,7 +1229,31 @@ void nr_ue_ulsch_procedures(PHY_VARS_NR_UE *UE,
           rm_info.E_uci_ACK,
           rm_info.E_uci_ACK_rvd,
           G_initial_total_pusch_bits);
+  }
 
+  uint64_t b_csi1[16] = {0}; // limit to 1024-bit encoded length
+  uint64_t b_csi2[16] = {0}; // limit to 1024-bit encoded length
+  if (pusch_pdu->pusch_uci.csi_payload.p1_bits != 0) {
+    nr_uci_encoding(pusch_pdu->pusch_uci.csi_payload.part1_payload,
+                    pusch_pdu->pusch_uci.csi_payload.p1_bits,
+                    pucch_pdu->prb_size,
+                    true,
+                    rm_info.E_uci_CSI1,
+                    mod_order,
+                    &b_csi1[0]);
+
+    // Process CSI Part 2 if any
+    if (pusch_pdu->pusch_uci.csi_payload.p2_bits > 0)
+      nr_uci_encoding(pusch_pdu->pusch_uci.csi_payload.part2_payload,
+                      pusch_pdu->pusch_uci.csi_payload.p2_bits,
+                      pucch_pdu->prb_size,
+                      true,
+                      rm_info.E_uci_CSI2,
+                      mod_order,
+                      &b_csi2[0]);
+  }
+
+  if (uci_present) {
     uint8_t temp_codeword[G_initial_total_pusch_bits];
     start_meas_nr_ue_phy(UE, UCI_ON_PUSCH_MAPPING);
     nr_data_control_mapping(pusch_pdu,
@@ -1158,17 +1261,18 @@ void nr_ue_ulsch_procedures(PHY_VARS_NR_UE *UE,
                             G[pusch_id],
                             rm_info.E_uci_ACK,
                             rm_info.E_uci_ACK_rvd,
+                            rm_info.E_uci_CSI1,
+                            rm_info.E_uci_CSI2,
                             temp_codeword,
                             G_initial_total_pusch_bits,
                             harq_process_ul_ue->f,
-                            b);
+                            b_ack,
+                            b_csi1,
+                            b_csi2);
     stop_meas_nr_ue_phy(UE, UCI_ON_PUSCH_MAPPING);
     memcpy(harq_process_ul_ue->f, temp_codeword, G_initial_total_pusch_bits);
     uci_mapping_template = template_buffer;
   }
-
-  AssertFatal(pusch_pdu->pusch_uci.csi_part1_bit_length == 0 && pusch_pdu->pusch_uci.csi_part2_bit_length == 0,
-              "UCI (CSI) on PUSCH not supported at PHY\n");
 
   uint16_t start_rb = pusch_pdu->rb_start;
   uint16_t start_sc = frame_parms->first_carrier_offset + (start_rb + pusch_pdu->bwp_start) * NR_NB_SC_PER_RB;
@@ -1202,9 +1306,8 @@ void nr_ue_ulsch_procedures(PHY_VARS_NR_UE *UE,
   /////////////////////////ULSCH scrambling/////////////////////////
 
   uint32_t available_bits;
-  bool is_uci_on_pusch = (pusch_pdu->pusch_uci.harq_ack_bit_length != 0);
 
-  if (is_uci_on_pusch) {
+  if (uci_present) {
     // UCI on PUSCH is present, so available bits are the total codeword length
     available_bits = G_initial_total_pusch_bits;
   } else {
@@ -1221,7 +1324,7 @@ void nr_ue_ulsch_procedures(PHY_VARS_NR_UE *UE,
                                available_bits,
                                pusch_pdu->data_scrambling_id,
                                rnti,
-                               is_uci_on_pusch,
+                               uci_present,
                                uci_mapping_template,
                                scrambled_output);
   if (UE->phy_sim_test_buf) {

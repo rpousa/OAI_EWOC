@@ -390,7 +390,7 @@ void fh_if5_north_asynch_in(RU_t *ru,
   LTE_DL_FRAME_PARMS *fp = ru->frame_parms;
   RU_proc_t *proc        = &ru->proc;
   int tti_tx,frame_tx;
-  openair0_timestamp timestamp_tx=0;
+  openair0_timestamp_t timestamp_tx = 0;
   //recv_IF5(ru, &timestamp_tx, *subframe, IF5_RRH_GW_DL);
   //      LOG_I(PHY,"Received subframe %d (TS %llu) from RCC\n",tti_tx,timestamp_tx);
   tti_tx = (timestamp_tx/fp->samples_per_tti)%10;
@@ -540,7 +540,7 @@ void rx_rf(RU_t *ru,
   unsigned int rxs;
   int i;
   int resynch=0;
-  openair0_timestamp ts=0,old_ts=0;
+  openair0_timestamp_t ts = 0, old_ts = 0;
 
   for (i=0; i<ru->nb_rx; i++)
     rxp[i] = (void *)&ru->common.rxdata[i][*subframe*fp->samples_per_tti];
@@ -1251,45 +1251,37 @@ void fill_rf_config(RU_t *ru,
     if(ru->numerology == 0) {
       if (fp->threequarter_fs) {
         cfg->sample_rate=23.04e6;
-        cfg->samples_per_frame = 230400;
         cfg->tx_bw = 20e6;
         cfg->rx_bw = 20e6;
       } else {
         cfg->sample_rate=30.72e6;
-        cfg->samples_per_frame = 307200;
         cfg->tx_bw = 20e6;
         cfg->rx_bw = 20e6;
       }
     } else if(ru->numerology == 1) {
       cfg->sample_rate=61.44e6;
-      cfg->samples_per_frame = 307200;
       cfg->tx_bw = 20e6;
       cfg->rx_bw = 20e6;
     } else if(ru->numerology == 2) {
       cfg->sample_rate=122.88e6;
-      cfg->samples_per_frame = 307200;
       cfg->tx_bw = 40e6;
       cfg->rx_bw = 40e6;
     } else {
       LOG_I(PHY,"Wrong input for numerology %d\n setting to 20MHz normal CP configuration",numerology);
       cfg->sample_rate=30.72e6;
-      cfg->samples_per_frame = 307200;
       cfg->tx_bw = 10e6;
       cfg->rx_bw = 10e6;
     }
   } else if(fp->N_RB_DL == 50) {
     cfg->sample_rate=15.36e6;
-    cfg->samples_per_frame = 153600;
     cfg->tx_bw = 10e6;
     cfg->rx_bw = 10e6;
   } else if (fp->N_RB_DL == 25) {
     cfg->sample_rate=7.68e6;
-    cfg->samples_per_frame = 76800;
     cfg->tx_bw = 5e6;
     cfg->rx_bw = 5e6;
   } else if (fp->N_RB_DL == 6) {
     cfg->sample_rate=1.92e6;
-    cfg->samples_per_frame = 19200;
     cfg->tx_bw = 1.5e6;
     cfg->rx_bw = 1.5e6;
   } else AssertFatal(1==0,"Unknown N_RB_DL %d\n",fp->N_RB_DL);
@@ -1299,7 +1291,6 @@ void fill_rf_config(RU_t *ru,
   else //FDD
     cfg->duplex_mode = duplex_mode_FDD;
 
-  cfg->Mod_id = 0;
   cfg->num_rb_dl=fp->N_RB_DL;
   cfg->tx_num_channels=ru->nb_tx;
   cfg->rx_num_channels=ru->nb_rx;

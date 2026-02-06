@@ -34,9 +34,9 @@
 
 extern PHY_VARS_NR_UE ***PHY_vars_UE_g;
 
-void nr_get_carrier_frequencies(PHY_VARS_NR_UE *ue, uint64_t *dl_carrier, uint64_t *ul_carrier){
-
-  NR_DL_FRAME_PARMS *fp = &ue->frame_parms;
+void nr_get_carrier_frequencies(const PHY_VARS_NR_UE *ue, uint64_t *dl_carrier, uint64_t *ul_carrier)
+{
+  const NR_DL_FRAME_PARMS *fp = &ue->frame_parms;
   if (ue->if_freq!=0) {
     *dl_carrier = ue->if_freq;
     *ul_carrier = *dl_carrier + ue->if_freq_off;
@@ -47,12 +47,8 @@ void nr_get_carrier_frequencies(PHY_VARS_NR_UE *ue, uint64_t *dl_carrier, uint64
   }
 }
 
-
-
-
-void nr_rf_card_config_gain(openair0_config_t *openair0_cfg,
-                            double rx_gain_off){
-
+void nr_rf_card_config_gain(openair0_config_t *openair0_cfg)
+{
   uint8_t mod_id     = 0;
   uint8_t cc_id      = 0;
   PHY_VARS_NR_UE *ue = PHY_vars_UE_g[mod_id][cc_id];
@@ -65,7 +61,7 @@ void nr_rf_card_config_gain(openair0_config_t *openair0_cfg,
     if (tx_gain)
       openair0_cfg->tx_gain[i] = tx_gain;
     if (rx_gain)
-      openair0_cfg->rx_gain[i] = rx_gain - rx_gain_off;
+      openair0_cfg->rx_gain[i] = rx_gain;
 
     openair0_cfg->autocal[i] = 1;
 

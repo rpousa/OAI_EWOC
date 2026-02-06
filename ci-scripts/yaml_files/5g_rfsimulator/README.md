@@ -256,7 +256,7 @@ Create the entry for the second UE in `docker-compose.yaml` file as follows:
             - NET_ADMIN  # for interface bringup
             - NET_RAW    # for ping
         environment:
-            USE_ADDITIONAL_OPTIONS: -E --rfsim -r 106 --numerology 1 -C 3619200000 --rfsimulator.serveraddr 192.168.71.140 --log_config.global_log_options level,nocolor,time
+            USE_ADDITIONAL_OPTIONS: -E --rfsim -r 106 --numerology 1 -C 3619200000 --rfsimulator.[0].serveraddr 192.168.71.140 --log_config.global_log_options level,nocolor,time
         depends_on:
             - oai-gnb
         devices:
@@ -518,8 +518,7 @@ uicc0 = {
   imsi = "208990100001100";
   key = "fec86ba6eb707ed08905757b1bb44b8f";
   opc= "C42449363BBAD02B66D16BC975D77CC1";
-  dnn= "oai";
-  nssai_sst=1;
+  pdu_sessions = ({ dnn = "oai"; nssai_sst = 1; });
 }
 ```
 

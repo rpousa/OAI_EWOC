@@ -41,7 +41,7 @@ uint32_t ref_get_samples_slot_timestamp(NR_DL_FRAME_PARMS *fp, unsigned int slot
   return samp_count;
 }
 
-uint32_t ref_get_slot_from_timestamp(openair0_timestamp ts, NR_DL_FRAME_PARMS *fp)
+uint32_t ref_get_slot_from_timestamp(openair0_timestamp_t ts, NR_DL_FRAME_PARMS *fp)
 {
   uint32_t slot_idx = 0;
   int samples_till_the_slot = get_samples_per_slot(slot_idx, fp) - 1;
@@ -75,7 +75,7 @@ void test_coherence_slot_api(NR_DL_FRAME_PARMS *fp)
     EXPECT_EQ(get_samples_slot_timestamp(fp, slot), ref_get_samples_slot_timestamp(fp, slot));
   }
 
-  openair0_timestamp ts = get_samples_per_slot(0, fp);
+  openair0_timestamp_t ts = get_samples_per_slot(0, fp);
   // When timestamp is the last sample of the slot
   EXPECT_EQ(get_slot_from_timestamp(ts - 1, fp), 0);
   for (unsigned int slot = 0; slot < fp->slots_per_frame; slot++) {

@@ -162,7 +162,7 @@ You need to use  `--rfsim` if you are running the test with rfsimulator.
 
 OAI UE:
 ```
-sudo ./nr-uesoftmodem -r 106 --numerology 1 --band 78 -C 3619200000 --rfsim --rfsimulator.serveraddr 127.0.0.1
+sudo ./nr-uesoftmodem -r 106 --numerology 1 --band 78 -C 3619200000 --rfsim --rfsimulator.[0].serveraddr 127.0.0.1
 ```
 
 ## 3. Configuration file IP addresses of network functions

@@ -41,12 +41,6 @@
 #define PDCP_DATA_PDU_BIT_SET    0x01
 
 /*
- * PDU-type (3-bit, see 6.3.8)
- */
-#define PDCP_STATUS_REPORT 0x00
-#define INTERSPERSED_ROHC_FEEDBACK_PACKET 0x01
-
-/*
  * 6.1 Protocol Data Units
  * 6.2.2 Control Plane PDCP Data PDU
  */
@@ -83,7 +77,6 @@ typedef struct {
   uint8_t dc;
   uint8_t pdu_type; // PDU type (see 6.3.8)
 } pdcp_control_pdu_for_interspersed_rohc_feedback_packet_header;
-#define PDCP_CONTROL_PDU_INTERSPERSED_ROHC_FEEDBACK_HEADER_SIZE 1
 
 /*
  * 6.2.6 PDCP Control PDU for PDCP status report
@@ -95,11 +88,6 @@ typedef struct {
   unsigned char* window_bitmap; // Ack/Nack information coded as a bitmap
   uint16_t window_bitmap_size;
 } pdcp_control_pdu_for_pdcp_status_report;
-/*
- * Following symbolic constant is the size of FIXED part of this PDU
- * so bitmap size should be added to find total header size
- */
-#define PDCP_CONTROL_PDU_STATUS_REPORT_HEADER_SIZE 2
 
 /*
  * Parses sequence number out of buffer of User Plane PDCP Data PDU with

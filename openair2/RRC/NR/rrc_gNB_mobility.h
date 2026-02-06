@@ -50,7 +50,7 @@ typedef struct nr_ho_source_cu {
   rnti_t old_rnti;
   /// old (source) CellGroupConfig (to send the cellGroupConfig in case of
   /// reestablishment)
-  NR_CellGroupConfig_t *old_cellGroupConfig;
+  byte_array_t old_cgc;
   /// function pointer to announce the handover cancellation, e.g.,
   /// reestablishment
   ho_cancel_t ho_cancel;

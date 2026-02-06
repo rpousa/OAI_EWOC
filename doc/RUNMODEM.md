@@ -140,6 +140,104 @@ You can view all available options by typing:
 ```shell
 ./nr-uesoftmodem --help
 ```
+
+### NR UE: Configure multiple RF-frontends (RUs)
+
+Multiple RF-frontends (also called RUs) can be defined for the nr-uesoftmodem.
+Therefore, two sections in the NR UE configuration file are used:
+- `RUs`
+- `cells`
+
+The `RUs` section in the NR UE configuration file contains an array of elements, where each element has these properies:
+
+| Property name    | Type           | Default value | Description                          |
+| ---------------- | -------------- | ------------- | ------------------------------------ |
+| nb_tx            | integer        | 1             | Number of TX Antennas                |
+| nb_rx            | integer        | 1             | Number of RX Antennas                |
+| att_tx           | integer        | 0             | TX Attenuation in dB                 |
+| att_rx           | integer        | 0             | RX Attenuation in dB                 |
+| max_rxgain       | integer        | 120           | Maximum RX Gain at 0 dB Attenuation  |
+| sdr_addrs        | string         | type=b200     | SDR Parameter String                 |
+| tx_subdev        | string         |               | SDR TX Subdevice                     |
+| rx_subdev        | string         |               | SDR RX Subdevice                     |
+| clock_src        | string         | internal      | SDR Clock Source                     |
+| time_src         | string         | internal      | SDR Time Source                      |
+| tune_offset      | floating point | 0.0           | SDR Tune Offset in Hz                |
+| if_freq          | integer        | 0             | DL Intermediate Frequency in Hz      |
+| if_offset        | integer        | 0             | UL Intermediate Frequency Offset in Hz |
+
+The `cells` section in the NR UE configuration file contains an array of elements, where each element has these properies:
+
+| Property name    | Type    | Default value | Description                              |
+| ---------------- | ------- | ------------- | ---------------------------------------- |
+| ru_id            | integer | 0             | ID of the associated RU from the `RUs` section |
+| band             | integer | 78            | 5G NR Band                               |
+| rf_freq          | integer | 0             | DL Carrier Centre Frequency in Hz        |
+| rf_offset        | integer | 0             | DL Carrier Centre Frequency Offset in Hz |
+| numerology       | integer | 1             | 5G NR Numerology (µ)                     |
+| N_RB_DL          | integer | 106           | Number of DL Carrier Ressource Blocks    |
+| ssb_start        | integer | 516           | Ressource Element where the SSB Starts   |
+
+There are different scenarios where multiple RF-frontends (also called RUs) are beneficial for the NR UE:
+
+1. RF-Simulator Inter-Frequency Handover between multiple cells
+2. Multiple UEs in one instance, each using their own RF-frontend (RF-Simulator connection)
+3. Different Antennas connected to different RF-ports
+4. Concurrent connection to multiple carriers (carrier aggregation CA)
+
+This would be and example configuration for the 1. scenario:
+
+```
+rfsimulator = (
+    {
+        serveraddr = "127.0.0.2";
+        serverport = 4043;
+    }, {
+        serveraddr = "127.0.0.3";
+        serverport = 4044;
+    }
+);
+
+RUs = (
+    {
+        nb_tx = 1;
+        nb_rx = 1;
+    }, {
+        nb_tx = 1;
+        nb_rx = 1;
+    }
+);
+
+cells = (
+    {
+        ru_id      = 0;
+        band       = 78;
+        rf_freq    = 3619200000L;
+        numerology = 1;
+        N_RB_DL    = 106;
+        ssb_start  = 516;
+    }, {
+        ru_id      = 1;
+        band       = 78;
+        rf_freq    = 3649440000L;
+        numerology = 1;
+        N_RB_DL    = 106;
+        ssb_start  = 516;
+    }
+);
+```
+
+An example for the 2. scenario can be found in the file [ci-scripts/yaml_files/5g_rfsimulator_multiue/nrue.uicc.conf](../ci-scripts/yaml_files/5g_rfsimulator_multiue/nrue.uicc.conf).
+
+The 3. scenario is similar to 1., but instead of providing RF-Simulator parameters, actual SDR parameters have to be provided.
+
+The 4. scenario is not supported, as the NR UE does not implement CA, yet.
+
+Current Limitations:
+- Each RU can be used by only one cell.
+- Each RU and cell can be used by only one UE (no RU sharing implemented, yet).
+- The sampling rates of all RUs must be the same.
+
 ### Common gNB and NR UE command line options
 
 #### Three-quarter sampling
@@ -174,7 +272,7 @@ Therefore either SDR boards and a dedicated NTN channel emulator are required, o
 As shown on the [rfsimulator page](../radio/rfsimulator/README.md), RFsimulator provides different possibilities.
 E.g. to perform a simple simulation of a satellite in geostationary orbit (GEO), these parameters should be added to both gNB and UE command lines:
 ```
---rfsimulator.prop_delay 238.74
+--rfsimulator.[0].prop_delay 238.74
 ```
 
 For simulation of a satellite in low earth orbit (LEO), two channel models have been added to rfsimulator:
@@ -210,7 +308,7 @@ This can be done by either providing this line in the conf file in section `rfsi
 ```
 Or by providing this the the command line parameters:
 ```
---rfsimulator.options chanmod
+--rfsimulator.[0].options chanmod
 ```
 
 #### gNB
@@ -338,7 +436,7 @@ position0 = {
 So an example NR UE command for FDD, 5MHz BW, 15 kHz SCS, transparent GEO satellite 5G NR NTN is this:
 ```
 cd cmake_targets
-sudo ./ran_build/build/nr-uesoftmodem -O ../targets/PROJECTS/GENERIC-NR-5GC/CONF/ue.conf --band 254 -C 2488400000 --CO -873500000 -r 25 --numerology 0 --ssb 60 --rfsim --rfsimulator.prop_delay 238.74
+sudo ./ran_build/build/nr-uesoftmodem -O ../targets/PROJECTS/GENERIC-NR-5GC/CONF/ue.conf --band 254 -C 2488400000 --CO -873500000 -r 25 --numerology 0 --ssb 60 --rfsim --rfsimulator.[0].prop_delay 238.74
 ```
 
 For LEO satellite scenarios, the parameter `--ntn-initial-time-drift` must be provided via command line, as the UE needs this value to compensate for the time drift during initial sync, before SIB19 was received.
@@ -356,7 +454,7 @@ For other information on optional NR UE command line options, please refer [here
 So an example NR UE command for FDD, 5MHz BW, 15 kHz SCS, transparent LEO satellite 5G NR NTN is this:
 ```
 cd cmake_targets
-sudo ./ran_build/build/nr-uesoftmodem -O ../targets/PROJECTS/GENERIC-NR-5GC/CONF/ue.conf --band 254 -C 2488400000 --CO -873500000 -r 25 --numerology 0 --ssb 60 --rfsim --rfsimulator.prop_delay 20 --rfsimulator.options chanmod --time-sync-I 0.1 --ntn-initial-time-drift -46 --initial-fo 57340 --cont-fo-comp 2
+sudo ./ran_build/build/nr-uesoftmodem -O ../targets/PROJECTS/GENERIC-NR-5GC/CONF/ue.conf --band 254 -C 2488400000 --CO -873500000 -r 25 --numerology 0 --ssb 60 --rfsim --rfsimulator.[0].prop_delay 20 --rfsimulator.[0].options chanmod --time-sync-I 0.1 --ntn-initial-time-drift -46 --initial-fo 57340 --cont-fo-comp 2
 ```
 
 ## Specific OAI modes
@@ -381,7 +479,7 @@ sudo ./nr-uesoftmodem --phy-test [--reconfig-file ../../../ci-scripts/rrc-files/
 In summary:
 - If you are running on the same machine and launched the 2 executables (`nr-softmodem` and `nr-uesoftmodem`) from the same directory, nothing has to be done.
 - If you launched the 2 executables from 2 different folders, just point to the location where you launched the `nr-softmodem`:
-  * `sudo ./nr-uesoftmodem --rfsim --phy-test --reconfig-file /the/path/where/you/launched/nr-softmodem/reconfig-file --rbconfig-file /the/path/where/you/launched/nr-softmodem/rbconfig-file --rfsimulator.serveraddr <TARGET_GNB_INTERFACE_ADDRESS>`
+  * `sudo ./nr-uesoftmodem --rfsim --phy-test --reconfig-file /the/path/where/you/launched/nr-softmodem/reconfig-file --rbconfig-file /the/path/where/you/launched/nr-softmodem/rbconfig-file --rfsimulator.[0].serveraddr <TARGET_GNB_INTERFACE_ADDRESS>`
 - If you are not running on the same machine, you need to **COPY** the two raw files
   * `scp usera@machineA:/the/path/where/you/launched/nr-softmodem/r*config.raw userb@machineB:/the/path/where/you/will/launch/nr-uesoftmodem/`
   * Obviously this operation should be done before launching the `nr-uesoftmodem` executable.
@@ -428,7 +526,7 @@ To run using the RFsimulator:
 
 ```bash
 sudo ./nr-softmodem -O ../../../targets/PROJECTS/GENERIC-LTE-EPC/CONF/gnb.band78.tm1.106PRB.usrpn300.conf --do-ra --rfsim
-sudo ./nr-uesoftmodem --do-ra --rfsim --rfsimulator.serveraddr 127.0.0.1
+sudo ./nr-uesoftmodem --do-ra --rfsim --rfsimulator.[0].serveraddr 127.0.0.1
 ```
 
 Using USRPs:

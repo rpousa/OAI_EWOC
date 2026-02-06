@@ -40,7 +40,6 @@
 /** Number of columns in BG1 */
 #define NR_LDPC_NCOL_BG1 68
 /** Number of rows in BG1 */
-#define NR_LDPC_NROW_BG1 46
 /** Number of edges/entries in BG1 */
 #define NR_LDPC_NUM_EDGE_BG1 316
 /** Number of check node (CN) groups in BG1
@@ -67,9 +66,7 @@
 /** Number of columns in BG2 */
 #define NR_LDPC_NCOL_BG2 52
 /** Number of rows in BG2 */
-#define NR_LDPC_NROW_BG2 42
 /** Number of edges/entries in BG2 */
-#define NR_LDPC_NUM_EDGE_BG2 197
 /** Number of check node (CN) groups in BG2
  A CN group is defined by its number of connected bit nodes. */
 #define NR_LDPC_NUM_CN_GROUPS_BG2 6

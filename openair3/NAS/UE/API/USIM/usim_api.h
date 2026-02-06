@@ -52,7 +52,6 @@ Description Implements the API used by the NAS layer to read/write
  * Subscriber authentication security key
  */
 #define USIM_API_K_SIZE         16
-#define USIM_API_K_VALUE        "fec86ba6eb707ed08905757b1bb44b8f"
 
 /*
  * The name of the file where are stored data of the USIM application
@@ -156,7 +155,6 @@ typedef struct {
  */
 typedef struct {
   /* Length of all subsequent data        */
-#define USIM_EPS_NAS_SECURITY_CONTEXT_TAG 0xA0U
   uint8_t length;
   /* Key set identifier KSI_ASME          */
 #define USIM_KSI_ASME_TAG     0x80U

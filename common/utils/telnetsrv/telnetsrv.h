@@ -32,9 +32,7 @@
 #define TELNETSRV_H
 
 #include <common/ran_context.h> 
-#define TELNETSRV_MODNAME  "telnetsrv"
 
-#define TELNET_PORT               9090
 #define TELNET_MAX_MSGLENGTH      2048
 #define TELNET_PROMPT_PREFIX      "softmodem"
 #define TELNET_MAXCMD             20

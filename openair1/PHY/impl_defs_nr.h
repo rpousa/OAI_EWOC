@@ -325,9 +325,6 @@ typedef struct {
 *
 ************************************************************************/
 
-#define MAX_NR_RATE_MATCH_PATTERNS            4
-#define MAX_NR_ZP_CSI_RS_RESOURCES           32
-#define MAX_NR_OF_DL_ALLOCATIONS             16
 #define MAX_NR_OF_UL_ALLOCATIONS            (16)
 
 typedef enum {

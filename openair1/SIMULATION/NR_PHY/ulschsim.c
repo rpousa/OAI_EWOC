@@ -73,7 +73,6 @@ double cpuf;
 // needed for some functions
 PHY_VARS_NR_UE *PHY_vars_UE_g[1][1] = { { NULL } };
 uint16_t n_rnti = 0x1234;
-openair0_config_t openair0_cfg[MAX_CARDS];
 
 void inc_ref_sched_response(int _)
 {

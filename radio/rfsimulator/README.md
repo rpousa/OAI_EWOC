@@ -64,42 +64,44 @@ This is equivalent to using `-w SIMU` when running the `build_oai` script.
 To use the RF simulator add the `--rfsim` option to the command line. By
 default the RF simulator device will try to connect to host 127.0.0.1, port
 4043, which is usually the behavior for the UE.  For the eNB/gNB, you either
-have to pass `--rfsimulator.serveraddr server` on the command line, or specify
+have to pass `--rfsimulator.[0].serveraddr server` on the command line, or specify
 the corresponding section in the configuration file.
 
 The RF simulator is using the configuration module, and its parameters are defined in a specific section called "rfsimulator". Add the following options to the command line in order to enable different RFSim features:
 
-| CL option                        | usage                                                                          | default                |
-|:---------------------            |:-------------------------------------------------------------------------------|----:                   |
-|`--rfsimulator.serveraddr <addr>` | IPv4v6 address or DNS name to connect to, or `server` to behave as a IPv4v6 TCP server | 127.0.0.1      |
-|`--rfsimulator.serverport <port>` | port number to connect to or to listen on (eNB, which behaves as a tcp server) | 4043                   |
-|`--rfsimulator.options`           | list of comma separated run-time options, two are supported: `chanmod`, `saviq`| all options disabled   |
-|`--rfsimulator.options saviq`     | store IQs to a file for future replay                                          | disabled               |
-|`--rfsimulator.options chanmod`   | enable the channel model                                                       | disabled               |
-|`--rfsimulator.IQfile <file>`     | path to a file to store the IQ samples to (only with `saviq`)                  | `/tmp/rfsimulator.iqs` |
-|`--rfsimulator.prop_delay`        | simulated receive-path (gNB: UL, UE: DL) propagation delay in ms               | 0                      |
-|`--rfsimulator.wait_timeout`      | wait timeout when no UE is connected                                           | 1                      |
+| CL option                            | usage                                                                          | default                |
+|:-------------------------------------|:-------------------------------------------------------------------------------|----:                   |
+|`--rfsimulator.[0].serveraddr <addr>` | IPv4v6 address or DNS name to connect to, or `server` to behave as a IPv4v6 TCP server | 127.0.0.1      |
+|`--rfsimulator.[0].serverport <port>` | port number to connect to or to listen on (eNB, which behaves as a tcp server) | 4043                   |
+|`--rfsimulator.[0].options`           | list of comma separated run-time options, two are supported: `chanmod`, `saviq`| all options disabled   |
+|`--rfsimulator.[0].options saviq`     | store IQs to a file for future replay                                          | disabled               |
+|`--rfsimulator.[0].options chanmod`   | enable the channel model                                                       | disabled               |
+|`--rfsimulator.[0].IQfile <file>`     | path to a file to store the IQ samples to (only with `saviq`)                  | `/tmp/rfsimulator.iqs` |
+|`--rfsimulator.[0].prop_delay`        | simulated receive-path (gNB: UL, UE: DL) propagation delay in ms               | 0                      |
+|`--rfsimulator.[0].wait_timeout`      | wait timeout when no UE is connected                                           | 1                      |
 
 Please refer to this document [`SIMULATION/TOOLS/DOC/channel_simulation.md`](../../openair1/SIMULATION/TOOLS/DOC/channel_simulation.md) for information about using the RFSimulator options to run the simulator with a channel model.
 
 ## 4G case
 
-For the eNB, use a valid configuration file setup for the USRP board tests and start the softmodem with the `--rfsim` and `--rfsimulator.serveraddr server` options.
+For the eNB, use a valid configuration file setup for the USRP board tests and start the softmodem with the `--rfsim` and `--rfsimulator.[0].serveraddr server` options.
 ```bash
-sudo ./lte-softmodem -O <config file> --rfsim --rfsimulator.serveraddr server
+sudo ./lte-softmodem -O <config file> --rfsim --rfsimulator.[0].serveraddr server
 ```
 Often, configuration files define the corresponding `rfsimulator` section, in
-which case you might omit `--rfsimulator.serveraddr server`. Example:
+which case you might omit `--rfsimulator.[0].serveraddr server`. Example:
 ```
-rfsimulator : {
-  serveraddr = "server";
-};
+rfsimulator = (
+  {
+    serveraddr = "server";
+  }
+);
 ```
 
 For the UE, it should be set to the IP address of the eNB. For instance, if the
 eNB runs on another host with IP `192.168.2.200`, do
 ```bash
-sudo ./lte-uesoftmodem -C 2685000000 -r 50 --rfsim --rfsimulator.serveraddr 192.168.2.200
+sudo ./lte-uesoftmodem -C 2685000000 -r 50 --rfsim --rfsimulator.[0].serveraddr 192.168.2.200
 ```
 For running on the same host, only `--rfsim` is necessary.
 
@@ -117,7 +119,7 @@ Similarly as for 4G, first launch the gNB, here in an example for the phytest:
 run gNB:
 
   ```bash
-  sudo ./nr-softmodem -O ../../../targets/PROJECTS/GENERIC-LTE-EPC/CONF/gnb.band78.tm1.106PRB.usrpn300.conf --gNBs.[0].min_rxtxtime 6 --phy-test --rfsim --rfsimulator.serveraddr server
+  sudo ./nr-softmodem -O ../../../targets/PROJECTS/GENERIC-LTE-EPC/CONF/gnb.band78.tm1.106PRB.usrpn300.conf --gNBs.[0].min_rxtxtime 6 --phy-test --rfsim --rfsimulator.[0].serveraddr server
   ```
 
 where `--gNBs.[0].min_rxtxtime 6` is due to the UE not being able to handle shorter
@@ -127,19 +129,19 @@ in the config file.
 and run UE:
 
   ```bash
-  sudo ./nr-uesoftmodem --rfsim --phy-test --rfsimulator.serveraddr <TARGET_GNB_IP_ADDRESS>
+  sudo ./nr-uesoftmodem --rfsim --phy-test --rfsimulator.[0].serveraddr <TARGET_GNB_IP_ADDRESS>
   ```
 
 To run OAI RFSimulator for SA mode, gNB:
 
   ```bash
-  sudo ./nr-softmodem -O ../../../targets/PROJECTS/GENERIC-NR-5GC/CONF/gnb.sa.band78.fr1.106PRB.usrpb210.conf --rfsim --rfsimulator.serveraddr server
+  sudo ./nr-softmodem -O ../../../targets/PROJECTS/GENERIC-NR-5GC/CONF/gnb.sa.band78.fr1.106PRB.usrpb210.conf --rfsim --rfsimulator.[0].serveraddr server
   ```
 
 and UE:
 
   ```bash
-  sudo ./nr-uesoftmodem --rfsim --rfsimulator.serveraddr <TARGET_GNB_IP_ADDRESS>
+  sudo ./nr-uesoftmodem --rfsim --rfsimulator.[0].serveraddr <TARGET_GNB_IP_ADDRESS>
   ```
 
 In the commands for the UE, `TARGET_GNB_IP_ADDRESS` can be 127.0.0.1 if both UE and gNB run on the same machine.
@@ -182,7 +184,7 @@ In case of a transparent GEO satellite, the minumum one-way propagation delay (D
 So, additionally to other parameters, this parameter should be given when executing the gNB and the UE executables:
 
 ```
---rfsimulator.prop_delay 238.74
+--rfsimulator.[0].prop_delay 238.74
 ```
 
 Note:
@@ -218,8 +220,8 @@ RFsimulator supports beam domain simulation.
 
 Several new CLI parameters were added
 
-* `--rfsimulator.enable_beams` : enable beam domain simulation. Should match on server and all clients.
-* `--rfsimulator.beam_gains <comma separated list>` : define a matrix of additional pathloss values (in dB)
+* `--rfsimulator.[0].enable_beams` : enable beam domain simulation. Should match on server and all clients.
+* `--rfsimulator.[0].beam_gains <comma separated list>` : define a matrix of additional pathloss values (in dB)
 to simulate the effect of different beam combinations in the RF simulator. You provide a comma-separated
 list of numbers, which forms the first row of a square matrix. The rest of the matrix is filled by projecting
 these values onto the diagonals, making it symmetric.
@@ -236,10 +238,10 @@ these values onto the diagonals, making it symmetric.
  Using the example above, if gNB is receiving in beam 1 and the UE is transmitting in beam 1, an additional
  2 dB pathloss will be applied on top of the pathloss from the channel model (if present).
 
-* `--rfsimulator.beam_map <beam_map>` : where `<beam_map>` is a `uint64_t` value where each bit is an enabled TX/RX beam.
+* `--rfsimulator.[0].beam_map <beam_map>` : where `<beam_map>` is a `uint64_t` value where each bit is an enabled TX/RX beam.
    For gNB: Initial beam_map, i.e. which beams gNB transmits/receives before calling beam APIs.
    For UE: Beam position in beam space in the simulation. The UE is not expected to use the beam APIs for now.
-* `--rfsimulator.beam_ids <beam_ids>` : where `<beam_ids>` is a comma separated list. Same as above but added for convenience.
+* `--rfsimulator.[0].beam_ids <beam_ids>` : where `<beam_ids>` is a comma separated list. Same as above but added for convenience.
 
 ## Runtime commands
 
