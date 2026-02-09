@@ -319,6 +319,32 @@ int config_libconfig_set(configmodule_interface_t *cfg, paramdef_t *cfgoptions, 
   }
 }
 
+static const char *config_type_to_name(int type)
+{
+  switch (type) {
+    case CONFIG_TYPE_NONE:
+      return "none";
+    case CONFIG_TYPE_GROUP:
+      return "group";
+    case CONFIG_TYPE_INT:
+      return "integer";
+    case CONFIG_TYPE_INT64:
+      return "64-bit integer";
+    case CONFIG_TYPE_FLOAT:
+      return "float";
+    case CONFIG_TYPE_STRING:
+      return "string";
+    case CONFIG_TYPE_BOOL:
+      return "boolean";
+    case CONFIG_TYPE_ARRAY:
+      return "array";
+    case CONFIG_TYPE_LIST:
+      return "list";
+    default:
+      return "unknown";
+  }
+}
+
 int config_libconfig_get(configmodule_interface_t *cfg, paramdef_t *cfgoptions, int numoptions, char *prefix)
 {
   config_setting_t *setting;
@@ -348,17 +374,26 @@ int config_libconfig_get(configmodule_interface_t *cfg, paramdef_t *cfgoptions, 
 
     switch(cfgoptions[i].type) {
       case TYPE_STRING:
-        if ( config_lookup_string(&(libconfig_privdata.cfg), cfgpath, (const char**)&str)) {
-          config_check_valptr(cfg, &cfgoptions[i], 1, strlen(str) + 1);
-          if ( strlen(str)+1 > cfgoptions[i].numelt )
-            fprintf(stderr,"[LIBCONFIG] %s:  %s exceeds maximum length of %i bytes, value truncated\n",
-                    cfgpath,str,cfgoptions[i].numelt);
-          snprintf( *cfgoptions[i].strptr , cfgoptions[i].numelt, "%s", str);
-          printf_params(cfg, "[LIBCONFIG] %s: \"%s\"\n", cfgpath, *cfgoptions[i].strptr);
-        } else {
+        setting = config_lookup(&(libconfig_privdata.cfg), cfgpath);
+        if (setting != NULL) {
+          int type = config_setting_type(setting);
+          if (type == CONFIG_TYPE_STRING) {
+            const char *strng = config_setting_get_string(setting);
+            config_check_valptr(cfg, &cfgoptions[i], 1, strlen(strng) + 1);
+            if (strlen(strng) + 1 > cfgoptions[i].numelt)
+              fprintf(stderr,
+                      "[LIBCONFIG] %s:  %s exceeds maximum length of %i bytes, value truncated\n",
+                      cfgpath,
+                      strng,
+                      cfgoptions[i].numelt);
+            snprintf(*cfgoptions[i].strptr, cfgoptions[i].numelt, "%s", strng);
+            printf_params(cfg, "[LIBCONFIG] %s: \"%s\"\n", cfgpath, *cfgoptions[i].strptr);
+          } else {
+            fprintf(stderr,"[LIBCONFIG] expected a string input for %s but got type %s\n", cfgpath, config_type_to_name(type));
+            fatalerror = 1;
+          }
+        } else
           defval = config_common_getdefault(cfg, &cfgoptions[i], prefix);
-        }
-
         break;
 
       case TYPE_STRINGLIST:

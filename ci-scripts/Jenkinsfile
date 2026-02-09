@@ -115,6 +115,7 @@ pipeline {
             } else {
               sh "git fetch"
               sh "git checkout -f ${commitID}"
+              sh "git reset --hard origin/${commitID}"
             }
           } else {
             echo "\u274C Some parameters are missing"

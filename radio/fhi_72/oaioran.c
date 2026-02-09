@@ -22,6 +22,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdatomic.h>
 #include "xran_fh_o_du.h"
 #include "xran_compression.h"
 #include "armral_bfp_compression.h"
@@ -56,6 +57,7 @@ int xran_is_prach_slot(uint8_t PortId, uint32_t subframe_id, uint32_t slot_id);
 
 #ifndef USE_POLLING
 extern notifiedFIFO_t oran_sync_fifo;
+atomic_int xran_queue_length = 0;
 #else
 volatile oran_sync_info_t oran_sync_info = {0};
 #endif
@@ -137,6 +139,7 @@ void oai_xran_fh_rx_callback(void *pCallbackTag, xran_status_t status)
       info->sl = slot2;
       info->f = frame;
       LOG_D(HW, "Push %d.%d.%d (slot %d, subframe %d,last_slot %d)\n", frame, info->sl, slot, ru_id, subframe, last_slot);
+      atomic_fetch_add(&xran_queue_length, 1);
       pushNotifiedFIFO(&oran_sync_fifo, req);
 #else
       LOG_D(HW, "Writing %d.%d.%d (slot %d, subframe %d,last_slot %d)\n", frame, slot2, ru_id, slot, subframe, last_slot);
@@ -320,19 +323,28 @@ int xran_fh_rx_read_slot(ru_info_t *ru, int *frame, int *slot)
   struct xran_common_counters x_counters[XRAN_PORTS_NUM];
   static int outcnt = 0;
 #ifndef USE_POLLING
-  // pull next even from oran_sync_fifo
+  // pull next event from oran_sync_fifo
   notifiedFIFO_elt_t *res = pullNotifiedFIFO(&oran_sync_fifo);
-
-  notifiedFIFO_elt_t *f;
-  while ((f = pollNotifiedFIFO(&oran_sync_fifo)) != NULL) {
-    oran_sync_info_t *old_info = NotifiedFifoData(res);
-    oran_sync_info_t *new_info = NotifiedFifoData(f);
-    LOG_E(HW, "Detected double sync message %d.%d => %d.%d\n", old_info->f, old_info->sl, new_info->f, new_info->sl);
-    delNotifiedFIFO_elt(res);
-    res = f;
-  }
-
+  atomic_fetch_sub(&xran_queue_length, 1);
   oran_sync_info_t *info = NotifiedFifoData(res);
+
+#define MAX_QUEUE_LENGTH_NO_JUMP 3
+  if (xran_queue_length > 0 && xran_queue_length < MAX_QUEUE_LENGTH_NO_JUMP) {
+    LOG_D(HW, "%4d.%2d TTI processing delay detected\n", info->f, info->sl);
+  } else if (xran_queue_length >= MAX_QUEUE_LENGTH_NO_JUMP) {
+    uint32_t old_f = info->f;
+    uint32_t old_sl = info->sl;
+    // set the frame/slot info to what is in the last message
+    notifiedFIFO_elt_t *f;
+    while ((f = pollNotifiedFIFO(&oran_sync_fifo)) != NULL) {
+      atomic_fetch_sub(&xran_queue_length, 1);
+      delNotifiedFIFO_elt(res);
+      res = f;
+    }
+    info = NotifiedFifoData(res);
+    LOG_W(HW, "TTI processing delay detected, skipping %4d.%2d => %4d.%2d\n", old_f, old_sl, info->f, info->sl);
+    DevAssert(xran_queue_length == 0);
+  }
 
   *slot = info->sl;
   *frame = info->f;

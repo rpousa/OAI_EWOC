@@ -38,7 +38,7 @@ RUN /bin/sh oaienv && \
     ./build_oai -w AW2SORI -t Ethernet
 
 #start from scratch for target executable
-FROM registry.access.redhat.com/ubi9/ubi:latest AS oai-gnb-aw2s
+FROM registry.redhat.io/ubi9/ubi:latest AS oai-gnb-aw2s
 ENV TZ=Europe/Paris
 
 # Install EPEL for RHEL9

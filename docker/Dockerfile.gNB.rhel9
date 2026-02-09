@@ -31,7 +31,7 @@ FROM ran-build:latest AS gnb-build
 
 
 #start from scratch for target executable
-FROM registry.access.redhat.com/ubi9/ubi:latest AS oai-gnb
+FROM registry.redhat.io/ubi9/ubi:latest AS oai-gnb
 ENV TZ=Europe/Paris
 
 # Install EPEL for RHEL9

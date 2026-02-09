@@ -228,7 +228,6 @@ void phy_free_nr_gNB(PHY_VARS_gNB *gNB)
 
   PHY_MEASUREMENTS_gNB *meas = &gNB->measurements;
   free_and_zero(meas->n0_subband_power);
-  free_and_zero(meas->n0_subband_power_dB);
 
   for (int id = 0; id < gNB->max_nb_srs; id++) {
     for(int i=0; i<MAX_NUM_NR_SRS_AP; i++) {

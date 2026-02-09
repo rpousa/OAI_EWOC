@@ -41,22 +41,12 @@
 
 #include "openair2/LAYER2/NR_MAC_gNB/nr_mac_gNB.h"
 
-typedef struct {
-  uint8_t num_msg;
-  uint8_t opaque_handle;
-  uint16_t message_id;
-  uint32_t message_length;
-} fapi_phy_api_msg;
-
+int get_cpu_msg_buf_size();
+int get_cpu_data_buf_size();
+bool allocate_msg(nv_ipc_msg_t* send_msg);
+void release_msg(nv_ipc_msg_t* send_msg);
+bool send_nvipc_msg(nv_ipc_msg_t* send_msg);
 bool aerial_nr_send_p5_message(vnf_t *vnf, uint16_t p5_idx, nfapi_nr_p4_p5_message_header_t *msg, uint32_t msg_len);
-bool aerial_send_P5_msg(void *packedBuf, uint32_t packedMsgLength, nfapi_nr_p4_p5_message_header_t *header);
-bool aerial_send_P7_msg(void *packedBuf, uint32_t packedMsgLength, nfapi_nr_p7_message_header_t *header);
-bool aerial_send_P7_msg_with_data(void *packedBuf,
-                                 uint32_t packedMsgLength,
-                                 void *dataBuf,
-                                 uint32_t dataLength,
-                                 nfapi_nr_p7_message_header_t *header);
-
 int nvIPC_Init(nvipc_params_t nvipc_params_s);
 int oai_fapi_send_end_request(int cell_id, uint32_t frame, uint32_t slot);
 int oai_fapi_ul_tti_req(nfapi_nr_ul_tti_request_t *ul_tti_req);

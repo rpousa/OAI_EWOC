@@ -63,6 +63,10 @@ char cpu_buf_recv[RECV_BUF_LEN];
 
 uint16_t sfn = 0, slot = 0;
 nv_ipc_t *ipc;
+static nv_ipc_config_t nv_ipc_config;
+static int cpu_msg_buf_size = 0;
+static int cpu_data_buf_size = 0;
+
 void nvIPC_Stop()
 {
   LOG_I(NR_MAC, "Received STOP.indication\n");
@@ -95,7 +99,7 @@ static int ipc_handle_rx_msg(nv_ipc_t *ipc, nv_ipc_msg_t *msg)
   nfapi_vnf_config_t * vnf_config = get_config();
   if (vnf_config != 0) {
     // first, unpack the header
-    fapi_phy_api_msg fapi_msg;
+    fapi_message_header_t fapi_msg;
     if (!(pull8(&pReadPackedMessage, &fapi_msg.num_msg, end) && pull8(&pReadPackedMessage, &fapi_msg.opaque_handle, end)
           && pull16(&pReadPackedMessage, &fapi_msg.message_id, end)
           && pull32(&pReadPackedMessage, &fapi_msg.message_length, end))) {
@@ -195,265 +199,76 @@ static int ipc_handle_rx_msg(nv_ipc_t *ipc, nv_ipc_msg_t *msg)
   return 0;
 }
 
-int8_t buf[1024];
+int get_cpu_msg_buf_size()
+{
+  return cpu_msg_buf_size;
+}
+int get_cpu_data_buf_size()
+{
+  return cpu_data_buf_size;
+}
 
-nv_ipc_config_t nv_ipc_config;
+bool allocate_msg(nv_ipc_msg_t *send_msg)
+{
+  return ipc->tx_allocate(ipc, send_msg, 0) == 0;
+}
+void release_msg(nv_ipc_msg_t *send_msg)
+{
+  ipc->tx_release(ipc, send_msg);
+}
+
+bool send_nvipc_msg(nv_ipc_msg_t *send_msg)
+{
+  int send_retval = ipc->tx_send_msg(ipc, send_msg);
+  if (send_retval != 0) {
+    LOG_E(NFAPI_VNF, "%s error: send TX message failed Error: %d\n", __FUNCTION__, send_retval);
+    ipc->tx_release(ipc, send_msg);
+    return false;
+  }
+
+  ipc->notify(ipc, 1); // notify that there's 1 message in queue
+  return true;
+}
 
 bool aerial_nr_send_p5_message(vnf_t *vnf, uint16_t p5_idx, nfapi_nr_p4_p5_message_header_t *msg, uint32_t msg_len)
 {
   nfapi_vnf_pnf_info_t *pnf = nfapi_vnf_pnf_list_find(&(vnf->_public), p5_idx);
 
   if (pnf) {
-    uint8_t tx_messagebufferFAPI[sizeof(vnf->tx_message_buffer)];
+    // Create the message
+    nv_ipc_msg_t send_msg = {.msg_id = msg->message_id,
+                             .cell_id = 0,
+                             // For P5 we don't need CPU_DATA
+                             .data_pool = NV_IPC_MEMPOOL_CPU_MSG,
+                             .data_len = 0,
+                             .data_buf = NULL};
+
+    // Allocate the message
+    if (!allocate_msg(&send_msg)) {
+      return false;
+    }
+
     int packedMessageLengthFAPI = -1;
-    packedMessageLengthFAPI =
-        vnf->_public.pack_func(msg, msg_len, tx_messagebufferFAPI, sizeof(tx_messagebufferFAPI), &vnf->_public.codec_config);
-    return aerial_send_P5_msg(tx_messagebufferFAPI, packedMessageLengthFAPI, msg) == 0;
+    // Pack directly into it
+    if ((packedMessageLengthFAPI =
+             vnf->_public.pack_func(msg, msg_len, send_msg.msg_buf, get_cpu_msg_buf_size(), &vnf->_public.codec_config))
+        < 0) {
+      release_msg(&send_msg);
+      return false;
+    }
+    if (packedMessageLengthFAPI <= 0) {
+      LOG_E(NFAPI_VNF, "Error packing message 0x%02x\n", msg->message_id);
+      release_msg(&send_msg);
+      return false;
+    }
+    // Set the length
+    send_msg.msg_len = packedMessageLengthFAPI + 8; // adding 8 to account for the size of the FAPI header
+    // Send
+    return send_nvipc_msg(&send_msg);
   } else {
     NFAPI_TRACE(NFAPI_TRACE_INFO, "%s() cannot find pnf info for p5_idx:%d\n", __FUNCTION__, p5_idx);
     return false;
   }
-}
-
-bool aerial_send_P5_msg(void *packedBuf, uint32_t packedMsgLength, nfapi_nr_p4_p5_message_header_t *header)
-{
-  if (ipc == NULL) {
-    return false;
-  }
-  nv_ipc_msg_t send_msg = {0};
-  // look for the specific message
-  switch (header->message_id) {
-    case NFAPI_NR_PHY_MSG_TYPE_PARAM_REQUEST:
-    case NFAPI_NR_PHY_MSG_TYPE_PARAM_RESPONSE:
-    case NFAPI_NR_PHY_MSG_TYPE_CONFIG_REQUEST:
-    case NFAPI_NR_PHY_MSG_TYPE_CONFIG_RESPONSE:
-    case NFAPI_NR_PHY_MSG_TYPE_START_REQUEST:
-    case NFAPI_NR_PHY_MSG_TYPE_START_RESPONSE:
-    case NFAPI_NR_PHY_MSG_TYPE_STOP_REQUEST:
-    case NFAPI_NR_PHY_MSG_TYPE_STOP_RESPONSE:
-      break;
-    default: {
-      if (header->message_id >= NFAPI_VENDOR_EXT_MSG_MIN && header->message_id <= NFAPI_VENDOR_EXT_MSG_MAX) {
-        // if(config && config->pack_p4_p5_vendor_extension) {
-        //   result = (config->pack_p4_p5_vendor_extension)(header, ppWritePackedMsg, end, config);
-        // } else {
-        //   NFAPI_TRACE(NFAPI_TRACE_ERROR, "%s VE NFAPI message ID %d. No ve ecoder provided\n", __FUNCTION__, header->message_id);
-        // }
-      } else {
-        NFAPI_TRACE(NFAPI_TRACE_ERROR, "%s NFAPI Unknown message ID %d\n", __FUNCTION__, header->message_id);
-      }
-    } break;
-  }
-  send_msg.msg_id = header->message_id;
-  send_msg.cell_id = 0;
-  send_msg.msg_len = packedMsgLength + 8; // adding 8 to account for the size of the FAPI header
-  send_msg.data_len = 0;
-  send_msg.data_buf = NULL;
-  send_msg.data_pool = NV_IPC_MEMPOOL_CPU_MSG;
-
-  // procedure is  allocate->fill->send
-  int alloc_retval = ipc->tx_allocate(ipc, &send_msg, 0);
-  if (alloc_retval != 0) {
-    LOG_E(NFAPI_VNF, "%s error: allocate TX buffer failed Error: %d\n", __FUNCTION__, alloc_retval);
-    ipc->tx_release(ipc, &send_msg);
-    return false;
-  }
-
-  memcpy(send_msg.msg_buf, packedBuf, send_msg.msg_len);
-  LOG_D(NFAPI_VNF,
-        "send: cell_id=%d msg_id=0x%02X msg_len=%d data_len=%d data_pool=%d\n",
-        send_msg.cell_id,
-        send_msg.msg_id,
-        send_msg.msg_len,
-        send_msg.data_len,
-        send_msg.data_pool);
-  // Send the message
-  int send_retval = ipc->tx_send_msg(ipc, &send_msg);
-  if (send_retval < 0) {
-    LOG_E(NFAPI_VNF, "%s error: send TX message failed Error: %d\n", __FUNCTION__, send_retval);
-    ipc->tx_release(ipc, &send_msg);
-    return false;
-  }
-
-  ipc->notify(ipc, 1); // notify that there's 1 message in queue
-  return true;
-}
-
-bool aerial_send_P7_msg(void *packedBuf, uint32_t packedMsgLength, nfapi_nr_p7_message_header_t *header)
-{
-  if (ipc == NULL) {
-    return false;
-  }
-  nv_ipc_msg_t send_msg;
-  uint8_t *pPacketBodyField = &((uint8_t *)packedBuf)[8];
-  uint8_t *pPackMessageEnd = packedBuf + packedMsgLength + 8;
-
-  uint16_t present_sfn = 0;
-  uint16_t present_slot = 0;
-  pull16(&pPacketBodyField, &present_sfn, pPackMessageEnd);
-  pull16(&pPacketBodyField, &present_slot, pPackMessageEnd);
-
-  if (present_sfn != old_sfn || present_slot != old_slot) {
-    LOG_E(NFAPI_VNF,
-          "\n============================================================================\n"
-          "sfn slot doesn't match unpacked one! L2->L1 %d.%d  vs L1->L2 %d.%d  \n"
-          "============================================================================\n",
-          present_sfn,
-          present_slot,
-          old_sfn,
-          old_slot);
-  }
-  // look for the specific message
-  switch (header->message_id) {
-    case NFAPI_NR_PHY_MSG_TYPE_DL_TTI_REQUEST:
-    case NFAPI_NR_PHY_MSG_TYPE_UL_TTI_REQUEST:
-    case NFAPI_NR_PHY_MSG_TYPE_TX_DATA_REQUEST:
-    case NFAPI_NR_PHY_MSG_TYPE_UL_DCI_REQUEST:
-    case NFAPI_UE_RELEASE_REQUEST:
-    case NFAPI_UE_RELEASE_RESPONSE:
-    case NFAPI_NR_PHY_MSG_TYPE_SLOT_INDICATION:
-    case NFAPI_NR_PHY_MSG_TYPE_RX_DATA_INDICATION:
-    case NFAPI_NR_PHY_MSG_TYPE_CRC_INDICATION:
-    case NFAPI_NR_PHY_MSG_TYPE_UCI_INDICATION:
-    case NFAPI_NR_PHY_MSG_TYPE_SRS_INDICATION:
-    case NFAPI_NR_PHY_MSG_TYPE_RACH_INDICATION:
-    case NFAPI_NR_PHY_MSG_TYPE_DL_NODE_SYNC:
-    case NFAPI_NR_PHY_MSG_TYPE_UL_NODE_SYNC:
-    case NFAPI_TIMING_INFO:
-    case 0x8f:
-      break;
-    default: {
-      if (header->message_id >= NFAPI_VENDOR_EXT_MSG_MIN && header->message_id <= NFAPI_VENDOR_EXT_MSG_MAX) {
-      } else {
-        NFAPI_TRACE(NFAPI_TRACE_ERROR, "%s NFAPI Unknown message ID %d\n", __FUNCTION__, header->message_id);
-      }
-    } break;
-  }
-
-  send_msg.msg_id = header->message_id;
-  send_msg.cell_id = 0;
-  send_msg.msg_len = packedMsgLength + 8; // adding 8 to account for the size of the FAPI header
-  send_msg.data_len = 0;
-  send_msg.data_buf = NULL;
-  send_msg.data_pool = NV_IPC_MEMPOOL_CPU_MSG;
-  // procedure is  allocate->fill->send
-
-  // Allocate buffer for TX message
-  int alloc_retval = ipc->tx_allocate(ipc, &send_msg, 0);
-  if (alloc_retval != 0) {
-    LOG_E(NFAPI_VNF, "%s error: allocate TX buffer failed Error: %d\n", __FUNCTION__, alloc_retval);
-    ipc->tx_release(ipc, &send_msg);
-    return false;
-  }
-
-  memcpy(send_msg.msg_buf, packedBuf, send_msg.msg_len);
-  LOG_D(NFAPI_VNF,
-        "send: cell_id=%d msg_id=0x%02X msg_len=%d data_len=%d data_pool=%d\n",
-        send_msg.cell_id,
-        send_msg.msg_id,
-        send_msg.msg_len,
-        send_msg.data_len,
-        send_msg.data_pool);
-  // Send the message
-  int send_retval = ipc->tx_send_msg(ipc, &send_msg);
-  if (send_retval < 0) {
-    LOG_E(NFAPI_VNF, "%s error: send TX message failed Error: %d\n", __FUNCTION__, send_retval);
-    ipc->tx_release(ipc, &send_msg);
-    return false;
-  }
-
-  ipc->notify(ipc, 1); // notify that there's 1 message in queue
-  return true;
-}
-
-bool aerial_send_P7_msg_with_data(void *packedBuf,
-                                 uint32_t packedMsgLength,
-                                 void *dataBuf,
-                                 uint32_t dataLength,
-                                 nfapi_nr_p7_message_header_t *header)
-{
-  if (ipc == NULL) {
-    return false;
-  }
-  nv_ipc_msg_t send_msg;
-  uint8_t *pPacketBodyField = &((uint8_t *)packedBuf)[8];
-  uint8_t *pPackMessageEnd = packedBuf + packedMsgLength + 8;
-  uint16_t present_sfn = 0;
-  uint16_t present_slot = 0;
-  pull16(&pPacketBodyField, &present_sfn, pPackMessageEnd);
-  pull16(&pPacketBodyField, &present_slot, pPackMessageEnd);
-
-  if (present_sfn != old_sfn || present_slot != old_slot) {
-    LOG_E(NFAPI_VNF,
-          "\n============================================================================\n"
-          "sfn slot doesn't match unpacked one! L2->L1 %d.%d  vs L1->L2 %d.%d  \n"
-          "============================================================================\n",
-          present_sfn,
-          present_slot,
-          old_sfn,
-          old_slot);
-  }
-  // look for the specific message
-  switch (header->message_id) {
-    case NFAPI_NR_PHY_MSG_TYPE_DL_TTI_REQUEST:
-    case NFAPI_NR_PHY_MSG_TYPE_UL_TTI_REQUEST:
-    case NFAPI_NR_PHY_MSG_TYPE_TX_DATA_REQUEST:
-    case NFAPI_NR_PHY_MSG_TYPE_UL_DCI_REQUEST:
-    case NFAPI_UE_RELEASE_REQUEST:
-    case NFAPI_UE_RELEASE_RESPONSE:
-    case NFAPI_NR_PHY_MSG_TYPE_SLOT_INDICATION:
-    case NFAPI_NR_PHY_MSG_TYPE_RX_DATA_INDICATION:
-    case NFAPI_NR_PHY_MSG_TYPE_CRC_INDICATION:
-    case NFAPI_NR_PHY_MSG_TYPE_UCI_INDICATION:
-    case NFAPI_NR_PHY_MSG_TYPE_SRS_INDICATION:
-    case NFAPI_NR_PHY_MSG_TYPE_RACH_INDICATION:
-    case NFAPI_NR_PHY_MSG_TYPE_DL_NODE_SYNC:
-    case NFAPI_NR_PHY_MSG_TYPE_UL_NODE_SYNC:
-    case NFAPI_TIMING_INFO:
-      break;
-    default: {
-      if (header->message_id >= NFAPI_VENDOR_EXT_MSG_MIN && header->message_id <= NFAPI_VENDOR_EXT_MSG_MAX) {
-      } else {
-        NFAPI_TRACE(NFAPI_TRACE_ERROR, "%s NFAPI Unknown message ID %d\n", __FUNCTION__, header->message_id);
-      }
-    } break;
-  }
-
-  send_msg.msg_id = header->message_id;
-  send_msg.cell_id = 0;
-  send_msg.msg_len = packedMsgLength + 8; // adding 8 to account for the size of the FAPI header
-  send_msg.data_len = dataLength;
-  send_msg.data_pool = NV_IPC_MEMPOOL_CPU_DATA;
-
-  // procedure is  allocate->fill->send
-
-  // Allocate buffer for TX message
-  int alloc_retval = ipc->tx_allocate(ipc, &send_msg, 0);
-  if (alloc_retval != 0) {
-    LOG_E(NFAPI_VNF, "%s error: allocate TX buffer failed Error: %d\n", __FUNCTION__, alloc_retval);
-    ipc->tx_release(ipc, &send_msg);
-    return false;
-  }
-
-  memcpy(send_msg.msg_buf, packedBuf, send_msg.msg_len);
-  memcpy(send_msg.data_buf, dataBuf, send_msg.data_len);
-  LOG_D(NFAPI_VNF,
-        "send: cell_id=%d msg_id=0x%02X msg_len=%d data_len=%d data_pool=%d\n",
-        send_msg.cell_id,
-        send_msg.msg_id,
-        send_msg.msg_len,
-        send_msg.data_len,
-        send_msg.data_pool);
-  // Send the message
-  int send_retval = ipc->tx_send_msg(ipc, &send_msg);
-  if (send_retval != 0) {
-    LOG_E(NFAPI_VNF, "%s error: send TX message failed Error: %d\n", __FUNCTION__, send_retval);
-    ipc->tx_release(ipc, &send_msg);
-    return false;
-  }
-
-  ipc->notify(ipc, 1); // notify that there's 1 message in queue
-  return true;
 }
 
 // Always allocate message buffer, but allocate data buffer only when data_len > 0
@@ -568,6 +383,10 @@ int nvIPC_Init(nvipc_params_t nvipc_params_s)
 {
   // Want to use transport SHM, type epoll, module secondary (reads the created shm from cuphycontroller)
   load_hard_code_config(&nv_ipc_config, NV_IPC_MODULE_SECONDARY, NV_IPC_TRANSPORT_SHM);
+  // save the mempool sizes for later use in packing
+  cpu_msg_buf_size = nv_ipc_get_buf_size(&nv_ipc_config, NV_IPC_MEMPOOL_CPU_MSG);
+  cpu_data_buf_size = nv_ipc_get_buf_size(&nv_ipc_config, NV_IPC_MEMPOOL_CPU_DATA);
+
   // Create nv_ipc_t instance
   LOG_I(NFAPI_VNF, "%s: creating IPC interface with prefix %s\n", __func__, nvipc_params_s.nvipc_shm_prefix);
   strcpy(nv_ipc_config.transport_config.shm.prefix, nvipc_params_s.nvipc_shm_prefix);
@@ -588,10 +407,9 @@ int oai_fapi_ul_tti_req(nfapi_nr_ul_tti_request_t *ul_tti_req)
   ul_tti_req->header.phy_id = 1; // DJP HACK TODO FIXME - need to pass this around!!!!
   ul_tti_req->header.message_id = NFAPI_NR_PHY_MSG_TYPE_UL_TTI_REQUEST;
 
-  // int retval = nfapi_vnf_p7_ul_tti_req(p7_config, ul_tti_req);
-  int retval = p7_config->send_p7_msg(get_p7_vnf(), &ul_tti_req->header);
+  bool retval = p7_config->send_p7_msg(get_p7_vnf(), &ul_tti_req->header);
 
-  if (retval != 0) {
+  if (!retval) {
     LOG_E(PHY, "%s() Problem sending retval:%d\n", __FUNCTION__, retval);
   } else {
     // Reset number of PDUs so that it is not resent
@@ -608,9 +426,9 @@ int oai_fapi_ul_dci_req(nfapi_nr_ul_dci_request_t *ul_dci_req)
   nfapi_vnf_p7_config_t *p7_config = get_p7_vnf_config();
   ul_dci_req->header.phy_id = 1; // DJP HACK TODO FIXME - need to pass this around!!!!
   ul_dci_req->header.message_id = NFAPI_NR_PHY_MSG_TYPE_UL_DCI_REQUEST;
-  // int retval = nfapi_vnf_p7_ul_dci_req(p7_config, ul_dci_req);
-  int retval = p7_config->send_p7_msg(get_p7_vnf(), &ul_dci_req->header);
-  if (retval != 0) {
+
+  bool retval = p7_config->send_p7_msg(get_p7_vnf(), &ul_dci_req->header);
+  if (!retval) {
     LOG_E(PHY, "%s() Problem sending retval:%d\n", __FUNCTION__, retval);
   } else {
     ul_dci_req->numPdus = 0;
@@ -623,10 +441,9 @@ int oai_fapi_tx_data_req(nfapi_nr_tx_data_request_t *tx_data_req)
   nfapi_vnf_p7_config_t *p7_config = get_p7_vnf_config();
   tx_data_req->header.phy_id = 1; // DJP HACK TODO FIXME - need to pass this around!!!!
   tx_data_req->header.message_id = NFAPI_NR_PHY_MSG_TYPE_TX_DATA_REQUEST;
-  // LOG_D(PHY, "[VNF] %s() TX_REQ sfn_sf:%d number_of_pdus:%d\n", __FUNCTION__, NFAPI_SFNSF2DEC(tx_data_req->SFN),
-  // tx_data_req->Number_of_PDUs); int retval = nfapi_vnf_p7_tx_data_req(p7_config, tx_data_req);
-  int retval = p7_config->send_p7_msg(get_p7_vnf(), &tx_data_req->header);
-  if (retval != 0) {
+
+  bool retval = p7_config->send_p7_msg(get_p7_vnf(), &tx_data_req->header);
+  if (!retval) {
     LOG_E(PHY, "%s() Problem sending retval:%d\n", __FUNCTION__, retval);
   } else {
     tx_data_req->Number_of_PDUs = 0;
@@ -640,11 +457,12 @@ int oai_fapi_dl_tti_req(nfapi_nr_dl_tti_request_t *dl_config_req)
   nfapi_vnf_p7_config_t *p7_config = get_p7_vnf_config();
   dl_config_req->header.message_id = NFAPI_NR_PHY_MSG_TYPE_DL_TTI_REQUEST;
   dl_config_req->header.phy_id = 1; // DJP HACK TODO FIXME - need to pass this around!!!!
-  int retval = p7_config->send_p7_msg(get_p7_vnf(), &dl_config_req->header);
+
+  bool retval = p7_config->send_p7_msg(get_p7_vnf(), &dl_config_req->header);
   dl_config_req->dl_tti_request_body.nPDUs = 0;
   dl_config_req->dl_tti_request_body.nGroup = 0;
 
-  if (retval != 0) {
+  if (!retval) {
     LOG_E(PHY, "%s() Problem sending retval:%d\n", __FUNCTION__, retval);
   }
   return retval;
@@ -653,8 +471,9 @@ int oai_fapi_dl_tti_req(nfapi_nr_dl_tti_request_t *dl_config_req)
 int oai_fapi_send_end_request(int cell, uint32_t frame, uint32_t slot){
   nfapi_vnf_p7_config_t *p7_config = get_p7_vnf_config();
   nfapi_nr_slot_indication_scf_t nr_slot_resp = {.header.message_id = 0x8F, .sfn = frame, .slot = slot};
-  int retval = p7_config->send_p7_msg(get_p7_vnf(), &nr_slot_resp.header);
-  if (retval != 0) {
+
+  bool retval = p7_config->send_p7_msg(get_p7_vnf(), &nr_slot_resp.header);
+  if (!retval) {
     LOG_E(PHY, "%s() Problem sending retval:%d\n", __FUNCTION__, retval);
   }
   return retval;

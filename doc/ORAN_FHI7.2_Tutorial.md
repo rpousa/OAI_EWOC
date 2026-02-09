@@ -719,7 +719,37 @@ RU must be rebooted so the changes apply.
 - The measured throughput was **520 Mbps DL** and **40 Mbps UL**.
 - With newer OAI versions, throughput degrades. This issue is currently under investigation.
 
-### Configure Network Interfaces and DPDK VFs
+#### ProtO-RU
+
+[ProtO-RU](https://github.com/NUS-CIR/ProtO-RU) is a software implementation of an O-RAN 7.2 RU using a NI USRP.
+Different from other COTS RUs, ProtO-RU requires a larger DU delay profile which is larger than the TTI interval.
+
+The OAI configuration file [`gnb.sa.band78.106prb.fhi72.1x1-proto-ru.conf`](../targets/PROJECTS/GENERIC-NR-5GC/CONF/gnb.sa.band78.106prb.fhi72.1x1-proto-ru.conf) corresponds to:
+
+- TDD pattern `DDDSU`, 2.5ms
+- Bandwidth 40MHz
+- MTU 9216
+- 1T1R
+
+##### RU configuration
+
+First, compile the RU as outlined in the [building ProtO-RU tutorial](https://github.com/NUS-CIR/ProtO-RU/tree/proto-ru?tab=readme-ov-file#building-proto-ru).
+Then, ensure that both your DU and ProtO-RU host are PTP synchronized.
+
+Next, use the RU config, [protoru-OAI-B210-TDD-n78-40MHz-1x1-30kHz.yml](https://github.com/NUS-CIR/ProtO-RU/blob/proto-ru/proto-ru/conf-files/protoru-OAI-B210-TDD-n78-40MHz-1x1-30kHz.yml), which corresponds to the above mentioned DU config file. 
+In addition, please adapt the DU MAC address and VLAN tag to your needs.
+
+ProtO-RU was successfully tested with USRP B210.
+If you are using a different SDR (e.g., N310), you will need to update the ProtO-RU and the DU configurations accordingly.
+
+Launch ProtO-RU with the adapted configuration file with the command:
+```bash
+sudo ./ru_emulator -c <path-to/protoru-OAI-B210-TDD-n78-40MHz-1x1-30kHz.yml>
+```
+
+Finally, start the OAI gNB.
+
+## Configure Network Interfaces and DPDK VFs
 
 The 7.2 fronthaul uses the xran library, which requires DPDK. In this step, we
 need to configure network interfaces to send data to the RU, and configure DPDK

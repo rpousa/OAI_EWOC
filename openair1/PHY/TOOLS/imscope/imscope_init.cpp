@@ -41,7 +41,8 @@ extern "C" void imscope_autoinit(void *dataptr)
   if (IS_SOFTMODEM_GNB) {
     scopeParms_t *scope_params = (scopeParms_t *)dataptr;
     scope_params->gNB->scopeData = scope;
-    scope_params->ru->scopeData = scope;
+    if (scope_params->ru)
+      scope_params->ru->scopeData = scope;
   } else {
     PHY_VARS_NR_UE *ue = (PHY_VARS_NR_UE *)dataptr;
     ue->scopeData = scope;

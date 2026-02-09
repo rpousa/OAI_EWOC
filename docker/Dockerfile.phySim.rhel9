@@ -46,7 +46,7 @@ RUN /bin/sh oaienv && \
     ninja -k10 -j36
 
 #start from scratch for target executable
-FROM registry.access.redhat.com/ubi9/ubi:latest AS oai-physim
+FROM registry.redhat.io/ubi9/ubi:latest AS oai-physim
 
 RUN dnf update -y && \
     dnf install -y \

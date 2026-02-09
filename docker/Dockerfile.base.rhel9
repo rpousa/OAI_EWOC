@@ -26,7 +26,7 @@
 #---------------------------------------------------------------------
 
 
-FROM registry.access.redhat.com/ubi9/ubi:latest AS ran-base
+FROM registry.redhat.io/ubi9/ubi:latest AS ran-base
 LABEL MAINTAINER OpenAirInterface <contact@openairinterface.org>
 ARG NEEDED_GIT_PROXY
 ARG TARGETARCH

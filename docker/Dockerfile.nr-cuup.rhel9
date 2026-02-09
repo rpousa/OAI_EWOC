@@ -32,7 +32,7 @@ FROM ran-build:latest AS gnb-build
 RUN cp /oai-ran/docker/scripts/gnb_entrypoint.sh /oai-ran/docker/scripts/entrypoint.sh
 
 #start from scratch for target executable
-FROM registry.access.redhat.com/ubi9/ubi:latest AS oai-nr-cuup
+FROM registry.redhat.io/ubi9/ubi:latest AS oai-nr-cuup
 ENV TZ=Europe/Paris
 
 # Install EPEL 

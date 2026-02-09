@@ -1083,8 +1083,6 @@ int phy_procedures_gNB_uespec_RX(PHY_VARS_gNB *gNB, int frame_rx, int slot_rx, N
     if (!(ulsch->active && ulsch->frame == frame_rx && ulsch->slot == slot_rx && !ulsch->handled))
       continue;
     LOG_D(PHY, "PUSCH ID %d with RNTI %x detection started in frame %d slot %d\n", ULSCH_id, ulsch->rnti, frame_rx, slot_rx);
-    nfapi_nr_pusch_pdu_t *pdu = &ulsch_harq->ulsch_pdu;
-    int num_dmrs = count_bits64_with_mask(pdu->ul_dmrs_symb_pos, 0, NR_NUMBER_OF_SYMBOLS_PER_SLOT);
 
 #ifdef DEBUG_RXDATA
     RU_t *ru = gNB->RU_list[0];
@@ -1124,9 +1122,7 @@ int phy_procedures_gNB_uespec_RX(PHY_VARS_gNB *gNB, int frame_rx, int slot_rx, N
     pusch_vars->ulsch_power_tot = 0;
     pusch_vars->ulsch_noise_power_tot = 0;
     for (int aarx = 0; aarx < nb_antennas_rx; aarx++) {
-      pusch_vars->ulsch_power[aarx] /= num_dmrs;
       pusch_vars->ulsch_power_tot += pusch_vars->ulsch_power[aarx];
-      pusch_vars->ulsch_noise_power[aarx] /= num_dmrs;
       pusch_vars->ulsch_noise_power_tot += pusch_vars->ulsch_noise_power[aarx];
     }
     if (dB_fixed_x10(pusch_vars->ulsch_power_tot) < dB_fixed_x10(pusch_vars->ulsch_noise_power_tot) + gNB->pusch_thres) {
