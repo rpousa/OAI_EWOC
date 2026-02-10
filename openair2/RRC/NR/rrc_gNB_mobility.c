@@ -63,50 +63,32 @@ static void free_ho_ctx(nr_handover_context_t *ho_ctx)
   free(ho_ctx);
 }
 
-/** @brief Fill DRB to Be Setup List in F1 UE Context Setup Request (optional list)
- * @return 0 if list is empty, list size otherwise */
-static int fill_drb_to_be_setup(const gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue, f1ap_drb_to_setup_t drbs[MAX_DRBS_PER_UE])
+/** @brief Apply target handover context: update F1AP associations and RNTI */
+void nr_rrc_apply_target_context(gNB_RRC_UE_t *UE)
 {
-  int nb_drb = 0;
+  DevAssert(UE->ho_context);
+  DevAssert(UE->ho_context->target);
+  nr_ho_target_cu_t *target_ctx = UE->ho_context->target;
+  f1_ue_data_t ue_data = cu_get_f1_ue_data(UE->rrc_ue_id);
+  LOG_I(NR_RRC,
+        "UE %d: update CU F1AP Context DU UE ID %u => %u and RNTI %04x => %04x\n",
+        UE->rrc_ue_id,
+        ue_data.secondary_ue,
+        target_ctx->du_ue_id,
+        UE->rnti,
+        target_ctx->new_rnti);
 
-  FOR_EACH_SEQ_ARR(drb_t *, rrc_drb, &ue->drbs) {
-    DevAssert(nb_drb < MAX_DRBS_PER_UE);
-    f1ap_drb_to_setup_t *drb = &drbs[nb_drb];
-    nr_pdcp_configuration_t *pdcp = &rrc_drb->pdcp_config;
-    nb_drb++;
-    /* fetch an existing PDU session for this DRB */
-    rrc_pdu_session_param_t *pdu = find_pduSession_from_drbId(ue, rrc_drb->drb_id);
-    AssertFatal(pdu != NULL, "no PDU session for DRB ID %d\n", rrc_drb->drb_id);
+  /* update F1 data: secondary UE association and DU association */
+  ue_data.secondary_ue = target_ctx->du_ue_id;
+  ue_data.du_assoc_id = target_ctx->du->assoc_id;
+  bool success = cu_update_f1_ue_data(UE->rrc_ue_id, &ue_data);
+  DevAssert(success);
 
-    drb->id = rrc_drb->drb_id;
+  /* update UE RNTI */
+  UE->rnti = target_ctx->new_rnti;
 
-    drb->qos_choice = F1AP_QOS_CHOICE_NR;
-    drb->nr.nssai = pdu->param.nssai;
-    drb->nr.flows_len = 1;
-    drb->nr.flows = calloc_or_fail(1, sizeof(*drb->nr.flows));
-
-    // Find the QoS flow associated with this DRB
-    // Since we don't have QFI mapping in the new structure, we'll use the first QoS flow
-    AssertFatal(seq_arr_size(&pdu->param.qos) == 1, "only 1 Qos flow supported\n");
-    nr_rrc_qos_t *qos_param = (nr_rrc_qos_t *)seq_arr_at(&pdu->param.qos, 0);
-    DevAssert(qos_param->qos.qfi > 0);
-    drb->nr.flows[0].qfi = qos_param->qos.qfi;
-    drb->nr.flows[0].param = get_qos_char_from_qos_flow_param(&qos_param->qos);
-    /* the DRB QoS parameters: we just reuse the ones from the first flow */
-    drb->nr.drb_qos = drb->nr.flows[0].param;
-
-    memcpy(&drb->up_ul_tnl[0].tl_address, &rrc_drb->cuup_tunnel_config.addr.buffer, sizeof(uint8_t) * 4);
-    drb->up_ul_tnl[0].teid = rrc_drb->cuup_tunnel_config.teid;
-    drb->up_ul_tnl_len = 1;
-
-    drb->rlc_mode = rrc->configuration.um_on_default_drb ? F1AP_RLC_MODE_UM_BIDIR : F1AP_RLC_MODE_AM;
-    DevAssert(pdcp->drb.sn_size == 18 || pdcp->drb.sn_size == 12);
-    drb->dl_pdcp_sn_len = malloc_or_fail(sizeof(*drb->dl_pdcp_sn_len));
-    *drb->dl_pdcp_sn_len = pdcp->drb.sn_size == 18 ? F1AP_PDCP_SN_18B : F1AP_PDCP_SN_12B;
-    drb->ul_pdcp_sn_len = malloc_or_fail(sizeof(*drb->ul_pdcp_sn_len));
-    *drb->ul_pdcp_sn_len = pdcp->drb.sn_size == 18 ? F1AP_PDCP_SN_18B : F1AP_PDCP_SN_12B;
-  }
-  return nb_drb;
+  /* update UE NR cell ID */
+  UE->nr_cellid = target_ctx->du->setup_req->cell[0].info.nr_cellid;
 }
 
 /* \brief Initiate a handover of UE to a specific target cell handled by this
@@ -166,8 +148,8 @@ static void nr_initiate_handover(const gNB_RRC_INST *rrc,
       ho_ctx->source->old_du_tunnel_config = drb->du_tunnel_config;
     }
 
-    int result = asn_copy(&asn_DEF_NR_CellGroupConfig, (void **)&ho_ctx->source->old_cellGroupConfig, ue->masterCellGroup);
-    AssertFatal(result == 0, "error during asn_copy() of CellGroupConfig\n");
+    // Store the old CellGroupConfig for reestablishment
+    ho_ctx->source->old_cgc = copy_byte_array(ue->mcg);
   }
 
   LOG_A(NR_RRC,
@@ -178,48 +160,7 @@ static void nr_initiate_handover(const gNB_RRC_INST *rrc,
         target_du->assoc_id,
         target_du->setup_req->cell[0].info.nr_pci);
 
-  f1ap_drb_to_setup_t *drbs = calloc_or_fail(MAX_DRBS_PER_UE, sizeof(*drbs));
-  int nb_drb = fill_drb_to_be_setup(rrc, ue, drbs);
-
-  int nb_srb = 2;
-  f1ap_srb_to_setup_t *srbs = calloc_or_fail(nb_srb, sizeof(*srbs));
-  srbs[0].id = 1;
-  srbs[1].id = 2;
-
-  free_MeasConfig(ue->measConfig);
-  ue->measConfig = nr_rrc_get_measconfig(rrc, target_du->setup_req->cell[0].info.nr_cellid);
-  byte_array_t *meas_config = calloc_or_fail(1, sizeof(*meas_config));
-  meas_config->buf = calloc_or_fail(1, NR_RRC_BUF_SIZE);
-  meas_config->len = do_NR_MeasConfig(ue->measConfig, meas_config->buf, NR_RRC_BUF_SIZE);
-
-  byte_array_t *meas_timing_config = get_meas_timing_config(target_du->mtc, ue->measConfig);
-
-  byte_array_t *hpi = malloc_or_fail(sizeof(*hpi));
-  *hpi = copy_byte_array(*ho_prep_info);
-
-  uint64_t *ue_agg_mbr = malloc_or_fail(sizeof(*ue_agg_mbr));
-  *ue_agg_mbr = 1000000000 /*bps*/;
-
-  f1ap_served_cell_info_t *cell_info = &target_du->setup_req->cell[0].info;
-  RETURN_IF_INVALID_ASSOC_ID(target_du->assoc_id);
-  f1ap_ue_context_setup_req_t ue_context_setup_req = {
-      .gNB_CU_ue_id = ue->rrc_ue_id,
-      .plmn.mcc = cell_info->plmn.mcc,
-      .plmn.mnc = cell_info->plmn.mnc,
-      .plmn.mnc_digit_length = cell_info->plmn.mnc_digit_length,
-      .nr_cellid = cell_info->nr_cellid,
-      .servCellIndex = 0, // TODO: correct value?
-      .srbs_len = nb_srb,
-      .srbs = srbs,
-      .drbs_len = nb_drb,
-      .drbs = drbs,
-      .cu_to_du_rrc_info.ho_prep_info = hpi,
-      .cu_to_du_rrc_info.meas_config = meas_config,
-      .cu_to_du_rrc_info.meas_timing_config = meas_timing_config,
-      .gnb_du_ue_agg_mbr_ul = ue_agg_mbr,
-  };
-  rrc->mac_rrc.ue_context_setup_request(target_du->assoc_id, &ue_context_setup_req);
-  free_ue_context_setup_req(&ue_context_setup_req);
+  rrc_f1_ue_context_setup_for_target_du(rrc, ue, target_du, ho_prep_info);
 }
 
 typedef struct deliver_ue_ctxt_modification_data_t {
@@ -364,13 +305,13 @@ void nr_rrc_trigger_f1_ho(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue, nr_rrc_du_contain
 void nr_rrc_finalize_ho(gNB_RRC_UE_t *ue)
 {
   if (ue->ho_context->source)
-    ASN_STRUCT_FREE(asn_DEF_NR_CellGroupConfig, ue->ho_context->source->old_cellGroupConfig);
+    free_byte_array(ue->ho_context->source->old_cgc);
   free_ho_ctx(ue->ho_context);
   ue->ho_context = NULL;
 }
 
-void nr_HO_F1_trigger_telnet(gNB_RRC_INST *rrc, uint32_t rrc_ue_id)
-{
+void nr_HO_F1_trigger_telnet(gNB_RRC_INST *rrc, uint32_t rrc_ue_id, uint64_t target_du_id) // changed to have a designated target du instead of a random/close cell one
+{ 
   rrc_gNB_ue_context_t *ue_context_p = rrc_gNB_get_ue_context(rrc, rrc_ue_id);
   if (ue_context_p == NULL) {
     LOG_E(NR_RRC, "cannot find UE context for UE ID %d\n", rrc_ue_id);
@@ -383,11 +324,25 @@ void nr_HO_F1_trigger_telnet(gNB_RRC_INST *rrc, uint32_t rrc_ue_id)
     LOG_E(NR_RRC, "cannot get source gNB-DU with assoc_id %d for UE %u\n", ue_data.du_assoc_id, ue->rrc_ue_id);
     return;
   }
+  
+  nr_rrc_du_container_t *target_du = NULL;
+  if (target_du_id == 0) {
+  
+    target_du = find_target_du(rrc, source_du->assoc_id);
+    LOG_I(NR_RRC, "Target DU ID is not specified, using the next available DU with assoc_id %d and du id %ld for UE %u \n", target_du->assoc_id, target_du->setup_req->gNB_DU_id, ue->rrc_ue_id);
+    if (target_du == NULL) {
+      LOG_E(NR_RRC, "No target gNB-DU found. Handover for UE %u aborted.\n", ue->rrc_ue_id);
+      return;
+    }
+  }
 
-  nr_rrc_du_container_t *target_du = find_target_du(rrc, source_du->assoc_id);
-  if (target_du == NULL) {
-    LOG_E(NR_RRC, "No target gNB-DU found. Handover for UE %u aborted.\n", ue->rrc_ue_id);
-    return;
+  else {
+    target_du = get_du_by_du_id(rrc, target_du_id);
+    if (target_du == NULL) {
+      LOG_E(NR_RRC, "No target gNB-DU found with DU ID %ld. Handover for UE %u aborted.\n", target_du_id, ue->rrc_ue_id);
+      return;
+    }
+    LOG_I(NR_RRC, "Triggering F1 handover for UE %u from source DU %ld to target DU %ld\n", ue->rrc_ue_id, source_du->setup_req->gNB_DU_id, target_du->setup_req->gNB_DU_id);
   }
 
   nr_rrc_trigger_f1_ho(rrc, ue, source_du, target_du);
@@ -464,10 +419,7 @@ static void nr_rrc_n2_ho_acknowledge(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE)
   /* this is the callback for N2 handover after F1 UE context setup response in
    * the handover case. Check that there was no associated DU, then set it */
   AssertFatal(previous_data.secondary_ue == -1, "there was already a DU present\n");
-  previous_data.secondary_ue = UE->ho_context->target->du_ue_id;
-  bool success = cu_update_f1_ue_data(UE->rrc_ue_id, &previous_data);
-  DevAssert(success);
-  LOG_I(NR_RRC, "Updated CU F1AP Context for UE %d, DU Id : %u\n", UE->rrc_ue_id, UE->ho_context->target->du_ue_id);
+  nr_rrc_apply_target_context(UE);
 
   byte_array_t hoCommand = rrc_gNB_encode_HandoverCommand(UE, rrc);
   if (hoCommand.len < 0) {

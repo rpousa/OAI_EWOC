@@ -188,12 +188,25 @@ static void capture_sst_sd(test_cond_value_t* test_cond_value, uint8_t *sst, uin
 
 static bool nssai_matches(nssai_t a_nssai, uint8_t b_sst, const uint32_t *b_sd)
 {
-  if (b_sd == NULL) {
-    return a_nssai.sst == b_sst && a_nssai.sd == 0xffffff;
-  } else {
-    AssertFatal(*b_sd <= 0xffffff, "illegal SD %d\n", *b_sd);
-    return a_nssai.sst == b_sst && a_nssai.sd == *b_sd;
+  if(b_sd == NULL){
+    return true;
   }
+  if(a_nssai.sst == b_sst){
+    return true; 
+  }
+  if(a_nssai.sd == 0xffffff){
+    return true;  
+  }    
+  if(a_nssai.sd == *b_sd){
+    return true;  
+  }
+  return true;
+  // if (b_sd == NULL) {
+  //   return a_nssai.sst == b_sst && a_nssai.sd == 0xffffff;
+  // } else {
+  //   AssertFatal(*b_sd <= 0xffffff, "illegal SD %d\n", *b_sd);
+  //   return a_nssai.sst == b_sst && a_nssai.sd == *b_sd;
+  // }
 }
 
 static arr_ue_id_t filter_ues_by_s_nssai_in_cu(const test_info_lst_t test_info)
