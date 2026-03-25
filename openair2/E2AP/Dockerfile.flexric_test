@@ -1,32 +1,3 @@
-#/*
-# * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
-# * contributor license agreements.  See the NOTICE file distributed with
-# * this work for additional information regarding copyright ownership.
-# * The OpenAirInterface Software Alliance licenses this file to You under
-# * the OAI Public License, Version 1.1  (the "License"); you may not use this file
-# * except in compliance with the License.
-# * You may obtain a copy of the License at
-# *
-# *      http://www.openairinterface.org/?page_id=698
-# *
-# * Unless required by applicable law or agreed to in writing, software
-# * distributed under the License is distributed on an "AS IS" BASIS,
-# * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# * See the License for the specific language governing permissions and
-# * limitations under the License.
-# *-------------------------------------------------------------------------------
-# * For more information about the OpenAirInterface (OAI) Software Alliance:
-# *      contact@openairinterface.org
-# */
-#
-#---------------------------------------------------------------------
-#
-# Dockerfile for the Open-Air-Interface FlexRIC service
-#   Valid for Ubuntu-22.04 (jammy)
-#
-#---------------------------------------------------------------------
-# BUILDER IMAGE
-#---------------------------------------------------------------------
 # Base builder image
 FROM ubuntu:jammy AS builder-base
 ENV DEBIAN_FRONTEND=noninteractive
@@ -58,24 +29,22 @@ RUN apt-get update && \
         gdb \
         libpcre2-dev \
         software-properties-common \
-        python3.10-dev \
-        asn1c && \
-        apt-get clean 
+        python3.10-dev && \
+    apt-get clean
 
-RUN     add-apt-repository -y ppa:ubuntu-toolchain-r/test && \
-        apt-get update && \
-        apt-get install -y --no-install-recommends \
+RUN add-apt-repository -y ppa:ubuntu-toolchain-r/test && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
         build-essential \
         ninja-build \
         gcc-13 \
         g++-13 \
         mold && \
-        apt-get clean && \
-        rm -rf /var/lib/apt/lists/*
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
 # SWIG builder stage
 FROM builder-base AS swig-builder
-
 RUN git clone -b release-4.1 https://github.com/swig/swig.git && \
     cd swig && \
     ./autogen.sh && \
@@ -86,7 +55,7 @@ RUN git clone -b release-4.1 https://github.com/swig/swig.git && \
 # ASN.1 compiler builder stage
 FROM builder-base AS asn1c-builder
 RUN rm -rf /tmp/asn1c && \
-    git clone  https://github.com/mouse07410/asn1c /tmp/asn1c && \
+    git clone https://github.com/mouse07410/asn1c /tmp/asn1c && \
     cd /tmp/asn1c && \
     git checkout 940dd5fa9f3917913fd487b13dfddfacd0ded06e && \
     git log -n1 && \
@@ -110,9 +79,11 @@ ENV PATH="/opt/asn1c/bin:${PATH}"
 # Build FlexRIC
 WORKDIR /flexric
 COPY ./flexric .
+
+# KEY FIX: Use Makefiles instead of Ninja, and add --whole-archive linker flag
 RUN mkdir build && \
     cd build && \
-    cmake -GNinja -DCMAKE_BUILD_TYPE=Release \
+    cmake -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_ASN1C_EXECUTABLE=/opt/asn1c/bin/asn1c \
           -DE2AP_VERSION=$E2AP_VERSION \
           -DKPM_VERSION=$KPM_VERSION \
@@ -120,10 +91,17 @@ RUN mkdir build && \
           -DCMAKE_INSTALL_PREFIX=/usr/local \
           -DCMAKE_C_FLAGS_RELEASE="-O3" \
           -DCMAKE_CXX_FLAGS_RELEASE="-O3" \
+          -DCMAKE_SHARED_LINKER_FLAGS="-Wl,--no-as-needed" \
           -DCMAKE_C_COMPILER=gcc-13 \
           -DCMAKE_CXX_COMPILER=g++-13 .. && \
-    ninja && \
-    ninja install
+    make -j$(nproc) VERBOSE=1 && \
+    make install && \
+    echo "=== Verify xApp shared library symbols ===" && \
+    nm -D /flexric/build/src/xApp/libe42_xapp_shared.so | grep "asn_DEF_NR_UL_DCCH_Message" && \
+    echo "=== Check shared object dependencies ===" && \
+    ldd /flexric/build/src/xApp/libe42_xapp_shared.so && \
+    echo "=== List all built .so files ===" && \
+    find /flexric/build -name "*.so*" -exec ls -la {} \;
 
 # Final runtime image
 FROM ubuntu:jammy
@@ -131,49 +109,51 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=Europe/Paris
 ENV XAPP_DURATION=-1
 
-# Install runtime dependencies only
+# Install runtime dependencies
 RUN apt-get update && \
+    apt-get install -y software-properties-common && \
+    add-apt-repository -y ppa:ubuntu-toolchain-r/test && \
+    apt-get update && \
     apt-get install -y --no-install-recommends \
         libsctp1 \
         python3.10 \
         libpcre2-8-0 \
         net-tools \
         iproute2 \
-        libssl3 && \
+        libssl3 \
+        libstdc++6 && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
+# Copy ALL shared libraries from the build
 COPY --from=flexric-builder /usr/local/lib/flexric/ /usr/local/lib/flexric/
 COPY --from=flexric-builder /flexric/build/src/xApp/libe42_xapp_shared.so /flexric/build/src/xApp/libe42_xapp_shared.so
+
+# Copy ALL .so files from the build tree (catches ASN.1 libs)
+COPY --from=flexric-builder /flexric/build/src/ /flexric/build/src/
+
 COPY --from=flexric-builder /flexric/build/examples/xApp /usr/local/flexric/xApp
-
 COPY --from=flexric-builder /flexric/build/examples/ric/nearRT-RIC /usr/local/bin/nearRT-RIC
-RUN mkdir -p /usr/local/flexric/emulator/agent
-COPY --from=flexric-builder /flexric/build/examples/emulator/agent /usr/local/flexric/emulator/
-COPY --from=flexric-builder \
-    /flexric/build/28_552_kpm_meas.txt /flexric/build/28_552_kpm_meas.txt
+COPY --from=flexric-builder /flexric/build/examples/emulator/agent /usr/local/flexric/emulator/agent
+COPY --from=flexric-builder /flexric/build/28_552_kpm_meas.txt /flexric/build/28_552_kpm_meas.txt
 
-RUN ldconfig && \
-    echo "--- Check shared objects dependencies for executable nearRT-RIC ---" && \
-    ldd /usr/local/bin/nearRT-RIC && \
-    echo "--- Check shared objects dependencies for xApp shared library ---" && \
-    ldd /flexric/build/src/xApp/libe42_xapp_shared.so 
+# Register ALL library paths
+RUN echo "/flexric/build/src/xApp" > /etc/ld.so.conf.d/flexric.conf && \
+    echo "/flexric/build/src/sm" >> /etc/ld.so.conf.d/flexric.conf && \
+    echo "/flexric/build/src/lib" >> /etc/ld.so.conf.d/flexric.conf && \
+    echo "/usr/local/lib/flexric" >> /etc/ld.so.conf.d/flexric.conf && \
+    find /flexric/build -name "*.so*" -exec dirname {} \; | sort -u >> /etc/ld.so.conf.d/flexric.conf && \
+    ldconfig && \
+    echo "=== Verify xApp SDK loads ===" && \
+    ldd /flexric/build/src/xApp/libe42_xapp_shared.so && \
+    echo "=== All flexric .so files ===" && \
+    find /flexric /usr/local/lib/flexric -name "*.so*" -exec ls -la {} \;
 
-# Copy necessary files from builder
-# COPY --from=flexric-builder /usr/local/lib/flexric/*.so /usr/local/lib/flexric/
-# COPY --from=flexric-builder /usr/local/bin/nearRT-RIC /usr/local/bin/
-# COPY --from=flexric-builder /flexric/build/examples/xApp /usr/local/flexric/xApp/
-# COPY --from=flexric-builder /flexric/build/examples/emulator/agent /usr/local/flexric/emulator/agent/
-COPY --from=flexric-builder /flexric/build/examples/ric/nearRT-RIC /usr/local/bin/ 
-# Copy configuration files
+# Copy config files
 COPY ./volumes/flexric_*.conf /usr/local/etc/flexric/
 COPY ./volumes/ric.conf /usr/local/etc/flexric/
 COPY ./volumes/ric.conf /usr/local/etc/flexric/flexric.conf
 
-# Update shared library cache
-RUN ldconfig
-
-# Expose ports
 EXPOSE 36421/sctp 36422/sctp
 
 WORKDIR /flexric
