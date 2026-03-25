@@ -143,8 +143,15 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-COPY --from=flexric-builder /flexric/build/examples/ric/nearRT-RIC /flexric/build/examples/ric/nearRT-RIC
+COPY --from=flexric-builder /usr/local/lib/flexric/ /usr/local/lib/flexric/
 COPY --from=flexric-builder /flexric/build/src/xApp/libe42_xapp_shared.so /flexric/build/src/xApp/libe42_xapp_shared.so
+COPY --from=flexric-builder /flexric/build/examples/xApp /usr/local/flexric/xApp
+
+COPY --from=flexric-builder /flexric/build/examples/ric/nearRT-RIC /usr/local/bin/nearRT-RIC
+RUN mkdir -p /usr/local/flexric/emulator/agent
+COPY --from=flexric-builder /flexric/build/examples/emulator/agent /usr/local/flexric/emulator/
+COPY --from=oai-flexric-builder \
+    /flexric/build/28_552_kpm_meas.txt /flexric/build/28_552_kpm_meas.txt
 
 RUN ldconfig && \
     echo "--- Check shared objects dependencies for executable nearRT-RIC ---" && \
@@ -158,10 +165,6 @@ RUN ldconfig && \
 # COPY --from=flexric-builder /flexric/build/examples/xApp /usr/local/flexric/xApp/
 # COPY --from=flexric-builder /flexric/build/examples/emulator/agent /usr/local/flexric/emulator/agent/
 COPY --from=flexric-builder /flexric/build/examples/ric/nearRT-RIC /usr/local/bin/ 
-COPY --from=flexric-builder /flexric/build/examples/xApp /usr/local/flexric/
-RUN mkdir -p /usr/local/flexric/emulator/agent
-COPY --from=flexric-builder /flexric/build/examples/emulator/agent /usr/local/flexric/emulator/
-COPY --from=flexric-builder /usr/local/lib/flexric/ /usr/local/lib/flexric/
 # Copy configuration files
 COPY ./volumes/flexric_*.conf /usr/local/etc/flexric/
 COPY ./volumes/ric.conf /usr/local/etc/flexric/
