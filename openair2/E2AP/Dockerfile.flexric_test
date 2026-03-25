@@ -150,7 +150,7 @@ COPY --from=flexric-builder /flexric/build/examples/xApp /usr/local/flexric/xApp
 COPY --from=flexric-builder /flexric/build/examples/ric/nearRT-RIC /usr/local/bin/nearRT-RIC
 RUN mkdir -p /usr/local/flexric/emulator/agent
 COPY --from=flexric-builder /flexric/build/examples/emulator/agent /usr/local/flexric/emulator/
-COPY --from=oai-flexric-builder \
+COPY --from=flexric-builder \
     /flexric/build/28_552_kpm_meas.txt /flexric/build/28_552_kpm_meas.txt
 
 RUN ldconfig && \
