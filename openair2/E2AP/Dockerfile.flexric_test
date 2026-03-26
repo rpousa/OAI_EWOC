@@ -140,8 +140,12 @@ RUN echo "/flexric/build/src/xApp" > /etc/ld.so.conf.d/flexric.conf && \
     echo "/usr/local/lib/flexric" >> /etc/ld.so.conf.d/flexric.conf && \
     find /flexric/build -name "*.so*" -exec dirname {} \; | sort -u >> /etc/ld.so.conf.d/flexric.conf && \
     ldconfig && \
+    echo "--- Check shared objects dependencies for executable nearRT-RIC ---" && \
+    ldd /usr/local/bin/nearRT-RIC && \
     echo "=== Verify xApp SDK loads ===" && \
     ldd /flexric/build/src/xApp/libe42_xapp_shared.so && \
+    echo "--- Check shared objects dependencies for flexric shared libraries ---" && \
+    ldd /usr/local/lib/flexric/*.so* && \
     echo "=== All flexric .so files ===" && \
     find /flexric /usr/local/lib/flexric -name "*.so*" -exec ls -la {} \;
 
