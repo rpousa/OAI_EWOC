@@ -123,7 +123,7 @@ RUN apt-get update && \
 
 # Copy ALL shared libraries from the build
 COPY --from=flexric-builder /usr/local/lib/flexric/ /usr/local/lib/flexric/
-COPY --from=flexric-builder /flexric/build/src/xApp/libe42_xapp_shared.so /flexric/build/src/xApp/libe42_xapp_shared.so
+COPY --from=flexric-builder /flexric/build/src/xApp/libe42_xapp_shared.so /flexric/build/src/xApp/
 
 # Copy ALL .so files from the build tree (catches ASN.1 libs)
 COPY --from=flexric-builder /flexric/build/src/ /flexric/build/src/
