@@ -62,8 +62,8 @@ RUN rm -rf /tmp/asn1c && \
 
 # FlexRIC builder stage
 FROM builder-base AS flexric-builder
-ARG E2AP_VERSION=E2AP_V3
-ARG KPM_VERSION=KPM_V3_00
+ARG E2AP_VERSION=E2AP_V2
+ARG KPM_VERSION=KPM_V2_03
 
 # # Copy from previous stages
 # COPY --from=swig-builder /usr/bin/swig /usr/bin/
@@ -73,9 +73,12 @@ ARG KPM_VERSION=KPM_V3_00
 ENV PATH="/opt/asn1c/bin:${PATH}"
 
 # Build FlexRIC
-WORKDIR /flexric
-COPY ./flexric .
-
+# WORKDIR /flexric
+# COPY ./flexric .
+RUN git clone https://gitlab.eurecom.fr/mosaic5g/flexric flexric && \
+    cd flexric && \
+    git checkout f1c08ed2b9b1eceeda7941dd7bf435db0168dd56
+    
 # KEY FIX: Use Makefiles instead of Ninja, and add --whole-archive linker flag
 RUN mkdir build && \
     cd build && \
@@ -88,6 +91,7 @@ RUN mkdir build && \
           -DCMAKE_C_FLAGS_RELEASE="-O3" \
           -DCMAKE_CXX_FLAGS_RELEASE="-O3" \
           -DCMAKE_SHARED_LINKER_FLAGS="-Wl,--no-as-needed" \
+          -DBUILDING_LIBRARY=DYNAMIC \
           -DCMAKE_C_COMPILER=gcc-13 \
           -DCMAKE_CXX_COMPILER=g++-13 .. && \
     make -j$(nproc) VERBOSE=1 && \
@@ -98,6 +102,7 @@ RUN mkdir build && \
     ldd /flexric/build/src/xApp/libe42_xapp_shared.so && \
     echo "=== List all built .so files ===" && \
     find /flexric/build -name "*.so*" -exec ls -la {} \;
+
 
 # Final runtime image
 FROM ubuntu:jammy
