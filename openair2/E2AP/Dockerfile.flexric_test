@@ -78,11 +78,12 @@ ENV PATH="/opt/asn1c/bin:${PATH}"
 RUN git clone https://gitlab.eurecom.fr/mosaic5g/flexric flexric && \
     cd flexric && \
     git checkout f1c08ed2b9b1eceeda7941dd7bf435db0168dd56
-    
+
 # KEY FIX: Use Makefiles instead of Ninja, and add --whole-archive linker flag
 RUN mkdir build && \
     cd build && \
-    cmake -DCMAKE_BUILD_TYPE=Release \
+    cmake .. \
+          -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_ASN1C_EXECUTABLE=/opt/asn1c/bin/asn1c \
           -DE2AP_VERSION=$E2AP_VERSION \
           -DKPM_VERSION=$KPM_VERSION \
