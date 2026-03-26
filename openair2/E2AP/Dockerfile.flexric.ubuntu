@@ -93,13 +93,43 @@ RUN mkdir build && \
     cmake -GNinja -DCMAKE_BUILD_TYPE=Release \
           -DE2AP_VERSION=$E2AP_VERSION \
           -DKPM_VERSION=$KPM_VERSION \
-          -DCMAKE_C_COMPILER=gcc-12 \
+          -DCMAKE_C_COMPILER=gcc-13 \
           -DXAPP_MULTILANGUAGE=ON \
-          -DCMAKE_CXX_COMPILER=g++-12 .. && \
+          -DCMAKE_CXX_COMPILER=g++-13 .. && \
     ninja && \
     ninja install && \
+    echo "=== Locating archive containing asn_DEF_NR_UL_DCCH_Message ===" && \
+    MISSING_LIB=$(find /flexric/build -name "*.a" -exec sh -c \
+      'nm "$1" 2>/dev/null | grep -q "T asn_DEF_NR_UL_DCCH_Message" && echo "$1"' _ {} \; | head -1) && \
+    if [ -n "$MISSING_LIB" ]; then \
+      echo "Found missing symbol in: $MISSING_LIB" && \
+      OTHER_ARCHIVES=$(find /flexric/build -name "*.a" ! -path "$MISSING_LIB" | tr '\n' ' ') && \
+      ALL_OBJS=$(find /flexric/build -path "*/CMakeFiles/*.dir/*.o" | tr '\n' ' ') && \
+      gcc-13 -shared -o /flexric/build/src/xApp/libe42_xapp_shared.so \
+        -Wl,--whole-archive "$MISSING_LIB" -Wl,--no-whole-archive \
+        $OTHER_ARCHIVES \
+        $ALL_OBJS \
+        -lsctp -lpthread -ldl -lm 2>/dev/null || \
+      gcc-13 -shared -o /flexric/build/src/xApp/libe42_xapp_shared.so \
+        -Wl,--whole-archive "$MISSING_LIB" -Wl,--no-whole-archive \
+        $OTHER_ARCHIVES \
+        -lsctp -lpthread -ldl -lm && \
+      echo "=== Verify symbol is now present ===" && \
+      nm -D /flexric/build/src/xApp/libe42_xapp_shared.so | grep "asn_DEF_NR_UL_DCCH_Message" && \
+      echo "SUCCESS: Symbol resolved"; \
+    else \
+      echo "WARNING: asn_DEF_NR_UL_DCCH_Message not found in any .a file" && \
+      echo "=== Trying whole-archive on ALL static libs ===" && \
+      ALL_ARCHIVES=$(find /flexric/build -name "*.a" | tr '\n' ' ') && \
+      gcc-13 -shared -o /flexric/build/src/xApp/libe42_xapp_shared.so \
+        -Wl,--whole-archive $ALL_ARCHIVES -Wl,--no-whole-archive \
+        -lsctp -lpthread -ldl -lm && \
+      nm -D /flexric/build/src/xApp/libe42_xapp_shared.so | grep "asn_DEF_NR_UL_DCCH_Message"; \
+    fi && \
     echo "--- Check shared objects dependencies for executable nearRT-RIC ---" && \
     ldd /flexric/build/examples/ric/nearRT-RIC && \
+    echo "=== Verify xApp shared library symbols ===" && \
+    nm -D /flexric/build/src/xApp/libe42_xapp_shared.so | grep "asn_DEF_NR_UL_DCCH_Message" && \
     echo "--- Check shared objects dependencies for xApp shared library ---" && \
     ldd /flexric/build/src/xApp/libe42_xapp_shared.so
 
