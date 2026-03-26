@@ -65,10 +65,10 @@ FROM builder-base AS flexric-builder
 ARG E2AP_VERSION=E2AP_V3
 ARG KPM_VERSION=KPM_V3_00
 
-# Copy from previous stages
-COPY --from=swig-builder /usr/bin/swig /usr/bin/
-COPY --from=swig-builder /usr/share/swig /usr/share/swig
-COPY --from=asn1c-builder /opt/asn1c /opt/asn1c
+# # Copy from previous stages
+# COPY --from=swig-builder /usr/bin/swig /usr/bin/
+# COPY --from=swig-builder /usr/share/swig /usr/share/swig
+# COPY --from=asn1c-builder /opt/asn1c /opt/asn1c
 
 ENV PATH="/opt/asn1c/bin:${PATH}"
 
