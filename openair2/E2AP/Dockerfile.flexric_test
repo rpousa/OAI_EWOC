@@ -43,8 +43,6 @@ RUN add-apt-repository -y ppa:ubuntu-toolchain-r/test && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# SWIG builder stage
-FROM builder-base AS swig-builder
 RUN git clone -b release-4.1 https://github.com/swig/swig.git && \
     cd swig && \
     ./autogen.sh && \
@@ -52,8 +50,6 @@ RUN git clone -b release-4.1 https://github.com/swig/swig.git && \
     make -j8 && \
     make install
 
-# ASN.1 compiler builder stage
-FROM builder-base AS asn1c-builder
 RUN rm -rf /tmp/asn1c && \
     git clone https://github.com/mouse07410/asn1c /tmp/asn1c && \
     cd /tmp/asn1c && \
