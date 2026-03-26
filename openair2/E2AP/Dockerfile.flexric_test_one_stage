@@ -226,7 +226,7 @@ RUN ldconfig && \
 
 RUN cp -r /flexric/build/examples/ric/nearRT-RIC /usr/local/bin/ && \
 #    mkdir -p /usr/local/flexric/xApp && \
-    cp -r /flexric/build/examples/xApp /usr/local/flexric/ && \
+    cp -r /flexric/build/examples/xApp /usr/local/flexric/xApp && \
     mkdir -p /usr/local/flexric/emulator/agent && \
     cp -r /flexric/build/examples/emulator/agent /usr/local/flexric/emulator/
 

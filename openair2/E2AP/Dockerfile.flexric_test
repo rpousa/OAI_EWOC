@@ -73,20 +73,13 @@ ARG KPM_VERSION=KPM_V2_03
 ENV PATH="/opt/asn1c/bin:${PATH}"
 
 # Build FlexRIC
-# WORKDIR /flexric
-# COPY ./flexric .
-
-# Pull the specific commit of FlexRIC to ensure reproducibility
-# RUN git clone https://gitlab.eurecom.fr/mosaic5g/flexric flexric && \
-#     cd flexric && \
-#     git checkout f1c08ed2b9b1eceeda7941dd7bf435db0168dd56
+WORKDIR /flexric
+COPY ./flexric .
 
 # KEY FIX: Use Makefiles instead of Ninja, and add --whole-archive linker flag
-RUN git clone https://gitlab.eurecom.fr/mosaic5g/flexric flexric && \
-    cd flexric && \
-    git checkout f1c08ed2b9b1eceeda7941dd7bf435db0168dd56 && \
-    mkdir build && cd build && \
-    cmake -DCMAKE_BUILD_TYPE=Release \
+RUN mkdir build && \
+    cd build && \
+    cmake -GNinja -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_ASN1C_EXECUTABLE=/opt/asn1c/bin/asn1c \
           -DE2AP_VERSION=$E2AP_VERSION \
           -DKPM_VERSION=$KPM_VERSION \
@@ -106,7 +99,6 @@ RUN git clone https://gitlab.eurecom.fr/mosaic5g/flexric flexric && \
     ldd /flexric/build/src/xApp/libe42_xapp_shared.so && \
     echo "=== List all built .so files ===" && \
     find /flexric/build -name "*.so*" -exec ls -la {} \;
-
 
 # Final runtime image
 FROM ubuntu:jammy
