@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 add_library(fgs_5gmm_lib OBJECT
     fgmm_lib.c
     fgs_service_request.c

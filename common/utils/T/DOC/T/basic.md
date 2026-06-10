@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 # Basic usage of the T
 
 ## Compilation
@@ -56,9 +58,7 @@ softmodem to wait for a tracer. The default port is 2021.
 The option `--T_dont_fork` allows one to use gdb to debug problems
 with the softmodem. Note that you then may have some "zombie"
 processes after crashes, in which case you can run
-`sudo killall -9 lte-softmodem` to get rid of them (`lte-softmodem`
-to be replaced by the program you trace, like `lte-softmodem-nos1`
-or `oaisim`).
+`sudo killall -9 lte-softmodem` to get rid of them.
 
 The option `--T_stdout` also accepts values 0 (to disable output
 on the terminal and only use the T tracer) and 1 (to disable
@@ -67,18 +67,26 @@ the T tracer and only output on the terminal). The default is
 
 ## Run a tracer
 
-Go into the directory `common/utils/T/tracer` (or
-`cmake_targets/ran_build/build/common/utils/T/tracer`) and run for example the
+Go into the directory `common/utils/T/tracer` and run for example the
 `enb` tracer:
 
 ```shell
+#in common/utils/T/tracer directory
 ./enb -d ../T_messages.txt
+```
+
+You can also run it from `cmake_targets/ran_build/build/` directory:
+
+```shell
+# in cmake_targets/ran_build/build directory
+./common/utils/T/tracer/enb -d ../../../common/utils/T/T_messages.txt
 ```
 
 To trace a remote program, use the `-ip` option. For example,
 if you want to trace a program running on `192.168.12.148` do:
 
 ```shell
+# in common/utils/T/tracer directory
 ./enb -d ../T_messages.txt -ip 192.168.12.148
 ```
 

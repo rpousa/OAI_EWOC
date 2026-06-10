@@ -1,39 +1,16 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file PHY/impl_defs_top.h
-* \brief More defines and structure definitions
-* \author R. Knopp, F. Kaltenberger
-* \date 2011
-* \version 0.1
-* \company Eurecom
-* \email: knopp@eurecom.fr,florian.kaltenberger@eurecom.fr
-* \note
-* \warning
-*/
+/*!
+ * \brief More defines and structure definitions
+ */
 
 #ifndef __PHY_IMPLEMENTATION_DEFS_NB_IOT_H__
 #define __PHY_IMPLEMENTATION_DEFS_NB_IOT_H__
 
 #include "common/openairinterface5g_limits.h"
+#include "common/cmake_defs.h"
 
 #define NUMBER_OF_SUBBANDS_MAX_NB_IoT 13
 typedef enum {no_relay_NB_IoT=1,unicast_relay_type1_NB_IoT,unicast_relay_type2_NB_IoT, multicast_relay_NB_IoT} relaying_type_t_NB_IoT;
@@ -54,15 +31,15 @@ typedef struct {
   //! estimated noise power (linear)
   unsigned int   n0_power[NB_ANTENNAS_RX];
   //! estimated noise power (dB)
-  unsigned short n0_power_dB[NB_ANTENNAS_RX];
+  short n0_power_dB[NB_ANTENNAS_RX];
   //! total estimated noise power (linear)
   unsigned int   n0_power_tot;
   //! total estimated noise power (dB)
-  unsigned short n0_power_tot_dB;
+  short n0_power_tot_dB;
   //! average estimated noise power (linear)
   unsigned int   n0_power_avg;
   //! average estimated noise power (dB)
-  unsigned short n0_power_avg_dB;
+  short n0_power_avg_dB;
   //! total estimated noise power (dBm)
   short n0_power_tot_dBm;
 
@@ -70,24 +47,24 @@ typedef struct {
   //! estimated received spatial signal power (linear)
   int            rx_spatial_power[NUMBER_OF_CONNECTED_eNB_MAX][2][2];
   //! estimated received spatial signal power (dB)
-  unsigned short rx_spatial_power_dB[NUMBER_OF_CONNECTED_eNB_MAX][2][2];
+  short rx_spatial_power_dB[NUMBER_OF_CONNECTED_eNB_MAX][2][2];
 
   /// estimated received signal power (sum over all TX antennas)
   //int            wideband_cqi[NUMBER_OF_CONNECTED_eNB_MAX][NB_ANTENNAS_RX];
   int            rx_power[NUMBER_OF_CONNECTED_eNB_MAX][NB_ANTENNAS_RX];
   /// estimated received signal power (sum over all TX antennas)
   //int            wideband_cqi_dB[NUMBER_OF_CONNECTED_eNB_MAX][NB_ANTENNAS_RX];
-  unsigned short rx_power_dB[NUMBER_OF_CONNECTED_eNB_MAX][NB_ANTENNAS_RX];
+  short rx_power_dB[NUMBER_OF_CONNECTED_eNB_MAX][NB_ANTENNAS_RX];
 
   /// estimated received signal power (sum over all TX/RX antennas)
   int            rx_power_tot[NUMBER_OF_CONNECTED_eNB_MAX]; //NEW
   /// estimated received signal power (sum over all TX/RX antennas)
-  unsigned short rx_power_tot_dB[NUMBER_OF_CONNECTED_eNB_MAX]; //NEW
+  short rx_power_tot_dB[NUMBER_OF_CONNECTED_eNB_MAX]; //NEW
 
   //! estimated received signal power (sum of all TX/RX antennas, time average)
   int            rx_power_avg[NUMBER_OF_CONNECTED_eNB_MAX];
   //! estimated received signal power (sum of all TX/RX antennas, time average, in dB)
-  unsigned short rx_power_avg_dB[NUMBER_OF_CONNECTED_eNB_MAX];
+  short rx_power_avg_dB[NUMBER_OF_CONNECTED_eNB_MAX];
 
   /// SINR (sum of all TX/RX antennas, in dB)
   int            wideband_cqi_tot[NUMBER_OF_CONNECTED_eNB_MAX];
@@ -140,17 +117,17 @@ typedef struct {
   //! estimated noise power (linear)
   unsigned int   n0_power[NB_ANTENNAS_RX];
   //! estimated noise power (dB)
-  unsigned short n0_power_dB[NB_ANTENNAS_RX];
+  short n0_power_dB[NB_ANTENNAS_RX];
   //! total estimated noise power (linear)
   unsigned int   n0_power_tot;
   //! estimated avg noise power (dB)
-  unsigned short n0_power_tot_dB;
+  short n0_power_tot_dB;
   //! estimated avg noise power (dB)
   short n0_power_tot_dBm;
   //! estimated avg noise power per RB per RX ant (lin)
   unsigned short n0_subband_power[NB_ANTENNAS_RX][100];
   //! estimated avg noise power per RB per RX ant (dB)
-  unsigned short n0_subband_power_dB[NB_ANTENNAS_RX][100];
+  short n0_subband_power_dB[NB_ANTENNAS_RX][100];
   //! estimated avg noise power per RB (dB)
   short n0_subband_power_tot_dB[100];
   //! estimated avg noise power per RB (dBm)
@@ -159,7 +136,7 @@ typedef struct {
   //! estimated received spatial signal power (linear)
   unsigned int   rx_spatial_power[NUMBER_OF_UE_MAX][2][2];
   //! estimated received spatial signal power (dB)
-  unsigned short rx_spatial_power_dB[NUMBER_OF_UE_MAX][2][2];
+  short rx_spatial_power_dB[NUMBER_OF_UE_MAX][2][2];
   //! estimated rssi (dBm)
   short          rx_rssi_dBm[NUMBER_OF_UE_MAX];
   //! estimated correlation (wideband linear) between spatial channels (computed in dlsch_demodulation)
@@ -172,7 +149,7 @@ typedef struct {
   /// Wideband CQI in dB (= SINR dB)
   int            wideband_cqi_dB[NUMBER_OF_UE_MAX][NB_ANTENNAS_RX];
   /// Wideband CQI (sum of all RX antennas, in dB)
-  char           wideband_cqi_tot[NUMBER_OF_UE_MAX];
+  int           wideband_cqi_tot[NUMBER_OF_UE_MAX];
   /// Subband CQI per RX antenna and RB (= SINR)
   int            subband_cqi[NUMBER_OF_UE_MAX][NB_ANTENNAS_RX][100];
   /// Total Subband CQI and RB (= SINR)

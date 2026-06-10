@@ -1,4 +1,6 @@
 #!/bin/bash
+# SPDX-License-Identifier: MIT
+
 set -eo pipefail
 
 BASE_COMMIT=$(git merge-base HEAD origin/develop)

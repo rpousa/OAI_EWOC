@@ -1,17 +1,7 @@
 /*
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Copyright 2017 Cisco Systems, Inc.
- * 
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- * 
- * http://www.apache.org/licenses/LICENSE-2.0
- * 
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
  */
 
 
@@ -480,6 +470,7 @@ int pnf_p7_send_message(pnf_p7_t* pnf_p7, uint8_t* msg, uint32_t len)
 
 int pnf_p7_pack_and_send_p7_message(pnf_p7_t* pnf_p7, nfapi_p7_message_header_t* header, uint32_t msg_len)
 {
+  UNUSED(msg_len)
 	header->m_segment_sequence = NFAPI_P7_SET_MSS(0, 0, pnf_p7->sequence_number);
 
 	// Need to guard against different threads calling the encode function at the same time
@@ -649,20 +640,20 @@ void send_dummy_subframe(pnf_p7_t* pnf_p7, uint16_t sfn_sf)
 	{
 		pnf_p7->_public.dummy_subframe.dl_config_req->sfn_sf = sfn_sf;
 		//NFAPI_TRACE(NFAPI_TRACE_INFO, "Dummy dl_config_req - enter\n");
-		(pnf_p7->_public.dl_config_req)(NULL, &(pnf_p7->_public), pnf_p7->_public.dummy_subframe.dl_config_req);
+		(pnf_p7->_public.dl_config_req)(&(pnf_p7->_public), pnf_p7->_public.dummy_subframe.dl_config_req);
 		//NFAPI_TRACE(NFAPI_TRACE_INFO, "Dummy dl_config_req - exit\n");
 	}
 	if(pnf_p7->_public.ul_config_req && pnf_p7->_public.dummy_subframe.ul_config_req)
 	{
 		pnf_p7->_public.dummy_subframe.ul_config_req->sfn_sf = sfn_sf;
 		NFAPI_TRACE(NFAPI_TRACE_INFO, "Dummy ul_config_req - enter\n");
-		(pnf_p7->_public.ul_config_req)(NULL, &pnf_p7->_public, pnf_p7->_public.dummy_subframe.ul_config_req);
+		(pnf_p7->_public.ul_config_req)(&pnf_p7->_public, pnf_p7->_public.dummy_subframe.ul_config_req);
 	}
 	if(pnf_p7->_public.hi_dci0_req && pnf_p7->_public.dummy_subframe.hi_dci0_req)
 	{
 		pnf_p7->_public.dummy_subframe.hi_dci0_req->sfn_sf = sfn_sf;
 		NFAPI_TRACE(NFAPI_TRACE_INFO, "Dummy hi_dci0 - enter\n");
-		(pnf_p7->_public.hi_dci0_req)(NULL, &pnf_p7->_public, pnf_p7->_public.dummy_subframe.hi_dci0_req);
+		(pnf_p7->_public.hi_dci0_req)(&pnf_p7->_public, pnf_p7->_public.dummy_subframe.hi_dci0_req);
 	}
 	if(pnf_p7->_public.lbt_dl_config_req && pnf_p7->_public.dummy_subframe.lbt_dl_config_req)
 	{
@@ -681,6 +672,7 @@ int nr_pnf_p7_get_msgs(pnf_p7_t* pnf_p7,
                        nfapi_nr_ul_dci_request_t* ret_ul_dci,
                        nfapi_nr_tx_data_request_t* ret_tx_data)
 {
+  UNUSED(phy_id)
   if (pthread_mutex_lock(&(pnf_p7->mutex)) != 0) {
     NFAPI_TRACE(NFAPI_TRACE_INFO, "failed to lock mutex\n");
     return -1;
@@ -804,6 +796,7 @@ int nr_pnf_p7_get_msgs(pnf_p7_t* pnf_p7,
 
 int pnf_p7_subframe_ind(pnf_p7_t* pnf_p7, uint16_t phy_id, uint16_t sfn_sf)
 {
+  UNUSED(phy_id)
 	// We could either send an event to the p7 thread have have it run the
 	// subframe or we could handle it here and lock access to the subframe
 	// buffers. If we do it on the p7 thread then we run the risk of blocking
@@ -902,7 +895,7 @@ int pnf_p7_subframe_ind(pnf_p7_t* pnf_p7, uint16_t phy_id, uint16_t sfn_sf)
 			if(tx_subframe_buffer->dl_config_req != 0)
 			{
 				if(pnf_p7->_public.dl_config_req)
-					(pnf_p7->_public.dl_config_req)(NULL, &(pnf_p7->_public), tx_subframe_buffer->dl_config_req);
+					(pnf_p7->_public.dl_config_req)(&(pnf_p7->_public), tx_subframe_buffer->dl_config_req);
 
 				//deallocate_nfapi_dl_config_request(subframe_buffer->dl_config_req, pnf_p7);
 			}
@@ -912,14 +905,14 @@ int pnf_p7_subframe_ind(pnf_p7_t* pnf_p7, uint16_t phy_id, uint16_t sfn_sf)
 				if(pnf_p7->_public.dl_config_req && pnf_p7->_public.dummy_subframe.dl_config_req)
 				{
 					pnf_p7->_public.dummy_subframe.dl_config_req->sfn_sf = sfn_sf_tx;
-					(pnf_p7->_public.dl_config_req)(NULL, &(pnf_p7->_public), pnf_p7->_public.dummy_subframe.dl_config_req);
+					(pnf_p7->_public.dl_config_req)(&(pnf_p7->_public), pnf_p7->_public.dummy_subframe.dl_config_req);
 				}
 			}
 
 			if(tx_subframe_buffer->hi_dci0_req != 0)
 			{
 				if(pnf_p7->_public.hi_dci0_req)
-					(pnf_p7->_public.hi_dci0_req)(NULL, &(pnf_p7->_public), tx_subframe_buffer->hi_dci0_req);
+					(pnf_p7->_public.hi_dci0_req)(&(pnf_p7->_public), tx_subframe_buffer->hi_dci0_req);
 
 				//deallocate_nfapi_hi_dci0_request(subframe_buffer->hi_dci0_req, pnf_p7);
 			}
@@ -929,7 +922,7 @@ int pnf_p7_subframe_ind(pnf_p7_t* pnf_p7, uint16_t phy_id, uint16_t sfn_sf)
 				if(pnf_p7->_public.hi_dci0_req && pnf_p7->_public.dummy_subframe.hi_dci0_req)
 				{
 					pnf_p7->_public.dummy_subframe.hi_dci0_req->sfn_sf = sfn_sf_tx;
-					(pnf_p7->_public.hi_dci0_req)(NULL, &(pnf_p7->_public), pnf_p7->_public.dummy_subframe.hi_dci0_req);
+					(pnf_p7->_public.hi_dci0_req)(&(pnf_p7->_public), pnf_p7->_public.dummy_subframe.hi_dci0_req);
 				}
 			}
 
@@ -980,7 +973,7 @@ int pnf_p7_subframe_ind(pnf_p7_t* pnf_p7, uint16_t phy_id, uint16_t sfn_sf)
 			if(subframe_buffer->ul_config_req != 0)
 			{
 				if(pnf_p7->_public.ul_config_req)
-					(pnf_p7->_public.ul_config_req)(NULL, &(pnf_p7->_public), subframe_buffer->ul_config_req);
+					(pnf_p7->_public.ul_config_req)(&(pnf_p7->_public), subframe_buffer->ul_config_req);
 
 				//deallocate_nfapi_ul_config_request(subframe_buffer->ul_config_req, pnf_p7);
 			}
@@ -990,7 +983,7 @@ int pnf_p7_subframe_ind(pnf_p7_t* pnf_p7, uint16_t phy_id, uint16_t sfn_sf)
 				if(pnf_p7->_public.ul_config_req && pnf_p7->_public.dummy_subframe.ul_config_req)
 				{
 					pnf_p7->_public.dummy_subframe.ul_config_req->sfn_sf = sfn_sf;
-					(pnf_p7->_public.ul_config_req)(NULL, &(pnf_p7->_public), pnf_p7->_public.dummy_subframe.ul_config_req);
+					(pnf_p7->_public.ul_config_req)(&(pnf_p7->_public), pnf_p7->_public.dummy_subframe.ul_config_req);
 				}
 			}
 

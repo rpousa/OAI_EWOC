@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: CC-BY-4.0
 
 #Build instructions
 source oaienv

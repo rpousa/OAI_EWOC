@@ -1,34 +1,17 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/* file: PHY/CODING/defs.h
-   purpose: Top-level definitions, data types and function prototypes for openairinterface coding blocks
-   author: raymond.knopp@eurecom.fr
-   date: 21.10.2009
-*/
+/*
+ * \brief Top-level definitions, data types and function prototypes for openairinterface coding blocks
+ */
 #ifndef __CODING_DEFS__H__
 #define __CODING_DEFS__H__
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <pthread.h>
+#include "common/utils/nr/nr_common.h"
 
 #define CRC24_A 0
 #define CRC24_B 1
@@ -38,6 +21,49 @@
 #define MAX_TURBO_ITERATIONS_MBSFN 8
 #define MAX_TURBO_ITERATIONS max_turbo_iterations
 
+typedef struct {
+  pthread_mutex_t mutex_failure;
+  bool failed;
+} decode_abort_t;
+
+static inline void init_abort(decode_abort_t *ab)
+{
+  int ret = pthread_mutex_init(&ab->mutex_failure, NULL);
+  AssertFatal(ret == 0, "mutex failed with %d\n", ret);
+  ab->failed = false;
+}
+
+static inline bool check_abort(decode_abort_t *ab)
+{
+  int ret = pthread_mutex_lock(&ab->mutex_failure);
+  AssertFatal(ret == 0, "mutex failed with %d\n", ret);
+  bool failed = ab->failed;
+  ret = pthread_mutex_unlock(&ab->mutex_failure);
+  AssertFatal(ret == 0, "mutex failed with %d\n", ret);
+  return failed;
+}
+
+static inline void set_abort(decode_abort_t *ab, bool v)
+{
+  int ret = pthread_mutex_lock(&ab->mutex_failure);
+  AssertFatal(ret == 0, "mutex failed with %d\n", ret);
+  ab->failed = v;
+  ret = pthread_mutex_unlock(&ab->mutex_failure);
+  AssertFatal(ret == 0, "mutex failed with %d\n", ret);
+}
+
+static inline int lenWithCrc(int nbSeg, int len)
+{
+  if (nbSeg > 1)
+    return (len + 24 + 24 * nbSeg) / nbSeg;
+  return len + (len > NR_MAX_PDSCH_TBS ? 24 : 16);
+}
+static inline int crcType(int nbSeg, int len)
+{
+  if (nbSeg > 1)
+    return CRC24_B;
+  return len > NR_MAX_PDSCH_TBS ? CRC24_A : CRC16;
+}
 
 #define LTE_NULL 2
 typedef struct {

@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 # T tracer - a simple tutorial
 
 There is a diff file with all modifications:

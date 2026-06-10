@@ -1,34 +1,11 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file common/config/config_paramdesc.h
+/*!
  * \brief configuration module, include file describing parameters, common to all implementations
- * \author Francois TABURET
- * \date 2017
- * \version 0.1
- * \company NOKIA BellLabs France
- * \email: francois.taburet@nokia-bell-labs.com
- * \note
- * \warning
  */
+
 #include <stdint.h>
 #ifndef INCLUDE_CONFIG_PARAMDESC_H
 #define INCLUDE_CONFIG_PARAMDESC_H
@@ -71,8 +48,8 @@ typedef union checkedparam {
     int num_okintval;                                            /* number of valid values in the checkingval array */
   } s1a;
   struct {
-    int (*f2)(configmodule_interface_t *cfg,
-              paramdef_t *param); /* check an integer against an authorized range, defined by its min and max value */
+    int (*f2)(const configmodule_interface_t *cfg,
+              const paramdef_t *param); /* check an integer against an authorized range, defined by its min and max value */
     int okintrange[CONFIG_MAX_NUMCHECKVAL];  /* integer array, store  min and max values  */
 
   } s2;
@@ -203,6 +180,11 @@ typedef struct paramdef {
 #define UINT64PARAM(name, help, flags, ptr, defval)                                                                          \
   {                                                                                                                          \
     OPTNAME(name), HELPSTR(help), PARAMFLAG(flags), .u64ptr = ptr, .defuintval = defval, PARAMTYPE(TYPE_UINT64), .numelt = 0 \
+  }
+#define STRINGLISTPARAM(name, help, flags, ptr, defval)                                                                 \
+  {                                                                                                                     \
+    OPTNAME(name), HELPSTR(help), PARAMFLAG(flags), .strptr = ptr, .defstrlistval = defval, PARAMTYPE(TYPE_STRINGLIST), \
+        .numelt = 0                                                                                                     \
   }
 
 typedef struct paramlist_def {

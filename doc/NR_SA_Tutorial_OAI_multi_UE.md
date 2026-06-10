@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 # OAI 5G NR SA tutorial to deploy multiple OAI nrUE
 
 **Table of Contents**

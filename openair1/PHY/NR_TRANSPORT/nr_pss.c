@@ -1,22 +1,5 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
 
@@ -49,8 +32,7 @@ int nr_generate_pss(  c16_t *txdataF,
   /// Resource mapping
 
   // PSS occupies a predefined position (subcarriers 56-182, symbol 0) within the SSB block starting from
-  int k = frame_parms->first_carrier_offset + frame_parms->ssb_start_subcarrier + 56; //and
-  if (k>= frame_parms->ofdm_symbol_size) k-=frame_parms->ofdm_symbol_size;
+  int k = frame_parms->ssb_start_subcarrier + 56;
 
   int l = ssb_start_symbol;
 
@@ -61,9 +43,6 @@ int nr_generate_pss(  c16_t *txdataF,
     //      printf("pss: writing position k %d / %d\n",k,frame_parms->ofdm_symbol_size);
     ((int16_t*)txdataF)[2*(l*frame_parms->ofdm_symbol_size + k)] = (((int16_t)amp) * d_pss) >> 15;
     k++;
-
-    if (k >= frame_parms->ofdm_symbol_size)
-      k-=frame_parms->ofdm_symbol_size;
   }
 
 #ifdef NR_PSS_DEBUG

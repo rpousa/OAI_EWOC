@@ -1,34 +1,10 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file PHY/LTE_TRANSPORT/ulsch_decoding.c
-* \brief Top-level routines for decoding  the ULSCH transport channel from 36.212 V8.6 2009-03
-* \author R. Knopp
-* \date 2011
-* \version 0.1
-* \company Eurecom
-* \email: knopp@eurecom.fr
-* \note
-* \warning
-*/
+/*!
+ * \brief Top-level routines for decoding  the ULSCH transport channel from 36.212 V8.6 2009-03
+ */
 
 //#define DEBUG_ULSCH_DECODING
 
@@ -429,7 +405,7 @@ unsigned int ulsch_decoding(PHY_VARS_eNB *eNB,
   else
     harq_pid = subframe2harq_pid(frame_parms,proc->frame_rx,subframe);
 
-  // x1 is set in lte_gold_generic
+  // x1 is set in gold_generic
   uint32_t x2 =
       ((uint32_t)ulsch->rnti << 14) + ((uint32_t)subframe << 9) + frame_parms->Nid_cell; // this is c_init in 36.211 Sec 6.3.1
   LTE_UL_eNB_HARQ_t *ulsch_harq = ulsch->harq_processes[harq_pid];

@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 # Handover Tutorial for OAI
 
 This tutorial explains how to perform handovers. It covers both F1 handovers
@@ -6,9 +8,9 @@ This tutorial explains how to perform handovers. It covers both F1 handovers
 This document assumes familiarity with the F1 split architecture and basic
 OAI knowledge. Please refer to the prerequisite documentation listed below:
 
-- To run the [Core Network](https://gitlab.eurecom.fr/oai/openairinterface5g/-/blob/develop/doc/NR_SA_Tutorial_OAI_CN5G.md)
-- To run [OAI full stack with COTS UE](https://gitlab.eurecom.fr/oai/openairinterface5g/-/blob/develop/doc/NR_SA_Tutorial_COTS_UE.md)
-- [F1 split design document](https://gitlab.eurecom.fr/oai/openairinterface5g/-/blob/develop/doc/F1AP/F1-design.md?ref_type=heads)
+- To run the [Core Network](./NR_SA_Tutorial_OAI_CN5G.md)
+- To run [OAI full stack with COTS UE](./NR_SA_Tutorial_COTS_UE.md)
+- [F1 split design document](./F1AP/F1-design.md)
 for details on the F1 architecture and the networking relationships between
 the CU and the associated DUs.
 
@@ -104,6 +106,9 @@ information further below.
 
 A number of remarks:
 
+1. DU0 and DU1 should use different SSBs, i.e., make sure that
+   `ssb_PositionsInBurst_Bitmap` is set to send SSB in different slots in the
+   configurataion files of DU0 (e.g., set to 1) and DU1 (e.g., set to 2).
 1. It is important that you start DU0, UE, DU1 in order, and having UE connect
    to DU0 before starting DU1. This is because we don't employ any channel
    emulation, and the UE could not decode the SIB1 of DU0 to connect.
@@ -193,9 +198,9 @@ triggered:
   - By connecting them to a GPS or an Octoclock to provide a common time and clock
     reference.
   - By synchronizing the RU hosts.
-  - By using Openairinterface starting tag [2025.w42](https://gitlab.eurecom.fr/oai/openairinterface5g/-/tree/2025.w42?ref_type=tags)
+  - By using Openairinterface starting tag [2025.w42](https://github.com/duranta-project/openairinterface5g/releases/tag/2025.w42)
     (A fix was added to force the USRP to "use" the time/clock provided by the
-    external source instead to its own master clock. for more info see [MR](https://gitlab.eurecom.fr/oai/openairinterface5g/-/merge_requests/3693)).
+    external source instead to its own master clock.).
 - Make sure that the UE sees both cells. For instance, you can switch to flight
   mode, go closer to the other DU, and switch off flight mode -- the UE should
   connect to that second DU.
@@ -433,6 +438,8 @@ a core-network-based handover.
 
 We assume:
 
+* `ssb_PositionsInBurst_Bitmap` set to different values for gNB-PCI0 and
+  gNB-PCI1 as described further above.
 * Two independent gNBs connected to the same 5GC via N2 interface.
 * A UE initially connected to gNB-PCI0, which will be handed over to gNB-PCI1.
 * Handover is triggered by either a decision based measurement event (e.g. A3)
@@ -505,8 +512,16 @@ configuration, e.g. [neighbour-config-rfsim.conf](../../ci-scripts/conf_files/ne
 This configuration can also be present in a different file and included in the
 gNB configuration file with `@include "neighbour-config-rfsim.conf"`.
 
-For each gNB there is a `neighbour_cell_configuration` linked to its serving
-cell ID.
+The neighbor configuration is nested:
+
+- `neighbour_list` outer entries are keyed by serving `nr_cellid`
+- each outer entry contains `neighbour_cell_configuration`, i.e., the list of neighbor cells for that serving cell
+
+In this model:
+
+- outer `nr_cellid` entries should be unique
+- neighbor `physical_cellId` values are defined in inner neighbor entries
+- the same serving-cell keyed neighbor mapping is used for both F1 and N2 handover logic
 
 See the example above for `neighbour-config-ho.conf`. The same configuration
 is for both F1 and N2 handover.

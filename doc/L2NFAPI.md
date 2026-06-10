@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 # L2 nFAPI Simulator Usage
 
 ## 4G L2 nFAPI simulator

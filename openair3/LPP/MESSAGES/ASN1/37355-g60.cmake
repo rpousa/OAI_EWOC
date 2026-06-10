@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 set(LPP_GRAMMAR ASN1/37355-g60.asn)
 
 set(lpp_source

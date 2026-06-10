@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 add_executable(test_thread-pool
   test_thread-pool.c)
 add_dependencies(tests test_thread-pool)

@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
+ */
+
 #include "event_selector.h"
 #include "gui/gui.h"
 #include "database.h"

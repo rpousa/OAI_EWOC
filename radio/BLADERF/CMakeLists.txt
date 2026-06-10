@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 pkg_check_modules(bladeRF REQUIRED libbladeRF)
 add_library(oai_bladerfdevif MODULE bladerf_lib.c)
 target_link_libraries(oai_bladerfdevif PRIVATE bladeRF)

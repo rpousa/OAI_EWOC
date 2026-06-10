@@ -1,22 +1,5 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
 #ifndef _NR_SDAP_ENTITY_H_
@@ -199,6 +182,8 @@ bool nr_sdap_delete_ue_entities(ue_id_t ue_id);
  * @param[in] ue_id     Unique identifier for the User Equipment. ID Range [0, 65536].
  */
 void nr_reconfigure_sdap_entity(NR_SDAP_Config_t *sdap_config, ue_id_t ue_id, int pdusession_id, int drb_id);
+
+void nr_sdap_entity_update_qos_flows(ue_id_t ue_id, int pdusession_id, int drb_id, const uint8_t *qfis, int n_qfis);
 
 void set_qfi(uint8_t qfi, uint8_t pduid, ue_id_t ue_id);
 void remove_ip_if(nr_sdap_entity_t *entity);

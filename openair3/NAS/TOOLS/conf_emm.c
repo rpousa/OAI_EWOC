@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
+ */
+
 #include <string.h>
 
 #include "common/utils/mem/oai_memory.h"

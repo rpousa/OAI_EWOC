@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
@@ -135,7 +139,7 @@ int main(int n, char **v)
   int input_is_float = 0;
   int no_fft = 0;
   int delay = 0;
-  int skip = 0;
+  uint64_t skip = 0;
   int symbols_per_subframe;
   long sampling_rate = 61440000;
   int mu = 1;
@@ -152,7 +156,7 @@ int main(int n, char **v)
     if (!strcmp(v[i], "-srate")) { if (i>n-2) usage(); sampling_rate = atol(v[++i]); continue; }
     if (!strcmp(v[i], "-prb")) { if (i>n-2) usage(); prb = atoi(v[++i]); continue; }
     if (!strcmp(v[i], "-mu")) { if (i>n-2) usage(); mu = atoi(v[++i]); continue; }
-    if (!strcmp(v[i], "-skip")) { if (i>n-2) usage(); skip = atoi(v[++i]); continue; }
+    if (!strcmp(v[i], "-skip")) { if (i>n-2) usage(); skip = atoll(v[++i]); continue; }
     usage();
   }
 
@@ -222,14 +226,14 @@ int main(int n, char **v)
   int back_color = 0;
   int hpixel = 0;
 
-  if (skip) {
-    if (input_is_float) {
-      float intime[skip * 2];
-      if (fread(intime, skip * 8, 1, stdin) != 1) abort();
-    } else {
-      short intime[skip * 2];
-      if (fread(intime, skip * 4, 1, stdin) != 1) abort();
-    }
+  /* skip data */
+  int sample_size = input_is_float ? 8 : 4;
+  uint64_t to_skip = skip;
+  while (to_skip) {
+    char intime[4096 * sample_size];
+    int count = to_skip > 4096 ? 4096 : to_skip;
+    if (fread(intime, count * sample_size, 1, stdin) != 1) abort();
+    to_skip -= count;
   }
 
   while (1) {

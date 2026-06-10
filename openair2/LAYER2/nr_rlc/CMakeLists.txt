@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 add_library(nr_rlc_core OBJECT
             nr_rlc_entity.c
             nr_rlc_entity_am.c

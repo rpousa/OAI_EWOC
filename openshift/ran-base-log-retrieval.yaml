@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+
 # Creating a pod to retrieve ran-base logs
 apiVersion: v1
 kind: Pod

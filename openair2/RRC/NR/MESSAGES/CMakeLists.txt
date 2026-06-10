@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 set(NR_RRC_VERSION 17 3 0)
 make_version(NR_RRC_cc ${NR_RRC_VERSION})
 string(REPLACE ";" "." NR_RRC_RELEASE "${NR_RRC_VERSION}")

@@ -1,27 +1,7 @@
-#/*
-# * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
-# * contributor license agreements.  See the NOTICE file distributed with
-# * this work for additional information regarding copyright ownership.
-# * The OpenAirInterface Software Alliance licenses this file to You under
-# * the OAI Public License, Version 1.1  (the "License"); you may not use this file
-# * except in compliance with the License.
-# * You may obtain a copy of the License at
-# *
-# *      http://www.openairinterface.org/?page_id=698
-# *
-# * Unless required by applicable law or agreed to in writing, software
-# * distributed under the License is distributed on an "AS IS" BASIS,
-# * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# * See the License for the specific language governing permissions and
-# * limitations under the License.
-# *-------------------------------------------------------------------------------
-# * For more information about the OpenAirInterface (OAI) Software Alliance:
-# *      contact@openairinterface.org
-# */
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
 
 # file build_helper
 # brief
-# authors Laurent Thomas, Lionel GAUTHIER
 #
 #######################################
 if [ ! -f /etc/os-release ]; then
@@ -103,20 +83,13 @@ get_distribution_release() {
 check_supported_distribution() {
     local distribution=$(get_distribution_release)
     case "$distribution" in
+        "ubuntu26.04") return 0 ;;
         "ubuntu24.04") return 0 ;;
         "ubuntu22.04") return 0 ;;
-        "ubuntu20.04") return 0 ;;
         "debian11")    return 0 ;;
-        "fedora41")    return 0 ;;
-        "fedora40")    return 0 ;;
-        "rhel8.2")     return 0 ;;
-        "rhel8.3")     return 0 ;;
-        "rhel8.4")     return 0 ;;
-        "rhel8.5")     return 0 ;;
-        "rhel8.6")     return 0 ;;
-        "rhel8.7")     return 0 ;;
-        "rhel8.8")     return 0 ;;
-        "rhel8.9")     return 0 ;;
+        "debian12")    return 0 ;;
+        "fedora43")    return 0 ;;
+        "fedora44")    return 0 ;;
         "rhel9.0")     return 0 ;;
         "rhel9.1")     return 0 ;;
         "rhel9.2")     return 0 ;;
@@ -125,10 +98,8 @@ check_supported_distribution() {
         "rhel9.5")     return 0 ;;
         "rhel9.6")     return 0 ;;
         "rhel9.7")     return 0 ;;
+        "rhel9.8")     return 0 ;;
         "centos9")     return 0 ;; # CentOS stream
-        "rocky8.7")    return 0 ;;
-        "rocky8.8")    return 0 ;;
-        "rocky8.9")    return 0 ;;
         "rocky9.1")    return 0 ;;
         "rocky9.2")    return 0 ;;
         "rocky9.3")    return 0 ;;
@@ -136,6 +107,7 @@ check_supported_distribution() {
         "rocky9.5")    return 0 ;;
         "rocky9.6")    return 0 ;;
         "rocky9.7")    return 0 ;;
+        "rocky9.8")    return 0 ;;
     esac
     return 1
 }
@@ -151,35 +123,6 @@ handler_EXIT() {
 }
 
 trap handler_EXIT EXIT
-
-###########################
-# Cleaners
-###########################
-
-clean_kernel() {
-    $SUDO modprobe ip_tables
-    $SUDO modprobe x_tables
-    $SUDO iptables -P INPUT ACCEPT
-    $SUDO iptables -F INPUT
-    $SUDO iptables -P OUTPUT ACCEPT
-    $SUDO iptables -F OUTPUT
-    $SUDO iptables -P FORWARD ACCEPT
-    $SUDO iptables -F FORWARD
-    $SUDO iptables -t nat -F
-    $SUDO iptables -t mangle -F
-    $SUDO iptables -t filter -F
-    $SUDO iptables -t raw -F
-    echo_info "Flushed iptables"
-}
-
-clean_all_files() {
- set_openair_env
- dir=$OPENAIR_DIR/cmake_targets
- rm -rf $dir/ran_build $dir/ran_build_noLOG
- rm -rf $dir/lte-simulators/build 
- rm -rf $dir/oaisim_build_oai/build $dir/oaisim_build_oai/CMakeLists.txt
- rm -rf $dir/autotests/bin $dir/autotests/log $dir/autotests/*/build
-}
 
 ############################################
 # External packages installers
@@ -202,12 +145,8 @@ install_usrp_uhd_driver_from_source(){
             # - 3.15.0.0
             git apply $OPENAIR_DIR/cmake_targets/tools/uhd-3.15-tdd-patch.diff
             ret=$?;[[ $ret -ne 0 ]] && echo_fatal "Could not apply the TDD patch"
-        elif [[ "$UHD_VERSION" == "4.8.0.0" || "$UHD_VERSION" == "4.7.0.0" || "$UHD_VERSION" == "4.6.0.0" || "$UHD_VERSION" == "4.5.0.0" ]]; then
-            # Tested that patch for the following versions:
-            # - 4.7.0.0
-            cp $OPENAIR_DIR/cmake_targets/tools/uhd-4.x-tdd-patch.diff $OPENAIR_DIR/cmake_targets/tools/uhd-4.5plus-tdd-patch.diff
-            sed -i '9,13 s/STATE_OFF/STATE_RX1_OFF/' $OPENAIR_DIR/cmake_targets/tools/uhd-4.5plus-tdd-patch.diff
-            sed -i '24,28 s/STATE_OFF/STATE_RX2_OFF/' $OPENAIR_DIR/cmake_targets/tools/uhd-4.5plus-tdd-patch.diff
+        elif [[ "$UHD_VERSION" == "4.10.0.0" || "$UHD_VERSION" == "4.9.0.0" || "$UHD_VERSION" == "4.8.0.0" || "$UHD_VERSION" == "4.7.0.0" || "$UHD_VERSION" == "4.6.0.0" || "$UHD_VERSION" == "4.5.0.0" ]]; then
+            # Tested patch for versions listed in elif clause
             git apply $OPENAIR_DIR/cmake_targets/tools/uhd-4.5plus-tdd-patch.diff
             ret=$?;[[ $ret -ne 0 ]] && echo_fatal "Could not apply the TDD patch"
         else
@@ -223,8 +162,8 @@ install_usrp_uhd_driver_from_source(){
             ret=$?;[[ $ret -ne 0 ]] && echo_fatal "Could not apply the TDD patch"
         fi
     else
-        git checkout tags/v4.0.0.0
-        git apply $OPENAIR_DIR/cmake_targets/tools/uhd-4.x-tdd-patch.diff
+        git checkout tags/v4.8.0.0
+        git apply $OPENAIR_DIR/cmake_targets/tools/uhd-4.5plus-tdd-patch.diff
         ret=$?;[[ $ret -ne 0 ]] && echo_fatal "Could not apply the TDD patch"
     fi
     # Printing out the results of the patch to make sure it was properly applied
@@ -260,29 +199,14 @@ check_install_usrp_uhd_driver(){
             install_usrp_uhd_driver_from_source
             return
         fi
-        # The new USRP repository
-        # Raphael Defosseux: Adding a loop on adding PPA because in CI the gpg key retrieve may
-        # timeout due to proxy / network latencies in Eurecom on VM
         echo_info "\nAdding PPA repository ettusresearch/uhd\n"
-        x=0
-        while [ $x -le 5 ]
-        do
-            if $SUDO add-apt-repository ppa:ettusresearch/uhd -y
-            then
-                echo_info "add-apt-repository successful\n"
-                break
-            else
-                echo_info "add-apt-repository failed, retrying...\n"
-                sleep 30
-            fi
-            x=$((x + 1))
-        done
+        $SUDO add-apt-repository ppa:ettusresearch/uhd -y
         $SUDO apt-get update
         $SUDO apt-get -y install python3-tk  $boost_libs_ubuntu libusb-1.0-0-dev
         case "$(get_distribution_release)" in
-          "ubuntu20.04" | "ubuntu22.04")
-            $SUDO apt-get -y install libuhd-dev libuhd4.5.0 uhd-host
-            ;;
+          "ubuntu22.04") $SUDO apt-get -y install libuhd-dev libuhd4.5.0 uhd-host ;;
+          "ubuntu24.04") $SUDO apt-get -y install libuhd-dev libuhd4.8.0 uhd-host ;;
+          "ubuntu26.04") $SUDO apt-get -y install libuhd-dev libuhd4.9.0 uhd-host ;;
         esac
     elif [[ "$OS_BASEDISTRO" == "fedora" ]]; then
         boost_libs_fedora="boost-chrono boost-date-time boost-filesystem boost-program-options boost-thread boost-test boost-regex boost-devel"
@@ -337,7 +261,7 @@ install_bladerf_driver_from_source(){
     rm -rf /tmp/bladeRF
     git clone https://github.com/Nuand/bladeRF.git
     cd bladeRF
-    git checkout tags/2016.06
+    git checkout tags/2025.10
     mkdir -p build
     cd build
     $CMAKE ../
@@ -345,31 +269,16 @@ install_bladerf_driver_from_source(){
     make
     $SUDO make install
     $SUDO ldconfig
-    echo "Downloading FPGA and firmware images"
-    cd /tmp/bladeRF
-    #wget has been removed from default dependencies, so we must be sure that's installed
-    $SUDO $INSTALLER -y install wget
-    wget --tries=3 --retry-connrefused https://www.nuand.com/fx3/bladeRF_fw_latest.img
-    wget --tries=3 --retry-connrefused https://www.nuand.com/fpga/hostedx40-latest.rbf
-    sudo mkdir -p /usr/share/Nuand/bladeRF
-    sudo mv bladeRF_fw_latest.img /usr/share/Nuand/bladeRF/bladeRF_fw.img
-    sudo mv hostedx40-latest.rbf /usr/share/Nuand/bladeRF/hostedx40.rbf
 }
 
 check_install_bladerf_driver(){
-    if [[ "$OS_DISTRO" == "ubuntu" ]]; then
-        $SUDO apt-get install -y  bladerf libbladerf-dev
-        $SUDO apt-get install -y bladerf-firmware-fx3
-        $SUDO apt-get install -y bladerf-fpga-hostedx40
-   elif [[ "$OS_BASEDISTRO" == "fedora" ]]; then
-        install_bladerf_driver_from_source
-   else
-        echo_error "BladeRF Installer for OAI does not support automatic build. Install BladeRF compiling sources manually from BladeRF website"
-   fi
-}
-
-flash_firmware_bladerf() {
-	$SUDO bladeRF-cli --flash-firmware /usr/share/Nuand/bladeRF/bladeRF_fw.img
+    if [[ "$OS_BASEDISTRO" == "debian" ]]; then
+      $SUDO apt-get update
+      $SUDO apt-get install -y libcurl4-openssl-dev
+    elif [[ "$OS_BASEDISTRO" == "fedora" ]]; then
+      $SUDO dnf -y install libcurl-devel
+    fi
+    install_bladerf_driver_from_source
 }
 
 check_install_lmssdr_driver(){
@@ -383,8 +292,6 @@ check_install_lmssdr_driver(){
                 echo_info "https://wiki.myriadrf.org/Lime_Suite"
                 echo_fatal "Cannot compile lmssdr device"
 	fi
-
-
 }
 
 install_soapy_from_source(){
@@ -453,7 +360,7 @@ check_install_additional_tools (){
   local optional_packages=""
   if [[ "$OS_BASEDISTRO" == "debian" ]]; then
     case "$(get_distribution_release)" in
-        "ubuntu20.04" | "ubuntu22.04" | "debian11" )
+        "ubuntu22.04" | "debian11" | "debian12" )
             optional_packages="python3 python3-pip python3-dev python3-scipy python3-matplotlib python3-pyroute2 universal-ctags"
             ;;
     esac
@@ -496,7 +403,7 @@ check_install_oai_software() {
   if [[ "$OS_BASEDISTRO" == "debian" ]]; then
     $SUDO apt install -y software-properties-common
     case "$(get_distribution_release)" in
-         "debian11")
+         "debian11" | "debian12" )
             specific_packages="libz-dev"
             ;;
     esac
@@ -508,9 +415,6 @@ check_install_oai_software() {
         ninja-build \
 	pkg-config \
 	git \
-	libblas-dev \
-	liblapack-dev \
-	liblapacke-dev \
 	libreadline-dev \
 	libconfig-dev \
 	libsctp-dev  \
@@ -548,10 +452,6 @@ check_install_oai_software() {
       openssl-devel \
       patch \
       readline-devel \
-      lapack \
-      lapack-devel \
-      blas \
-      blas-devel \
       vim-common \
       zlib-devel \
       yaml-cpp-devel
@@ -565,7 +465,6 @@ install_asn1c_from_source(){
     echo_info "\nInstalling ASN1."
     $SUDO $INSTALLER -y install bison flex
     $SUDO rm -rf /tmp/asn1c
-    # GIT_SSL_NO_VERIFY=true git clone https://gitlab.eurecom.fr/oai/asn1c.git /tmp/asn1c
     git clone https://github.com/mouse07410/asn1c /tmp/asn1c
     cd /tmp/asn1c
     #git checkout vlm_master

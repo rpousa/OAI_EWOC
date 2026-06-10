@@ -1,33 +1,9 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file common_lib.h
+/*!
  * \brief common APIs for different RF frontend device
- * \author HongliangXU, Navid Nikaein
- * \date 2015
- * \version 0.2
- * \company Eurecom
- * \maintainer:  navid.nikaein@eurecom.fr
- * \note
- * \warning
  */
 
 #ifndef COMMON_LIB_H
@@ -35,9 +11,8 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <sys/types.h>
-#include <openair1/PHY/TOOLS/tools_defs.h>
+#include <stdbool.h>
 #include "record_player.h"
-#include "common/utils/threadPool/notified_fifo.h"
 
 /* default name of shared library implementing the radio front end */
 #define OAI_RF_LIBNAME        "oai_device"
@@ -163,14 +138,6 @@ typedef enum {
   TX_GPIO_CHANGE = 0x1000,
 } radio_tx_gpio_flag_t;
 
-/*! \brief Structure used for initializing UDP read threads */
-typedef struct {
-  openair0_device_t *device;
-  int thread_id;
-  pthread_t pthread;
-  notifiedFIFO_t *resp;
-} udp_ctx_t;
-
 typedef enum {
   RU_GPIO_CONTROL_NONE,
   RU_GPIO_CONTROL_GENERIC,
@@ -275,8 +242,6 @@ typedef struct openair0_config {
   recplay_conf_t *recplay_conf;
   //! Flag to indicate this configuration is for NR
   int nr_flag;
-  //! NR band number
-  int nr_band;
   //! NR scs for raster
   int nr_scs_for_raster;
   //! Core IDs for RX FH
@@ -288,6 +253,7 @@ typedef struct openair0_config {
   //! this interface is reused for split 7, so split 7 options provided below
   split7_config_t split7;
 } openair0_config_t;
+extern openair0_config_t openair0_cfg[MAX_CARDS];
 
 /*! \brief RF mapping */
 typedef struct {
@@ -376,7 +342,7 @@ typedef struct {
   struct {
     bool active;
     openair0_timestamp_t timestamp;
-    void *txp[NB_ANTENNAS_TX];
+    void **txp;
     int nsamps;
     int nbAnt;
     int flags;
@@ -417,9 +383,6 @@ struct openair0_device {
 
   /*!brief pointer to FH state, used in ECPRI split 8*/
   fhstate_t fhstate;
-
-  /*!brief UDP TX thread context*/
-  udp_ctx_t **utx;
 
   /*!brief Used in ECPRI split 8 to indicate numerator of sampling rate ratio*/
   int sampling_rate_ratio_n;
@@ -656,7 +619,6 @@ struct openair0_device {
   void *(*get_internal_parameter)(char *id);
   /* \brief timing statistics for TX fronthaul (ethernet)
    */
-  time_stats_t tx_fhaul;
   re_order_t reOrder;
 };
 
@@ -714,10 +676,6 @@ extern void iqrecorder_end(openair0_device_t *device);
 
 int openair0_write_reorder(openair0_device_t *device, openair0_timestamp_t timestamp, void **txp, int nsamps, int nbAnt, int flags);
 void openair0_write_reorder_clear_context(openair0_device_t *device);
-#include <unistd.h>
-#ifndef gettid
-#define gettid() syscall(__NR_gettid)
-#endif
 /**@}*/
 
 #ifdef __cplusplus

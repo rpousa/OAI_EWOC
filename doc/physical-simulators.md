@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 # Physical Simulators ("Physims") User Guide
 
 This document provides an overview and usage guide for the **physical simulators**, also referred to as **unitary
@@ -17,6 +19,7 @@ Physims are essential for:
 * Debugging and evaluating new PHY code in isolation
 * Regression testing
 * Ensuring correctness before merging new contributions into the repository
+* Performance measurements
 
 These tests are run automatically as part of the following
 pipelines:
@@ -52,9 +55,11 @@ Example:
 openair1/SIMULATION/NR_PHY/dlsim.c
 ```
 
+The actual tests are defined in `openair1/SIMULATION/tests/CMakeLists.txt`.
+
 ## How to Run Simulators Using `ctest`
 
-### Option 1: Using CMake
+### Option 1: Using CMake (Recommended)
 
 Build the simulators and tests using the dedicated cmake option, then run
 `ctest` which will run all registered tests.
@@ -99,6 +104,65 @@ For instance, to run only all run NR ULSCH simulator tests, with 4 jobs in
 parallel, type
 
     ctest -L nr_ulschsim -j 4
+
+Or you run all 5G tests that `-R` pattern-match on a `dl` pattern:
+
+    ctest -R nr_dl
+
+Or you can see the test parameters that would be run for `nr_ulsim` without
+actually running the tests
+
+    ctest -R nr_ulsim -N -V
+
+Note that the lines `Test command:` show the actual shell code that will be
+executed. For increased flexibility, tests are run indirectly through a cmake
+script `openair1/SIMULATION/tests/RunTimedTest.cmake` that not only runs the
+test, but can also analyze its output. The actual command is passed via a
+variable `TEST_CMD` that lists the executable and parameters as a semicolon
+(`;`) delimited list. See further below for an example of how to read this.
+
+## Performance evaluation
+
+Some simulators, notably `nr_dlsim` and `nr_ulsim`, provide the possibility to
+show performance metrics via option `-P`.
+
+To discover predefined tests, you can search for test cases that define `-P`
+like so (note the leading `;` to limit to the test case executable command line
+as `-P` is also used by the cmake scripts themselves):
+
+     $ ctest -N -V | grep Test\ command: | grep -- ';-P' | tail -n1
+     213: Test command: /usr/bin/cmake "-DTEST_CMD=/home/richie/oai/build/nr_ulsim;-P;-n300;-b14;-I15;-i;0,1;-g;C,l;-t70;-u;1;-m16;-R106;-r106;-U;1,1,1,2;-W2;-y2;-z4;-s11.2;-S11.2" "-DCHECK_SCRIPT=/home/richie/oai/openair1/SIMULATION/tests/analyze-timing.sh" "-P" "/home/richie/oai/openair1/SIMULATION/tests/RunTimedTest.cmake"
+
+From this, we see that the tests can be run like so, in the same directory as
+cmake:
+
+    ./nr_ulsim -P -n300 -b14 -I15 -i 0,1 -g C,l -t70 -u 1 -m16 -R106 -r106 -U 1,1,1,2 -W2 -y2 -z4 -s11.2 -S11.2
+
+After invoking the tests, you should see processing times for UE TX and gNB RX:
+
+```
+UE TX
+|__ PHY_PROC_TX                            246.01 us (300 trials)		( 73.80 total [ms])
+
+[...]
+
+gNB RX
+Total PHY proc rx                           2587.88 us (300 trials)
+ Statistics std=301.10, median=0.00, q1=0.00, q3=0.00 µs (on 0 trials)
+|__ RX PUSCH time                          875.68 us (300 trials)		(262.70 total [ms])
+```
+
+You can see average per-trial processing time in micro-seconds, and the total
+test times for the 300 trials (`-n`) in milliseconds.
+
+Use `grep` to find the places where these stats are printed, and to see which
+variable in the stacks traces the measurement. For `RX PUSCH time`, we can
+identify the variable `rx_pusch_stats`:
+
+```
+$ git grep -n 'RX PUSCH time' ../
+../openair1/SIMULATION/NR_PHY/ulsim.c:1714:      printStatIndent(&gNB->rx_pusch_stats, "RX PUSCH time");
+```
 
 ## Adding a New Physim Test
 

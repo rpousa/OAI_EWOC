@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 set(NRPPA_GRAMMAR ASN1/38455.asn)
 
 set(nrppa_source

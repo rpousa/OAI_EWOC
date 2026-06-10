@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 set(LTE_RRC_VERSION 16 13 0)
 make_version(LTE_RRC_cc ${LTE_RRC_VERSION})
 string(REPLACE ";" "." LTE_RRC_RELEASE "${LTE_RRC_VERSION}")

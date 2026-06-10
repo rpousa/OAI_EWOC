@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
+ */
+
 #include "nr_rlc_entity.h"
 
 #include <stdio.h>

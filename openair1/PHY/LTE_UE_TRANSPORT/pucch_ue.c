@@ -1,34 +1,10 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file PHY/LTE_TRANSPORT/pucch.c
-* \brief Top-level routines for generating and decoding the PUCCH physical channel V8.6 2009-03
-* \author R. Knopp
-* \date 2011
-* \version 0.1
-* \company Eurecom
-* \email: knopp@eurecom.fr
-* \note
-* \warning
-*/
+/*!
+ * \brief Top-level routines for generating and decoding the PUCCH physical channel V8.6 2009-03
+ */
 #include "PHY/defs_UE.h"
 #include "PHY/phy_extern_ue.h" 
 #include "PHY/LTE_REFSIG/lte_refsig.h"
@@ -345,7 +321,7 @@ static inline void pucch2x_scrambling(LTE_DL_FRAME_PARMS *fp,int subframe,uint16
   uint8_t c;
 
   x2 = (rnti) + ((uint32_t)(1+subframe)<<16)*(1+(fp->Nid_cell<<1)); //this is c_init in 36.211 Sec 6.3.1
-  s = lte_gold_generic(&x1, &x2, 1);
+  s = gold_generic(&x1, &x2, 1);
   for (i=0;i<19;i++) {
     c = (uint8_t)((s>>i)&1);
     btilde[i] = (((B>>i)&1) ^ c);
@@ -656,8 +632,8 @@ void generate_pucch3x(int32_t **txdataF,
 
     // Scrambling
     cinit = (subframe + 1) * ((2 * frame_parms->Nid_cell + 1)<<16) + rnti;
-    s0 = lte_gold_generic(&x1,&cinit,1);
-    s1 = lte_gold_generic(&x1,&cinit,0);
+    s0 = gold_generic(&x1,&cinit,1);
+    s1 = gold_generic(&x1,&cinit,0);
 
     for (i=0; i<48; i++) {
       s = (i<32)? s0:s1;

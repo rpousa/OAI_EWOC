@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+
 services:
     oai-nr-ue:
         image: ${REGISTRY-oaisoftwarealliance/}${NRUE_IMG:-oai-nr-ue}:${TAG:-develop}

@@ -1,31 +1,9 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file rrc_gNB_NGAP.h
+/*!
  * \brief rrc NGAP procedures for gNB
- * \author Yoshio INOUE, Masayuki HARADA
- * \date 2020
- * \version 0.1
- * \email: yoshio.inoue@fujitsu.com,masayuki.harada@fujitsu.com
- *         (yoshio.inoue%40fujitsu.com%2cmasayuki.harada%40fujitsu.com) 
  */
 
 #ifndef RRC_GNB_NGAP_H_
@@ -48,23 +26,19 @@ int rrc_gNB_process_NGAP_INITIAL_CONTEXT_SETUP_REQ(MessageDef *msg_p, instance_t
 
 void rrc_gNB_send_NGAP_INITIAL_CONTEXT_SETUP_RESP(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE);
 
-void rrc_gNB_send_NGAP_INITIAL_CONTEXT_SETUP_FAIL(uint32_t gnb,
-                                                  const rrc_gNB_ue_context_t *const ue_context_pP,
-                                                  const ngap_cause_t causeP);
+void rrc_gNB_send_NGAP_INITIAL_CONTEXT_SETUP_FAIL(uint32_t gnb, const ngap_cause_t causeP);
 
-int rrc_gNB_process_NGAP_DOWNLINK_NAS(MessageDef *msg_p, instance_t instance, mui_t *rrc_gNB_mui);
+int rrc_gNB_process_NGAP_DOWNLINK_NAS(MessageDef *msg_p, instance_t instance);
 
 void rrc_gNB_send_NGAP_UPLINK_NAS(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE, const NR_UL_DCCH_Message_t *const ul_dcch_msg);
 
-void rrc_gNB_send_NGAP_PDUSESSION_SETUP_RESP(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE, uint8_t xid);
+void rrc_gNB_send_NGAP_PDUSESSION_SETUP_RESP(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE);
 
 void rrc_gNB_process_NGAP_PDUSESSION_SETUP_REQ(MessageDef *msg_p, instance_t instance);
 
-int rrc_gNB_process_NGAP_PDUSESSION_MODIFY_REQ(MessageDef *msg_p, instance_t instance);
+int rrc_gNB_process_NGAP_PDUSESSION_MODIFY_REQ(const ngap_pdusession_modify_req_t *req, instance_t instance);
 
 int rrc_gNB_send_NGAP_PDUSESSION_MODIFY_RESP(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE, uint8_t xid);
-
-void rrc_gNB_modify_dedicatedRRCReconfiguration(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue_p);
 
 void rrc_gNB_send_NGAP_UE_CONTEXT_RELEASE_REQ(const module_id_t gnb_mod_idP,
                                               const rrc_gNB_ue_context_t *const ue_context_pP,
@@ -84,7 +58,7 @@ void rrc_gNB_send_NGAP_PDUSESSION_RELEASE_RESPONSE(gNB_RRC_INST *rrc, gNB_RRC_UE
 
 void nr_rrc_pdcp_config_security(gNB_RRC_UE_t *UE, bool enable_ciphering);
 
-int rrc_gNB_process_PAGING_IND(MessageDef *msg_p, instance_t instance);
+int rrc_gNB_process_PAGING_IND(gNB_RRC_INST *rrc, const instance_t instance, const ngap_paging_ind_t *msg);
 
 void rrc_gNB_send_NGAP_HANDOVER_REQUIRED(gNB_RRC_INST *rrc,
                                          gNB_RRC_UE_t *UE,
@@ -93,7 +67,7 @@ void rrc_gNB_send_NGAP_HANDOVER_REQUIRED(gNB_RRC_INST *rrc,
 
 void rrc_gNB_send_NGAP_HANDOVER_FAILURE(gNB_RRC_INST *rrc, ngap_handover_failure_t *msg);
 
-int rrc_gNB_process_Handover_Request(gNB_RRC_INST *rrc, instance_t instance, ngap_handover_request_t *msg);
+int rrc_gNB_process_Handover_Request(gNB_RRC_INST *rrc, ngap_handover_request_t *msg);
 void rrc_gNB_free_Handover_Request(ngap_handover_request_t *msg);
 
 void rrc_gNB_send_NGAP_HANDOVER_REQUEST_ACKNOWLEDGE(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE, byte_array_t ho_command);

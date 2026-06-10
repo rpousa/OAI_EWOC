@@ -1,23 +1,5 @@
-#/*
-# * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
-# * contributor license agreements.  See the NOTICE file distributed with
-# * this work for additional information regarding copyright ownership.
-# * The OpenAirInterface Software Alliance licenses this file to You under
-# * the OAI Public License, Version 1.1  (the "License"); you may not use this file
-# * except in compliance with the License.
-# * You may obtain a copy of the License at
-# *
-# *      http://www.openairinterface.org/?page_id=698
-# *
-# * Unless required by applicable law or agreed to in writing, software
-# * distributed under the License is distributed on an "AS IS" BASIS,
-# * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# * See the License for the specific language governing permissions and
-# * limitations under the License.
-# *-------------------------------------------------------------------------------
-# * For more information about the OpenAirInterface (OAI) Software Alliance:
-# *      contact@openairinterface.org
-# */
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 #---------------------------------------------------------------------
 #
 # Dockerfile for the Open-Air-Interface BUILD service
@@ -25,16 +7,18 @@
 #
 #---------------------------------------------------------------------
 
+ARG UBUNTU_IMAGE=ubuntu:noble
 FROM ran-base:latest AS nr-ue-base
 
 FROM ran-build:latest AS nr-ue-build
 
 
 #start from scratch for target executable
-FROM ubuntu:noble AS oai-nr-ue
+FROM ${UBUNTU_IMAGE} AS oai-nr-ue
 ARG BUILD_OPTION
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=Europe/Paris
+ENV PATH="/opt/oai-nr-ue/bin:$PATH"
 
 RUN apt-get update && \
     apt-get upgrade --yes && \
@@ -52,8 +36,6 @@ RUN apt-get update && \
         libboost-system1.83.0 \
         libboost-program-options1.83.0 \
         tzdata \
-        liblapacke \
-        libblas3 \
         libconfig9 \
         openssl \
         net-tools \
@@ -67,7 +49,9 @@ RUN apt-get update && \
         iperf3 \
         iperf \
         libyaml-cpp-dev \
-        libnanomsg5 && \
+        libzstd1 \
+        libnanomsg5 \
+        libzmq5 && \
 # if the --sanitize option was used to build, additional packages are required
     /bin/bash -c 'if [[ "$BUILD_OPTION" = "--sanitize" ]]; then DEBIAN_FRONTEND=noninteractive apt-get install --yes \
         libasan8 \
@@ -78,6 +62,7 @@ RUN apt-get update && \
 WORKDIR /opt/oai-nr-ue/bin
 COPY --from=nr-ue-build \
     /oai-ran/cmake_targets/ran_build/build/nr-uesoftmodem \
+    /oai-ran/cmake_targets/ran_build/build/common/utils/T/tracer/record* \
     ./
 
 COPY ./docker/scripts/nr_ue_entrypoint.sh ./entrypoint.sh
@@ -87,6 +72,7 @@ COPY --from=nr-ue-build \
     /oai-ran/cmake_targets/ran_build/build/liboai_eth_transpro.so \
     /oai-ran/cmake_targets/ran_build/build/librfsimulator.so \
     /oai-ran/cmake_targets/ran_build/build/liboai_usrpdevif.so \
+    /oai-ran/cmake_targets/ran_build/build/liboai_bladerfdevif.so \
     /oai-ran/cmake_targets/ran_build/build/libcoding.so \
     /oai-ran/cmake_targets/ran_build/build/libparams_libconfig.so \
     /oai-ran/cmake_targets/ran_build/build/libdfts.so \
@@ -94,14 +80,25 @@ COPY --from=nr-ue-build \
     /oai-ran/cmake_targets/ran_build/build/libtelnetsrv.so \
     /oai-ran/cmake_targets/ran_build/build/libtelnetsrv_ciUE.so \
     /oai-ran/cmake_targets/ran_build/build/libtelnetsrv_5Gue.so \
+    /oai-ran/cmake_targets/ran_build/build/libnrscope.so \
+    /oai-ran/cmake_targets/ran_build/build/libtelnetsrv.so \
     /oai-ran/cmake_targets/ran_build/build/libparams_yaml.so \
     /oai-ran/cmake_targets/ran_build/build/libvrtsim.so \
+    /oai-ran/cmake_targets/ran_build/build/liboai_zmqdevif.so \
+    # Wildcards so it doesn't fail if not present
+    /oai-ran/cmake_targets/ran_build/build/_deps*/fmtlog-build*/libfmtlog-shared*.so \
+    /oai-ran/cmake_targets/ran_build/build/_deps*/clickhouse-cpp-build*/clickhouse/libclickhouse*.so \
     /usr/local/lib/
+
+#    /oai-ran/cmake_targets/ran_build/build/libimscope.so \
 
 # Now we are copying from builder-image the UHD files.
 COPY --from=nr-ue-base /usr/local/bin/uhd_find_devices /usr/local/bin
 COPY --from=nr-ue-base /usr/local/lib/libuhd.so.4.8.0 /usr/local/lib
 COPY --from=nr-ue-base /usr/local/lib/uhd/utils/uhd_images_downloader.py /opt/oai-nr-ue/bin
+
+# Copy BladeRF runtime from base image
+COPY --from=nr-ue-base /usr/local/lib/libbladeRF* /usr/local/lib/
 
 RUN /bin/bash -c "ln -s /usr/local/lib/liboai_usrpdevif.so /usr/local/lib/liboai_device.so" && \
     ldconfig && \
@@ -111,6 +108,7 @@ RUN /bin/bash -c "ln -s /usr/local/lib/liboai_usrpdevif.so /usr/local/lib/liboai
     ldd /usr/local/lib/liboai_eth_transpro.so \
         /usr/local/lib/librfsimulator.so \
         /usr/local/lib/liboai_usrpdevif.so \
+        /usr/local/lib/liboai_bladerfdevif.so \
         /usr/local/lib/libcoding.so \
         /usr/local/lib/libparams_libconfig.so \
         /usr/local/lib/libdfts.so \
@@ -118,11 +116,13 @@ RUN /bin/bash -c "ln -s /usr/local/lib/liboai_usrpdevif.so /usr/local/lib/liboai
         /usr/local/lib/libtelnetsrv.so \
         /usr/local/lib/libtelnetsrv_ciUE.so \
         /usr/local/lib/libtelnetsrv_5Gue.so \
-        /usr/local/lib/libuhd.so.4.8.0
+        /usr/local/lib/libuhd.so.4.8.0 \
+        /usr/local/lib/liboai_zmqdevif.so
 
 WORKDIR /opt/oai-nr-ue
 
 COPY --from=nr-ue-base /usr/local/bin/yq /usr/local/bin/yq
 COPY --from=nr-ue-base /tini /tini
+COPY --from=nr-ue-build /oai-ran/common/utils/T/T_messages.txt ./
 CMD ["/opt/oai-nr-ue/bin/nr-uesoftmodem"]
 ENTRYPOINT ["/tini", "-v", "--", "/opt/oai-nr-ue/bin/entrypoint.sh"]

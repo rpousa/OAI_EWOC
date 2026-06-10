@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 This document outlines some information specific to system tuning for
 running all executables (`nr-softmodem`, `lte-softmodem`, `nr-uesoftmodem`,
 `lte-uesoftmodem`, `nr-cuup`, called softmodems for short in the following).
@@ -66,6 +68,109 @@ sudo sysctl -n -e -q -w net.core.rmem_max=134217728
 sudo sysctl -n -e -q -w net.core.wmem_default=134217728
 sudo sysctl -n -e -q -w net.core.wmem_max=134217728
 ```
+
+### System tuning
+In order to get an optimal real-time behavior, a few tunings can be performed on the host system:
+- The use of isolated cores for the softmodem prevents competitions on the usage of core between the softmodem and other processes.
+  Core isolation is enabled through the kernel command line.  
+  **Warning: modifying the kernel command line can harm the OS behavior. Proceed with caution.**  
+  Refer to the [OAI 7.2 Fronthaul Interface Tutorial](./ORAN_FHI7.2_Tutorial.md) for examples.
+
+### Softmodem tuning
+The way the NR softmodem uses the computing ressource can be configured.
+It can have a significant effect on the performance and real-time behavior:
+- The L1 TX and L1 RX threads are the two main threads
+  executing the L1 RX and L1 TX pipelines.  
+  These threads are ideally assigned to two dedicated cores.
+  To be dedicated, the cores should be isolated in the
+  kernel parameters and not be assigned elsewhere.  
+  They can be assigned to specified cores with options
+  `--L1s.[0].L1_tx_thread_core` and `--L1s.[0].L1_rx_thread_core`
+  followed by a core id.
+- The thread pool is a group of processor cores over which
+  some baseband processing worker cores execute.  
+  It is configured by providing a list of core ids
+  after option `--thread-pool`.  
+  `-1` can also be passed instead of a core id
+  in order to use a floating core.  
+  By default, the thread pool is 8 floating cores.
+- PDSCH generation (i.e., layer mapping and precoding) is by default executed
+  in the L1 TX thread but can be multithreaded using the thread pool.  
+  This is enabled by option `--L1s.[0].L1_num_tx_sym_per_thread` followed
+  by the number of symbols that should be processed in each thread.  
+  This option can also be set in the gNB configuration file in field
+  `L1_num_tx_sym_per_thread` in the `L1s` section.
+
+### Workarounds
+If the real-time performance remains bad after tuning the system and softmodem,
+some workarounds allow to lower the computing demand
+at the cost of lower network performance:
+- If you get real-time problems on heavy UL traffic,
+  reduce the maximum UL MCS using an additional
+  command-line switch: `--MACRLCs.[0].ul_max_mcs 14`.  
+  This comes at the cost of a lower spectral efficiency
+  (i.e., less data for the same radio resource).
+- You can also reduce the number of LDPC decoder iterations,
+  which will make the LDPC decoder take less time:
+  `--L1s.[0].max_ldpc_iterations 4`.  
+  The default number of LDPC iterations is 8.
+  Lowering the number of iteration comes at the cost
+  of more unsuccessful transmissions.  
+  OAI offers multiple implementation of LDPC coding,
+  including offloading to an accelerator,
+  the number of LDPC iteration should be chosen accordingly.
+
+### Known hardware behaviors
+Here is a **non-exhaustive** list of known behaviors related to hardware architecture:
+- On some AMD EPYC series processors with Zen architecture
+  (at least every Zen4, Zen4c, Zen5 and Zen5c based processors
+  experience this behavior),  
+  the processor is made of multiple dies holding one or multiple
+  core complexes which are groups of cores with an L3 cache.  
+  This means that cores from different core complexes
+  do not share the same L3 cache and communication between
+  these cores implies inter L3 cache communication  
+  within a die or, even worse, between dies,
+  which has a cost in term of latency.  
+  Depending on the system configuration,
+  the NUMA topology may reflect this physical topology,
+  which can induce even further latency for
+  inter core complex communication.  
+  The softmodem is sensitive to this latency and its performance
+  can be harmed if it uses cores across the border of dies or core complexes,  
+  especially when multithreading of PDSCH generation is enabled
+  (argument of `--L1s.[0].L1_num_tx_sym_per_thread` is superior to 0).  
+  **Solution**: We recommend to use only one core complex
+  or one die for allocating cores to nr-softmodem process.
+- NUMA architecture: Make sure you don't assign cores to nr-softmodem from
+  different numa nodes. Cores from different numa cores can induce latency.
+  It is preferred to use the cores from numa node
+  which is used by the Fronthaul NIC.
+
+**Example**: How to assign cores to `nr-softmodem` process for gNB/DU connected to an o-ran 7.2 O-RU on EPYC 9575F (64 Zen5)
+assuming that we have configured `L1s.[0].L1_num_tx_sym_per_thread = 1`
+
+There are 8 cores per core complex and one core complex per die. You can visulize this topology using 
+
+```bash
+# Ubuntu 25.04
+for X in $(seq 0 63); do echo -n "cpu$X -> die "; cat /sys/devices/system/cpu/cpu$X/topology/die_id; done
+```
+   
+A 100MHz 4x4 FR1 gNB/DU with FHI 7.2 can be executed with full capabilities (4DL and 2UL layers)
+on a single core complex (cpus 0-7 in this example) by folowing the instructions of the
+[OAI 7.2 Fronthaul Interface Tutorial](./ORAN_FHI7.2_Tutorial.md)
+with the following core assignment:
+
+- `L1s.[0].L1_tx_thread_core = 0`
+- `L1s.[0].L1_rx_thread_core = 1`
+- `RUs.[0].ru_thread_core = 2`
+- `fhi_72.system_core = 3`
+- `fhi_72.io_core = 4`
+- `fhi_72.worker_cores.[0] = 5` (minimum 1 core)
+- `thread-pool: 2,3,6,7`
+  (thread pool can overlap with `RUs.[0].ru_thread_core` and `fhi_72.system_core`)
+
 
 ## Capabilities
 

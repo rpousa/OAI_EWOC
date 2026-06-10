@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 # System Requirements for Using OAI Stack
 
 This document describes the minimal and performant system requirements for OpenAirInterface (OAI) 4G/5G software stack (UE and gNB stack). The information provided in this document is based on experimentation, if you have a feedback then open an issue or send an email on the mailing list. 

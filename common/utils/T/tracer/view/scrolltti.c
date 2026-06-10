@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
+ */
+
 #include "view.h"
 #include "../utils.h"
 #include <stdio.h>
@@ -66,6 +70,7 @@ static void *scrolltti_thread(void *_this)
 static void clear(view *this)
 {
   /* TODO */
+  UNUSED(this);
 }
 
 static void insert(struct scrolltti *this, double value)

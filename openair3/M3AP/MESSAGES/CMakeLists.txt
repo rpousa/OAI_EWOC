@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 set(M3AP_VERSION 14 0 0)
 make_version(M3AP_cc ${M3AP_VERSION})
 string(REPLACE ";" "." M3AP_RELEASE "${M3AP_VERSION}")

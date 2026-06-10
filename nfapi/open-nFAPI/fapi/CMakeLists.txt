@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 add_library(nr_fapi_common
         src/nr_fapi.c
 )

@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -96,7 +100,7 @@ static void vcd_main_gui(gui *g, event_handler *h, void *database)
   for (i = 0; i < nb_functions; i++)
     timeline_set_subline_background_color(g, w, i,
         new_color(g, i & 1 ? "#ddd" : "#eee"));
-  timeview = new_view_time(3600, 10, g, w);
+  timeview = new_view_time(10, g, w);
   i = 0;
   for (j = 0; j < n; j++) {
     if (strncmp(ids[j], "VCD_FUNCTION_", 13) != 0) continue;

@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
+ */
+
 #ifndef _CONFIG_USERAPI_H_
 #define _CONFIG_USERAPI_H_
 

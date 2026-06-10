@@ -1,33 +1,9 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file PHY/LTE_TRANSPORT/dlsch_llr_computation.c
+/*!
  * \brief Top-level routines for LLR computation of the PDSCH physical channel from 36-211, V8.6 2009-03
- * \author R. Knopp, F. Kaltenberger,A. Bhamri, S. Aubert, S. Wagner, X Jiang
- * \date 2011
- * \version 0.1
- * \company Eurecom
- * \email: knopp@eurecom.fr,florian.kaltenberger@eurecom.fr,ankit.bhamri@eurecom.fr,sebastien.aubert@eurecom.fr, sebastian.wagner@eurecom.fr
- * \note
- * \warning
  */
 
 #include "PHY/defs_UE.h"
@@ -1437,9 +1413,6 @@ void qam16_qpsk(short *stream0_in,
 {
 
   /*
-    Author: Sebastian Wagner
-    Date: 2012-06-04
-
     Input:
     stream0_in:  MF filter for 1st stream, i.e., y0=h0'*y
     stream!_in:  MF filter for 2nd stream, i.e., y1=h1'*y
@@ -1899,9 +1872,6 @@ void qam16_qam16(short *stream0_in,
 {
 
   /*
-    Author: Sebastian Wagner
-    Date: 2012-06-04
-
     Input:
     stream0_in:  MF filter for 1st stream, i.e., y0=h0'*y
     stream!_in:  MF filter for 2nd stream, i.e., y1=h1'*y
@@ -2405,9 +2375,6 @@ void qam16_qam64(int16_t *stream0_in,
 {
 
   /*
-    Author: Sebastian Wagner
-    Date: 2012-06-04
-
     Input:
     stream0_in:  MF filter for 1st stream, i.e., y0=h0'*y
     stream!_in:  MF filter for 2nd stream, i.e., y1=h1'*y
@@ -2993,9 +2960,6 @@ void qam64_qpsk(int16_t *stream0_in,
 {
 
   /*
-    Author: S. Wagner
-    Date: 31-07-12
-
     Input:
     stream0_in:  MF filter for 1st stream, i.e., y0=h0'*y
     stream1_in:  MF filter for 2nd stream, i.e., y1=h1'*y
@@ -4469,9 +4433,6 @@ void qam64_qam16(short *stream0_in,
 {
 
   /*
-    Author: S. Wagner
-    Date: 31-07-12
-
     Input:
     stream0_in:  MF filter for 1st stream, i.e., y0=h0'*y
     stream1_in:  MF filter for 2nd stream, i.e., y1=h1'*y
@@ -5961,9 +5922,6 @@ void qam64_qam64(short *stream0_in,
 {
 
   /*
-    Author: S. Wagner
-    Date: 31-07-12
-
     Input:
     stream0_in:  MF filter for 1st stream, i.e., y0=h0'*y
     stream1_in:  MF filter for 2nd stream, i.e., y1=h1'*y

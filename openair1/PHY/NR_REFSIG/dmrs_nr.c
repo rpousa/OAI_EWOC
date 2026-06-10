@@ -1,22 +1,5 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
 /**********************************************************************
@@ -32,7 +15,9 @@
 
 #include "PHY/NR_REFSIG/ss_pbch_nr.h"
 #include "PHY/NR_REFSIG/dmrs_nr.h"
+#include "log.h"
 #include "nfapi/open-nFAPI/nfapi/public_inc/nfapi_nr_interface.h"
+#include "bits.h"
 
 uint8_t allowed_xlsch_re_in_dmrs_symbol(uint16_t k,
                                         uint16_t start_sc,
@@ -173,88 +158,6 @@ void pseudo_random_sequence_optimised(unsigned int size, uint32_t *c, uint32_t c
 
 /*******************************************************************
 *
-* NAME :         lte_gold_new
-*
-* PARAMETERS :
-*
-* RETURN :       generate pseudo-random sequence which is a length-31 Gold sequence
-*
-* DESCRIPTION :  This function is the same as "lte_gold" function in file lte_gold.c
-*                It allows checking that optimization works fine.
-*                generated sequence is given in an array as a bit map.
-*
-*********************************************************************/
-
-#define CELL_DMRS_LENGTH   (224*2)
-#define CHECK_GOLD_SEQUENCE
-
-void lte_gold_new(LTE_DL_FRAME_PARMS *frame_parms, uint32_t lte_gold_table[20][2][14], uint16_t Nid_cell)
-{
-  unsigned char ns,l,Ncp=1-frame_parms->Ncp;
-  uint32_t cinit;
-
-#ifdef CHECK_GOLD_SEQUENCE
-
-  uint32_t dmrs_bitmap[20][2][14];
-  uint32_t *dmrs_sequence =  calloc(CELL_DMRS_LENGTH, sizeof(uint32_t));
-  if (dmrs_sequence == NULL) {
-    msg("Fatal error: memory allocation problem \n");
-  	assert(0);
-  }
-  else
-  {
-    printf("Check of demodulation reference signal of pbch sequence \n");
-  }
-
-#endif
-
-  /* for each slot number */
-  for (ns=0; ns<20; ns++) {
-
-  /* for each ofdm position */
-    for (l=0; l<2; l++) {
-
-      cinit = Ncp +
-             (Nid_cell<<1) +
-             (((1+(Nid_cell<<1))*(1 + (((frame_parms->Ncp==0)?4:3)*l) + (7*(1+ns))))<<10);
-
-      pseudo_random_sequence_optimised(14, &(lte_gold_table[ns][l][0]), cinit);
-
-#ifdef CHECK_GOLD_SEQUENCE
-
-      pseudo_random_sequence(CELL_DMRS_LENGTH, dmrs_sequence, cinit);
-
-      int j = 0;
-      int k = 0;
-
-      /* format for getting bitmap from uint32_t */
-      for (int i=0; i<14; i++) {
-        dmrs_bitmap[ns][l][i] = 0;
-        for (; j < k + 32; j++) {
-          dmrs_bitmap[ns][l][i] |= (dmrs_sequence[j]<<j);
-        }
-        k = j;
-      }
-
-      for (int i=0; i<14; i++) {
-        if (lte_gold_table[ns][l][i] != dmrs_bitmap[ns][l][i]) {
-          printf("Error in gold sequence computation for ns %d l %d and index %i : 0x%x 0x%x \n", ns, l, i, lte_gold_table[ns][l][i], dmrs_bitmap[ns][l][i]);
-          assert(0);
-        }
-      }
-
-#endif
-
-    }
-  }
-
-#ifdef CHECK_GOLD_SEQUENCE
-  free(dmrs_sequence);
-#endif
-}
-
-/*******************************************************************
-*
 * NAME :         get_dmrs_freq_idx_ul
 *
 * PARAMETERS :   n : index of DMRS symbol
@@ -338,7 +241,9 @@ void nr_chest_time_domain_avg(NR_DL_FRAME_PARMS *frame_parms,
                               uint8_t num_symbols,
                               uint8_t start_symbol,
                               uint16_t dmrs_bitmap,
-                              uint16_t num_rbs)
+                              uint16_t num_rbs,
+                              uint8_t nb_layers,
+                              uint8_t num_streams)
 {
   simde__m128i *ul_ch128_0;
   simde__m128i *ul_ch128_1;
@@ -347,64 +252,68 @@ void nr_chest_time_domain_avg(NR_DL_FRAME_PARMS *frame_parms,
   int num_dmrs_symb = count_bits64_with_mask(dmrs_bitmap, start_symbol, total_symbols);
   int first_dmrs_symb = get_next_dmrs_symbol_in_slot(dmrs_bitmap, start_symbol, total_symbols);
   AssertFatal(first_dmrs_symb > -1, "No DMRS symbol present in this slot\n");
-  for (int aarx = 0; aarx < frame_parms->nb_antennas_rx; aarx++) {
-    for (int symb = first_dmrs_symb+1; symb < total_symbols; symb++) {
-      ul_ch128_0 = (simde__m128i *)&ch_estimates[aarx][first_dmrs_symb*frame_parms->ofdm_symbol_size];
-      if ((dmrs_bitmap >> symb) & 0x01) {
-        ul_ch128_1 = (simde__m128i *)&ch_estimates[aarx][symb*frame_parms->ofdm_symbol_size];
-        for (int rbIdx = 0; rbIdx < num_rbs; rbIdx++) {
-          ul_ch128_0[0] = simde_mm_adds_epi16(ul_ch128_0[0], ul_ch128_1[0]);
-          ul_ch128_0[1] = simde_mm_adds_epi16(ul_ch128_0[1], ul_ch128_1[1]);
-          ul_ch128_0[2] = simde_mm_adds_epi16(ul_ch128_0[2], ul_ch128_1[2]);
-          ul_ch128_0 += 3;
-          ul_ch128_1 += 3;
+  for (int nl = 0; nl < nb_layers; nl++) {
+    for (int aarx = 0; aarx < num_streams; aarx++) {
+      int ch_offset = nl * num_streams + aarx;
+      for (int symb = first_dmrs_symb + 1; symb < total_symbols; symb++) {
+        ul_ch128_0 = (simde__m128i *)&ch_estimates[ch_offset][first_dmrs_symb * frame_parms->ofdm_symbol_size];
+        if ((dmrs_bitmap >> symb) & 0x01) {
+          ul_ch128_1 = (simde__m128i *)&ch_estimates[ch_offset][symb * frame_parms->ofdm_symbol_size];
+          for (int rbIdx = 0; rbIdx < num_rbs; rbIdx++) {
+            ul_ch128_0[0] = simde_mm_adds_epi16(ul_ch128_0[0], ul_ch128_1[0]);
+            ul_ch128_0[1] = simde_mm_adds_epi16(ul_ch128_0[1], ul_ch128_1[1]);
+            ul_ch128_0[2] = simde_mm_adds_epi16(ul_ch128_0[2], ul_ch128_1[2]);
+            ul_ch128_0 += 3;
+            ul_ch128_1 += 3;
+          }
         }
       }
+      ul_ch128_0 = (simde__m128i *)&ch_estimates[ch_offset][first_dmrs_symb * frame_parms->ofdm_symbol_size];
+      if (num_dmrs_symb == 2) {
+        for (int rbIdx = 0; rbIdx < num_rbs; rbIdx++) {
+          ul_ch128_0[0] = simde_mm_srai_epi16(ul_ch128_0[0], 1);
+          ul_ch128_0[1] = simde_mm_srai_epi16(ul_ch128_0[1], 1);
+          ul_ch128_0[2] = simde_mm_srai_epi16(ul_ch128_0[2], 1);
+          ul_ch128_0 += 3;
+        }
+      } else if (num_dmrs_symb == 4) {
+        for (int rbIdx = 0; rbIdx < num_rbs; rbIdx++) {
+          ul_ch128_0[0] = simde_mm_srai_epi16(ul_ch128_0[0], 2);
+          ul_ch128_0[1] = simde_mm_srai_epi16(ul_ch128_0[1], 2);
+          ul_ch128_0[2] = simde_mm_srai_epi16(ul_ch128_0[2], 2);
+          ul_ch128_0 += 3;
+        }
+      } else if (num_dmrs_symb == 3) {
+        ul_ch16_0 = (int16_t *)&ch_estimates[ch_offset][first_dmrs_symb * frame_parms->ofdm_symbol_size];
+        for (int rbIdx = 0; rbIdx < num_rbs; rbIdx++) {
+          ul_ch16_0[0] /= 3;
+          ul_ch16_0[1] /= 3;
+          ul_ch16_0[2] /= 3;
+          ul_ch16_0[3] /= 3;
+          ul_ch16_0[4] /= 3;
+          ul_ch16_0[5] /= 3;
+          ul_ch16_0[6] /= 3;
+          ul_ch16_0[7] /= 3;
+          ul_ch16_0[8] /= 3;
+          ul_ch16_0[9] /= 3;
+          ul_ch16_0[10] /= 3;
+          ul_ch16_0[11] /= 3;
+          ul_ch16_0[12] /= 3;
+          ul_ch16_0[13] /= 3;
+          ul_ch16_0[14] /= 3;
+          ul_ch16_0[15] /= 3;
+          ul_ch16_0[16] /= 3;
+          ul_ch16_0[17] /= 3;
+          ul_ch16_0[18] /= 3;
+          ul_ch16_0[19] /= 3;
+          ul_ch16_0[20] /= 3;
+          ul_ch16_0[21] /= 3;
+          ul_ch16_0[22] /= 3;
+          ul_ch16_0[23] /= 3;
+          ul_ch16_0 += 24;
+        }
+      } else
+        AssertFatal((num_dmrs_symb < 5) && (num_dmrs_symb > 0), "Illegal number of DMRS symbols in the slot\n");
     }
-    ul_ch128_0 = (simde__m128i *)&ch_estimates[aarx][first_dmrs_symb*frame_parms->ofdm_symbol_size];
-    if (num_dmrs_symb == 2) {
-      for (int rbIdx = 0; rbIdx < num_rbs; rbIdx++) {
-        ul_ch128_0[0] = simde_mm_srai_epi16(ul_ch128_0[0], 1);
-        ul_ch128_0[1] = simde_mm_srai_epi16(ul_ch128_0[1], 1);
-        ul_ch128_0[2] = simde_mm_srai_epi16(ul_ch128_0[2], 1);
-        ul_ch128_0 += 3;
-      }
-    } else if (num_dmrs_symb == 4) {
-      for (int rbIdx = 0; rbIdx < num_rbs; rbIdx++) {
-        ul_ch128_0[0] = simde_mm_srai_epi16(ul_ch128_0[0], 2);
-        ul_ch128_0[1] = simde_mm_srai_epi16(ul_ch128_0[1], 2);
-        ul_ch128_0[2] = simde_mm_srai_epi16(ul_ch128_0[2], 2);
-        ul_ch128_0 += 3;
-      }
-    } else if (num_dmrs_symb == 3) {
-      ul_ch16_0 = (int16_t *)&ch_estimates[aarx][first_dmrs_symb*frame_parms->ofdm_symbol_size];
-      for (int rbIdx = 0; rbIdx < num_rbs; rbIdx++) {
-        ul_ch16_0[0] /= 3;
-        ul_ch16_0[1] /= 3;
-        ul_ch16_0[2] /= 3;
-        ul_ch16_0[3] /= 3;
-        ul_ch16_0[4] /= 3;
-        ul_ch16_0[5] /= 3;
-        ul_ch16_0[6] /= 3;
-        ul_ch16_0[7] /= 3;
-        ul_ch16_0[8] /= 3;
-        ul_ch16_0[9] /= 3;
-        ul_ch16_0[10] /= 3;
-        ul_ch16_0[11] /= 3;
-        ul_ch16_0[12] /= 3;
-        ul_ch16_0[13] /= 3;
-        ul_ch16_0[14] /= 3;
-        ul_ch16_0[15] /= 3;
-        ul_ch16_0[16] /= 3;
-        ul_ch16_0[17] /= 3;
-        ul_ch16_0[18] /= 3;
-        ul_ch16_0[19] /= 3;
-        ul_ch16_0[20] /= 3;
-        ul_ch16_0[21] /= 3;
-        ul_ch16_0[22] /= 3;
-        ul_ch16_0[23] /= 3;
-        ul_ch16_0 += 24;
-      }
-    } else AssertFatal((num_dmrs_symb < 5) && (num_dmrs_symb > 0), "Illegal number of DMRS symbols in the slot\n");
   }
 }

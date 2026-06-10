@@ -1,22 +1,5 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
 // this function fills the PHY_vars->PHY_measurement structure
@@ -254,13 +237,13 @@ void ue_rrc_measurements(PHY_VARS_UE *ue,
 
           //              ue->measurements.n0_power[aarx] += (((int32_t)rxF_pss[-64]*rxF_pss[-64])+((int32_t)rxF_pss[-63]*rxF_pss[-63]));
           //          printf("pssm32 %d\n",ue->measurements.n0_power[aarx]);
-              ue->measurements.n0_power_dB[aarx] = (unsigned short) dB_fixed(ue->measurements.n0_power[aarx]/12);
+              ue->measurements.n0_power_dB[aarx] = dB_fixed(ue->measurements.n0_power[aarx]/12);
               ue->measurements.n0_power_tot /*+=*/ = ue->measurements.n0_power[aarx];
         }
 
             //LOG_I(PHY,"Subframe %d RRC UE MEAS Noise Level %d \n", subframe, ue->measurements.n0_power_tot);
 
-        ue->measurements.n0_power_tot_dB = (unsigned short) dB_fixed(ue->measurements.n0_power_tot/(12*aarx));
+        ue->measurements.n0_power_tot_dB = dB_fixed(ue->measurements.n0_power_tot/(12*aarx));
         ue->measurements.n0_power_tot_dBm = ue->measurements.n0_power_tot_dB - ue->rx_total_gain_dB - dB_fixed(ue->frame_parms.ofdm_symbol_size);
         } else {
             LOG_E(PHY, "Not yet implemented: noise power calculation when prefix length == EXTENDED\n");
@@ -311,11 +294,11 @@ void ue_rrc_measurements(PHY_VARS_UE *ue,
                 ue->measurements.n0_power[aarx] += (((int32_t)rxF_pss[-66]*rxF_pss[-66])+((int32_t)rxF_pss[-65]*rxF_pss[-65]));
             //              ue->measurements.n0_power[aarx] += (((int32_t)rxF_pss[-64]*rxF_pss[-64])+((int32_t)rxF_pss[-63]*rxF_pss[-63]));
             //          printf("pssm32 %d\n",ue->measurements.n0_power[aarx]);
-                ue->measurements.n0_power_dB[aarx] = (unsigned short) dB_fixed(ue->measurements.n0_power[aarx]/12);
+                ue->measurements.n0_power_dB[aarx] = dB_fixed(ue->measurements.n0_power[aarx]/12);
                 ue->measurements.n0_power_tot /*+=*/ = ue->measurements.n0_power[aarx];
         }
 
-        ue->measurements.n0_power_tot_dB = (unsigned short) dB_fixed(ue->measurements.n0_power_tot/(12*aarx));
+        ue->measurements.n0_power_tot_dB = dB_fixed(ue->measurements.n0_power_tot/(12*aarx));
         ue->measurements.n0_power_tot_dBm = ue->measurements.n0_power_tot_dB - ue->rx_total_gain_dB - dB_fixed(ue->frame_parms.ofdm_symbol_size);
 
         //LOG_I(PHY,"Subframe %d RRC UE MEAS Noise Level %d \n", subframe, ue->measurements.n0_power_tot);
@@ -549,10 +532,7 @@ void construct_HhH_elements(int *ch0conj_ch0, //00_00
   }
 }
 
-
-void squared_matrix_element(int32_t *Hh_h_00,
-                            int32_t *Hh_h_00_sq,
-                            unsigned short nb_rb)
+static void squared_matrix_element(int32_t *Hh_h_00, int32_t *Hh_h_00_sq, unsigned short nb_rb)
 {
 
   simde__m128i *Hh_h_00_128,*Hh_h_00_sq_128;
@@ -1037,7 +1017,7 @@ void lte_ue_measurements(PHY_VARS_UE *ue,
         if (ue->measurements.rx_spatial_power[eNB_id][aatx][aarx]<0)
           ue->measurements.rx_spatial_power[eNB_id][aatx][aarx] = 0; //ue->measurements.n0_power[aarx];
 
-        ue->measurements.rx_spatial_power_dB[eNB_id][aatx][aarx] = (unsigned short) dB_fixed(ue->measurements.rx_spatial_power[eNB_id][aatx][aarx]);
+        ue->measurements.rx_spatial_power_dB[eNB_id][aatx][aarx] = dB_fixed(ue->measurements.rx_spatial_power[eNB_id][aatx][aarx]);
 
         if (aatx==0)
           ue->measurements.rx_power[eNB_id][aarx] = ue->measurements.rx_spatial_power[eNB_id][aatx][aarx];
@@ -1045,7 +1025,7 @@ void lte_ue_measurements(PHY_VARS_UE *ue,
           ue->measurements.rx_power[eNB_id][aarx] += ue->measurements.rx_spatial_power[eNB_id][aatx][aarx];
       } //aatx
 
-      ue->measurements.rx_power_dB[eNB_id][aarx] = (unsigned short) dB_fixed(ue->measurements.rx_power[eNB_id][aarx]);
+      ue->measurements.rx_power_dB[eNB_id][aarx] = dB_fixed(ue->measurements.rx_power[eNB_id][aarx]);
 
       if (aarx==0)
         ue->measurements.rx_power_tot[eNB_id] = ue->measurements.rx_power[eNB_id][aarx];
@@ -1053,7 +1033,7 @@ void lte_ue_measurements(PHY_VARS_UE *ue,
         ue->measurements.rx_power_tot[eNB_id] += ue->measurements.rx_power[eNB_id][aarx];
     } //aarx
 
-    ue->measurements.rx_power_tot_dB[eNB_id] = (unsigned short) dB_fixed(ue->measurements.rx_power_tot[eNB_id]);
+    ue->measurements.rx_power_tot_dB[eNB_id] = dB_fixed(ue->measurements.rx_power_tot[eNB_id]);
 
   } //eNB_id
 

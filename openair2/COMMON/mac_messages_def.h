@@ -1,29 +1,9 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
 /*
  * mac_messages_def.h
- *
- *  Created on: Oct 24, 2013
- *      Author: L. winckel and Navid Nikaein
  */
 
 //-------------------------------------------------------------------------------------------//
@@ -51,6 +31,7 @@ MESSAGE_DEF(RRC_MAC_PCCH_DATA_REQ,      MESSAGE_PRIORITY_MED_PLUS, RrcMacPcchDat
 MESSAGE_DEF(NR_RRC_MAC_RA_IND,          MESSAGE_PRIORITY_MED_PLUS, NRRrcMacRaInd,               nr_rrc_mac_ra_ind)
 MESSAGE_DEF(NR_RRC_MAC_MSG3_IND,        MESSAGE_PRIORITY_MED_PLUS, NRRrcMacMsg3Ind,             nr_rrc_mac_msg3_ind)
 MESSAGE_DEF(NR_RRC_MAC_INAC_IND,        MESSAGE_PRIORITY_MED_PLUS, NRRrcMacInacInd,             nr_rrc_mac_inac_ind)
+MESSAGE_DEF(NR_RRC_MAC_VERIFY,          MESSAGE_PRIORITY_MED_PLUS, NRRrcMacVerify,              nr_rrc_mac_verify)
 
 /* RRC configures DRX context (MAC timers) of a UE */
 MESSAGE_DEF(RRC_MAC_DRX_CONFIG_REQ, MESSAGE_PRIORITY_MED, rrc_mac_drx_config_req_t, rrc_mac_drx_config_req)

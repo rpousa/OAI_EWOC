@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 add_library(barrier barrier.c)
 target_include_directories(barrier PUBLIC ./)
 target_link_libraries(barrier PUBLIC pthread)

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 FROM ran-base:latest
 ARG USERNAME=root
 ARG USER_UID=1000
@@ -23,7 +25,7 @@ RUN cd /oai-ran && \
 
 ## Build Fronthaul library
 COPY cmake_targets/tools/oran_fhi_integration_patches/F/oaioran_F.patch /oaioran_F.patch
-RUN git clone https://gerrit.o-ran-sc.org/r/o-du/phy.git /opt/phy && \
+RUN git clone https://github.com/openairinterface/o-du-phy.git /opt/phy && \
     cd /opt/phy && \
     git checkout oran_f_release_v1.0 &&\
     git apply /oaioran_F.patch && \

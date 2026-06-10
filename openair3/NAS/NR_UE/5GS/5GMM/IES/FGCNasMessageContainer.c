@@ -1,36 +1,15 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file FGCNasMessageContainer.c
-
-\brief security mode complete procedures for gNB
-\author Yoshio INOUE, Masayuki HARADA
-\email: yoshio.inoue@fujitsu.com,masayuki.harada@fujitsu.com
-\date 2020
-\version 0.1
-*/
+/*!
+ * \brief security mode complete procedures for gNB
+ */
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <arpa/inet.h>
 
 #include "TLVEncoder.h"
 #include "TLVDecoder.h"
@@ -39,7 +18,7 @@
 int decode_fgc_nas_message_container(FGCNasMessageContainer *nasmessagecontainer, uint8_t iei, uint8_t *buffer, uint32_t len)
 {
   int decoded = 0;
-  uint8_t ielen = 0;
+  uint16_t ielen = 0;
   int decode_result;
 
   if (iei > 0) {
@@ -47,8 +26,10 @@ int decode_fgc_nas_message_container(FGCNasMessageContainer *nasmessagecontainer
     decoded++;
   }
 
-  ielen = *(buffer + decoded);
-  decoded += 2;
+  uint16_t encoded_ielen;
+  memcpy(&encoded_ielen, buffer + decoded, sizeof(encoded_ielen));
+  ielen = ntohs(encoded_ielen);
+  decoded += sizeof(encoded_ielen);
   CHECK_LENGTH_DECODER(len - decoded, ielen);
 
   if ((decode_result =
@@ -60,6 +41,7 @@ int decode_fgc_nas_message_container(FGCNasMessageContainer *nasmessagecontainer
 
   return decoded;
 }
+
 int encode_fgc_nas_message_container(const FGCNasMessageContainer *nasmessagecontainer, uint8_t iei, uint8_t *buffer, uint32_t len)
 {
   uint32_t encoded = 0;

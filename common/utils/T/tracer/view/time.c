@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
+ */
+
 #include "view.h"
 #include "../utils.h"
 #include <stdio.h>
@@ -152,9 +156,10 @@ static void *time_thread(void *_this)
   return 0;
 }
 
-static void scroll(void *private, gui *g,
-    char *notification, widget *w, void *notification_data)
+static void scroll(void *private, gui *g, char *notification, widget *w, void *notification_data)
 {
+  UNUSED(g);
+  UNUSED(w);
   struct time *this = private;
   int *d = notification_data;
   int x = d[0];
@@ -213,9 +218,11 @@ end:
   if (pthread_mutex_unlock(&this->lock)) abort();
 }
 
-static void click(void *private, gui *g,
-    char *notification, widget *w, void *notification_data)
+static void click(void *private, gui *g, char *notification, widget *w, void *notification_data)
 {
+  UNUSED(g);
+  UNUSED(w);
+  UNUSED(notification);
   struct time *this = private;
   int *d = notification_data;
   int button = *d;
@@ -224,8 +231,7 @@ static void click(void *private, gui *g,
   if (button == 1) this->autoscroll = 1;
 }
 
-view *new_view_time(int number_of_seconds, float refresh_rate,
-    gui *g, widget *w)
+view *new_view_time(float refresh_rate, gui *g, widget *w)
 {
   struct time *ret = calloc(1, sizeof(struct time));
   if (ret == NULL) abort();

@@ -1,30 +1,8 @@
 #!/bin/bash
-#/*
-# * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
-# * contributor license agreements.  See the NOTICE file distributed with
-# * this work for additional information regarding copyright ownership.
-# * The OpenAirInterface Software Alliance licenses this file to You under
-# * the OAI Public License, Version 1.1  (the "License"); you may not use this file
-# * except in compliance with the License.
-# * You may obtain a copy of the License at
-# *
-# *      http://www.openairinterface.org/?page_id=698
-# *
-# * Unless required by applicable law or agreed to in writing, software
-# * distributed under the License is distributed on an "AS IS" BASIS,
-# * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# * See the License for the specific language governing permissions and
-# * limitations under the License.
-# *-------------------------------------------------------------------------------
-# * For more information about the OpenAirInterface (OAI) Software Alliance:
-# *      contact@openairinterface.org
-# */
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
 
 # file build_oai
 # brief OAI automated build tool that can be used to install, compile, run OAI.
-# author  Navid Nikaein, Lionel GAUTHIER, Laurent Thomas
-
-set -e
 
 # Include helper functions
 THIS_SCRIPT_PATH=$(dirname $(readlink -f "$0"))
@@ -36,12 +14,11 @@ set_openair_env
 # Variables for UE data generation
 conf_nvram_path=$OPENAIR_DIR/openair3/NAS/TOOLS/ue_eurecom_test_sfr.conf
 
-HW=""
+HWs=""
 BUILD_DIR=ran_build
-DISABLE_HARDWARE_DEPENDENCY="False"
 CMAKE_BUILD_TYPE="RelWithDebInfo"
 CMAKE_CMD="$CMAKE"
-OPTIONAL_LIBRARIES="telnetsrv enbscope uescope nrscope ldpc_cuda ldpc_aal ldpc_xdma websrv oai_iqplayer imscope imscope_record"
+OPTIONAL_LIBRARIES="telnetsrv enbscope uescope nrscope ldpc_aal websrv oai_iqplayer imscope imscope_record"
 TARGET_LIST=""
 BUILD_TOOL_OPT="-j$(nproc)"
 
@@ -91,7 +68,7 @@ Options:
 --UE-conf-nvram [configuration file]
    Specify conf_nvram_path (default \"$conf_nvram_path\")
 -w | --hardware
-   USRP, BLADERF, LMSSDR, IRIS, SIMU, AW2SORI, AERIAL, None (Default)
+   USRP, BLADERF, LMSSDR, IRIS, SIMU, AW2SORI, AERIAL, ZMQ, None (Default)
    Adds this RF board support (in external packages installation and in compilation)
 -t | --transport
    Selects the transport protocol type, options: None, Ethernet, oran_fhlib_5g, oran_fhlib_5g_mplane, WLS
@@ -153,15 +130,8 @@ function main() {
        --build-tool-opt)
             BUILD_TOOL_OPT+=" $2"
             shift 2;;
-       -c | --clean)
+       -c | --clean | -C | --clean-all)
             CLEAN=1
-            shift;;
-       -C | --clean-all)
-            CLEAN_ALL=1
-            shift;;
-       --clean-kernel)
-            clean_kernel
-            echo_info "Erased iptables config and removed modules from kernel"
             shift;;
        --cmake-opt)
             CMAKE_CMD="$CMAKE_CMD $2"
@@ -253,23 +223,23 @@ function main() {
             shift 2;;
        -w | --hardware)
             case "$2" in
-                "USRP" | "BLADERF" | "LMSSDR" | "IRIS")
-                    HW="OAI_"$2
+                "USRP" | "BLADERF" | "LMSSDR" | "IRIS" | "ZMQ")
+                    HWs+=" OAI_"$2
                     TARGET_LIST="$TARGET_LIST oai_${2,,}devif" # ,, makes lowercase
                     CMAKE_CMD="$CMAKE_CMD -DOAI_$2=ON"
                     ;;
                 "SIMU")
-                    HW="OAI_"$2
+                    HWs+=" OAI_"$2
                     TARGET_LIST="$TARGET_LIST rfsimulator"
                     CMAKE_CMD="$CMAKE_CMD -DOAI_$2=ON"
                     ;;
                 "AW2SORI")
-                    HW="OAI_"$2
+                    HWs=" OAI_"$2
                     TARGET_LIST="$TARGET_LIST aw2sori_transpro"
                     CMAKE_CMD="$CMAKE_CMD -DOAI_$2=ON"
                     ;;
                 "AERIAL"|"Aerial"|"aerial")
-                    HW="OAI_AERIAL"
+                    HWs+=" OAI_AERIAL"
                     CMAKE_CMD="$CMAKE_CMD -DOAI_AERIAL=ON"
                     ;;
                 "None")
@@ -328,10 +298,6 @@ function main() {
             CMAKE_CMD="$CMAKE_CMD -DT_TRACER=False"
             echo_info "Disabling the T tracer"
             shift 1;;
-       --disable-hardware-dependency)
-            echo_info "Disabling hardware dependency for compiling software"
-            DISABLE_HARDWARE_DEPENDENCY="True"
-            shift 1;;
        --ue-trace)
             CMAKE_CMD="$CMAKE_CMD -DUE_DEBUG_TRACE=False"
             echo_info "Enabling UE trace for debug"
@@ -355,8 +321,8 @@ function main() {
               echo_info "Enabling build of all optional shared libraries ($OPTIONAL_LIBRARIES)" 
             else
               for reqlib in $2; do
-                lib=$(echo $OPTIONAL_LIBRARIES | tr ' ' '\n' | grep -w $reqlib) # search given parameter in list
-                [[ $? -ne 0 ]] && echo_fatal "Unknown optional library in $reqlib, valid libraries are $OPTIONAL_LIBRARIES"
+                lib=$(echo $OPTIONAL_LIBRARIES | tr ' ' '\n' | grep -w -- $reqlib) # search given parameter in list
+                [[ $? -ne 0 ]] && echo_fatal "Unknown optional library \"$reqlib\", valid libraries are: $OPTIONAL_LIBRARIES"
                 TARGET_LIST="$TARGET_LIST $lib" # will append the found library
                 CMAKE_CMD="$CMAKE_CMD -DENABLE_${lib^^}=ON"
                 echo_info "Enabling build of optional shared library $lib"
@@ -409,13 +375,8 @@ function main() {
 
   echo "OPENAIR_DIR    = $OPENAIR_DIR"
 
-  if [ "$CLEAN_ALL" = "1" ] ; then
-    clean_all_files
-    echo "Erased all previously producted files"
-  fi
-
-  dlog=$OPENAIR_DIR/cmake_targets/log
-  mkdir -p $dlog
+  DIR=$OPENAIR_DIR/cmake_targets
+  [ "$CLEAN" = "1" ] && rm -rf "$DIR/$BUILD_DIR"
 
   if [ "$INSTALL_EXTERNAL" = "1" ] ; then
     echo_info "Installing packages"
@@ -424,37 +385,29 @@ function main() {
       echo_info "installing LTTng"
       install_lttng $1
     fi
-    if [ "$HW" == "OAI_USRP" ] ; then
-      echo_info "installing packages for USRP support"
-      check_install_usrp_uhd_driver
-      if [ ! -v BUILD_UHD_FROM_SOURCE ] && [ ! "$DISABLE_HARDWARE_DEPENDENCY" == "True" ]; then
-        install_usrp_uhd_driver $UHD_IMAGES_DIR
+    for HW in $HWs; do
+      if [ "$HW" == "OAI_USRP" ] ; then
+        echo_info "installing packages for USRP support"
+        check_install_usrp_uhd_driver
+        if [ ! -v BUILD_UHD_FROM_SOURCE ]; then
+          install_usrp_uhd_driver $UHD_IMAGES_DIR
+        fi
+      elif [ "$HW" == "OAI_BLADERF" ] ; then
+        echo_info "installing packages for BLADERF support"
+        check_install_bladerf_driver
+      elif [ "$HW" == "OAI_IRIS" ] ; then
+        echo_info "installing packages for IRIS support"
+        check_install_soapy
+      else
+        echo_warning "no installation scripts for hardware $HW"
       fi
-    fi
-    if [ "$HW" == "OAI_BLADERF" ] ; then
-      echo_info "installing packages for BLADERF support"
-      check_install_bladerf_driver
-      if [ ! "$DISABLE_HARDWARE_DEPENDENCY" == "True" ]; then
-        flash_firmware_bladerf
-      fi
-    fi
-    if [ "$HW" == "OAI_IRIS" ] ; then
-      echo_info "installing packages for IRIS support"
-      check_install_soapy
-      #if [ ! "$DISABLE_HARDWARE_DEPENDENCY" == "True" ]; then
-      #  flash_firmware_iris
-      #fi
-    fi
+    done
   fi
 
   if [ "$INSTALL_OPTIONAL" = "1" ] ; then
     echo_info "Installing optional packages"
     check_install_additional_tools
   fi
-
-  DIR=$OPENAIR_DIR/cmake_targets
-
-  [ "$CLEAN" = "1" ] && rm -rf $DIR/$BUILD_DIR/build
 
   if [[ $TARGET_LIST != "" ]] && [[ -f $OPENAIR_DIR/CMakeLists.txt ]]; then
     # add some default libraries that should always be built
@@ -470,11 +423,10 @@ function main() {
     # e.g., cmake_targets/ran_build/build, hence the ../../..
     CMAKE_CMD="$CMAKE_CMD ../../.."
     echo_info "Running \"$CMAKE_CMD\""
-    eval $CMAKE_CMD
+    eval $CMAKE_CMD || echo_fatal "cmake configuration failed"
     cmd="$CMAKE --build . --target ${TARGET_LIST} -- ${BUILD_TOOL_OPT}"
     echo_info "Running \"${cmd}\"" $green
-    eval $cmd
-    ret=$?
+    eval $cmd || echo_fatal "build failed"
 
     if [ "$UE" = 1 ] ; then
       echo_info "Generate LTE USIM default sim content UE specific part"

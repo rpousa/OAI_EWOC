@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 # Colosseum Automated Testing
 
 These scripts are used by a Jenkins [job](../Jenkinsfile-colosseum) to trigger automated testing of OpenAirInterface (OAI) gNB and softUE on the [Colosseum](https://www.northeastern.edu/colosseum/) Open RAN digital twin.

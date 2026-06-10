@@ -1,33 +1,9 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/* \file config_ue.c
+/*
  * \brief UE configuration performed by RRC or as a consequence of RRC procedures
- * \author R. Knopp, K.H. HSU
- * \date 2018
- * \version 0.1
- * \company Eurecom / NTUST
- * \email: knopp@eurecom.fr, kai-hsiang.hsu@eurecom.fr
- * \note
- * \warning
  */
 
 #define _GNU_SOURCE
@@ -39,6 +15,8 @@
 #include "common/utils/nr/nr_common.h"
 #include "executables/softmodem-common.h"
 #include "SCHED_NR/phy_frame_config_nr.h"
+#include "RRC/NR_UE/verify_RRC.h"
+#include "RRC/NR_UE/L2_interface_ue.h"
 #include "oai_asn1.h"
 
 #define ASIGN_P_VAL(dst, src) \
@@ -96,28 +74,28 @@ static void set_tdd_config_nr_ue(fapi_nr_tdd_table_t *tdd_table, const frame_str
   for (int i = 0; i < fs->numb_slots_period; i++) {
     fapi_nr_max_tdd_periodicity_t *period_list = &tdd_table->max_tdd_periodicity_list[i];
     period_list->max_num_of_symbol_per_slot_list =
-      malloc(NR_NUMBER_OF_SYMBOLS_PER_SLOT * sizeof(*period_list->max_num_of_symbol_per_slot_list));
+      malloc(NR_SYMBOLS_PER_SLOT * sizeof(*period_list->max_num_of_symbol_per_slot_list));
     if (pc->tdd_slot_bitmap[i].slot_type == TDD_NR_DOWNLINK_SLOT) {
-      for (int s = 0; s < NR_NUMBER_OF_SYMBOLS_PER_SLOT; s++) {
+      for (int s = 0; s < NR_SYMBOLS_PER_SLOT; s++) {
         period_list->max_num_of_symbol_per_slot_list[s].slot_config = 0;
       }
     }
     if (pc->tdd_slot_bitmap[i].slot_type == TDD_NR_UPLINK_SLOT) {
-      for (int s = 0; s < NR_NUMBER_OF_SYMBOLS_PER_SLOT; s++) {
+      for (int s = 0; s < NR_SYMBOLS_PER_SLOT; s++) {
         period_list->max_num_of_symbol_per_slot_list[s].slot_config = 1;
       }
     }
     if (pc->tdd_slot_bitmap[i].slot_type == TDD_NR_MIXED_SLOT) {
       int dl_symb = pc->tdd_slot_bitmap[i].num_dl_symbols;
       int ul_symb = pc->tdd_slot_bitmap[i].num_ul_symbols;
-      int g_symb = NR_NUMBER_OF_SYMBOLS_PER_SLOT - dl_symb - ul_symb;
+      int g_symb = NR_SYMBOLS_PER_SLOT - dl_symb - ul_symb;
       for (int s = 0; s < dl_symb; s++) {
         period_list->max_num_of_symbol_per_slot_list[s].slot_config = 0;
       }
       for (int s = dl_symb; s < dl_symb + g_symb; s++) {
         period_list->max_num_of_symbol_per_slot_list[s].slot_config = 2;
       }
-      for (int s = dl_symb + g_symb; s < NR_NUMBER_OF_SYMBOLS_PER_SLOT; s++) {
+      for (int s = dl_symb + g_symb; s < NR_SYMBOLS_PER_SLOT; s++) {
         period_list->max_num_of_symbol_per_slot_list[s].slot_config = 1;
       }
     }
@@ -229,6 +207,7 @@ static void config_common_ue_sa(NR_UE_MAC_INST_t *mac, NR_ServingCellConfigCommo
   cfg->ssb_table.ssb_offset_point_a = frequencyInfoDL->offsetToPointA;
   cfg->ssb_table.ssb_period = scc->ssb_PeriodicityServingCell;
   cfg->ssb_table.ssb_subcarrier_offset = mac->ssb_subcarrier_offset;
+  cfg->ssb_table.ssb_case = set_ssb_case(mac->numerology, mac->nr_band);
 
   if (mac->frequency_range == FR1){
     cfg->ssb_table.ssb_mask_list[0].ssb_mask = ((uint32_t) scc->ssb_PositionsInBurst.inOneGroup.buf[0]) << 24;
@@ -536,16 +515,16 @@ static void config_common_ue(NR_UE_MAC_INST_t *mac, NR_ServingCellConfigCommon_t
 
   // SSB Table config
   if (frequencyInfoDL && frequencyInfoDL->absoluteFrequencySSB) {
-    int scs_scaling = 1 << (cfg->ssb_config.scs_common);
-    if (frequencyInfoDL->absoluteFrequencyPointA < 600000)
-      scs_scaling = scs_scaling * 3;
-    if (frequencyInfoDL->absoluteFrequencyPointA > 2016666)
-      scs_scaling = scs_scaling >> 2;
-    uint32_t absolute_diff = (*frequencyInfoDL->absoluteFrequencySSB - frequencyInfoDL->absoluteFrequencyPointA);
-    cfg->ssb_table.ssb_offset_point_a = absolute_diff / (12 * scs_scaling) - 10;
+    cfg->ssb_table.ssb_offset_point_a = get_ssb_offset_to_pointA(*frequencyInfoDL->absoluteFrequencySSB,
+                                                                 frequencyInfoDL->absoluteFrequencyPointA,
+                                                                 cfg->ssb_config.scs_common,
+                                                                 mac->frequency_range);
     cfg->ssb_table.ssb_period = *scc->ssb_periodicityServingCell;
     // NSA -> take ssb offset from SCS
-    cfg->ssb_table.ssb_subcarrier_offset = absolute_diff % (12 * scs_scaling);
+    cfg->ssb_table.ssb_subcarrier_offset = get_ssb_subcarrier_offset(*frequencyInfoDL->absoluteFrequencySSB,
+                                                                     frequencyInfoDL->absoluteFrequencyPointA,
+                                                                     cfg->ssb_config.scs_common);
+    cfg->ssb_table.ssb_case = set_ssb_case(*scc->ssbSubcarrierSpacing, mac->nr_band);
   }
 
   switch (scc->ssb_PositionsInBurst->present) {
@@ -608,6 +587,16 @@ static void config_common_ue(NR_UE_MAC_INST_t *mac, NR_ServingCellConfigCommon_t
 
     cfg->prach_config.num_prach_fd_occasions_list = (fapi_nr_num_prach_fd_occasions_t *)malloc(
         cfg->prach_config.num_prach_fd_occasions * sizeof(fapi_nr_num_prach_fd_occasions_t));
+
+    // Get UL carrier SCS for PRACH k1 calculation
+    int ul_carrier_scs;
+    if (scc->uplinkConfigCommon->frequencyInfoUL
+        && scc->uplinkConfigCommon->frequencyInfoUL->scs_SpecificCarrierList.list.count > 0) {
+      ul_carrier_scs = scc->uplinkConfigCommon->frequencyInfoUL->scs_SpecificCarrierList.list.array[0]->subcarrierSpacing;
+    } else {
+      ul_carrier_scs = scc->uplinkConfigCommon->initialUplinkBWP->genericParameters.subcarrierSpacing;
+    }
+
     for (int i = 0; i < cfg->prach_config.num_prach_fd_occasions; i++) {
       fapi_nr_num_prach_fd_occasions_t *prach_fd_occasion = &cfg->prach_config.num_prach_fd_occasions_list[i];
       prach_fd_occasion->num_prach_fd_occasions = i;
@@ -616,7 +605,8 @@ static void config_common_ue(NR_UE_MAC_INST_t *mac, NR_ServingCellConfigCommon_t
       else
         prach_fd_occasion->prach_root_sequence_index = rach_ConfigCommon->prach_RootSequenceIndex.choice.l839;
 
-      prach_fd_occasion->k1 = rach_ConfigCommon->rach_ConfigGeneric.msg1_FrequencyStart;
+      prach_fd_occasion->k1 = rach_ConfigCommon->rach_ConfigGeneric.msg1_FrequencyStart
+          + (get_N_RA_RB(cfg->prach_config.prach_sub_c_spacing, ul_carrier_scs) * i);
       prach_fd_occasion->prach_zero_corr_conf = rach_ConfigCommon->rach_ConfigGeneric.zeroCorrelationZoneConfig;
       prach_fd_occasion->num_root_sequences =
           compute_nr_root_seq(rach_ConfigCommon, nb_preambles, frame_type, mac->frequency_range);
@@ -704,9 +694,7 @@ static void update_ss(void *ue_ss_in, void *nw_ss_in)
   }
 }
 
-static void configure_common_ss_coreset(const NR_UE_MAC_INST_t *mac,
-                                        NR_BWP_PDCCH_t *pdcch,
-                                        NR_PDCCH_ConfigCommon_t *pdcch_ConfigCommon)
+static void configure_common_ss_coreset(NR_BWP_PDCCH_t *pdcch, NR_PDCCH_ConfigCommon_t *pdcch_ConfigCommon)
 {
   if (!pdcch_ConfigCommon)
     return;
@@ -1765,7 +1753,7 @@ static void configure_common_BWP_dl(NR_UE_MAC_INST_t *mac, int bwp_id, NR_BWP_Do
     NR_BWP_PDCCH_t *pdcch = &mac->config_BWP_PDCCH[bwp_id];
     if (dl_common->pdcch_ConfigCommon) {
       if (dl_common->pdcch_ConfigCommon->present == NR_SetupRelease_PDCCH_ConfigCommon_PR_setup)
-        configure_common_ss_coreset(mac, pdcch, dl_common->pdcch_ConfigCommon->choice.setup);
+        configure_common_ss_coreset(pdcch, dl_common->pdcch_ConfigCommon->choice.setup);
       if (dl_common->pdcch_ConfigCommon->present == NR_SetupRelease_PDCCH_ConfigCommon_PR_release)
         release_common_ss_cset(pdcch);
     }
@@ -2094,18 +2082,24 @@ static void handle_reconfiguration_with_sync(NR_UE_MAC_INST_t *mac,
       configure_common_BWP_dl(mac, bwp_id, scc->downlinkConfigCommon->initialDownlinkBWP);
     if (scc->uplinkConfigCommon)
       configure_common_BWP_ul(mac, bwp_id, scc->uplinkConfigCommon->initialUplinkBWP);
+
+    // Update PDCCH config as MAC configuration has changed
+    // Used only in SA mode.
+    mac->update_pdcch_config = IS_SA_MODE(get_softmodem_params());
   }
 
   mac->state = UE_NOT_SYNC_RECONF;
   ra->ra_state = nrRA_UE_IDLE;
   nr_ue_mac_default_configs(mac);
 
+  // PHY CONFIG request should be sent, ahead of SYNC request
+  // As SYNC request processes the new config
+  mac->if_module->phy_config_request(&mac->phy_config);
+  mac->phy_config.config_req.ntn_config.params_changed = false;
   mac->synch_request.Mod_id = mac->ue_id;
   mac->synch_request.CC_id = cc_idP;
   mac->synch_request.synch_req.target_Nid_cell = mac->physCellId;
   mac->if_module->synch_request(&mac->synch_request);
-  mac->if_module->phy_config_request(&mac->phy_config);
-  mac->phy_config.config_req.ntn_config.params_changed = false;
 }
 
 static void configure_physicalcellgroup(NR_UE_MAC_INST_t *mac,
@@ -2560,7 +2554,9 @@ static void modify_csi_measconfig(NR_CSI_MeasConfig_t *source, NR_CSI_MeasConfig
   }
 }
 
-static void configure_csiconfig(NR_UE_ServingCell_Info_t *sc_info, struct NR_SetupRelease_CSI_MeasConfig *csi_MeasConfig_sr)
+static void configure_csiconfig(NR_UE_ServingCell_Info_t *sc_info,
+                                struct NR_SetupRelease_CSI_MeasConfig *csi_MeasConfig_sr,
+                                module_id_t ue_id)
 {
   switch (csi_MeasConfig_sr->present) {
     case NR_SetupRelease_CSI_MeasConfig_PR_NOTHING:
@@ -2582,6 +2578,8 @@ static void configure_csiconfig(NR_UE_ServingCell_Info_t *sc_info, struct NR_Set
       } else { // modification
         modify_csi_measconfig(csi_MeasConfig_sr->choice.setup, sc_info->csi_MeasConfig);
       }
+      if (!check_csi_report_consistency(sc_info->csi_MeasConfig))
+        nr_mac_rrc_verification_failed(ue_id);
       break;
     }
     default:
@@ -2593,7 +2591,7 @@ static void configure_servingcell_info(NR_UE_MAC_INST_t *mac, NR_ServingCellConf
 {
   NR_UE_ServingCell_Info_t *sc_info = &mac->sc_info;
   if (scd->csi_MeasConfig) {
-    configure_csiconfig(sc_info, scd->csi_MeasConfig);
+    configure_csiconfig(sc_info, scd->csi_MeasConfig, mac->ue_id);
     compute_csi_bitlen(sc_info->csi_MeasConfig, mac->csi_report_template);
   }
 

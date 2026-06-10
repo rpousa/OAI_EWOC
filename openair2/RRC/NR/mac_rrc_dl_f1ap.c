@@ -1,22 +1,5 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
 #include <netinet/in.h>
@@ -30,6 +13,7 @@
 #include "intertask_interface.h"
 #include "mac_rrc_dl.h"
 #include "nr_rrc_defs.h"
+#include "lib/f1ap_paging.h"
 #include "lib/f1ap_rrc_message_transfer.h"
 #include "lib/f1ap_interface_management.h"
 #include "lib/f1ap_ue_context.h"
@@ -45,6 +29,7 @@ static void f1_reset_cu_initiated_f1ap(sctp_assoc_t assoc_id, const f1ap_reset_t
 
 static void f1_reset_acknowledge_du_initiated_f1ap(sctp_assoc_t assoc_id, const f1ap_reset_ack_t *ack)
 {
+  UNUSED(assoc_id);
   (void)ack;
   AssertFatal(false, "%s() not implemented yet\n", __func__);
 }
@@ -138,6 +123,15 @@ static void dl_rrc_message_transfer_f1ap(sctp_assoc_t assoc_id, const f1ap_dl_rr
   itti_send_msg_to_task (TASK_CU_F1, 0, message_p);
 }
 
+static void paging_f1ap(sctp_assoc_t assoc_id, const f1ap_paging_t *paging)
+{
+  MessageDef *message_p = itti_alloc_new_message(TASK_RRC_GNB, 0, F1AP_PAGING);
+  message_p->ittiMsgHeader.originInstance = assoc_id;
+  f1ap_paging_t *msg = &F1AP_PAGING(message_p);
+  *msg = cp_f1ap_paging(paging);
+  itti_send_msg_to_task(TASK_CU_F1, 0, message_p);
+}
+
 void mac_rrc_dl_f1ap_init(nr_mac_rrc_dl_if_t *mac_rrc)
 {
   mac_rrc->f1_reset = f1_reset_cu_initiated_f1ap;
@@ -151,4 +145,5 @@ void mac_rrc_dl_f1ap_init(nr_mac_rrc_dl_if_t *mac_rrc)
   mac_rrc->ue_context_modification_refuse = ue_context_modification_refuse_f1ap;
   mac_rrc->ue_context_release_command = ue_context_release_command_f1ap;
   mac_rrc->dl_rrc_message_transfer = dl_rrc_message_transfer_f1ap;
+  mac_rrc->paging_transfer = paging_f1ap;
 }

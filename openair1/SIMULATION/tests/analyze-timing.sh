@@ -1,4 +1,5 @@
 #!/bin/bash
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
 
 # This bash script builds an awk script. The awk script tries to match
 # (provided) patterns and compares them against given thresholds condition
@@ -47,7 +48,7 @@ while [ $# -gt 0 ]; do
     } else {
       r = "FAIL";
     }
-    RESULTS['${NUM}']=sprintf("CHECK %-35s %7.2f %-8s %s", "'${PATTERN}'", meas, " '${COND}'", r);
+    RESULTS['${NUM}']=sprintf("CHECK %-40s %10.2f %-10s %s", "'${PATTERN}'", meas, "'${COND}'", r);
   }
 '
 

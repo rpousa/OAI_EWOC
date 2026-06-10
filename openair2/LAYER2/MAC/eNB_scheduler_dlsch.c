@@ -1,32 +1,9 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file eNB_scheduler_dlsch.c
+/*!
  * \brief procedures related to eNB for the DLSCH transport channel
- * \author  Navid Nikaein and Raymond Knopp
- * \date 2010 - 2014
- * \email: navid.nikaein@eurecom.fr
- * \version 1.0
- * @ingroup _mac
-
  */
 
 #define _GNU_SOURCE
@@ -984,6 +961,7 @@ schedule_ue_spec(module_id_t module_idP,
           dlsch_pdu->payload[0][offset + sdu_length_total + j] = 0;
         }
         ws_trace_t tmp = {.direction = DIRECTION_DOWNLINK,
+                          .type = cc[CC_id].tdd_Config == NULL ? FDD_RADIO : TDD_RADIO,
                           .pdu_buffer = (uint8_t *)dlsch_pdu->payload,
                           .pdu_buffer_size = TBS,
                           .ueid = module_idP,
@@ -1647,6 +1625,7 @@ schedule_ue_spec_br(module_id_t module_idP,
           }
 
           ws_trace_t tmp = {.direction = DIRECTION_DOWNLINK,
+                            .type = cc[CC_id].tdd_Config == NULL ? FDD_RADIO : TDD_RADIO,
                             .pdu_buffer = UE_info->DLSCH_pdu[CC_id][0][UE_id].payload[0],
                             .pdu_buffer_size = TBS,
                             .ueid = module_idP,
@@ -1849,6 +1828,7 @@ schedule_ue_spec_br(module_id_t module_idP,
         T_INT (0 /* harq_pid always 0? */ ),
         T_BUFFER (&mac->UE_info.DLSCH_pdu[CC_id][0][UE_id].payload[0], TX_req->pdu_length));
       ws_trace_t tmp = {.direction = 1,
+                        .type = cc[CC_id].tdd_Config == NULL ? FDD_RADIO : TDD_RADIO,
                         .pdu_buffer = mac->UE_info.DLSCH_pdu[CC_id][0][UE_id].payload[0],
                         .pdu_buffer_size = TX_req->pdu_length,
                         .ueid = UE_id,
@@ -2358,6 +2338,7 @@ schedule_PCH(module_id_t module_idP,
           continue;
         }
         ws_trace_t tmp = {.direction = DIRECTION_DOWNLINK,
+                          .type = cc->tdd_Config == NULL ? FDD_RADIO : TDD_RADIO,
                           .pdu_buffer = eNB->common_channels[CC_id].PCCH_pdu.payload,
                           .pdu_buffer_size = pcch_sdu_length,
                           .ueid = 0xffff,

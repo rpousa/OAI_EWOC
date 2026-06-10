@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 getall command can be used to get the list of variables that can bet set or get from the telnet shell. Knowing the names of the variables they can then be set or read. Setting a variable is not always relevant, the telnet server doesn't provide a mechanism to restrict the set command.
 
 ```bash

@@ -1,22 +1,5 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1 (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
 /*
@@ -32,6 +15,7 @@
 #include <stdbool.h>
 #include "fgs_nas_utils.h"
 #include "common/utils/ds/byte_array.h"
+#include "common/utils/utils.h"
 
 /* The following defines are valide for
 both PDU Session Status and PDU session Reactivation Result IEs */
@@ -92,15 +76,20 @@ typedef enum { PDU_SESSION_INACTIVE = 0, PDU_SESSION_ACTIVE } PSI_status_t;
 typedef enum { REACTIVATION_SUCCESS = 0, REACTIVATION_FAILED } PSI_reactivation_t;
 
 #define FOREACH_SA_IEI(IEI_DEF)                           \
-  IEI_DEF(IEI_PDU_SESSION_STATUS, 0x50)                   \
+  IEI_DEF(IEI_ALLOWED_PDU_SESSION_STATUS, 0x25)           \
   IEI_DEF(IEI_PDU_SESSION_REACT_RESULT, 0x26)             \
-  IEI_DEF(IEI_PDU_SESSION_REACT_RESULT_ERROR_CAUSE, 0x72) \
-  IEI_DEF(IEI_EAPMSG, 0x78)                               \
-  IEI_DEF(IEI_CAG_INFO_LIST, 0x75)                        \
+  IEI_DEF(IEI_PAGING_RESTRICTION, 0x28)                   \
+  IEI_DEF(IEI_UE_REQUEST_TYPE, 0x29)                      \
+  IEI_DEF(IEI_UPLINK_DATA_STATUS, 0x40)                   \
+  IEI_DEF(IEI_PDU_SESSION_STATUS, 0x50)                   \
+  IEI_DEF(IEI_T3446_VALUE, 0x5F)                          \
   IEI_DEF(IEI_T3448_VALUE, 0x6B)                          \
-  IEI_DEF(IEI_T3446_VALUE, 0x5F)
+  IEI_DEF(IEI_FGS_NAS_MESSAGE_CONTAINER, 0x71)            \
+  IEI_DEF(IEI_PDU_SESSION_REACT_RESULT_ERROR_CAUSE, 0x72) \
+  IEI_DEF(IEI_CAG_INFO_LIST, 0x75)                        \
+  IEI_DEF(IEI_EAPMSG, 0x78)
 
-// Enum for Service Accept IEIs
+// Enum for Service Request procedure IEIs
 typedef enum { FOREACH_SA_IEI(TO_ENUM) } nas_service_IEI_t;
 
 static const text_info_t sa_iei_s[] = {FOREACH_SA_IEI(TO_TEXT)};

@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
+ */
+
 #ifndef _LOWER_LAYER_DEFS_H
 #define _LOWER_LAYER_DEFS_H
 

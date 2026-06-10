@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 # starting the softmodem with the telnet server
 By default the embedded telnet server, which is implemented in a shared library, is not built. It can be built after compiling the softmodem executable using the `build_oai` script:
 

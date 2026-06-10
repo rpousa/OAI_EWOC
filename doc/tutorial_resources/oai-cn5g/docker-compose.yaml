@@ -1,7 +1,7 @@
 services:
     mysql:
         container_name: "mysql"
-        image: mysql:8.0
+        image: mysql:9.6
         volumes:
             - ./database/oai_db.sql:/docker-entrypoint-initdb.d/oai_db.sql
             - ./healthscripts/mysql-healthcheck.sh:/tmp/mysql-healthcheck.sh
@@ -36,7 +36,7 @@ services:
                 ipv4_address: 192.168.70.139
     oai-udr:
         container_name: "oai-udr"
-        image: oaisoftwarealliance/oai-udr:develop
+        image: oaisoftwarealliance/oai-udr:v2.2.1
         expose:
             - 80/tcp
             - 8080/tcp
@@ -52,7 +52,7 @@ services:
                 ipv4_address: 192.168.70.136
     oai-udm:
         container_name: "oai-udm"
-        image: oaisoftwarealliance/oai-udm:develop
+        image: oaisoftwarealliance/oai-udm:v2.2.1
         expose:
             - 80/tcp
             - 8080/tcp
@@ -67,7 +67,7 @@ services:
                 ipv4_address: 192.168.70.137
     oai-ausf:
         container_name: "oai-ausf"
-        image: oaisoftwarealliance/oai-ausf:develop
+        image: oaisoftwarealliance/oai-ausf:v2.2.1
         expose:
             - 80/tcp
             - 8080/tcp
@@ -82,7 +82,7 @@ services:
                 ipv4_address: 192.168.70.138
     oai-nrf:
         container_name: "oai-nrf"
-        image: oaisoftwarealliance/oai-nrf:develop
+        image: oaisoftwarealliance/oai-nrf:v2.2.1
         expose:
             - 80/tcp
             - 8080/tcp
@@ -95,7 +95,7 @@ services:
                 ipv4_address: 192.168.70.130
     oai-amf:
         container_name: "oai-amf"
-        image: oaisoftwarealliance/oai-amf:develop
+        image: oaisoftwarealliance/oai-amf:v2.2.1
         expose:
             - 80/tcp
             - 8080/tcp
@@ -113,7 +113,7 @@ services:
                 ipv4_address: 192.168.70.132
     oai-smf:
         container_name: "oai-smf"
-        image: oaisoftwarealliance/oai-smf:develop
+        image: oaisoftwarealliance/oai-smf:v2.2.1
         expose:
             - 80/tcp
             - 8080/tcp
@@ -130,7 +130,7 @@ services:
                 ipv4_address: 192.168.70.133
     oai-upf:
         container_name: "oai-upf"
-        image: oaisoftwarealliance/oai-upf:develop
+        image: oaisoftwarealliance/oai-upf:v2.2.1
         expose:
             - 2152/udp
             - 8805/udp
@@ -154,9 +154,9 @@ services:
         privileged: true
         init: true
         container_name: oai-ext-dn
-        image: oaisoftwarealliance/trf-gen-cn5g:jammy
+        image: oaisoftwarealliance/trf-gen-cn5g:latest
         entrypoint: /bin/bash -c \
-              "ip route add 10.0.0.0/16 via 192.168.70.134 dev eth0; ip route; sleep infinity"
+              "ip route add 10.0.0.0/16 via 192.168.70.134 dev eth0; ip route; iperf3 -s -D; sleep infinity"
         command: ["/bin/bash", "-c", "trap : SIGTERM SIGINT; sleep infinity & wait"]
         healthcheck:
             test: /bin/bash -c "ip r | grep 10.0.0"

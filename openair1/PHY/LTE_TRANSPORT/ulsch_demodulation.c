@@ -1,34 +1,10 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file PHY/LTE_TRANSPORT/ulsch_demodulation.c
-* \brief Top-level routines for demodulating the PUSCH physical channel from 36.211 V8.6 2009-03
-* \author R. Knopp
-* \date 2011
-* \version 0.1
-* \company Eurecom
-* \email: knopp@eurecom.fr, florian.kaltenberger@eurecom.fr, ankit.bhamri@eurecom.fr
-* \note
-* \warning
-*/
+/*!
+ * \brief Top-level routines for demodulating the PUSCH physical channel from 36.211 V8.6 2009-03
+ */
 
 #include "PHY/defs_eNB.h"
 //#include "PHY/phy_extern.h"
@@ -408,7 +384,6 @@ void ulsch_channel_compensation(int32_t **rxdataF_ext,
                                 int32_t **rxdataF_comp,
                                 LTE_DL_FRAME_PARMS *frame_parms,
                                 uint8_t symbol,
-                                uint8_t Qm,
                                 uint16_t nb_rb,
                                 uint8_t output_shift) {
 
@@ -542,7 +517,6 @@ void rx_ulsch(PHY_VARS_eNB *eNB,
                               (c16_t **)eNB->pusch_vars[UE_id]->drs_ch_estimates,
                               (c16_t **)eNB->pusch_vars[UE_id]->drs_ch_estimates_time,
                               (c16_t **)eNB->pusch_vars[UE_id]->rxdataF_ext,
-                              UE_id,
                               l % (frame_parms->symbols_per_tti / 2),
                               l / (frame_parms->symbols_per_tti / 2));
   }
@@ -623,7 +597,6 @@ void rx_ulsch(PHY_VARS_eNB *eNB,
       pusch_vars->rxdataF_comp,
       frame_parms,
       l,
-      Qm,
       ulsch[UE_id]->harq_processes[harq_pid]->nb_rb,
       log2_maxh); // log2_maxh+I0_shift
 

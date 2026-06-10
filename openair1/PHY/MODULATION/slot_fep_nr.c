@@ -1,30 +1,11 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-#include "PHY/defs_nr_UE.h"
 #include "PHY/defs_gNB.h"
 #include "PHY/defs_nr_common.h"
 #include "modulation_UE.h"
 #include "nr_modulation.h"
-#include "PHY/LTE_ESTIMATION/lte_estimation.h"
 #include "PHY/NR_UE_ESTIMATION/nr_estimation.h"
 #include "PHY/nr_phy_common/inc/nr_phy_common.h"
 #include <common/utils/LOG/log.h>
@@ -229,7 +210,7 @@ void nr_ofdm_demod_and_rx_rotation(c16_t **rxdata,
                                    int slot,
                                    int slot_offsetF,
                                    enum nr_Link linktype,
-                                   bool was_symbol_used[NR_NUMBER_OF_SYMBOLS_PER_SLOT])
+                                   bool was_symbol_used[NR_SYMBOLS_PER_SLOT])
 {
   for (int aa = 0; aa < nb_antennas; aa++) {
     for (uint8_t symbol = 0; symbol < fp->symbols_per_slot; symbol++) {

@@ -1,33 +1,9 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file PHY/NR_UE_TRANSPORT/pucch_nr.c
+/*!
 * \brief Top-level routines for generating and decoding the PUCCH physical channel
-* \author A. Mico Pereperez
-* \date 2018
-* \version 0.1
-* \company Eurecom
-* \email:
-* \note
-* \warning
 */
 //#include "PHY/defs.h"
 #include "PHY/impl_defs_nr.h"
@@ -39,7 +15,7 @@
 #include "PHY/NR_TRANSPORT/nr_transport_common_proto.h"
 #include <openair1/PHY/CODING/nrSmallBlock/nr_small_block_defs.h>
 #include "common/utils/LOG/log.h"
-#include "common/utils/LOG/vcd_signal_dumper.h"
+#include "bits.h"
 #include "openair1/PHY/NR_REFSIG/nr_refsig.h"
 
 #include "T.h"
@@ -52,8 +28,7 @@
 //#define ONE_OVER_SQRT2 23170 // 32767/sqrt(2) = 23170 (ONE_OVER_SQRT2)
 //#define POLAR_CODING_DEBUG
 
-void nr_generate_pucch0(const PHY_VARS_NR_UE *ue,
-                        c16_t **txdataF,
+void nr_generate_pucch0(c16_t **txdataF,
                         const NR_DL_FRAME_PARMS *frame_parms,
                         const int16_t amp16,
                         const int nr_slot_tx,
@@ -156,8 +131,7 @@ void nr_generate_pucch0(const PHY_VARS_NR_UE *ue,
   }
 }
 
-void nr_generate_pucch1(const PHY_VARS_NR_UE *ue,
-                        c16_t **txdataF,
+void nr_generate_pucch1(c16_t **txdataF,
                         const NR_DL_FRAME_PARMS *frame_parms,
                         const int16_t amp16,
                         const int nr_slot_tx,
@@ -192,7 +166,7 @@ void nr_generate_pucch1(const PHY_VARS_NR_UE *ue,
     d = qpskSymbols[tmp];
   }
 #ifdef DEBUG_NR_PUCCH_TX
-  printf("\t [nr_generate_pucch1] sequence modulation: payload=%lx \tde_re=%d \tde_im=%d\n", payload, d.r, d.i);
+  printf("\t [nr_generate_pucch1] sequence modulation (amp %d/%d): payload=%lx \tde_re=%d \tde_im=%d\n", amp, baseVal,payload, d.r, d.i);
 #endif
   /*
    * Defining cyclic shift hopping TS 38.211 Subclause 6.3.2.2.2
@@ -275,13 +249,14 @@ void nr_generate_pucch1(const PHY_VARS_NR_UE *ue,
 #ifdef DEBUG_NR_PUCCH_TX
       printf(
           "\t [nr_generate_pucch1] sequence generation \tu=%d \tv=%d \talpha=%lf \tr_u_v_alpha_delta[n=%d]=(%d,%d) "
-          "\ty_n[n=%d]=(%d,%d)\n",
+          "\td=(%d,%d)\ty_n[n=%d]=(%d,%d)\n",
           u,
           v,
           alpha,
           n,
           r_u_v_alpha_delta[n].r,
           r_u_v_alpha_delta[n].i,
+	  d.r,d.i,
           n,
           y_n[n].r,
           y_n[n].i);
@@ -752,8 +727,7 @@ void nr_uci_encoding(uint64_t payload, uint8_t nr_bit, uint8_t nrofPRB, bool uci
   }
 }
 //#if 0
-void nr_generate_pucch2(const PHY_VARS_NR_UE *ue,
-                        c16_t **txdataF,
+void nr_generate_pucch2(c16_t **txdataF,
                         const NR_DL_FRAME_PARMS *frame_parms,
                         const int16_t amp16,
                         const int nr_slot_tx,
@@ -937,8 +911,7 @@ void nr_generate_pucch2(const PHY_VARS_NR_UE *ue,
   }
 }
 //#if 0
-void nr_generate_pucch3_4(const PHY_VARS_NR_UE *ue,
-                          c16_t **txdataF,
+void nr_generate_pucch3_4(c16_t **txdataF,
                           const NR_DL_FRAME_PARMS *frame_parms,
                           const int16_t amp16,
                           const int nr_slot_tx,

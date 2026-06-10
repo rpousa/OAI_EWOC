@@ -1,33 +1,9 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file phy_procedures_lte_ue.c
+/*!
  * \brief Implementation of UE procedures from 36.213 LTE specifications / This includes FeMBMS UE procedures from 36.213 v14.2.0 specification
- * \author R. Knopp, F. Kaltenberger, N. Nikaein, J. Morgade
- * \date 2011
- * \version 0.1
- * \company Eurecom
- * \email: {knopp, florian.kaltenberger, navid.nikaein}@eurecom.fr, javier.morgade@ieee.org
- * \note
- * \warning
  */
 
 #define _GNU_SOURCE
@@ -2334,6 +2310,7 @@ if((ue->frame_parms.FeMBMS_active == 0)|| is_fembms_cas_subframe(frame_rx,subfra
       dummy[1] = ue->pbch_vars[eNB_id]->decoded_output[1];
       dummy[2] = ue->pbch_vars[eNB_id]->decoded_output[0];
       ws_trace_t tmp = {.direction = DIRECTION_DOWNLINK,
+                        .type = ue->frame_parms.frame_type == FDD ? FDD_RADIO : TDD_RADIO,
                         .pdu_buffer = dummy,
                         .pdu_buffer_size = sizeof(dummy),
                         .ueid = ue->Mod_id,
@@ -2925,19 +2902,16 @@ void ue_pmch_procedures(PHY_VARS_UE *ue,
         else
           ue->dlsch_mtch_errors[sync_area][0]++;
 
-        LOG_E(PHY,"[UE %d] Frame %d, subframe %d: PMCH in error (%d,%d), not passing to L2 (TBS %d, iter %d,G %d)\n",
+        LOG_E(PHY,
+              "[UE %d] Frame %d, subframe %d: PMCH in error (%d,%d), not passing to L2 (TBS %d, iter %d,G %d)\n",
               ue->Mod_id,
-              frame_rx,subframe_rx,
+              frame_rx,
+              subframe_rx,
               ue->dlsch_mcch_errors[sync_area][0],
               ue->dlsch_mtch_errors[sync_area][0],
-              ue->dlsch_MCH[0]->harq_processes[0]->TBS>>3,
+              ue->dlsch_MCH[0]->harq_processes[0]->TBS >> 3,
               ue->dlsch_MCH[0]->max_turbo_iterations,
               ue->dlsch_MCH[0]->harq_processes[0]->G);
-        // dump_mch(ue,0,ue->dlsch_MCH[0]->harq_processes[0]->G,subframe_rx);
-        //if(subframe_rx == 3){
-        //dump_mch(ue,0,ue->dlsch_MCH[0]->harq_processes[0]->G,subframe_rx);
-        //exit_fun("nothing to add");
-        //}
 
         if (LOG_DEBUGFLAG(DEBUG_UE_PHYPROC)) {
           for (int i=0; i<ue->dlsch_MCH[0]->harq_processes[0]->TBS>>3; i++) {
@@ -2962,11 +2936,9 @@ void ue_pmch_procedures(PHY_VARS_UE *ue,
                         CC_id,
                         frame_rx,
                         ue->dlsch_MCH[0]->harq_processes[0]->b,
-                        ue->dlsch_MCH[0]->harq_processes[0]->TBS>>3,
-                        eNB_id,// not relevant in eMBMS context
+                        ue->dlsch_MCH[0]->harq_processes[0]->TBS >> 3,
+                        eNB_id, // not relevant in eMBMS context
                         sync_area);
-        //dump_mch(ue,0,ue->dlsch_MCH[0]->harq_processes[0]->G,subframe_rx);
-        //exit_fun("nothing to add");
 
         if (mcch_active == 1)
           ue->dlsch_mcch_received[sync_area][0]++;

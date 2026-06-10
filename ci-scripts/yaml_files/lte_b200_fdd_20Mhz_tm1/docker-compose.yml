@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+
 services:
     enb_mono_fdd:
         image: ${REGISTRY-oaisoftwarealliance/}oai-enb:${TAG:-develop}

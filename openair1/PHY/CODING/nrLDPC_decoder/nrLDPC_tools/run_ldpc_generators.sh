@@ -1,4 +1,5 @@
 #!/bin/bash
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
 
 echo "to build the LDPC decoder headers: go to the build directory, and type"
 echo "make/ninja ldpc_generators"

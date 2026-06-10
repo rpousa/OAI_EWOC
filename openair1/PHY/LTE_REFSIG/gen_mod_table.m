@@ -1,6 +1,4 @@
 % octave srcipt to generate table of modulated symbols for LEON3
-% author: florian.kaltenberger@eurcom.fr, raymond.knopp@eurecom.fr
-% date: 10.11.2009
 %
 % 0        .. "0"
 % 1  - 4   .. QPSK(0)  - QPSK(3)

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 add_library(oai_eth_transpro MODULE
             ethernet_lib.c
             eth_udp.c

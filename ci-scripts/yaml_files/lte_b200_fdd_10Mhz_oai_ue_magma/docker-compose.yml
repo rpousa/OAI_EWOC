@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+
 services:
     lte_ue0:
         image: ${REGISTRY-oaisoftwarealliance/}oai-lte-ue:${TAG:-develop}

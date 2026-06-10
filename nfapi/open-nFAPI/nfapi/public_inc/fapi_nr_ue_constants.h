@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
+ */
+
 #ifndef _FAPI_NR_UE_CONSTANTS_H_
 #define _FAPI_NR_UE_CONSTANTS_H_
 

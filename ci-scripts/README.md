@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 This document outlines how to use the OAI CI framework and gives a quickstart.
 
 [[_TOC_]]

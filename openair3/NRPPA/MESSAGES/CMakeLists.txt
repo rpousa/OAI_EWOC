@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 #set(NRPPA_VERSION 16 78 0)
 #make_version(NRPPA_cc ${NRPPA_VERSION})
 #add_definitions(-DNRPPA_VERSION=${NRPPA_cc})

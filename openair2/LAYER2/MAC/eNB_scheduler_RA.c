@@ -1,32 +1,9 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file eNB_scheduler_RA.c
+/*!
  * \brief primitives used for random access
- * \author  Navid Nikaein and Raymond Knopp
- * \date 2010 - 2014
- * \email: navid.nikaein@eurecom.fr
- * \version 1.0
- * @ingroup _mac
-
  */
 
 /* indented with: indent -kr eNB_scheduler_RA.c */
@@ -895,6 +872,7 @@ generate_Msg4(module_id_t module_idP,
       T (T_ENB_MAC_UE_DL_PDU_WITH_DATA, T_INT (module_idP), T_INT (CC_idP), T_INT (ra->rnti), T_INT (frameP), T_INT (subframeP),
          T_INT (0 /*harq_pid always 0? */ ), T_BUFFER (&mac->UE_info.DLSCH_pdu[CC_idP][0][UE_id].payload[0], ra->msg4_TBsize));
       ws_trace_t tmp = {.direction = DIRECTION_DOWNLINK,
+                        .type = cc[CC_idP].tdd_Config == NULL ? FDD_RADIO : TDD_RADIO,
                         .pdu_buffer = mac->UE_info.DLSCH_pdu[CC_idP][0][(unsigned char)UE_id].payload[0],
                         .pdu_buffer_size = ra->msg4_rrc_sdu_length,
                         .ueid = UE_id,
@@ -1081,6 +1059,7 @@ generate_Msg4(module_id_t module_idP,
             T_BUFFER(&mac->UE_info.DLSCH_pdu[CC_idP][0][UE_id].
                      payload[0], ra->msg4_TBsize));
           ws_trace_t tmp = {.direction = DIRECTION_DOWNLINK,
+                            .type = cc[CC_idP].tdd_Config == NULL ? FDD_RADIO : TDD_RADIO,
                             .pdu_buffer = mac->UE_info.DLSCH_pdu[CC_idP][0][(unsigned char)UE_id].payload[0],
                             .pdu_buffer_size = rrc_sdu_length,
                             .ueid = UE_id,

@@ -1,33 +1,9 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file prach_procedures.c
+/*!
  * \brief Implementation of eNB procedures from 36.213 LTE specifications
- * \author R. Knopp, F. Kaltenberger, N. Nikaein, X. Foukas
- * \date 2011
- * \version 0.1
- * \company Eurecom
- * \email: knopp@eurecom.fr,florian.kaltenberger@eurecom.fr,navid.nikaein@eurecom.fr, x.foukas@sms.ed.ac.uk
- * \note
- * \warning
  */
 
 #include "PHY/defs_eNB.h"
@@ -47,11 +23,12 @@
 
 extern int oai_nfapi_rach_ind(nfapi_rach_indication_t *rach_ind);
 
-void prach_procedures(PHY_VARS_eNB *eNB,
-                      int br_flag ) {
-  uint16_t max_preamble[4]={0},max_preamble_energy[4]={0},max_preamble_delay[4]={0},avg_preamble_energy[4]={0}; 
+void prach_procedures(PHY_VARS_eNB *eNB, int br_flag)
+{
+  uint16_t max_preamble[4] = {0}, max_preamble_energy[4] = {0}, max_preamble_delay[4] = {0};
+  int16_t avg_preamble_energy[4] = {0};
   uint16_t i;
-  int frame,subframe;
+  int frame, subframe;
 
   if (br_flag==1) {
     subframe = eNB->proc.subframe_prach_br;

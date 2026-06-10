@@ -1,22 +1,5 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
 #include "f1ap_positioning.h"
@@ -1666,62 +1649,62 @@ static bool eq_srs_config(const f1ap_srs_config_t *f1_sRSConfig, const f1ap_srs_
     f1ap_srs_resource_list_t *srs_resource_list = sRSConfig->srs_resource_list;
     f1ap_srs_resource_list_t *f1_srs_resource_list = f1_sRSConfig->srs_resource_list;
     uint32_t srs_resource_list_length = srs_resource_list->srs_resource_list_length;
-    _F1_EQ_CHECK_INT(f1_srs_resource_list->srs_resource_list_length, srs_resource_list_length);
+    _EQ_CHECK_INT(f1_srs_resource_list->srs_resource_list_length, srs_resource_list_length);
     for (int i = 0; i < srs_resource_list_length; i++) {
       f1ap_srs_resource_t *srs_resource = &srs_resource_list->srs_resource[i];
       f1ap_srs_resource_t *f1_srs_resource = &f1_srs_resource_list->srs_resource[i];
-      _F1_EQ_CHECK_INT(f1_srs_resource->srs_resource_id, srs_resource->srs_resource_id);
-      _F1_EQ_CHECK_INT(f1_srs_resource->nr_of_srs_ports, srs_resource->nr_of_srs_ports);
+      _EQ_CHECK_INT(f1_srs_resource->srs_resource_id, srs_resource->srs_resource_id);
+      _EQ_CHECK_INT(f1_srs_resource->nr_of_srs_ports, srs_resource->nr_of_srs_ports);
 
       f1ap_transmission_comb_t *f1_srs_tx_comb = &f1_srs_resource->transmission_comb;
       f1ap_transmission_comb_t *srs_tx_comb = &srs_resource->transmission_comb;
 
-      _F1_EQ_CHECK_INT(f1_srs_tx_comb->present, srs_tx_comb->present);
+      _EQ_CHECK_INT(f1_srs_tx_comb->present, srs_tx_comb->present);
       switch (srs_tx_comb->present) {
         case F1AP_TRANSMISSION_COMB_PR_NOTHING:
           // nothing to check
           break;
         case F1AP_TRANSMISSION_COMB_PR_N2:
-          _F1_EQ_CHECK_INT(f1_srs_tx_comb->choice.n2.comb_offset_n2, srs_tx_comb->choice.n2.comb_offset_n2);
-          _F1_EQ_CHECK_INT(f1_srs_tx_comb->choice.n2.cyclic_shift_n2, srs_tx_comb->choice.n2.cyclic_shift_n2);
+          _EQ_CHECK_INT(f1_srs_tx_comb->choice.n2.comb_offset_n2, srs_tx_comb->choice.n2.comb_offset_n2);
+          _EQ_CHECK_INT(f1_srs_tx_comb->choice.n2.cyclic_shift_n2, srs_tx_comb->choice.n2.cyclic_shift_n2);
           break;
         case F1AP_TRANSMISSION_COMB_PR_N4:
-          _F1_EQ_CHECK_INT(f1_srs_tx_comb->choice.n4.comb_offset_n4, srs_tx_comb->choice.n4.comb_offset_n4);
-          _F1_EQ_CHECK_INT(f1_srs_tx_comb->choice.n4.cyclic_shift_n4, srs_tx_comb->choice.n4.cyclic_shift_n4);
+          _EQ_CHECK_INT(f1_srs_tx_comb->choice.n4.comb_offset_n4, srs_tx_comb->choice.n4.comb_offset_n4);
+          _EQ_CHECK_INT(f1_srs_tx_comb->choice.n4.cyclic_shift_n4, srs_tx_comb->choice.n4.cyclic_shift_n4);
           break;
         default:
           AssertFatal(false, "illegal transmissionComb %d\n", srs_tx_comb->present);
           break;
       }
 
-      _F1_EQ_CHECK_INT(f1_srs_resource->start_position, srs_resource->start_position);
-      _F1_EQ_CHECK_INT(f1_srs_resource->nr_of_symbols, srs_resource->nr_of_symbols);
-      _F1_EQ_CHECK_INT(f1_srs_resource->repetition_factor, srs_resource->repetition_factor);
-      _F1_EQ_CHECK_INT(f1_srs_resource->freq_domain_position, srs_resource->freq_domain_position);
-      _F1_EQ_CHECK_INT(f1_srs_resource->freq_domain_shift, srs_resource->freq_domain_shift);
-      _F1_EQ_CHECK_INT(f1_srs_resource->c_srs, srs_resource->c_srs);
-      _F1_EQ_CHECK_INT(f1_srs_resource->b_srs, srs_resource->b_srs);
-      _F1_EQ_CHECK_INT(f1_srs_resource->b_hop, srs_resource->b_hop);
-      _F1_EQ_CHECK_INT(f1_srs_resource->group_or_sequence_hopping, srs_resource->group_or_sequence_hopping);
+      _EQ_CHECK_INT(f1_srs_resource->start_position, srs_resource->start_position);
+      _EQ_CHECK_INT(f1_srs_resource->nr_of_symbols, srs_resource->nr_of_symbols);
+      _EQ_CHECK_INT(f1_srs_resource->repetition_factor, srs_resource->repetition_factor);
+      _EQ_CHECK_INT(f1_srs_resource->freq_domain_position, srs_resource->freq_domain_position);
+      _EQ_CHECK_INT(f1_srs_resource->freq_domain_shift, srs_resource->freq_domain_shift);
+      _EQ_CHECK_INT(f1_srs_resource->c_srs, srs_resource->c_srs);
+      _EQ_CHECK_INT(f1_srs_resource->b_srs, srs_resource->b_srs);
+      _EQ_CHECK_INT(f1_srs_resource->b_hop, srs_resource->b_hop);
+      _EQ_CHECK_INT(f1_srs_resource->group_or_sequence_hopping, srs_resource->group_or_sequence_hopping);
 
       f1ap_resource_type_t *f1_res_type = &f1_srs_resource->resource_type;
       f1ap_resource_type_t *res_type = &srs_resource->resource_type;
-      _F1_EQ_CHECK_INT(f1_res_type->present, res_type->present);
+      _EQ_CHECK_INT(f1_res_type->present, res_type->present);
       if (res_type->present == F1AP_RESOURCE_TYPE_PR_NOTHING) {
         // nothing to check
       } else if (res_type->present == F1AP_RESOURCE_TYPE_PR_PERIODIC) {
-        _F1_EQ_CHECK_INT(f1_res_type->choice.periodic.periodicity, res_type->choice.periodic.periodicity);
-        _F1_EQ_CHECK_INT(f1_res_type->choice.periodic.offset, res_type->choice.periodic.offset);
+        _EQ_CHECK_INT(f1_res_type->choice.periodic.periodicity, res_type->choice.periodic.periodicity);
+        _EQ_CHECK_INT(f1_res_type->choice.periodic.offset, res_type->choice.periodic.offset);
       } else if (res_type->present == F1AP_RESOURCE_TYPE_PR_SEMI_PERSISTENT) {
-        _F1_EQ_CHECK_INT(f1_res_type->choice.semi_persistent.periodicity, res_type->choice.semi_persistent.periodicity);
-        _F1_EQ_CHECK_INT(f1_res_type->choice.semi_persistent.offset, res_type->choice.semi_persistent.offset);
+        _EQ_CHECK_INT(f1_res_type->choice.semi_persistent.periodicity, res_type->choice.semi_persistent.periodicity);
+        _EQ_CHECK_INT(f1_res_type->choice.semi_persistent.offset, res_type->choice.semi_persistent.offset);
       } else if (res_type->present == F1AP_RESOURCE_TYPE_PR_APERIODIC) {
-        _F1_EQ_CHECK_INT(f1_res_type->choice.aperiodic, res_type->choice.aperiodic);
+        _EQ_CHECK_INT(f1_res_type->choice.aperiodic, res_type->choice.aperiodic);
       } else {
         AssertFatal(false, "illegal resourceType %d\n", res_type->present);
       }
 
-      _F1_EQ_CHECK_INT(f1_srs_resource->sequence_id, srs_resource->sequence_id);
+      _EQ_CHECK_INT(f1_srs_resource->sequence_id, srs_resource->sequence_id);
     }
   }
 
@@ -1733,12 +1716,12 @@ static bool eq_srs_config(const f1ap_srs_config_t *f1_sRSConfig, const f1ap_srs_
     f1ap_pos_srs_resource_list_t *pos_srs_resource_list = sRSConfig->pos_srs_resource_list;
     f1ap_pos_srs_resource_list_t *f1_pos_srs_resource_list = f1_sRSConfig->pos_srs_resource_list;
     uint32_t pos_srs_resource_list_length = pos_srs_resource_list->pos_srs_resource_list_length;
-    _F1_EQ_CHECK_INT(f1_pos_srs_resource_list->pos_srs_resource_list_length, pos_srs_resource_list_length);
+    _EQ_CHECK_INT(f1_pos_srs_resource_list->pos_srs_resource_list_length, pos_srs_resource_list_length);
     for (int i = 0; i < pos_srs_resource_list_length; i++) {
       f1ap_pos_srs_resource_item_t *pos_srs_resource = &pos_srs_resource_list->pos_srs_resource_item[i];
       f1ap_pos_srs_resource_item_t *f1_pos_srs_resource = &f1_pos_srs_resource_list->pos_srs_resource_item[i];
-      _F1_EQ_CHECK_INT(f1_pos_srs_resource->srs_pos_resource_id, pos_srs_resource->srs_pos_resource_id);
-      _F1_EQ_CHECK_INT(f1_pos_srs_resource->transmission_comb_pos.present, pos_srs_resource->transmission_comb_pos.present);
+      _EQ_CHECK_INT(f1_pos_srs_resource->srs_pos_resource_id, pos_srs_resource->srs_pos_resource_id);
+      _EQ_CHECK_INT(f1_pos_srs_resource->transmission_comb_pos.present, pos_srs_resource->transmission_comb_pos.present);
 
       f1ap_transmission_comb_pos_t *f1_srs_tx_comb_pos = &f1_pos_srs_resource->transmission_comb_pos;
       f1ap_transmission_comb_pos_t *srs_tx_comb_pos = &pos_srs_resource->transmission_comb_pos;
@@ -1747,46 +1730,46 @@ static bool eq_srs_config(const f1ap_srs_config_t *f1_sRSConfig, const f1ap_srs_
           // nothing to check
           break;
         case F1AP_TRANSMISSION_COMB_POS_PR_N2:
-          _F1_EQ_CHECK_INT(f1_srs_tx_comb_pos->choice.n2.comb_offset_n2, srs_tx_comb_pos->choice.n2.comb_offset_n2);
-          _F1_EQ_CHECK_INT(f1_srs_tx_comb_pos->choice.n2.cyclic_shift_n2, srs_tx_comb_pos->choice.n2.cyclic_shift_n2);
+          _EQ_CHECK_INT(f1_srs_tx_comb_pos->choice.n2.comb_offset_n2, srs_tx_comb_pos->choice.n2.comb_offset_n2);
+          _EQ_CHECK_INT(f1_srs_tx_comb_pos->choice.n2.cyclic_shift_n2, srs_tx_comb_pos->choice.n2.cyclic_shift_n2);
           break;
         case F1AP_TRANSMISSION_COMB_POS_PR_N4:
-          _F1_EQ_CHECK_INT(f1_srs_tx_comb_pos->choice.n4.comb_offset_n4, srs_tx_comb_pos->choice.n4.comb_offset_n4);
-          _F1_EQ_CHECK_INT(f1_srs_tx_comb_pos->choice.n4.cyclic_shift_n4, srs_tx_comb_pos->choice.n4.cyclic_shift_n4);
+          _EQ_CHECK_INT(f1_srs_tx_comb_pos->choice.n4.comb_offset_n4, srs_tx_comb_pos->choice.n4.comb_offset_n4);
+          _EQ_CHECK_INT(f1_srs_tx_comb_pos->choice.n4.cyclic_shift_n4, srs_tx_comb_pos->choice.n4.cyclic_shift_n4);
           break;
         case F1AP_TRANSMISSION_COMB_POS_PR_N8:
-          _F1_EQ_CHECK_INT(f1_srs_tx_comb_pos->choice.n8.comb_offset_n8, srs_tx_comb_pos->choice.n8.comb_offset_n8);
-          _F1_EQ_CHECK_INT(f1_srs_tx_comb_pos->choice.n8.cyclic_shift_n8, srs_tx_comb_pos->choice.n8.cyclic_shift_n8);
+          _EQ_CHECK_INT(f1_srs_tx_comb_pos->choice.n8.comb_offset_n8, srs_tx_comb_pos->choice.n8.comb_offset_n8);
+          _EQ_CHECK_INT(f1_srs_tx_comb_pos->choice.n8.cyclic_shift_n8, srs_tx_comb_pos->choice.n8.cyclic_shift_n8);
           break;
         default:
           AssertFatal(false, "illegal transmissionComb %d\n", srs_tx_comb_pos->present);
           break;
       }
 
-      _F1_EQ_CHECK_INT(f1_pos_srs_resource->start_position, pos_srs_resource->start_position);
-      _F1_EQ_CHECK_INT(f1_pos_srs_resource->nr_of_symbols, pos_srs_resource->nr_of_symbols);
-      _F1_EQ_CHECK_INT(f1_pos_srs_resource->freq_domain_shift, pos_srs_resource->freq_domain_shift);
-      _F1_EQ_CHECK_INT(f1_pos_srs_resource->c_srs, pos_srs_resource->c_srs);
-      _F1_EQ_CHECK_INT(f1_pos_srs_resource->group_or_sequence_hopping, pos_srs_resource->group_or_sequence_hopping);
+      _EQ_CHECK_INT(f1_pos_srs_resource->start_position, pos_srs_resource->start_position);
+      _EQ_CHECK_INT(f1_pos_srs_resource->nr_of_symbols, pos_srs_resource->nr_of_symbols);
+      _EQ_CHECK_INT(f1_pos_srs_resource->freq_domain_shift, pos_srs_resource->freq_domain_shift);
+      _EQ_CHECK_INT(f1_pos_srs_resource->c_srs, pos_srs_resource->c_srs);
+      _EQ_CHECK_INT(f1_pos_srs_resource->group_or_sequence_hopping, pos_srs_resource->group_or_sequence_hopping);
 
       f1ap_resource_type_pos_t *f1_res_type_pos = &f1_pos_srs_resource->resource_type_pos;
       f1ap_resource_type_pos_t *res_type_pos = &pos_srs_resource->resource_type_pos;
-      _F1_EQ_CHECK_INT(f1_res_type_pos->present, res_type_pos->present);
+      _EQ_CHECK_INT(f1_res_type_pos->present, res_type_pos->present);
       if (res_type_pos->present == F1AP_RESOURCE_TYPE_POS_PR_NOTHING) {
         // nothing to check
       } else if (res_type_pos->present == F1AP_RESOURCE_TYPE_POS_PR_PERIODIC) {
-        _F1_EQ_CHECK_INT(f1_res_type_pos->choice.periodic.periodicity, res_type_pos->choice.periodic.periodicity);
-        _F1_EQ_CHECK_INT(f1_res_type_pos->choice.periodic.offset, res_type_pos->choice.periodic.offset);
+        _EQ_CHECK_INT(f1_res_type_pos->choice.periodic.periodicity, res_type_pos->choice.periodic.periodicity);
+        _EQ_CHECK_INT(f1_res_type_pos->choice.periodic.offset, res_type_pos->choice.periodic.offset);
       } else if (res_type_pos->present == F1AP_RESOURCE_TYPE_POS_PR_SEMI_PERSISTENT) {
-        _F1_EQ_CHECK_INT(f1_res_type_pos->choice.semi_persistent.periodicity, res_type_pos->choice.semi_persistent.periodicity);
-        _F1_EQ_CHECK_INT(f1_res_type_pos->choice.semi_persistent.offset, res_type_pos->choice.semi_persistent.offset);
+        _EQ_CHECK_INT(f1_res_type_pos->choice.semi_persistent.periodicity, res_type_pos->choice.semi_persistent.periodicity);
+        _EQ_CHECK_INT(f1_res_type_pos->choice.semi_persistent.offset, res_type_pos->choice.semi_persistent.offset);
       } else if (res_type_pos->present == F1AP_RESOURCE_TYPE_POS_PR_APERIODIC) {
-        _F1_EQ_CHECK_INT(f1_res_type_pos->choice.aperiodic.slot_offset, res_type_pos->choice.aperiodic.slot_offset);
+        _EQ_CHECK_INT(f1_res_type_pos->choice.aperiodic.slot_offset, res_type_pos->choice.aperiodic.slot_offset);
       } else {
         AssertFatal(false, "illegal resourceType %d\n", res_type_pos->present);
       }
 
-      _F1_EQ_CHECK_INT(f1_pos_srs_resource->sequence_id, pos_srs_resource->sequence_id);
+      _EQ_CHECK_INT(f1_pos_srs_resource->sequence_id, pos_srs_resource->sequence_id);
     }
   }
 
@@ -1798,35 +1781,35 @@ static bool eq_srs_config(const f1ap_srs_config_t *f1_sRSConfig, const f1ap_srs_
     f1ap_srs_resource_set_list_t *srs_resource_set_list = sRSConfig->srs_resource_set_list;
     f1ap_srs_resource_set_list_t *f1_srs_resource_set_list = f1_sRSConfig->srs_resource_set_list;
     uint32_t srs_resource_set_list_length = srs_resource_set_list->srs_resource_set_list_length;
-    _F1_EQ_CHECK_INT(f1_srs_resource_set_list->srs_resource_set_list_length, srs_resource_set_list_length);
+    _EQ_CHECK_INT(f1_srs_resource_set_list->srs_resource_set_list_length, srs_resource_set_list_length);
     for (int i = 0; i < srs_resource_set_list_length; i++) {
       f1ap_srs_resource_set_t *srs_resource_set = &srs_resource_set_list->srs_resource_set[i];
       f1ap_srs_resource_set_t *f1_srs_resource_set = &f1_srs_resource_set_list->srs_resource_set[i];
-      _F1_EQ_CHECK_INT(f1_srs_resource_set->srs_resource_set_id, srs_resource_set->srs_resource_set_id);
+      _EQ_CHECK_INT(f1_srs_resource_set->srs_resource_set_id, srs_resource_set->srs_resource_set_id);
       uint8_t srs_resource_id_list_length = srs_resource_set->srs_resource_id_list.srs_resource_id_list_length;
-      _F1_EQ_CHECK_INT(f1_srs_resource_set->srs_resource_id_list.srs_resource_id_list_length, srs_resource_id_list_length);
+      _EQ_CHECK_INT(f1_srs_resource_set->srs_resource_id_list.srs_resource_id_list_length, srs_resource_id_list_length);
       for (int j = 0; j < srs_resource_id_list_length; j++) {
-        _F1_EQ_CHECK_LONG(f1_srs_resource_set->srs_resource_id_list.srs_resource_id[j],
-                          srs_resource_set->srs_resource_id_list.srs_resource_id[j]);
+        _EQ_CHECK_LONG(f1_srs_resource_set->srs_resource_id_list.srs_resource_id[j],
+                       srs_resource_set->srs_resource_id_list.srs_resource_id[j]);
       }
 
       f1ap_resource_set_type_t *f1_res_set_type = &f1_srs_resource_set->resource_set_type;
       f1ap_resource_set_type_t *res_set_type = &srs_resource_set->resource_set_type;
-      _F1_EQ_CHECK_INT(f1_res_set_type->present, res_set_type->present);
+      _EQ_CHECK_INT(f1_res_set_type->present, res_set_type->present);
       switch (res_set_type->present) {
         case F1AP_RESOURCE_SET_TYPE_PR_NOTHING:
           // nothing to check
           break;
         case F1AP_RESOURCE_SET_TYPE_PR_PERIODIC:
-          _F1_EQ_CHECK_INT(f1_res_set_type->choice.periodic, res_set_type->choice.periodic);
+          _EQ_CHECK_INT(f1_res_set_type->choice.periodic, res_set_type->choice.periodic);
           break;
         case F1AP_RESOURCE_SET_TYPE_PR_SEMI_PERSISTENT:
-          _F1_EQ_CHECK_INT(f1_res_set_type->choice.semi_persistent, res_set_type->choice.semi_persistent);
+          _EQ_CHECK_INT(f1_res_set_type->choice.semi_persistent, res_set_type->choice.semi_persistent);
           break;
         case F1AP_RESOURCE_SET_TYPE_PR_APERIODIC:
-          _F1_EQ_CHECK_INT(f1_res_set_type->choice.aperiodic.srs_resource_trigger,
-                           res_set_type->choice.aperiodic.srs_resource_trigger);
-          _F1_EQ_CHECK_LONG(f1_res_set_type->choice.aperiodic.slot_offset, res_set_type->choice.aperiodic.slot_offset);
+          _EQ_CHECK_INT(f1_res_set_type->choice.aperiodic.srs_resource_trigger,
+                        res_set_type->choice.aperiodic.srs_resource_trigger);
+          _EQ_CHECK_LONG(f1_res_set_type->choice.aperiodic.slot_offset, res_set_type->choice.aperiodic.slot_offset);
           break;
         default:
           AssertFatal(false, "illegal resource set type %d\n", res_set_type->present);
@@ -1843,34 +1826,34 @@ static bool eq_srs_config(const f1ap_srs_config_t *f1_sRSConfig, const f1ap_srs_
     f1ap_pos_srs_resource_set_list_t *pos_srs_resource_set_list = sRSConfig->pos_srs_resource_set_list;
     f1ap_pos_srs_resource_set_list_t *f1_pos_srs_resource_set_list = f1_sRSConfig->pos_srs_resource_set_list;
     uint32_t pos_srs_resource_set_list_length = pos_srs_resource_set_list->pos_srs_resource_set_list_length;
-    _F1_EQ_CHECK_INT(f1_pos_srs_resource_set_list->pos_srs_resource_set_list_length, pos_srs_resource_set_list_length);
+    _EQ_CHECK_INT(f1_pos_srs_resource_set_list->pos_srs_resource_set_list_length, pos_srs_resource_set_list_length);
     for (int i = 0; i < pos_srs_resource_set_list_length; i++) {
       f1ap_pos_srs_resource_set_item_t *pos_srs_resource_set = &pos_srs_resource_set_list->pos_srs_resource_set_item[i];
       f1ap_pos_srs_resource_set_item_t *f1_pos_srs_resource_set = &f1_pos_srs_resource_set_list->pos_srs_resource_set_item[i];
-      _F1_EQ_CHECK_INT(f1_pos_srs_resource_set->pos_srs_resource_set_id, pos_srs_resource_set->pos_srs_resource_set_id);
+      _EQ_CHECK_INT(f1_pos_srs_resource_set->pos_srs_resource_set_id, pos_srs_resource_set->pos_srs_resource_set_id);
       uint8_t pos_srs_resource_id_list_length = pos_srs_resource_set->pos_srs_resource_id_list.pos_srs_resource_id_list_length;
-      _F1_EQ_CHECK_INT(f1_pos_srs_resource_set->pos_srs_resource_id_list.pos_srs_resource_id_list_length,
-                       pos_srs_resource_id_list_length);
+      _EQ_CHECK_INT(f1_pos_srs_resource_set->pos_srs_resource_id_list.pos_srs_resource_id_list_length,
+                    pos_srs_resource_id_list_length);
       for (int j = 0; j < pos_srs_resource_id_list_length; j++) {
-        _F1_EQ_CHECK_LONG(f1_pos_srs_resource_set->pos_srs_resource_id_list.srs_pos_resource_id[j],
-                          pos_srs_resource_set->pos_srs_resource_id_list.srs_pos_resource_id[j]);
+        _EQ_CHECK_LONG(f1_pos_srs_resource_set->pos_srs_resource_id_list.srs_pos_resource_id[j],
+                       pos_srs_resource_set->pos_srs_resource_id_list.srs_pos_resource_id[j]);
       }
 
       f1ap_pos_resource_set_type_t *f1_pos_res_set_type = &f1_pos_srs_resource_set->pos_resource_set_type;
       f1ap_pos_resource_set_type_t *pos_res_set_type = &pos_srs_resource_set->pos_resource_set_type;
-      _F1_EQ_CHECK_INT(f1_pos_res_set_type->present, pos_res_set_type->present);
+      _EQ_CHECK_INT(f1_pos_res_set_type->present, pos_res_set_type->present);
       switch (pos_res_set_type->present) {
         case F1AP_POS_RESOURCE_SET_TYPE_PR_NOTHING:
           // nothing to check
           break;
         case F1AP_POS_RESOURCE_SET_TYPE_PR_PERIODIC:
-          _F1_EQ_CHECK_INT(f1_pos_res_set_type->choice.periodic, pos_res_set_type->choice.periodic);
+          _EQ_CHECK_INT(f1_pos_res_set_type->choice.periodic, pos_res_set_type->choice.periodic);
           break;
         case F1AP_POS_RESOURCE_SET_TYPE_PR_SEMI_PERSISTENT:
-          _F1_EQ_CHECK_INT(f1_pos_res_set_type->choice.semi_persistent, pos_res_set_type->choice.semi_persistent);
+          _EQ_CHECK_INT(f1_pos_res_set_type->choice.semi_persistent, pos_res_set_type->choice.semi_persistent);
           break;
         case F1AP_POS_RESOURCE_SET_TYPE_PR_APERIODIC:
-          _F1_EQ_CHECK_INT(f1_pos_res_set_type->choice.srs_resource, pos_res_set_type->choice.srs_resource);
+          _EQ_CHECK_INT(f1_pos_res_set_type->choice.srs_resource, pos_res_set_type->choice.srs_resource);
           break;
         default:
           AssertFatal(false, "illegal resource set type pos %d\n", pos_res_set_type->present);
@@ -1885,7 +1868,7 @@ static bool eq_srs_carrier_list_item(const f1ap_srs_carrier_list_item_t *f1_srs_
                                      const f1ap_srs_carrier_list_item_t *srs_carrier_list_item)
 {
   // pointA
-  _F1_EQ_CHECK_INT(f1_srs_carrier_list_item->pointA, srs_carrier_list_item->pointA);
+  _EQ_CHECK_INT(f1_srs_carrier_list_item->pointA, srs_carrier_list_item->pointA);
 
   // Uplink Channel BW-PerSCS-List
   const f1ap_uplink_channel_bw_per_scs_list_t *uplink_channel_bw_per_scs_list =
@@ -1894,16 +1877,16 @@ static bool eq_srs_carrier_list_item(const f1ap_srs_carrier_list_item_t *f1_srs_
       &f1_srs_carrier_list_item->uplink_channel_bw_per_scs_list;
 
   uint32_t scs_specific_carrier_list_length = uplink_channel_bw_per_scs_list->scs_specific_carrier_list_length;
-  _F1_EQ_CHECK_INT(f1_uplink_channel_bw_per_scs_list->scs_specific_carrier_list_length, scs_specific_carrier_list_length);
+  _EQ_CHECK_INT(f1_uplink_channel_bw_per_scs_list->scs_specific_carrier_list_length, scs_specific_carrier_list_length);
   for (int i = 0; i < scs_specific_carrier_list_length; i++) {
     f1ap_scs_specific_carrier_t *scs_specific_carrier = &uplink_channel_bw_per_scs_list->scs_specific_carrier[i];
     f1ap_scs_specific_carrier_t *f1_scs_specific_carrier = &f1_uplink_channel_bw_per_scs_list->scs_specific_carrier[i];
     // offset to carrier
-    _F1_EQ_CHECK_INT(f1_scs_specific_carrier->offset_to_carrier, scs_specific_carrier->offset_to_carrier);
+    _EQ_CHECK_INT(f1_scs_specific_carrier->offset_to_carrier, scs_specific_carrier->offset_to_carrier);
     // subcarrier spacing
-    _F1_EQ_CHECK_INT(f1_scs_specific_carrier->subcarrier_spacing, scs_specific_carrier->subcarrier_spacing);
+    _EQ_CHECK_INT(f1_scs_specific_carrier->subcarrier_spacing, scs_specific_carrier->subcarrier_spacing);
     // carrier bandwidth
-    _F1_EQ_CHECK_INT(f1_scs_specific_carrier->carrier_bandwidth, scs_specific_carrier->carrier_bandwidth);
+    _EQ_CHECK_INT(f1_scs_specific_carrier->carrier_bandwidth, scs_specific_carrier->carrier_bandwidth);
   }
 
   // Active UL BWP
@@ -1911,15 +1894,15 @@ static bool eq_srs_carrier_list_item(const f1ap_srs_carrier_list_item_t *f1_srs_
   const f1ap_active_ul_bwp_t *active_ul_bwp = &srs_carrier_list_item->active_ul_bwp;
 
   // location and bandwidth
-  _F1_EQ_CHECK_INT(f1_active_ul_bwp->location_and_bandwidth, active_ul_bwp->location_and_bandwidth);
+  _EQ_CHECK_INT(f1_active_ul_bwp->location_and_bandwidth, active_ul_bwp->location_and_bandwidth);
   // subcarrier spacing
-  _F1_EQ_CHECK_INT(f1_active_ul_bwp->subcarrier_spacing, active_ul_bwp->subcarrier_spacing);
+  _EQ_CHECK_INT(f1_active_ul_bwp->subcarrier_spacing, active_ul_bwp->subcarrier_spacing);
 
   // cyclic prefix
-  _F1_EQ_CHECK_INT(f1_active_ul_bwp->cyclic_prefix, active_ul_bwp->cyclic_prefix);
+  _EQ_CHECK_INT(f1_active_ul_bwp->cyclic_prefix, active_ul_bwp->cyclic_prefix);
 
   // Tx Direct Current Location
-  _F1_EQ_CHECK_INT(f1_active_ul_bwp->tx_direct_current_location, active_ul_bwp->tx_direct_current_location);
+  _EQ_CHECK_INT(f1_active_ul_bwp->tx_direct_current_location, active_ul_bwp->tx_direct_current_location);
 
   // SRS Config
   const f1ap_srs_config_t *f1_sRSConfig = &f1_active_ul_bwp->srs_config;
@@ -1932,7 +1915,7 @@ static bool eq_srs_carrier_list(const f1ap_srs_carrier_list_t *srs_carrier_list_
                                 const f1ap_srs_carrier_list_t *srs_carrier_list_b)
 {
   uint32_t srs_carrier_list_len = srs_carrier_list_a->srs_carrier_list_length;
-  _F1_EQ_CHECK_INT(srs_carrier_list_b->srs_carrier_list_length, srs_carrier_list_len);
+  _EQ_CHECK_INT(srs_carrier_list_b->srs_carrier_list_length, srs_carrier_list_len);
   for (int i = 0; i < srs_carrier_list_len; i++) {
     f1ap_srs_carrier_list_item_t *srs_carrier_list_item_a = &srs_carrier_list_a->srs_carrier_list_item[i];
     f1ap_srs_carrier_list_item_t *srs_carrier_list_item_b = &srs_carrier_list_b->srs_carrier_list_item[i];
@@ -2497,26 +2480,25 @@ static f1ap_geographical_coordinates_t cp_geographical_coordinates(const f1ap_ge
 static bool eq_reference_point_type(const f1ap_trp_reference_point_type_t *f1_referencePointType,
                                     const f1ap_trp_reference_point_type_t *referencePointType)
 {
-  _F1_EQ_CHECK_INT(f1_referencePointType->present, referencePointType->present);
+  _EQ_CHECK_INT(f1_referencePointType->present, referencePointType->present);
   switch (f1_referencePointType->present) {
     case F1AP_TRP_REFERENCE_POINT_TYPE_PR_TRPPOSITION_RELATIVE_GEODETIC: {
       const f1ap_relative_geodetic_location_t *f1_tRPPositionRelativeGeodetic =
           &f1_referencePointType->choice.trp_position_relative_geodetic;
       const f1ap_relative_geodetic_location_t *tRPPositionRelativeGeodetic =
           &referencePointType->choice.trp_position_relative_geodetic;
-      _F1_EQ_CHECK_LONG(tRPPositionRelativeGeodetic->milli_arc_second_units,
-                        f1_tRPPositionRelativeGeodetic->milli_arc_second_units);
-      _F1_EQ_CHECK_LONG(tRPPositionRelativeGeodetic->height_units, f1_tRPPositionRelativeGeodetic->height_units);
-      _F1_EQ_CHECK_LONG(tRPPositionRelativeGeodetic->delta_latitude, f1_tRPPositionRelativeGeodetic->delta_latitude);
-      _F1_EQ_CHECK_LONG(tRPPositionRelativeGeodetic->delta_longitude, f1_tRPPositionRelativeGeodetic->delta_longitude);
-      _F1_EQ_CHECK_LONG(tRPPositionRelativeGeodetic->delta_height, f1_tRPPositionRelativeGeodetic->delta_height);
+      _EQ_CHECK_LONG(tRPPositionRelativeGeodetic->milli_arc_second_units, f1_tRPPositionRelativeGeodetic->milli_arc_second_units);
+      _EQ_CHECK_LONG(tRPPositionRelativeGeodetic->height_units, f1_tRPPositionRelativeGeodetic->height_units);
+      _EQ_CHECK_LONG(tRPPositionRelativeGeodetic->delta_latitude, f1_tRPPositionRelativeGeodetic->delta_latitude);
+      _EQ_CHECK_LONG(tRPPositionRelativeGeodetic->delta_longitude, f1_tRPPositionRelativeGeodetic->delta_longitude);
+      _EQ_CHECK_LONG(tRPPositionRelativeGeodetic->delta_height, f1_tRPPositionRelativeGeodetic->delta_height);
 
       const f1ap_location_uncertainty_t *f1_locationUncertainty_g = &f1_tRPPositionRelativeGeodetic->location_uncertainty;
       const f1ap_location_uncertainty_t *locationUncertainty_g = &tRPPositionRelativeGeodetic->location_uncertainty;
-      _F1_EQ_CHECK_LONG(locationUncertainty_g->horizontal_uncertainty, f1_locationUncertainty_g->horizontal_uncertainty);
-      _F1_EQ_CHECK_LONG(locationUncertainty_g->horizontal_confidence, f1_locationUncertainty_g->horizontal_confidence);
-      _F1_EQ_CHECK_LONG(locationUncertainty_g->vertical_uncertainty, f1_locationUncertainty_g->vertical_uncertainty);
-      _F1_EQ_CHECK_LONG(locationUncertainty_g->vertical_confidence, f1_locationUncertainty_g->vertical_confidence);
+      _EQ_CHECK_LONG(locationUncertainty_g->horizontal_uncertainty, f1_locationUncertainty_g->horizontal_uncertainty);
+      _EQ_CHECK_LONG(locationUncertainty_g->horizontal_confidence, f1_locationUncertainty_g->horizontal_confidence);
+      _EQ_CHECK_LONG(locationUncertainty_g->vertical_uncertainty, f1_locationUncertainty_g->vertical_uncertainty);
+      _EQ_CHECK_LONG(locationUncertainty_g->vertical_confidence, f1_locationUncertainty_g->vertical_confidence);
       break;
     }
     case F1AP_TRP_REFERENCE_POINT_TYPE_PR_TRPPOSITION_RELATIVE_CARTESIAN: {
@@ -2524,17 +2506,17 @@ static bool eq_reference_point_type(const f1ap_trp_reference_point_type_t *f1_re
           &f1_referencePointType->choice.trp_position_relative_cartesian;
       const f1ap_relative_cartesian_location_t *tRPPositionRelativeCartesian =
           &referencePointType->choice.trp_position_relative_cartesian;
-      _F1_EQ_CHECK_LONG(tRPPositionRelativeCartesian->xyz_unit, f1_tRPPositionRelativeCartesian->xyz_unit);
-      _F1_EQ_CHECK_LONG(tRPPositionRelativeCartesian->xvalue, f1_tRPPositionRelativeCartesian->xvalue);
-      _F1_EQ_CHECK_LONG(tRPPositionRelativeCartesian->yvalue, f1_tRPPositionRelativeCartesian->yvalue);
-      _F1_EQ_CHECK_LONG(tRPPositionRelativeCartesian->zvalue, f1_tRPPositionRelativeCartesian->zvalue);
+      _EQ_CHECK_LONG(tRPPositionRelativeCartesian->xyz_unit, f1_tRPPositionRelativeCartesian->xyz_unit);
+      _EQ_CHECK_LONG(tRPPositionRelativeCartesian->xvalue, f1_tRPPositionRelativeCartesian->xvalue);
+      _EQ_CHECK_LONG(tRPPositionRelativeCartesian->yvalue, f1_tRPPositionRelativeCartesian->yvalue);
+      _EQ_CHECK_LONG(tRPPositionRelativeCartesian->zvalue, f1_tRPPositionRelativeCartesian->zvalue);
 
       const f1ap_location_uncertainty_t *f1_locationUncertainty_c = &f1_tRPPositionRelativeCartesian->location_uncertainty;
       const f1ap_location_uncertainty_t *locationUncertainty_c = &tRPPositionRelativeCartesian->location_uncertainty;
-      _F1_EQ_CHECK_LONG(locationUncertainty_c->horizontal_uncertainty, f1_locationUncertainty_c->horizontal_uncertainty);
-      _F1_EQ_CHECK_LONG(locationUncertainty_c->horizontal_confidence, f1_locationUncertainty_c->horizontal_confidence);
-      _F1_EQ_CHECK_LONG(locationUncertainty_c->vertical_uncertainty, f1_locationUncertainty_c->vertical_uncertainty);
-      _F1_EQ_CHECK_LONG(locationUncertainty_c->vertical_confidence, f1_locationUncertainty_c->vertical_confidence);
+      _EQ_CHECK_LONG(locationUncertainty_c->horizontal_uncertainty, f1_locationUncertainty_c->horizontal_uncertainty);
+      _EQ_CHECK_LONG(locationUncertainty_c->horizontal_confidence, f1_locationUncertainty_c->horizontal_confidence);
+      _EQ_CHECK_LONG(locationUncertainty_c->vertical_uncertainty, f1_locationUncertainty_c->vertical_uncertainty);
+      _EQ_CHECK_LONG(locationUncertainty_c->vertical_confidence, f1_locationUncertainty_c->vertical_confidence);
       break;
     }
     default:
@@ -2547,15 +2529,15 @@ static bool eq_reference_point_type(const f1ap_trp_reference_point_type_t *f1_re
 static bool eq_trp_ha_pos(const f1ap_ngran_high_accuracy_access_point_position_t *trp_ha_pos,
                           const f1ap_ngran_high_accuracy_access_point_position_t *f1_trp_ha_pos)
 {
-  _F1_EQ_CHECK_LONG(trp_ha_pos->latitude, f1_trp_ha_pos->latitude);
-  _F1_EQ_CHECK_LONG(trp_ha_pos->longitude, f1_trp_ha_pos->longitude);
-  _F1_EQ_CHECK_LONG(trp_ha_pos->altitude, f1_trp_ha_pos->altitude);
-  _F1_EQ_CHECK_LONG(trp_ha_pos->uncertainty_semi_major, f1_trp_ha_pos->uncertainty_semi_major);
-  _F1_EQ_CHECK_LONG(trp_ha_pos->uncertainty_semi_minor, f1_trp_ha_pos->uncertainty_semi_minor);
-  _F1_EQ_CHECK_LONG(trp_ha_pos->orientation_of_major_axis, f1_trp_ha_pos->orientation_of_major_axis);
-  _F1_EQ_CHECK_LONG(trp_ha_pos->horizontal_confidence, f1_trp_ha_pos->horizontal_confidence);
-  _F1_EQ_CHECK_LONG(trp_ha_pos->uncertainty_altitude, f1_trp_ha_pos->uncertainty_altitude);
-  _F1_EQ_CHECK_LONG(trp_ha_pos->vertical_confidence, f1_trp_ha_pos->vertical_confidence);
+  _EQ_CHECK_LONG(trp_ha_pos->latitude, f1_trp_ha_pos->latitude);
+  _EQ_CHECK_LONG(trp_ha_pos->longitude, f1_trp_ha_pos->longitude);
+  _EQ_CHECK_LONG(trp_ha_pos->altitude, f1_trp_ha_pos->altitude);
+  _EQ_CHECK_LONG(trp_ha_pos->uncertainty_semi_major, f1_trp_ha_pos->uncertainty_semi_major);
+  _EQ_CHECK_LONG(trp_ha_pos->uncertainty_semi_minor, f1_trp_ha_pos->uncertainty_semi_minor);
+  _EQ_CHECK_LONG(trp_ha_pos->orientation_of_major_axis, f1_trp_ha_pos->orientation_of_major_axis);
+  _EQ_CHECK_LONG(trp_ha_pos->horizontal_confidence, f1_trp_ha_pos->horizontal_confidence);
+  _EQ_CHECK_LONG(trp_ha_pos->uncertainty_altitude, f1_trp_ha_pos->uncertainty_altitude);
+  _EQ_CHECK_LONG(trp_ha_pos->vertical_confidence, f1_trp_ha_pos->vertical_confidence);
   return true;
 }
 
@@ -2563,7 +2545,7 @@ static bool eq_geographical_coordinates(const f1ap_geographical_coordinates_t *i
 {
   const f1ap_trp_position_definition_type_t *f1_trp_pos_def_type = &in->trp_position_definition_type;
   const f1ap_trp_position_definition_type_t *trp_pos_def_type = &out->trp_position_definition_type;
-  _F1_EQ_CHECK_INT(f1_trp_pos_def_type->present, trp_pos_def_type->present);
+  _EQ_CHECK_INT(f1_trp_pos_def_type->present, trp_pos_def_type->present);
   switch (f1_trp_pos_def_type->present) {
     case F1AP_TRP_POSITION_DEFINITION_TYPE_PR_NOTHING:
       // nothing to check
@@ -2571,21 +2553,21 @@ static bool eq_geographical_coordinates(const f1ap_geographical_coordinates_t *i
     case F1AP_TRP_POSITION_DEFINITION_TYPE_PR_DIRECT: {
       const f1ap_trp_position_direct_t *f1_direct = &f1_trp_pos_def_type->choice.direct;
       const f1ap_trp_position_direct_t *direct = &trp_pos_def_type->choice.direct;
-      _F1_EQ_CHECK_INT(f1_direct->accuracy.present, direct->accuracy.present);
+      _EQ_CHECK_INT(f1_direct->accuracy.present, direct->accuracy.present);
 
       if (f1_direct->accuracy.present == F1AP_TRP_POSITION_DIRECT_ACCURACY_PR_TRPPOSITION) {
         const f1ap_access_point_position_t *trp_pos = &direct->accuracy.choice.trp_position;
         const f1ap_access_point_position_t *f1_trp_pos = &f1_direct->accuracy.choice.trp_position;
-        _F1_EQ_CHECK_LONG(trp_pos->latitude_sign, f1_trp_pos->latitude_sign);
-        _F1_EQ_CHECK_LONG(trp_pos->latitude, f1_trp_pos->latitude);
-        _F1_EQ_CHECK_LONG(trp_pos->longitude, f1_trp_pos->longitude);
-        _F1_EQ_CHECK_LONG(trp_pos->direction_of_altitude, f1_trp_pos->direction_of_altitude);
-        _F1_EQ_CHECK_LONG(trp_pos->altitude, f1_trp_pos->altitude);
-        _F1_EQ_CHECK_LONG(trp_pos->uncertainty_semi_major, f1_trp_pos->uncertainty_semi_major);
-        _F1_EQ_CHECK_LONG(trp_pos->uncertainty_semi_minor, f1_trp_pos->uncertainty_semi_minor);
-        _F1_EQ_CHECK_LONG(trp_pos->orientation_of_major_axis, f1_trp_pos->orientation_of_major_axis);
-        _F1_EQ_CHECK_LONG(trp_pos->uncertainty_altitude, f1_trp_pos->uncertainty_altitude);
-        _F1_EQ_CHECK_LONG(trp_pos->confidence, f1_trp_pos->confidence);
+        _EQ_CHECK_LONG(trp_pos->latitude_sign, f1_trp_pos->latitude_sign);
+        _EQ_CHECK_LONG(trp_pos->latitude, f1_trp_pos->latitude);
+        _EQ_CHECK_LONG(trp_pos->longitude, f1_trp_pos->longitude);
+        _EQ_CHECK_LONG(trp_pos->direction_of_altitude, f1_trp_pos->direction_of_altitude);
+        _EQ_CHECK_LONG(trp_pos->altitude, f1_trp_pos->altitude);
+        _EQ_CHECK_LONG(trp_pos->uncertainty_semi_major, f1_trp_pos->uncertainty_semi_major);
+        _EQ_CHECK_LONG(trp_pos->uncertainty_semi_minor, f1_trp_pos->uncertainty_semi_minor);
+        _EQ_CHECK_LONG(trp_pos->orientation_of_major_axis, f1_trp_pos->orientation_of_major_axis);
+        _EQ_CHECK_LONG(trp_pos->uncertainty_altitude, f1_trp_pos->uncertainty_altitude);
+        _EQ_CHECK_LONG(trp_pos->confidence, f1_trp_pos->confidence);
       } else if (f1_direct->accuracy.present == F1AP_TRP_POSITION_DIRECT_ACCURACY_PR_TRPHAPOSITION) {
         const f1ap_ngran_high_accuracy_access_point_position_t *trp_ha_pos = &direct->accuracy.choice.trp_HAposition;
         const f1ap_ngran_high_accuracy_access_point_position_t *f1_trp_ha_pos = &f1_direct->accuracy.choice.trp_HAposition;
@@ -2600,24 +2582,23 @@ static bool eq_geographical_coordinates(const f1ap_geographical_coordinates_t *i
       const f1ap_trp_position_referenced_t *referenced = &trp_pos_def_type->choice.referenced;
       const f1ap_reference_point_t *f1_referencePoint = &f1_referenced->reference_point;
       const f1ap_reference_point_t *referencePoint = &referenced->reference_point;
-      _F1_EQ_CHECK_INT(f1_referencePoint->present, referencePoint->present);
+      _EQ_CHECK_INT(f1_referencePoint->present, referencePoint->present);
 
       if (f1_referencePoint->present == F1AP_REFERENCE_POINT_PR_COORDINATEID) {
-        _F1_EQ_CHECK_LONG(referencePoint->choice.coordinate_id, f1_referencePoint->choice.coordinate_id);
+        _EQ_CHECK_LONG(referencePoint->choice.coordinate_id, f1_referencePoint->choice.coordinate_id);
       } else if (f1_referencePoint->present == F1AP_REFERENCE_POINT_PR_REFERENCEPOINTCOORDINATE) {
         const f1ap_access_point_position_t *referencePointCoordinate = &referencePoint->choice.reference_point_coordinate;
         const f1ap_access_point_position_t *f1_referencePointCoordinate = &f1_referencePoint->choice.reference_point_coordinate;
-        _F1_EQ_CHECK_LONG(referencePointCoordinate->latitude_sign, f1_referencePointCoordinate->latitude_sign);
-        _F1_EQ_CHECK_LONG(referencePointCoordinate->latitude, f1_referencePointCoordinate->latitude);
-        _F1_EQ_CHECK_LONG(referencePointCoordinate->longitude, f1_referencePointCoordinate->longitude);
-        _F1_EQ_CHECK_LONG(referencePointCoordinate->direction_of_altitude, f1_referencePointCoordinate->direction_of_altitude);
-        _F1_EQ_CHECK_LONG(referencePointCoordinate->altitude, f1_referencePointCoordinate->altitude);
-        _F1_EQ_CHECK_LONG(referencePointCoordinate->uncertainty_semi_major, f1_referencePointCoordinate->uncertainty_semi_major);
-        _F1_EQ_CHECK_LONG(referencePointCoordinate->uncertainty_semi_minor, f1_referencePointCoordinate->uncertainty_semi_minor);
-        _F1_EQ_CHECK_LONG(referencePointCoordinate->orientation_of_major_axis,
-                          f1_referencePointCoordinate->orientation_of_major_axis);
-        _F1_EQ_CHECK_LONG(referencePointCoordinate->uncertainty_altitude, f1_referencePointCoordinate->uncertainty_altitude);
-        _F1_EQ_CHECK_LONG(referencePointCoordinate->confidence, f1_referencePointCoordinate->confidence);
+        _EQ_CHECK_LONG(referencePointCoordinate->latitude_sign, f1_referencePointCoordinate->latitude_sign);
+        _EQ_CHECK_LONG(referencePointCoordinate->latitude, f1_referencePointCoordinate->latitude);
+        _EQ_CHECK_LONG(referencePointCoordinate->longitude, f1_referencePointCoordinate->longitude);
+        _EQ_CHECK_LONG(referencePointCoordinate->direction_of_altitude, f1_referencePointCoordinate->direction_of_altitude);
+        _EQ_CHECK_LONG(referencePointCoordinate->altitude, f1_referencePointCoordinate->altitude);
+        _EQ_CHECK_LONG(referencePointCoordinate->uncertainty_semi_major, f1_referencePointCoordinate->uncertainty_semi_major);
+        _EQ_CHECK_LONG(referencePointCoordinate->uncertainty_semi_minor, f1_referencePointCoordinate->uncertainty_semi_minor);
+        _EQ_CHECK_LONG(referencePointCoordinate->orientation_of_major_axis, f1_referencePointCoordinate->orientation_of_major_axis);
+        _EQ_CHECK_LONG(referencePointCoordinate->uncertainty_altitude, f1_referencePointCoordinate->uncertainty_altitude);
+        _EQ_CHECK_LONG(referencePointCoordinate->confidence, f1_referencePointCoordinate->confidence);
       } else if (f1_referencePoint->present == F1AP_REFERENCE_POINT_PR_REFERENCEPOINTCOORDINATEHA) {
         const f1ap_ngran_high_accuracy_access_point_position_t *referencePointCoordinateHA =
             &referencePoint->choice.reference_point_coordinateHA;
@@ -2796,22 +2777,22 @@ static f1ap_trp_information_type_response_item_t cp_trp_info_type_response_item(
 static bool eq_trp_info_type_response_item(const f1ap_trp_information_type_response_item_t *in,
                                            const f1ap_trp_information_type_response_item_t *out)
 {
-  _F1_EQ_CHECK_INT(in->present, out->present);
+  _EQ_CHECK_INT(in->present, out->present);
   switch (in->present) {
     case F1AP_TRP_INFORMATION_TYPE_RESPONSE_ITEM_PR_NOTHING:
       // nothing to check
       break;
     case F1AP_TRP_INFORMATION_TYPE_RESPONSE_ITEM_PR_PCI_NR:
-      _F1_EQ_CHECK_INT(in->choice.pci_nr, out->choice.pci_nr);
+      _EQ_CHECK_INT(in->choice.pci_nr, out->choice.pci_nr);
       break;
     case F1AP_TRP_INFORMATION_TYPE_RESPONSE_ITEM_PR_NG_RAN_CGI:
-      _F1_EQ_CHECK_INT(in->choice.ng_ran_cgi.plmn.mcc, out->choice.ng_ran_cgi.plmn.mcc);
-      _F1_EQ_CHECK_INT(in->choice.ng_ran_cgi.plmn.mnc, out->choice.ng_ran_cgi.plmn.mnc);
-      _F1_EQ_CHECK_INT(in->choice.ng_ran_cgi.plmn.mnc_digit_length, out->choice.ng_ran_cgi.plmn.mnc_digit_length);
-      _F1_EQ_CHECK_LONG(in->choice.ng_ran_cgi.nr_cellid, out->choice.ng_ran_cgi.nr_cellid);
+      _EQ_CHECK_INT(in->choice.ng_ran_cgi.plmn.mcc, out->choice.ng_ran_cgi.plmn.mcc);
+      _EQ_CHECK_INT(in->choice.ng_ran_cgi.plmn.mnc, out->choice.ng_ran_cgi.plmn.mnc);
+      _EQ_CHECK_INT(in->choice.ng_ran_cgi.plmn.mnc_digit_length, out->choice.ng_ran_cgi.plmn.mnc_digit_length);
+      _EQ_CHECK_LONG(in->choice.ng_ran_cgi.nr_cellid, out->choice.ng_ran_cgi.nr_cellid);
       break;
     case F1AP_TRP_INFORMATION_TYPE_RESPONSE_ITEM_PR_NRARFCN:
-      _F1_EQ_CHECK_INT(in->choice.nr_arfcn, out->choice.nr_arfcn);
+      _EQ_CHECK_INT(in->choice.nr_arfcn, out->choice.nr_arfcn);
       break;
     case F1AP_TRP_INFORMATION_TYPE_RESPONSE_ITEM_PR_PRSCONFIGURATION:
       PRINT_ERROR("TRP information type response item PRS configuration unsupported\n");
@@ -3321,7 +3302,7 @@ static bool eq_positioning_measurement_result(const f1ap_pos_measurement_result_
                                               const f1ap_pos_measurement_result_t *posMeasurementResult)
 {
   uint32_t pos_meas_result_length = f1_posMeasurementResult->pos_measurement_result_item_length;
-  _F1_EQ_CHECK_INT(posMeasurementResult->pos_measurement_result_item_length, pos_meas_result_length);
+  _EQ_CHECK_INT(posMeasurementResult->pos_measurement_result_item_length, pos_meas_result_length);
   for (int i = 0; i < pos_meas_result_length; i++) {
     f1ap_pos_measurement_result_item_t *f1_pos_measurement_result_item = &f1_posMeasurementResult->pos_measurement_result_item[i];
     f1ap_pos_measurement_result_item_t *pos_measurement_result_item = &posMeasurementResult->pos_measurement_result_item[i];
@@ -3330,7 +3311,7 @@ static bool eq_positioning_measurement_result(const f1ap_pos_measurement_result_
     f1ap_measured_results_value_t *f1_measuredResultsValue = &f1_pos_measurement_result_item->measured_results_value;
     f1ap_measured_results_value_t *measuredResultsValue = &pos_measurement_result_item->measured_results_value;
 
-    _F1_EQ_CHECK_INT(measuredResultsValue->present, f1_measuredResultsValue->present);
+    _EQ_CHECK_INT(measuredResultsValue->present, f1_measuredResultsValue->present);
     switch (measuredResultsValue->present) {
       case F1AP_MEASURED_RESULTS_VALUE_PR_NOTHING:
         // nothing to check
@@ -3340,23 +3321,23 @@ static bool eq_positioning_measurement_result(const f1ap_pos_measurement_result_
         f1ap_ul_aoa_t *f1_uL_AngleOfArrival = &f1_measuredResultsValue->choice.ul_angle_of_arrival;
         f1ap_ul_aoa_t *uL_AngleOfArrival = &measuredResultsValue->choice.ul_angle_of_arrival;
 
-        _F1_EQ_CHECK_INT(uL_AngleOfArrival->azimuth_aoa, f1_uL_AngleOfArrival->azimuth_aoa);
+        _EQ_CHECK_INT(uL_AngleOfArrival->azimuth_aoa, f1_uL_AngleOfArrival->azimuth_aoa);
         if (f1_uL_AngleOfArrival->zenith_aoa) {
-          _F1_EQ_CHECK_INT(*uL_AngleOfArrival->zenith_aoa, *f1_uL_AngleOfArrival->zenith_aoa);
+          _EQ_CHECK_INT(*uL_AngleOfArrival->zenith_aoa, *f1_uL_AngleOfArrival->zenith_aoa);
         }
         if (f1_uL_AngleOfArrival->lcs_to_gcs_translation_aoa) {
           f1ap_lcs_to_gcs_translationaoa_t *lCS_to_GCS_TranslationAoA = uL_AngleOfArrival->lcs_to_gcs_translation_aoa;
           f1ap_lcs_to_gcs_translationaoa_t *f1_lCS_to_GCS_TranslationAoA = f1_uL_AngleOfArrival->lcs_to_gcs_translation_aoa;
 
-          _F1_EQ_CHECK_INT(lCS_to_GCS_TranslationAoA->alpha, f1_lCS_to_GCS_TranslationAoA->alpha);
-          _F1_EQ_CHECK_INT(lCS_to_GCS_TranslationAoA->beta, f1_lCS_to_GCS_TranslationAoA->beta);
-          _F1_EQ_CHECK_INT(lCS_to_GCS_TranslationAoA->gamma, f1_lCS_to_GCS_TranslationAoA->gamma);
+          _EQ_CHECK_INT(lCS_to_GCS_TranslationAoA->alpha, f1_lCS_to_GCS_TranslationAoA->alpha);
+          _EQ_CHECK_INT(lCS_to_GCS_TranslationAoA->beta, f1_lCS_to_GCS_TranslationAoA->beta);
+          _EQ_CHECK_INT(lCS_to_GCS_TranslationAoA->gamma, f1_lCS_to_GCS_TranslationAoA->gamma);
         }
         break;
       }
       // UL SRS RSRP
       case F1AP_MEASURED_RESULTS_VALUE_PR_UL_SRS_RSRP:
-        _F1_EQ_CHECK_INT(measuredResultsValue->choice.ul_srs_rsrp, f1_measuredResultsValue->choice.ul_srs_rsrp);
+        _EQ_CHECK_INT(measuredResultsValue->choice.ul_srs_rsrp, f1_measuredResultsValue->choice.ul_srs_rsrp);
         break;
       // UL RTOA
       case F1AP_MEASURED_RESULTS_VALUE_PR_UL_RTOA: {
@@ -3370,22 +3351,22 @@ static bool eq_positioning_measurement_result(const f1ap_pos_measurement_result_
           case F1AP_ULRTOAMEAS_PR_NOTHING:
             break;
           case F1AP_ULRTOAMEAS_PR_K0:
-            _F1_EQ_CHECK_INT(ul_rtoa_meas_item->choice.k0, f1_ul_rtoa_meas_item->choice.k0);
+            _EQ_CHECK_INT(ul_rtoa_meas_item->choice.k0, f1_ul_rtoa_meas_item->choice.k0);
             break;
           case F1AP_ULRTOAMEAS_PR_K1:
-            _F1_EQ_CHECK_INT(ul_rtoa_meas_item->choice.k1, f1_ul_rtoa_meas_item->choice.k1);
+            _EQ_CHECK_INT(ul_rtoa_meas_item->choice.k1, f1_ul_rtoa_meas_item->choice.k1);
             break;
           case F1AP_ULRTOAMEAS_PR_K2:
-            _F1_EQ_CHECK_INT(ul_rtoa_meas_item->choice.k2, f1_ul_rtoa_meas_item->choice.k2);
+            _EQ_CHECK_INT(ul_rtoa_meas_item->choice.k2, f1_ul_rtoa_meas_item->choice.k2);
             break;
           case F1AP_ULRTOAMEAS_PR_K3:
-            _F1_EQ_CHECK_INT(ul_rtoa_meas_item->choice.k3, f1_ul_rtoa_meas_item->choice.k3);
+            _EQ_CHECK_INT(ul_rtoa_meas_item->choice.k3, f1_ul_rtoa_meas_item->choice.k3);
             break;
           case F1AP_ULRTOAMEAS_PR_K4:
-            _F1_EQ_CHECK_INT(ul_rtoa_meas_item->choice.k4, f1_ul_rtoa_meas_item->choice.k4);
+            _EQ_CHECK_INT(ul_rtoa_meas_item->choice.k4, f1_ul_rtoa_meas_item->choice.k4);
             break;
           case F1AP_ULRTOAMEAS_PR_K5:
-            _F1_EQ_CHECK_INT(ul_rtoa_meas_item->choice.k5, f1_ul_rtoa_meas_item->choice.k5);
+            _EQ_CHECK_INT(ul_rtoa_meas_item->choice.k5, f1_ul_rtoa_meas_item->choice.k5);
             break;
           default:
             AssertError(false, return false, "Illegal uL_RTOA_MeasurementItem %d\n", f1_ul_rtoa_meas_item->present);
@@ -3399,27 +3380,27 @@ static bool eq_positioning_measurement_result(const f1ap_pos_measurement_result_
         f1ap_gnb_rx_tx_time_diff_t *gNB_RxTxTimeDiff = &measuredResultsValue->choice.gnb_rx_tx_time_diff;
         f1ap_gnb_rx_tx_time_diff_meas_t *f1_rx_tx_time_diff = &f1_gNB_RxTxTimeDiff->rx_tx_time_diff;
         f1ap_gnb_rx_tx_time_diff_meas_t *rx_tx_time_diff = &gNB_RxTxTimeDiff->rx_tx_time_diff;
-        _F1_EQ_CHECK_INT(f1_rx_tx_time_diff->present, rx_tx_time_diff->present);
+        _EQ_CHECK_INT(f1_rx_tx_time_diff->present, rx_tx_time_diff->present);
         switch (f1_rx_tx_time_diff->present) {
           case F1AP_GNBRXTXTIMEDIFFMEAS_PR_NOTHING:
             break;
           case F1AP_GNBRXTXTIMEDIFFMEAS_PR_K0:
-            _F1_EQ_CHECK_INT(rx_tx_time_diff->choice.k0, f1_rx_tx_time_diff->choice.k0);
+            _EQ_CHECK_INT(rx_tx_time_diff->choice.k0, f1_rx_tx_time_diff->choice.k0);
             break;
           case F1AP_GNBRXTXTIMEDIFFMEAS_PR_K1:
-            _F1_EQ_CHECK_INT(rx_tx_time_diff->choice.k1, f1_rx_tx_time_diff->choice.k1);
+            _EQ_CHECK_INT(rx_tx_time_diff->choice.k1, f1_rx_tx_time_diff->choice.k1);
             break;
           case F1AP_GNBRXTXTIMEDIFFMEAS_PR_K2:
-            _F1_EQ_CHECK_INT(rx_tx_time_diff->choice.k2, f1_rx_tx_time_diff->choice.k2);
+            _EQ_CHECK_INT(rx_tx_time_diff->choice.k2, f1_rx_tx_time_diff->choice.k2);
             break;
           case F1AP_GNBRXTXTIMEDIFFMEAS_PR_K3:
-            _F1_EQ_CHECK_INT(rx_tx_time_diff->choice.k3, f1_rx_tx_time_diff->choice.k3);
+            _EQ_CHECK_INT(rx_tx_time_diff->choice.k3, f1_rx_tx_time_diff->choice.k3);
             break;
           case F1AP_GNBRXTXTIMEDIFFMEAS_PR_K4:
-            _F1_EQ_CHECK_INT(rx_tx_time_diff->choice.k4, f1_rx_tx_time_diff->choice.k4);
+            _EQ_CHECK_INT(rx_tx_time_diff->choice.k4, f1_rx_tx_time_diff->choice.k4);
             break;
           case F1AP_GNBRXTXTIMEDIFFMEAS_PR_K5:
-            _F1_EQ_CHECK_INT(rx_tx_time_diff->choice.k5, f1_rx_tx_time_diff->choice.k5);
+            _EQ_CHECK_INT(rx_tx_time_diff->choice.k5, f1_rx_tx_time_diff->choice.k5);
             break;
           default:
             AssertError(false, return false, "Illegal rxTxTimeDiff value %d\n", f1_rx_tx_time_diff->present);
@@ -3435,7 +3416,7 @@ static bool eq_positioning_measurement_result(const f1ap_pos_measurement_result_
     // timeStamp
     f1ap_time_stamp_t *f1_timeStamp = &f1_pos_measurement_result_item->time_stamp;
     f1ap_time_stamp_t *timeStamp = &pos_measurement_result_item->time_stamp;
-    _F1_EQ_CHECK_INT(timeStamp->system_frame_number, f1_timeStamp->system_frame_number);
+    _EQ_CHECK_INT(timeStamp->system_frame_number, f1_timeStamp->system_frame_number);
     f1ap_time_stamp_slot_index_t *f1_slot_index = &f1_timeStamp->slot_index;
     f1ap_time_stamp_slot_index_t *slot_index = &timeStamp->slot_index;
 
@@ -3443,16 +3424,16 @@ static bool eq_positioning_measurement_result(const f1ap_pos_measurement_result_
       case F1AP_TIME_STAMP_SLOT_INDEX_PR_NOTHING:
         break;
       case F1AP_TIME_STAMP_SLOT_INDEX_PR_SCS_15:
-        _F1_EQ_CHECK_INT(slot_index->choice.scs_15, f1_slot_index->choice.scs_15);
+        _EQ_CHECK_INT(slot_index->choice.scs_15, f1_slot_index->choice.scs_15);
         break;
       case F1AP_TIME_STAMP_SLOT_INDEX_PR_SCS_30:
-        _F1_EQ_CHECK_INT(slot_index->choice.scs_30, f1_slot_index->choice.scs_30);
+        _EQ_CHECK_INT(slot_index->choice.scs_30, f1_slot_index->choice.scs_30);
         break;
       case F1AP_TIME_STAMP_SLOT_INDEX_PR_SCS_60:
-        _F1_EQ_CHECK_INT(slot_index->choice.scs_60, f1_slot_index->choice.scs_60);
+        _EQ_CHECK_INT(slot_index->choice.scs_60, f1_slot_index->choice.scs_60);
         break;
       case F1AP_TIME_STAMP_SLOT_INDEX_PR_SCS_120:
-        _F1_EQ_CHECK_INT(slot_index->choice.scs_120, f1_slot_index->choice.scs_120);
+        _EQ_CHECK_INT(slot_index->choice.scs_120, f1_slot_index->choice.scs_120);
         break;
       default:
         AssertError(false, return false, "Illegal slotIndex value %d\n", f1_slot_index->present);
@@ -3521,11 +3502,11 @@ bool decode_positioning_information_req(const F1AP_F1AP_PDU_t *pdu, f1ap_positio
     AssertError(ie != NULL, return false, "in->protocolIEs.list.array[i] is NULL");
     switch (ie->id) {
       case F1AP_ProtocolIE_ID_id_gNB_CU_UE_F1AP_ID:
-        _F1_EQ_CHECK_INT(ie->value.present, F1AP_PositioningInformationRequestIEs__value_PR_GNB_CU_UE_F1AP_ID);
+        _EQ_CHECK_INT(ie->value.present, F1AP_PositioningInformationRequestIEs__value_PR_GNB_CU_UE_F1AP_ID);
         out->gNB_CU_ue_id = ie->value.choice.GNB_CU_UE_F1AP_ID;
         break;
       case F1AP_ProtocolIE_ID_id_gNB_DU_UE_F1AP_ID:
-        _F1_EQ_CHECK_INT(ie->value.present, F1AP_PositioningInformationRequestIEs__value_PR_GNB_DU_UE_F1AP_ID);
+        _EQ_CHECK_INT(ie->value.present, F1AP_PositioningInformationRequestIEs__value_PR_GNB_DU_UE_F1AP_ID);
         out->gNB_DU_ue_id = ie->value.choice.GNB_DU_UE_F1AP_ID;
         break;
       case F1AP_ProtocolIE_ID_id_RequestedSRSTransmissionCharacteristics:
@@ -3559,8 +3540,8 @@ f1ap_positioning_information_req_t cp_positioning_information_req(const f1ap_pos
  */
 bool eq_positioning_information_req(const f1ap_positioning_information_req_t *a, const f1ap_positioning_information_req_t *b)
 {
-  _F1_EQ_CHECK_INT(a->gNB_CU_ue_id, b->gNB_CU_ue_id);
-  _F1_EQ_CHECK_INT(a->gNB_DU_ue_id, b->gNB_DU_ue_id);
+  _EQ_CHECK_INT(a->gNB_CU_ue_id, b->gNB_CU_ue_id);
+  _EQ_CHECK_INT(a->gNB_DU_ue_id, b->gNB_DU_ue_id);
 
   return true;
 }
@@ -3571,6 +3552,7 @@ bool eq_positioning_information_req(const f1ap_positioning_information_req_t *a,
 void free_positioning_information_req(f1ap_positioning_information_req_t *msg)
 {
   // nothing to free
+  UNUSED(msg);
 }
 
 /**
@@ -3647,15 +3629,15 @@ bool decode_positioning_information_resp(const F1AP_F1AP_PDU_t *pdu, f1ap_positi
     AssertError(ie != NULL, return false, "in->protocolIEs.list.array[i] is NULL");
     switch (ie->id) {
       case F1AP_ProtocolIE_ID_id_gNB_CU_UE_F1AP_ID:
-        _F1_EQ_CHECK_INT(ie->value.present, F1AP_PositioningInformationResponseIEs__value_PR_GNB_CU_UE_F1AP_ID);
+        _EQ_CHECK_INT(ie->value.present, F1AP_PositioningInformationResponseIEs__value_PR_GNB_CU_UE_F1AP_ID);
         out->gNB_CU_ue_id = ie->value.choice.GNB_CU_UE_F1AP_ID;
         break;
       case F1AP_ProtocolIE_ID_id_gNB_DU_UE_F1AP_ID:
-        _F1_EQ_CHECK_INT(ie->value.present, F1AP_PositioningInformationResponseIEs__value_PR_GNB_DU_UE_F1AP_ID);
+        _EQ_CHECK_INT(ie->value.present, F1AP_PositioningInformationResponseIEs__value_PR_GNB_DU_UE_F1AP_ID);
         out->gNB_DU_ue_id = ie->value.choice.GNB_DU_UE_F1AP_ID;
         break;
       case F1AP_ProtocolIE_ID_id_SRSConfiguration:
-        _F1_EQ_CHECK_INT(ie->value.present, F1AP_PositioningInformationResponseIEs__value_PR_SRSConfiguration);
+        _EQ_CHECK_INT(ie->value.present, F1AP_PositioningInformationResponseIEs__value_PR_SRSConfiguration);
         F1AP_SRSCarrier_List_t *f1_sRSCarrier_List = &ie->value.choice.SRSConfiguration.sRSCarrier_List;
         out->srs_configuration = calloc_or_fail(1, sizeof(*out->srs_configuration));
         f1ap_srs_carrier_list_t *srs_carrier_list = &out->srs_configuration->srs_carrier_list;
@@ -3703,8 +3685,8 @@ f1ap_positioning_information_resp_t cp_positioning_information_resp(const f1ap_p
  */
 bool eq_positioning_information_resp(const f1ap_positioning_information_resp_t *a, const f1ap_positioning_information_resp_t *b)
 {
-  _F1_EQ_CHECK_INT(a->gNB_CU_ue_id, b->gNB_CU_ue_id);
-  _F1_EQ_CHECK_INT(a->gNB_DU_ue_id, b->gNB_DU_ue_id);
+  _EQ_CHECK_INT(a->gNB_CU_ue_id, b->gNB_CU_ue_id);
+  _EQ_CHECK_INT(a->gNB_DU_ue_id, b->gNB_DU_ue_id);
 
   /* optional: SRS Configuration (O) */
   if ((a->srs_configuration == NULL) != (b->srs_configuration == NULL)) {
@@ -3799,15 +3781,15 @@ bool decode_positioning_information_failure(const F1AP_F1AP_PDU_t *pdu, f1ap_pos
     AssertError(ie != NULL, return false, "in->protocolIEs.list.array[i] is NULL");
     switch (ie->id) {
       case F1AP_ProtocolIE_ID_id_gNB_CU_UE_F1AP_ID:
-        _F1_EQ_CHECK_INT(ie->value.present, F1AP_PositioningInformationFailureIEs__value_PR_GNB_CU_UE_F1AP_ID);
+        _EQ_CHECK_INT(ie->value.present, F1AP_PositioningInformationFailureIEs__value_PR_GNB_CU_UE_F1AP_ID);
         out->gNB_CU_ue_id = ie->value.choice.GNB_CU_UE_F1AP_ID;
         break;
       case F1AP_ProtocolIE_ID_id_gNB_DU_UE_F1AP_ID:
-        _F1_EQ_CHECK_INT(ie->value.present, F1AP_PositioningInformationFailureIEs__value_PR_GNB_DU_UE_F1AP_ID);
+        _EQ_CHECK_INT(ie->value.present, F1AP_PositioningInformationFailureIEs__value_PR_GNB_DU_UE_F1AP_ID);
         out->gNB_DU_ue_id = ie->value.choice.GNB_DU_UE_F1AP_ID;
         break;
       case F1AP_ProtocolIE_ID_id_Cause:
-        _F1_EQ_CHECK_INT(ie->value.present, F1AP_PositioningInformationFailureIEs__value_PR_Cause);
+        _EQ_CHECK_INT(ie->value.present, F1AP_PositioningInformationFailureIEs__value_PR_Cause);
         _F1_CHECK_EXP(decode_f1ap_cause(ie->value.choice.Cause, &out->cause, &out->cause_value));
         break;
       case F1AP_ProtocolIE_ID_id_CriticalityDiagnostics:
@@ -3844,10 +3826,10 @@ f1ap_positioning_information_failure_t cp_positioning_information_failure(const 
 bool eq_positioning_information_failure(const f1ap_positioning_information_failure_t *a,
                                         const f1ap_positioning_information_failure_t *b)
 {
-  _F1_EQ_CHECK_INT(a->gNB_CU_ue_id, b->gNB_CU_ue_id);
-  _F1_EQ_CHECK_INT(a->gNB_DU_ue_id, b->gNB_DU_ue_id);
-  _F1_EQ_CHECK_INT(a->cause, b->cause);
-  _F1_EQ_CHECK_LONG(a->cause_value, b->cause_value);
+  _EQ_CHECK_INT(a->gNB_CU_ue_id, b->gNB_CU_ue_id);
+  _EQ_CHECK_INT(a->gNB_DU_ue_id, b->gNB_DU_ue_id);
+  _EQ_CHECK_INT(a->cause, b->cause);
+  _EQ_CHECK_LONG(a->cause_value, b->cause_value);
 
   return true;
 }
@@ -3858,6 +3840,7 @@ bool eq_positioning_information_failure(const f1ap_positioning_information_failu
 void free_positioning_information_failure(f1ap_positioning_information_failure_t *msg)
 {
   // nothing to free
+  UNUSED(msg);
 }
 
 /**
@@ -3927,15 +3910,15 @@ bool decode_positioning_activation_req(const F1AP_F1AP_PDU_t *pdu, f1ap_position
     AssertError(ie != NULL, return false, "in->protocolIEs.list.array[i] is NULL");
     switch (ie->id) {
       case F1AP_ProtocolIE_ID_id_gNB_CU_UE_F1AP_ID:
-        _F1_EQ_CHECK_INT(ie->value.present, F1AP_PositioningActivationRequestIEs__value_PR_GNB_CU_UE_F1AP_ID);
+        _EQ_CHECK_INT(ie->value.present, F1AP_PositioningActivationRequestIEs__value_PR_GNB_CU_UE_F1AP_ID);
         out->gNB_CU_ue_id = ie->value.choice.GNB_CU_UE_F1AP_ID;
         break;
       case F1AP_ProtocolIE_ID_id_gNB_DU_UE_F1AP_ID:
-        _F1_EQ_CHECK_INT(ie->value.present, F1AP_PositioningActivationRequestIEs__value_PR_GNB_DU_UE_F1AP_ID);
+        _EQ_CHECK_INT(ie->value.present, F1AP_PositioningActivationRequestIEs__value_PR_GNB_DU_UE_F1AP_ID);
         out->gNB_DU_ue_id = ie->value.choice.GNB_DU_UE_F1AP_ID;
         break;
       case F1AP_ProtocolIE_ID_id_SRSType:
-        _F1_EQ_CHECK_INT(ie->value.present, F1AP_PositioningActivationRequestIEs__value_PR_SRSType);
+        _EQ_CHECK_INT(ie->value.present, F1AP_PositioningActivationRequestIEs__value_PR_SRSType);
         _F1_CHECK_EXP(decode_f1ap_srstype(&ie->value.choice.SRSType, &out->srs_type));
         break;
       case F1AP_ProtocolIE_ID_id_ActivationTime:
@@ -3987,9 +3970,9 @@ f1ap_positioning_activation_req_t cp_positioning_activation_req(const f1ap_posit
  */
 bool eq_positioning_activation_req(const f1ap_positioning_activation_req_t *a, const f1ap_positioning_activation_req_t *b)
 {
-  _F1_EQ_CHECK_INT(a->gNB_CU_ue_id, b->gNB_CU_ue_id);
-  _F1_EQ_CHECK_INT(a->gNB_DU_ue_id, b->gNB_DU_ue_id);
-  _F1_EQ_CHECK_INT(a->srs_type.present, b->srs_type.present);
+  _EQ_CHECK_INT(a->gNB_CU_ue_id, b->gNB_CU_ue_id);
+  _EQ_CHECK_INT(a->gNB_DU_ue_id, b->gNB_DU_ue_id);
+  _EQ_CHECK_INT(a->srs_type.present, b->srs_type.present);
 
   const f1ap_srs_type_t *srs_type_a = &a->srs_type;
   const f1ap_srs_type_t *srs_type_b = &b->srs_type;
@@ -3998,10 +3981,10 @@ bool eq_positioning_activation_req(const f1ap_positioning_activation_req_t *a, c
       // nothing to check
       break;
     case F1AP_SRS_TYPE_PR_SEMIPERSISTENTSRS:
-      _F1_EQ_CHECK_INT(*srs_type_a->choice.srs_resource_set_id, *srs_type_b->choice.srs_resource_set_id);
+      _EQ_CHECK_INT(*srs_type_a->choice.srs_resource_set_id, *srs_type_b->choice.srs_resource_set_id);
       break;
     case F1AP_SRS_TYPE_PR_APERIODICSRS:
-      _F1_EQ_CHECK_INT(*srs_type_a->choice.aperiodic, *srs_type_b->choice.aperiodic);
+      _EQ_CHECK_INT(*srs_type_a->choice.aperiodic, *srs_type_b->choice.aperiodic);
       break;
     default:
       PRINT_ERROR("received illegal SRS type %d\n", srs_type_a->present);
@@ -4093,11 +4076,11 @@ bool decode_positioning_activation_resp(const F1AP_F1AP_PDU_t *pdu, f1ap_positio
     AssertError(ie != NULL, return false, "in->protocolIEs.list.array[i] is NULL");
     switch (ie->id) {
       case F1AP_ProtocolIE_ID_id_gNB_CU_UE_F1AP_ID:
-        _F1_EQ_CHECK_INT(ie->value.present, F1AP_PositioningActivationResponseIEs__value_PR_GNB_CU_UE_F1AP_ID);
+        _EQ_CHECK_INT(ie->value.present, F1AP_PositioningActivationResponseIEs__value_PR_GNB_CU_UE_F1AP_ID);
         out->gNB_CU_ue_id = ie->value.choice.GNB_CU_UE_F1AP_ID;
         break;
       case F1AP_ProtocolIE_ID_id_gNB_DU_UE_F1AP_ID:
-        _F1_EQ_CHECK_INT(ie->value.present, F1AP_PositioningActivationResponseIEs__value_PR_GNB_DU_UE_F1AP_ID);
+        _EQ_CHECK_INT(ie->value.present, F1AP_PositioningActivationResponseIEs__value_PR_GNB_DU_UE_F1AP_ID);
         out->gNB_DU_ue_id = ie->value.choice.GNB_DU_UE_F1AP_ID;
         break;
       case F1AP_ProtocolIE_ID_id_SystemFrameNumber:
@@ -4137,8 +4120,8 @@ f1ap_positioning_activation_resp_t cp_positioning_activation_resp(const f1ap_pos
  */
 bool eq_positioning_activation_resp(const f1ap_positioning_activation_resp_t *a, const f1ap_positioning_activation_resp_t *b)
 {
-  _F1_EQ_CHECK_INT(a->gNB_CU_ue_id, b->gNB_CU_ue_id);
-  _F1_EQ_CHECK_INT(a->gNB_DU_ue_id, b->gNB_DU_ue_id);
+  _EQ_CHECK_INT(a->gNB_CU_ue_id, b->gNB_CU_ue_id);
+  _EQ_CHECK_INT(a->gNB_DU_ue_id, b->gNB_DU_ue_id);
 
   return true;
 }
@@ -4149,6 +4132,7 @@ bool eq_positioning_activation_resp(const f1ap_positioning_activation_resp_t *a,
 void free_positioning_activation_resp(f1ap_positioning_activation_resp_t *msg)
 {
   // nothing to free
+  UNUSED(msg);
 }
 
 /**
@@ -4218,15 +4202,15 @@ bool decode_positioning_activation_failure(const F1AP_F1AP_PDU_t *pdu, f1ap_posi
     AssertError(ie != NULL, return false, "in->protocolIEs.list.array[i] is NULL");
     switch (ie->id) {
       case F1AP_ProtocolIE_ID_id_gNB_CU_UE_F1AP_ID:
-        _F1_EQ_CHECK_INT(ie->value.present, F1AP_PositioningActivationFailureIEs__value_PR_GNB_CU_UE_F1AP_ID);
+        _EQ_CHECK_INT(ie->value.present, F1AP_PositioningActivationFailureIEs__value_PR_GNB_CU_UE_F1AP_ID);
         out->gNB_CU_ue_id = ie->value.choice.GNB_CU_UE_F1AP_ID;
         break;
       case F1AP_ProtocolIE_ID_id_gNB_DU_UE_F1AP_ID:
-        _F1_EQ_CHECK_INT(ie->value.present, F1AP_PositioningActivationFailureIEs__value_PR_GNB_DU_UE_F1AP_ID);
+        _EQ_CHECK_INT(ie->value.present, F1AP_PositioningActivationFailureIEs__value_PR_GNB_DU_UE_F1AP_ID);
         out->gNB_DU_ue_id = ie->value.choice.GNB_DU_UE_F1AP_ID;
         break;
       case F1AP_ProtocolIE_ID_id_Cause:
-        _F1_EQ_CHECK_INT(ie->value.present, F1AP_PositioningActivationFailureIEs__value_PR_Cause);
+        _EQ_CHECK_INT(ie->value.present, F1AP_PositioningActivationFailureIEs__value_PR_Cause);
         _F1_CHECK_EXP(decode_f1ap_cause(ie->value.choice.Cause, &out->cause, &out->cause_value));
         break;
       case F1AP_ProtocolIE_ID_id_CriticalityDiagnostics:
@@ -4263,10 +4247,10 @@ f1ap_positioning_activation_failure_t cp_positioning_activation_failure(const f1
 bool eq_positioning_activation_failure(const f1ap_positioning_activation_failure_t *a,
                                        const f1ap_positioning_activation_failure_t *b)
 {
-  _F1_EQ_CHECK_INT(a->gNB_CU_ue_id, b->gNB_CU_ue_id);
-  _F1_EQ_CHECK_INT(a->gNB_DU_ue_id, b->gNB_DU_ue_id);
-  _F1_EQ_CHECK_INT(a->cause, b->cause);
-  _F1_EQ_CHECK_LONG(a->cause_value, b->cause_value);
+  _EQ_CHECK_INT(a->gNB_CU_ue_id, b->gNB_CU_ue_id);
+  _EQ_CHECK_INT(a->gNB_DU_ue_id, b->gNB_DU_ue_id);
+  _EQ_CHECK_INT(a->cause, b->cause);
+  _EQ_CHECK_LONG(a->cause_value, b->cause_value);
 
   return true;
 }
@@ -4277,6 +4261,7 @@ bool eq_positioning_activation_failure(const f1ap_positioning_activation_failure
 void free_positioning_activation_failure(f1ap_positioning_activation_failure_t *msg)
 {
   // nothing to free
+  UNUSED(msg);
 }
 
 /**
@@ -4338,15 +4323,15 @@ bool decode_positioning_deactivation(const F1AP_F1AP_PDU_t *pdu, f1ap_positionin
     AssertError(ie != NULL, return false, "in->protocolIEs.list.array[i] is NULL");
     switch (ie->id) {
       case F1AP_ProtocolIE_ID_id_gNB_CU_UE_F1AP_ID:
-        _F1_EQ_CHECK_INT(ie->value.present, F1AP_PositioningDeactivationIEs__value_PR_GNB_CU_UE_F1AP_ID);
+        _EQ_CHECK_INT(ie->value.present, F1AP_PositioningDeactivationIEs__value_PR_GNB_CU_UE_F1AP_ID);
         out->gNB_CU_ue_id = ie->value.choice.GNB_CU_UE_F1AP_ID;
         break;
       case F1AP_ProtocolIE_ID_id_gNB_DU_UE_F1AP_ID:
-        _F1_EQ_CHECK_INT(ie->value.present, F1AP_PositioningDeactivationIEs__value_PR_GNB_DU_UE_F1AP_ID);
+        _EQ_CHECK_INT(ie->value.present, F1AP_PositioningDeactivationIEs__value_PR_GNB_DU_UE_F1AP_ID);
         out->gNB_DU_ue_id = ie->value.choice.GNB_DU_UE_F1AP_ID;
         break;
       case F1AP_ProtocolIE_ID_id_AbortTransmission:
-        _F1_EQ_CHECK_INT(ie->value.present, F1AP_PositioningDeactivationIEs__value_PR_AbortTransmission);
+        _EQ_CHECK_INT(ie->value.present, F1AP_PositioningDeactivationIEs__value_PR_AbortTransmission);
         _F1_CHECK_EXP(decode_f1ap_abort_transmission(&ie->value.choice.AbortTransmission, &out->abort_transmission));
         break;
       default:
@@ -4393,18 +4378,18 @@ f1ap_positioning_deactivation_t cp_positioning_deactivation(const f1ap_positioni
  */
 bool eq_positioning_deactivation(const f1ap_positioning_deactivation_t *a, const f1ap_positioning_deactivation_t *b)
 {
-  _F1_EQ_CHECK_INT(a->gNB_CU_ue_id, b->gNB_CU_ue_id);
-  _F1_EQ_CHECK_INT(a->gNB_DU_ue_id, b->gNB_DU_ue_id);
-  _F1_EQ_CHECK_INT(a->abort_transmission.present, b->abort_transmission.present);
+  _EQ_CHECK_INT(a->gNB_CU_ue_id, b->gNB_CU_ue_id);
+  _EQ_CHECK_INT(a->gNB_DU_ue_id, b->gNB_DU_ue_id);
+  _EQ_CHECK_INT(a->abort_transmission.present, b->abort_transmission.present);
   switch (a->abort_transmission.present) {
     case F1AP_ABORT_TRANSMISSION_PR_NOTHING:
       // nothing to check
       break;
     case F1AP_ABORT_TRANSMISSION_PR_SRSRESOURCESETID:
-      _F1_EQ_CHECK_INT(a->abort_transmission.choice.srs_resource_set_id, b->abort_transmission.choice.srs_resource_set_id);
+      _EQ_CHECK_INT(a->abort_transmission.choice.srs_resource_set_id, b->abort_transmission.choice.srs_resource_set_id);
       break;
     case F1AP_ABORT_TRANSMISSION_PR_RELEASEALL:
-      _F1_EQ_CHECK_INT(a->abort_transmission.choice.release_all, b->abort_transmission.choice.release_all);
+      _EQ_CHECK_INT(a->abort_transmission.choice.release_all, b->abort_transmission.choice.release_all);
       break;
     default:
       PRINT_ERROR("received illegal Abort Transmission value %d\n", a->abort_transmission.present);
@@ -4420,6 +4405,7 @@ bool eq_positioning_deactivation(const f1ap_positioning_deactivation_t *a, const
 void free_positioning_deactivation(f1ap_positioning_deactivation_t *msg)
 {
   // nothing to free
+  UNUSED(msg);
 }
 
 /**
@@ -4496,15 +4482,15 @@ bool decode_positioning_information_update(const F1AP_F1AP_PDU_t *pdu, f1ap_posi
     AssertError(ie != NULL, return false, "in->protocolIEs.list.array[i] is NULL");
     switch (ie->id) {
       case F1AP_ProtocolIE_ID_id_gNB_CU_UE_F1AP_ID:
-        _F1_EQ_CHECK_INT(ie->value.present, F1AP_PositioningInformationUpdateIEs__value_PR_GNB_CU_UE_F1AP_ID);
+        _EQ_CHECK_INT(ie->value.present, F1AP_PositioningInformationUpdateIEs__value_PR_GNB_CU_UE_F1AP_ID);
         out->gNB_CU_ue_id = ie->value.choice.GNB_CU_UE_F1AP_ID;
         break;
       case F1AP_ProtocolIE_ID_id_gNB_DU_UE_F1AP_ID:
-        _F1_EQ_CHECK_INT(ie->value.present, F1AP_PositioningInformationUpdateIEs__value_PR_GNB_DU_UE_F1AP_ID);
+        _EQ_CHECK_INT(ie->value.present, F1AP_PositioningInformationUpdateIEs__value_PR_GNB_DU_UE_F1AP_ID);
         out->gNB_DU_ue_id = ie->value.choice.GNB_DU_UE_F1AP_ID;
         break;
       case F1AP_ProtocolIE_ID_id_SRSConfiguration:
-        _F1_EQ_CHECK_INT(ie->value.present, F1AP_PositioningInformationUpdateIEs__value_PR_SRSConfiguration);
+        _EQ_CHECK_INT(ie->value.present, F1AP_PositioningInformationUpdateIEs__value_PR_SRSConfiguration);
         F1AP_SRSCarrier_List_t *f1_sRSCarrier_List = &ie->value.choice.SRSConfiguration.sRSCarrier_List;
         out->srs_configuration = calloc_or_fail(1, sizeof(*out->srs_configuration));
         f1ap_srs_carrier_list_t *srs_carrier_list = &out->srs_configuration->srs_carrier_list;
@@ -4550,8 +4536,8 @@ f1ap_positioning_information_update_t cp_positioning_information_update(const f1
 bool eq_positioning_information_update(const f1ap_positioning_information_update_t *a,
                                        const f1ap_positioning_information_update_t *b)
 {
-  _F1_EQ_CHECK_INT(a->gNB_CU_ue_id, b->gNB_CU_ue_id);
-  _F1_EQ_CHECK_INT(a->gNB_DU_ue_id, b->gNB_DU_ue_id);
+  _EQ_CHECK_INT(a->gNB_CU_ue_id, b->gNB_CU_ue_id);
+  _EQ_CHECK_INT(a->gNB_DU_ue_id, b->gNB_DU_ue_id);
 
   /* optional: SRS Configuration */
   if ((a->srs_configuration == NULL) != (b->srs_configuration == NULL)) {
@@ -4655,11 +4641,11 @@ bool decode_trp_information_req(const F1AP_F1AP_PDU_t *pdu, f1ap_trp_information
     AssertError(ie != NULL, return false, "in->protocolIEs.list.array[i] is NULL");
     switch (ie->id) {
       case F1AP_ProtocolIE_ID_id_TransactionID:
-        _F1_EQ_CHECK_INT(ie->value.present, F1AP_TRPInformationRequestIEs__value_PR_TransactionID);
+        _EQ_CHECK_INT(ie->value.present, F1AP_TRPInformationRequestIEs__value_PR_TransactionID);
         out->transaction_id = ie->value.choice.TransactionID;
         break;
       case F1AP_ProtocolIE_ID_id_TRPList:
-        _F1_EQ_CHECK_INT(ie->value.present, F1AP_TRPInformationRequestIEs__value_PR_TRPList);
+        _EQ_CHECK_INT(ie->value.present, F1AP_TRPInformationRequestIEs__value_PR_TRPList);
         out->has_trp_list = true;
         uint32_t trp_list_length = ie->value.choice.TRPList.list.count;
         AssertError(trp_list_length > 0, return false, "at least 1 TRP must be present");
@@ -4671,7 +4657,7 @@ bool decode_trp_information_req(const F1AP_F1AP_PDU_t *pdu, f1ap_trp_information
         }
         break;
       case F1AP_ProtocolIE_ID_id_TRPInformationTypeListTRPReq:
-        _F1_EQ_CHECK_INT(ie->value.present, F1AP_TRPInformationRequestIEs__value_PR_TRPInformationTypeListTRPReq);
+        _EQ_CHECK_INT(ie->value.present, F1AP_TRPInformationRequestIEs__value_PR_TRPInformationTypeListTRPReq);
         uint8_t trp_info_type_list_length = ie->value.choice.TRPInformationTypeListTRPReq.list.count;
         AssertError(trp_info_type_list_length > 0, return false, "at least 1 TRP Information Type must be present");
         f1ap_trp_information_type_list_t *trp_information_type_list = &out->trp_information_type_list;
@@ -4681,8 +4667,8 @@ bool decode_trp_information_req(const F1AP_F1AP_PDU_t *pdu, f1ap_trp_information
         for (int i = 0; i < trp_info_type_list_length; i++) {
           F1AP_TRPInformationTypeItemTRPReq_t *f1_trpinfotypeitem =
               (F1AP_TRPInformationTypeItemTRPReq_t *)ie->value.choice.TRPInformationTypeListTRPReq.list.array[i];
-          _F1_EQ_CHECK_LONG(f1_trpinfotypeitem->id, F1AP_ProtocolIE_ID_id_TRPInformationTypeItem);
-          _F1_EQ_CHECK_INT(f1_trpinfotypeitem->value.present, F1AP_TRPInformationTypeItemTRPReq__value_PR_TRPInformationTypeItem);
+          _EQ_CHECK_LONG(f1_trpinfotypeitem->id, F1AP_ProtocolIE_ID_id_TRPInformationTypeItem);
+          _EQ_CHECK_INT(f1_trpinfotypeitem->value.present, F1AP_TRPInformationTypeItemTRPReq__value_PR_TRPInformationTypeItem);
           trp_information_type_list->trp_information_type_item[i] = f1_trpinfotypeitem->value.choice.TRPInformationTypeItem;
         }
         break;
@@ -4733,22 +4719,22 @@ f1ap_trp_information_req_t cp_trp_information_req(const f1ap_trp_information_req
  */
 bool eq_trp_information_req(const f1ap_trp_information_req_t *a, const f1ap_trp_information_req_t *b)
 {
-  _F1_EQ_CHECK_INT(a->transaction_id, b->transaction_id);
-  _F1_EQ_CHECK_INT(a->has_trp_list, b->has_trp_list);
+  _EQ_CHECK_INT(a->transaction_id, b->transaction_id);
+  _EQ_CHECK_INT(a->has_trp_list, b->has_trp_list);
   if (a->has_trp_list) {
-    _F1_EQ_CHECK_INT(a->trp_list.trp_list_length, b->trp_list.trp_list_length);
+    _EQ_CHECK_INT(a->trp_list.trp_list_length, b->trp_list.trp_list_length);
     for (int i = 0; i < a->trp_list.trp_list_length; i++) {
-      _F1_EQ_CHECK_INT(a->trp_list.trp_list_item[i].trp_id, b->trp_list.trp_list_item[i].trp_id);
+      _EQ_CHECK_INT(a->trp_list.trp_list_item[i].trp_id, b->trp_list.trp_list_item[i].trp_id);
     }
   }
 
   const f1ap_trp_information_type_list_t *trp_information_type_list_a = &a->trp_information_type_list;
   const f1ap_trp_information_type_list_t *trp_information_type_list_b = &b->trp_information_type_list;
-  _F1_EQ_CHECK_INT(trp_information_type_list_a->trp_information_type_list_length,
-                   trp_information_type_list_b->trp_information_type_list_length);
+  _EQ_CHECK_INT(trp_information_type_list_a->trp_information_type_list_length,
+                trp_information_type_list_b->trp_information_type_list_length);
   for (int i = 0; i < trp_information_type_list_a->trp_information_type_list_length; i++) {
-    _F1_EQ_CHECK_INT(trp_information_type_list_a->trp_information_type_item[i],
-                     trp_information_type_list_b->trp_information_type_item[i]);
+    _EQ_CHECK_INT(trp_information_type_list_a->trp_information_type_item[i],
+                  trp_information_type_list_b->trp_information_type_item[i]);
   }
 
   return true;
@@ -4840,11 +4826,11 @@ bool decode_trp_information_resp(const F1AP_F1AP_PDU_t *pdu, f1ap_trp_informatio
     AssertError(ie != NULL, return false, "in->protocolIEs.list.array[i] is NULL");
     switch (ie->id) {
       case F1AP_ProtocolIE_ID_id_TransactionID:
-        _F1_EQ_CHECK_INT(ie->value.present, F1AP_TRPInformationResponseIEs__value_PR_TransactionID);
+        _EQ_CHECK_INT(ie->value.present, F1AP_TRPInformationResponseIEs__value_PR_TransactionID);
         out->transaction_id = ie->value.choice.TransactionID;
         break;
       case F1AP_ProtocolIE_ID_id_TRPInformationListTRPResp:
-        _F1_EQ_CHECK_INT(ie->value.present, F1AP_TRPInformationResponseIEs__value_PR_TRPInformationListTRPResp);
+        _EQ_CHECK_INT(ie->value.present, F1AP_TRPInformationResponseIEs__value_PR_TRPInformationListTRPResp);
         uint32_t trp_info_item_length = ie->value.choice.TRPInformationListTRPResp.list.count;
         AssertError(trp_info_item_length > 0, return false, "at least 1 TRP Information Item must be present");
         out->trp_information_list.trp_information_item_length = trp_info_item_length;
@@ -4853,8 +4839,8 @@ bool decode_trp_information_resp(const F1AP_F1AP_PDU_t *pdu, f1ap_trp_informatio
         for (int i = 0; i < trp_info_item_length; i++) {
           F1AP_TRPInformationItemTRPResp_t *f1_trpinfolist =
               (F1AP_TRPInformationItemTRPResp_t *)ie->value.choice.TRPInformationListTRPResp.list.array[i];
-          _F1_EQ_CHECK_LONG(f1_trpinfolist->id, F1AP_ProtocolIE_ID_id_TRPInformationItem);
-          _F1_EQ_CHECK_INT(f1_trpinfolist->value.present, F1AP_TRPInformationItemTRPResp__value_PR_TRPInformationItem);
+          _EQ_CHECK_LONG(f1_trpinfolist->id, F1AP_ProtocolIE_ID_id_TRPInformationItem);
+          _EQ_CHECK_INT(f1_trpinfolist->value.present, F1AP_TRPInformationItemTRPResp__value_PR_TRPInformationItem);
           F1AP_TRPInformationItem_t *f1_trp_info_item = &f1_trpinfolist->value.choice.TRPInformationItem;
           F1AP_TRPInformation_t *f1_trp_info = &f1_trp_info_item->tRPInformation;
           trp_info_item[i].trp_id = f1_trp_info->tRPID;
@@ -4936,9 +4922,9 @@ f1ap_trp_information_resp_t cp_trp_information_resp(const f1ap_trp_information_r
  */
 bool eq_trp_information_resp(const f1ap_trp_information_resp_t *a, const f1ap_trp_information_resp_t *b)
 {
-  _F1_EQ_CHECK_INT(a->transaction_id, b->transaction_id);
+  _EQ_CHECK_INT(a->transaction_id, b->transaction_id);
 
-  _F1_EQ_CHECK_INT(a->trp_information_list.trp_information_item_length, b->trp_information_list.trp_information_item_length);
+  _EQ_CHECK_INT(a->trp_information_list.trp_information_item_length, b->trp_information_list.trp_information_item_length);
   uint32_t trp_info_item_length = a->trp_information_list.trp_information_item_length;
   AssertError(trp_info_item_length > 0, return false, "at least 1 TRP Information Item must be present\n");
 
@@ -4950,11 +4936,11 @@ bool eq_trp_information_resp(const f1ap_trp_information_resp_t *a, const f1ap_tr
         &trp_information_item_a[i].trp_information_type_response_list;
     f1ap_trp_information_type_response_list_t *trp_info_type_resp_list_b =
         &trp_information_item_b[i].trp_information_type_response_list;
-    _F1_EQ_CHECK_INT(trp_info_type_resp_list_a->trp_information_type_response_item_length,
-                     trp_info_type_resp_list_b->trp_information_type_response_item_length);
+    _EQ_CHECK_INT(trp_info_type_resp_list_a->trp_information_type_response_item_length,
+                  trp_info_type_resp_list_b->trp_information_type_response_item_length);
     uint8_t trp_info_type_resp_item_len = trp_info_type_resp_list_a->trp_information_type_response_item_length;
     AssertError(trp_info_type_resp_item_len > 0, return false, "at least 1 TRP Information type response Item must be present\n");
-    _F1_EQ_CHECK_INT(trp_information_item_a[i].trp_id, trp_information_item_b[i].trp_id);
+    _EQ_CHECK_INT(trp_information_item_a[i].trp_id, trp_information_item_b[i].trp_id);
     for (int j = 0; j < trp_info_type_resp_item_len; j++) {
       _F1_CHECK_EXP(eq_trp_info_type_response_item(&trp_info_type_resp_list_a->trp_information_type_response_item[j],
                                                    &trp_info_type_resp_list_b->trp_information_type_response_item[j]));
@@ -5030,11 +5016,11 @@ bool decode_trp_information_failure(const F1AP_F1AP_PDU_t *pdu, f1ap_trp_informa
     AssertError(ie != NULL, return false, "in->protocolIEs.list.array[i] is NULL");
     switch (ie->id) {
       case F1AP_ProtocolIE_ID_id_TransactionID:
-        _F1_EQ_CHECK_INT(ie->value.present, F1AP_TRPInformationFailureIEs__value_PR_TransactionID);
+        _EQ_CHECK_INT(ie->value.present, F1AP_TRPInformationFailureIEs__value_PR_TransactionID);
         out->transaction_id = ie->value.choice.TransactionID;
         break;
       case F1AP_ProtocolIE_ID_id_Cause:
-        _F1_EQ_CHECK_INT(ie->value.present, F1AP_TRPInformationFailureIEs__value_PR_Cause);
+        _EQ_CHECK_INT(ie->value.present, F1AP_TRPInformationFailureIEs__value_PR_Cause);
         _F1_CHECK_EXP(decode_f1ap_cause(ie->value.choice.Cause, &out->cause, &out->cause_value));
         break;
       case F1AP_ProtocolIE_ID_id_CriticalityDiagnostics:
@@ -5069,9 +5055,9 @@ f1ap_trp_information_failure_t cp_trp_information_failure(const f1ap_trp_informa
  */
 bool eq_trp_information_failure(const f1ap_trp_information_failure_t *a, const f1ap_trp_information_failure_t *b)
 {
-  _F1_EQ_CHECK_INT(a->transaction_id, b->transaction_id);
-  _F1_EQ_CHECK_INT(a->cause, b->cause);
-  _F1_EQ_CHECK_LONG(a->cause_value, b->cause_value);
+  _EQ_CHECK_INT(a->transaction_id, b->transaction_id);
+  _EQ_CHECK_INT(a->cause, b->cause);
+  _EQ_CHECK_LONG(a->cause_value, b->cause_value);
 
   return true;
 }
@@ -5082,6 +5068,7 @@ bool eq_trp_information_failure(const f1ap_trp_information_failure_t *a, const f
 void free_trp_information_failure(f1ap_trp_information_failure_t *msg)
 {
   // nothing to free
+  UNUSED(msg);
 }
 
 /**
@@ -5231,19 +5218,19 @@ bool decode_positioning_measurement_req(const F1AP_F1AP_PDU_t *pdu, f1ap_positio
     AssertError(ie != NULL, return false, "in->protocolIEs.list.array[i] is NULL");
     switch (ie->id) {
       case F1AP_ProtocolIE_ID_id_TransactionID:
-        _F1_EQ_CHECK_INT(ie->value.present, F1AP_PositioningMeasurementRequestIEs__value_PR_TransactionID);
+        _EQ_CHECK_INT(ie->value.present, F1AP_PositioningMeasurementRequestIEs__value_PR_TransactionID);
         out->transaction_id = ie->value.choice.TransactionID;
         break;
       case F1AP_ProtocolIE_ID_id_LMF_MeasurementID:
-        _F1_EQ_CHECK_INT(ie->value.present, F1AP_PositioningMeasurementRequestIEs__value_PR_LMF_MeasurementID);
+        _EQ_CHECK_INT(ie->value.present, F1AP_PositioningMeasurementRequestIEs__value_PR_LMF_MeasurementID);
         out->lmf_measurement_id = ie->value.choice.LMF_MeasurementID;
         break;
       case F1AP_ProtocolIE_ID_id_RAN_MeasurementID:
-        _F1_EQ_CHECK_INT(ie->value.present, F1AP_PositioningMeasurementRequestIEs__value_PR_RAN_MeasurementID);
+        _EQ_CHECK_INT(ie->value.present, F1AP_PositioningMeasurementRequestIEs__value_PR_RAN_MeasurementID);
         out->ran_measurement_id = ie->value.choice.RAN_MeasurementID;
         break;
       case F1AP_ProtocolIE_ID_id_TRP_MeasurementRequestList:
-        _F1_EQ_CHECK_INT(ie->value.present, F1AP_PositioningMeasurementRequestIEs__value_PR_TRP_MeasurementRequestList);
+        _EQ_CHECK_INT(ie->value.present, F1AP_PositioningMeasurementRequestIEs__value_PR_TRP_MeasurementRequestList);
         F1AP_TRP_MeasurementRequestList_t *f1_trp_meas_req_list = &ie->value.choice.TRP_MeasurementRequestList;
         f1ap_trp_measurement_request_list_t *trp_meas_req_list = &out->trp_measurement_request_list;
         uint32_t trp_meas_req_list_len = f1_trp_meas_req_list->list.count;
@@ -5256,15 +5243,15 @@ bool decode_positioning_measurement_req(const F1AP_F1AP_PDU_t *pdu, f1ap_positio
         }
         break;
       case F1AP_ProtocolIE_ID_id_PosReportCharacteristics:
-        _F1_EQ_CHECK_INT(ie->value.present, F1AP_PositioningMeasurementRequestIEs__value_PR_PosReportCharacteristics);
+        _EQ_CHECK_INT(ie->value.present, F1AP_PositioningMeasurementRequestIEs__value_PR_PosReportCharacteristics);
         out->pos_report_characteristics = ie->value.choice.PosReportCharacteristics;
         break;
       case F1AP_ProtocolIE_ID_id_PosMeasurementPeriodicity:
-        _F1_EQ_CHECK_INT(ie->value.present, F1AP_PositioningMeasurementRequestIEs__value_PR_MeasurementPeriodicity);
+        _EQ_CHECK_INT(ie->value.present, F1AP_PositioningMeasurementRequestIEs__value_PR_MeasurementPeriodicity);
         out->measurement_periodicity = ie->value.choice.MeasurementPeriodicity;
         break;
       case F1AP_ProtocolIE_ID_id_PosMeasurementQuantities:
-        _F1_EQ_CHECK_INT(ie->value.present, F1AP_PositioningMeasurementRequestIEs__value_PR_PosMeasurementQuantities);
+        _EQ_CHECK_INT(ie->value.present, F1AP_PositioningMeasurementRequestIEs__value_PR_PosMeasurementQuantities);
         F1AP_PosMeasurementQuantities_t *f1_pos_meas_quantities = &ie->value.choice.PosMeasurementQuantities;
         f1ap_pos_measurement_quantities_t *pos_meas_quantities = &out->pos_measurement_quantities;
         uint32_t pos_meas_quantities_len = f1_pos_meas_quantities->list.count;
@@ -5283,7 +5270,7 @@ bool decode_positioning_measurement_req(const F1AP_F1AP_PDU_t *pdu, f1ap_positio
         PRINT_ERROR("F1AP_ProtocolIE_ID_id %ld not supported, skipping\n", ie->id);
         break;
       case F1AP_ProtocolIE_ID_id_SRSConfiguration:
-        _F1_EQ_CHECK_INT(ie->value.present, F1AP_PositioningMeasurementRequestIEs__value_PR_SRSConfiguration);
+        _EQ_CHECK_INT(ie->value.present, F1AP_PositioningMeasurementRequestIEs__value_PR_SRSConfiguration);
         F1AP_SRSCarrier_List_t *f1_sRSCarrier_List = &ie->value.choice.SRSConfiguration.sRSCarrier_List;
         out->srs_configuration = calloc_or_fail(1, sizeof(*out->srs_configuration));
         f1ap_srs_carrier_list_t *srs_carrier_list = &out->srs_configuration->srs_carrier_list;
@@ -5363,34 +5350,34 @@ f1ap_positioning_measurement_req_t cp_positioning_measurement_req(const f1ap_pos
  */
 bool eq_positioning_measurement_req(const f1ap_positioning_measurement_req_t *a, const f1ap_positioning_measurement_req_t *b)
 {
-  _F1_EQ_CHECK_INT(a->transaction_id, b->transaction_id);
-  _F1_EQ_CHECK_INT(a->lmf_measurement_id, b->lmf_measurement_id);
-  _F1_EQ_CHECK_INT(a->ran_measurement_id, b->ran_measurement_id);
+  _EQ_CHECK_INT(a->transaction_id, b->transaction_id);
+  _EQ_CHECK_INT(a->lmf_measurement_id, b->lmf_measurement_id);
+  _EQ_CHECK_INT(a->ran_measurement_id, b->ran_measurement_id);
 
   const f1ap_trp_measurement_request_list_t *trp_meas_req_list_a = &a->trp_measurement_request_list;
   const f1ap_trp_measurement_request_list_t *trp_meas_req_list_b = &b->trp_measurement_request_list;
   uint32_t trp_meas_req_list_len = trp_meas_req_list_a->trp_measurement_request_list_length;
   AssertFatal(trp_meas_req_list_len > 0, "at least 1 TRP must be present");
-  _F1_EQ_CHECK_INT(trp_meas_req_list_b->trp_measurement_request_list_length, trp_meas_req_list_len);
+  _EQ_CHECK_INT(trp_meas_req_list_b->trp_measurement_request_list_length, trp_meas_req_list_len);
   for (int i = 0; i < trp_meas_req_list_len; i++) {
-    _F1_EQ_CHECK_INT(trp_meas_req_list_a->trp_measurement_request_item[i].tRPID,
-                     trp_meas_req_list_b->trp_measurement_request_item[i].tRPID);
+    _EQ_CHECK_INT(trp_meas_req_list_a->trp_measurement_request_item[i].tRPID,
+                  trp_meas_req_list_b->trp_measurement_request_item[i].tRPID);
   }
 
-  _F1_EQ_CHECK_INT(a->pos_report_characteristics, b->pos_report_characteristics);
+  _EQ_CHECK_INT(a->pos_report_characteristics, b->pos_report_characteristics);
   if (a->pos_report_characteristics == F1AP_POSREPORTCHARACTERISTICS_PERIODIC) {
-    _F1_EQ_CHECK_INT(a->measurement_periodicity, b->measurement_periodicity);
+    _EQ_CHECK_INT(a->measurement_periodicity, b->measurement_periodicity);
   }
 
   const f1ap_pos_measurement_quantities_t *pos_meas_quantities_a = &a->pos_measurement_quantities;
   const f1ap_pos_measurement_quantities_t *pos_meas_quantities_b = &b->pos_measurement_quantities;
   uint32_t pos_meas_quantities_len = pos_meas_quantities_a->pos_measurement_quantities_length;
   AssertFatal(pos_meas_quantities_len > 0, "at least 1 position measurement must be present");
-  _F1_EQ_CHECK_INT(pos_meas_quantities_b->pos_measurement_quantities_length, pos_meas_quantities_len);
+  _EQ_CHECK_INT(pos_meas_quantities_b->pos_measurement_quantities_length, pos_meas_quantities_len);
   for (int i = 0; i < pos_meas_quantities_len; i++) {
     f1ap_pos_measurement_quantities_item_t *a_pos_meas_quantities_item = &pos_meas_quantities_a->pos_measurement_quantities_item[i];
     f1ap_pos_measurement_quantities_item_t *b_pos_meas_quantities_item = &pos_meas_quantities_b->pos_measurement_quantities_item[i];
-    _F1_EQ_CHECK_INT(a_pos_meas_quantities_item->pos_measurement_type, b_pos_meas_quantities_item->pos_measurement_type);
+    _EQ_CHECK_INT(a_pos_meas_quantities_item->pos_measurement_type, b_pos_meas_quantities_item->pos_measurement_type);
   }
 
   /* optional: SRS Configuration */
@@ -5512,19 +5499,19 @@ bool decode_positioning_measurement_resp(const F1AP_F1AP_PDU_t *pdu, f1ap_positi
     AssertError(ie != NULL, return false, "in->protocolIEs.list.array[i] is NULL");
     switch (ie->id) {
       case F1AP_ProtocolIE_ID_id_TransactionID:
-        _F1_EQ_CHECK_INT(ie->value.present, F1AP_PositioningMeasurementResponseIEs__value_PR_TransactionID);
+        _EQ_CHECK_INT(ie->value.present, F1AP_PositioningMeasurementResponseIEs__value_PR_TransactionID);
         out->transaction_id = ie->value.choice.TransactionID;
         break;
       case F1AP_ProtocolIE_ID_id_LMF_MeasurementID:
-        _F1_EQ_CHECK_INT(ie->value.present, F1AP_PositioningMeasurementResponseIEs__value_PR_LMF_MeasurementID);
+        _EQ_CHECK_INT(ie->value.present, F1AP_PositioningMeasurementResponseIEs__value_PR_LMF_MeasurementID);
         out->lmf_measurement_id = ie->value.choice.LMF_MeasurementID;
         break;
       case F1AP_ProtocolIE_ID_id_RAN_MeasurementID:
-        _F1_EQ_CHECK_INT(ie->value.present, F1AP_PositioningMeasurementResponseIEs__value_PR_RAN_MeasurementID);
+        _EQ_CHECK_INT(ie->value.present, F1AP_PositioningMeasurementResponseIEs__value_PR_RAN_MeasurementID);
         out->ran_measurement_id = ie->value.choice.RAN_MeasurementID;
         break;
       case F1AP_ProtocolIE_ID_id_PosMeasurementResultList:
-        _F1_EQ_CHECK_INT(ie->value.present, F1AP_PositioningMeasurementResponseIEs__value_PR_PosMeasurementResultList);
+        _EQ_CHECK_INT(ie->value.present, F1AP_PositioningMeasurementResponseIEs__value_PR_PosMeasurementResultList);
         F1AP_PosMeasurementResultList_t *in_list = &ie->value.choice.PosMeasurementResultList;
         uint32_t pos_meas_result_list_len = in_list->list.count;
         out->pos_measurement_result_list = calloc_or_fail(1, sizeof(*out->pos_measurement_result_list));
@@ -5587,9 +5574,9 @@ f1ap_positioning_measurement_resp_t cp_positioning_measurement_resp(const f1ap_p
  */
 bool eq_positioning_measurement_resp(const f1ap_positioning_measurement_resp_t *a, const f1ap_positioning_measurement_resp_t *b)
 {
-  _F1_EQ_CHECK_INT(a->transaction_id, b->transaction_id);
-  _F1_EQ_CHECK_INT(a->lmf_measurement_id, b->lmf_measurement_id);
-  _F1_EQ_CHECK_INT(a->ran_measurement_id, b->ran_measurement_id);
+  _EQ_CHECK_INT(a->transaction_id, b->transaction_id);
+  _EQ_CHECK_INT(a->lmf_measurement_id, b->lmf_measurement_id);
+  _EQ_CHECK_INT(a->ran_measurement_id, b->ran_measurement_id);
 
   if ((a->pos_measurement_result_list == NULL) != (b->pos_measurement_result_list == NULL)) {
     return false;
@@ -5598,12 +5585,12 @@ bool eq_positioning_measurement_resp(const f1ap_positioning_measurement_resp_t *
     f1ap_pos_measurement_result_list_t *list_a = a->pos_measurement_result_list;
     f1ap_pos_measurement_result_list_t *list_b = b->pos_measurement_result_list;
     uint32_t pos_meas_result_list_len = list_a->pos_measurement_result_list_length;
-    _F1_EQ_CHECK_INT(list_b->pos_measurement_result_list_length, pos_meas_result_list_len);
+    _EQ_CHECK_INT(list_b->pos_measurement_result_list_length, pos_meas_result_list_len);
     for (int i = 0; i < pos_meas_result_list_len; i++) {
       f1ap_pos_measurement_result_list_item_t *item_a = &list_a->pos_measurement_result_list_item[i];
       f1ap_pos_measurement_result_list_item_t *item_b = &list_b->pos_measurement_result_list_item[i];
       _F1_CHECK_EXP(eq_positioning_measurement_result(&item_a->pos_measurement_result, &item_b->pos_measurement_result));
-      _F1_EQ_CHECK_INT(item_a->trp_id, item_b->trp_id);
+      _EQ_CHECK_INT(item_a->trp_id, item_b->trp_id);
     }
   }
 
@@ -5715,19 +5702,19 @@ bool decode_positioning_measurement_failure(const F1AP_F1AP_PDU_t *pdu, f1ap_pos
     AssertError(ie != NULL, return false, "in->protocolIEs.list.array[i] is NULL");
     switch (ie->id) {
       case F1AP_ProtocolIE_ID_id_TransactionID:
-        _F1_EQ_CHECK_INT(ie->value.present, F1AP_PositioningMeasurementFailureIEs__value_PR_TransactionID);
+        _EQ_CHECK_INT(ie->value.present, F1AP_PositioningMeasurementFailureIEs__value_PR_TransactionID);
         out->transaction_id = ie->value.choice.TransactionID;
         break;
       case F1AP_ProtocolIE_ID_id_LMF_MeasurementID:
-        _F1_EQ_CHECK_INT(ie->value.present, F1AP_PositioningMeasurementFailureIEs__value_PR_LMF_MeasurementID);
+        _EQ_CHECK_INT(ie->value.present, F1AP_PositioningMeasurementFailureIEs__value_PR_LMF_MeasurementID);
         out->lmf_measurement_id = ie->value.choice.LMF_MeasurementID;
         break;
       case F1AP_ProtocolIE_ID_id_RAN_MeasurementID:
-        _F1_EQ_CHECK_INT(ie->value.present, F1AP_PositioningMeasurementFailureIEs__value_PR_RAN_MeasurementID);
+        _EQ_CHECK_INT(ie->value.present, F1AP_PositioningMeasurementFailureIEs__value_PR_RAN_MeasurementID);
         out->ran_measurement_id = ie->value.choice.RAN_MeasurementID;
         break;
       case F1AP_ProtocolIE_ID_id_Cause:
-        _F1_EQ_CHECK_INT(ie->value.present, F1AP_PositioningMeasurementFailureIEs__value_PR_Cause);
+        _EQ_CHECK_INT(ie->value.present, F1AP_PositioningMeasurementFailureIEs__value_PR_Cause);
         _F1_CHECK_EXP(decode_f1ap_cause(ie->value.choice.Cause, &out->cause, &out->cause_value));
         break;
       case F1AP_ProtocolIE_ID_id_CriticalityDiagnostics:
@@ -5765,11 +5752,11 @@ f1ap_positioning_measurement_failure_t cp_positioning_measurement_failure(const 
 bool eq_positioning_measurement_failure(const f1ap_positioning_measurement_failure_t *a,
                                         const f1ap_positioning_measurement_failure_t *b)
 {
-  _F1_EQ_CHECK_INT(a->transaction_id, b->transaction_id);
-  _F1_EQ_CHECK_INT(a->lmf_measurement_id, b->lmf_measurement_id);
-  _F1_EQ_CHECK_INT(a->ran_measurement_id, b->ran_measurement_id);
-  _F1_EQ_CHECK_INT(a->cause, b->cause);
-  _F1_EQ_CHECK_LONG(a->cause_value, b->cause_value);
+  _EQ_CHECK_INT(a->transaction_id, b->transaction_id);
+  _EQ_CHECK_INT(a->lmf_measurement_id, b->lmf_measurement_id);
+  _EQ_CHECK_INT(a->ran_measurement_id, b->ran_measurement_id);
+  _EQ_CHECK_INT(a->cause, b->cause);
+  _EQ_CHECK_LONG(a->cause_value, b->cause_value);
 
   return true;
 }
@@ -5780,6 +5767,7 @@ bool eq_positioning_measurement_failure(const f1ap_positioning_measurement_failu
 void free_positioning_measurement_failure(f1ap_positioning_measurement_failure_t *msg)
 {
   // nothing to free
+  UNUSED(msg);
 }
 
 /**
@@ -5872,19 +5860,19 @@ bool decode_positioning_measurement_report(const F1AP_F1AP_PDU_t *pdu, f1ap_posi
     AssertError(ie != NULL, return false, "in->protocolIEs.list.array[i] is NULL");
     switch (ie->id) {
       case F1AP_ProtocolIE_ID_id_TransactionID:
-        _F1_EQ_CHECK_INT(ie->value.present, F1AP_PositioningMeasurementReportIEs__value_PR_TransactionID);
+        _EQ_CHECK_INT(ie->value.present, F1AP_PositioningMeasurementReportIEs__value_PR_TransactionID);
         out->transaction_id = ie->value.choice.TransactionID;
         break;
       case F1AP_ProtocolIE_ID_id_LMF_MeasurementID:
-        _F1_EQ_CHECK_INT(ie->value.present, F1AP_PositioningMeasurementReportIEs__value_PR_LMF_MeasurementID);
+        _EQ_CHECK_INT(ie->value.present, F1AP_PositioningMeasurementReportIEs__value_PR_LMF_MeasurementID);
         out->lmf_measurement_id = ie->value.choice.LMF_MeasurementID;
         break;
       case F1AP_ProtocolIE_ID_id_RAN_MeasurementID:
-        _F1_EQ_CHECK_INT(ie->value.present, F1AP_PositioningMeasurementReportIEs__value_PR_RAN_MeasurementID);
+        _EQ_CHECK_INT(ie->value.present, F1AP_PositioningMeasurementReportIEs__value_PR_RAN_MeasurementID);
         out->ran_measurement_id = ie->value.choice.RAN_MeasurementID;
         break;
       case F1AP_ProtocolIE_ID_id_PosMeasurementResultList:
-        _F1_EQ_CHECK_INT(ie->value.present, F1AP_PositioningMeasurementReportIEs__value_PR_PosMeasurementResultList);
+        _EQ_CHECK_INT(ie->value.present, F1AP_PositioningMeasurementReportIEs__value_PR_PosMeasurementResultList);
         F1AP_PosMeasurementResultList_t *f1_PosMeasurementResultList = &ie->value.choice.PosMeasurementResultList;
         uint32_t pos_meas_result_list_len = f1_PosMeasurementResultList->list.count;
         out->pos_measurement_result_list = calloc_or_fail(1, sizeof(*out->pos_measurement_result_list));
@@ -5945,19 +5933,19 @@ f1ap_positioning_measurement_report_t cp_positioning_measurement_report(const f1
 bool eq_positioning_measurement_report(const f1ap_positioning_measurement_report_t *a,
                                        const f1ap_positioning_measurement_report_t *b)
 {
-  _F1_EQ_CHECK_INT(a->transaction_id, b->transaction_id);
-  _F1_EQ_CHECK_INT(a->lmf_measurement_id, b->lmf_measurement_id);
-  _F1_EQ_CHECK_INT(a->ran_measurement_id, b->ran_measurement_id);
+  _EQ_CHECK_INT(a->transaction_id, b->transaction_id);
+  _EQ_CHECK_INT(a->lmf_measurement_id, b->lmf_measurement_id);
+  _EQ_CHECK_INT(a->ran_measurement_id, b->ran_measurement_id);
 
   f1ap_pos_measurement_result_list_t *list_a = a->pos_measurement_result_list;
   f1ap_pos_measurement_result_list_t *list_b = b->pos_measurement_result_list;
   uint32_t pos_meas_result_list_len = list_a->pos_measurement_result_list_length;
-  _F1_EQ_CHECK_INT(list_b->pos_measurement_result_list_length, pos_meas_result_list_len);
+  _EQ_CHECK_INT(list_b->pos_measurement_result_list_length, pos_meas_result_list_len);
   for (int i = 0; i < pos_meas_result_list_len; i++) {
     f1ap_pos_measurement_result_list_item_t *item_a = &list_a->pos_measurement_result_list_item[i];
     f1ap_pos_measurement_result_list_item_t *item_b = &list_b->pos_measurement_result_list_item[i];
     _F1_CHECK_EXP(eq_positioning_measurement_result(&item_a->pos_measurement_result, &item_b->pos_measurement_result));
-    _F1_EQ_CHECK_INT(item_a->trp_id, item_b->trp_id);
+    _EQ_CHECK_INT(item_a->trp_id, item_b->trp_id);
   }
 
   return true;
@@ -6050,15 +6038,15 @@ bool decode_positioning_measurement_abort(const F1AP_F1AP_PDU_t *pdu, f1ap_posit
     AssertError(ie != NULL, return false, "in->protocolIEs.list.array[i] is NULL");
     switch (ie->id) {
       case F1AP_ProtocolIE_ID_id_TransactionID:
-        _F1_EQ_CHECK_INT(ie->value.present, F1AP_PositioningMeasurementAbortIEs__value_PR_TransactionID);
+        _EQ_CHECK_INT(ie->value.present, F1AP_PositioningMeasurementAbortIEs__value_PR_TransactionID);
         out->transaction_id = ie->value.choice.TransactionID;
         break;
       case F1AP_ProtocolIE_ID_id_LMF_MeasurementID:
-        _F1_EQ_CHECK_INT(ie->value.present, F1AP_PositioningMeasurementAbortIEs__value_PR_LMF_MeasurementID);
+        _EQ_CHECK_INT(ie->value.present, F1AP_PositioningMeasurementAbortIEs__value_PR_LMF_MeasurementID);
         out->lmf_measurement_id = ie->value.choice.LMF_MeasurementID;
         break;
       case F1AP_ProtocolIE_ID_id_RAN_MeasurementID:
-        _F1_EQ_CHECK_INT(ie->value.present, F1AP_PositioningMeasurementAbortIEs__value_PR_RAN_MeasurementID);
+        _EQ_CHECK_INT(ie->value.present, F1AP_PositioningMeasurementAbortIEs__value_PR_RAN_MeasurementID);
         out->ran_measurement_id = ie->value.choice.RAN_MeasurementID;
         break;
       default:
@@ -6090,9 +6078,9 @@ f1ap_positioning_measurement_abort_t cp_positioning_measurement_abort(const f1ap
  */
 bool eq_positioning_measurement_abort(const f1ap_positioning_measurement_abort_t *a, const f1ap_positioning_measurement_abort_t *b)
 {
-  _F1_EQ_CHECK_INT(a->transaction_id, b->transaction_id);
-  _F1_EQ_CHECK_INT(a->lmf_measurement_id, b->lmf_measurement_id);
-  _F1_EQ_CHECK_INT(a->ran_measurement_id, b->ran_measurement_id);
+  _EQ_CHECK_INT(a->transaction_id, b->transaction_id);
+  _EQ_CHECK_INT(a->lmf_measurement_id, b->lmf_measurement_id);
+  _EQ_CHECK_INT(a->ran_measurement_id, b->ran_measurement_id);
 
   return true;
 }
@@ -6103,6 +6091,7 @@ bool eq_positioning_measurement_abort(const f1ap_positioning_measurement_abort_t
 void free_positioning_measurement_abort(f1ap_positioning_measurement_abort_t *msg)
 {
   // nothing to free
+  UNUSED(msg);
 }
 
 /**
@@ -6186,19 +6175,19 @@ bool decode_positioning_measurement_failure_indication(const F1AP_F1AP_PDU_t *pd
     AssertError(ie != NULL, return false, "in->protocolIEs.list.array[i] is NULL");
     switch (ie->id) {
       case F1AP_ProtocolIE_ID_id_TransactionID:
-        _F1_EQ_CHECK_INT(ie->value.present, F1AP_PositioningMeasurementFailureIndicationIEs__value_PR_TransactionID);
+        _EQ_CHECK_INT(ie->value.present, F1AP_PositioningMeasurementFailureIndicationIEs__value_PR_TransactionID);
         out->transaction_id = ie->value.choice.TransactionID;
         break;
       case F1AP_ProtocolIE_ID_id_LMF_MeasurementID:
-        _F1_EQ_CHECK_INT(ie->value.present, F1AP_PositioningMeasurementFailureIndicationIEs__value_PR_LMF_MeasurementID);
+        _EQ_CHECK_INT(ie->value.present, F1AP_PositioningMeasurementFailureIndicationIEs__value_PR_LMF_MeasurementID);
         out->lmf_measurement_id = ie->value.choice.LMF_MeasurementID;
         break;
       case F1AP_ProtocolIE_ID_id_RAN_MeasurementID:
-        _F1_EQ_CHECK_INT(ie->value.present, F1AP_PositioningMeasurementFailureIndicationIEs__value_PR_RAN_MeasurementID);
+        _EQ_CHECK_INT(ie->value.present, F1AP_PositioningMeasurementFailureIndicationIEs__value_PR_RAN_MeasurementID);
         out->ran_measurement_id = ie->value.choice.RAN_MeasurementID;
         break;
       case F1AP_ProtocolIE_ID_id_Cause:
-        _F1_EQ_CHECK_INT(ie->value.present, F1AP_PositioningMeasurementFailureIndicationIEs__value_PR_Cause);
+        _EQ_CHECK_INT(ie->value.present, F1AP_PositioningMeasurementFailureIndicationIEs__value_PR_Cause);
         _F1_CHECK_EXP(decode_f1ap_cause(ie->value.choice.Cause, &out->cause, &out->cause_value));
         break;
       default:
@@ -6234,11 +6223,11 @@ f1ap_positioning_measurement_failure_indication_t cp_positioning_measurement_fai
 bool eq_positioning_measurement_failure_indication(const f1ap_positioning_measurement_failure_indication_t *a,
                                                    const f1ap_positioning_measurement_failure_indication_t *b)
 {
-  _F1_EQ_CHECK_INT(a->transaction_id, b->transaction_id);
-  _F1_EQ_CHECK_INT(a->lmf_measurement_id, b->lmf_measurement_id);
-  _F1_EQ_CHECK_INT(a->ran_measurement_id, b->ran_measurement_id);
-  _F1_EQ_CHECK_INT(a->cause, b->cause);
-  _F1_EQ_CHECK_LONG(a->cause_value, b->cause_value);
+  _EQ_CHECK_INT(a->transaction_id, b->transaction_id);
+  _EQ_CHECK_INT(a->lmf_measurement_id, b->lmf_measurement_id);
+  _EQ_CHECK_INT(a->ran_measurement_id, b->ran_measurement_id);
+  _EQ_CHECK_INT(a->cause, b->cause);
+  _EQ_CHECK_LONG(a->cause_value, b->cause_value);
 
   return true;
 }
@@ -6249,6 +6238,7 @@ bool eq_positioning_measurement_failure_indication(const f1ap_positioning_measur
 void free_positioning_measurement_failure_indication(f1ap_positioning_measurement_failure_indication_t *msg)
 {
   // nothing to free
+  UNUSED(msg);
 }
 
 /**
@@ -6333,19 +6323,19 @@ bool decode_positioning_measurement_update(const F1AP_F1AP_PDU_t *pdu, f1ap_posi
     AssertError(ie != NULL, return false, "in->protocolIEs.list.array[i] is NULL");
     switch (ie->id) {
       case F1AP_ProtocolIE_ID_id_TransactionID:
-        _F1_EQ_CHECK_INT(ie->value.present, F1AP_PositioningMeasurementUpdateIEs__value_PR_TransactionID);
+        _EQ_CHECK_INT(ie->value.present, F1AP_PositioningMeasurementUpdateIEs__value_PR_TransactionID);
         out->transaction_id = ie->value.choice.TransactionID;
         break;
       case F1AP_ProtocolIE_ID_id_LMF_MeasurementID:
-        _F1_EQ_CHECK_INT(ie->value.present, F1AP_PositioningMeasurementUpdateIEs__value_PR_LMF_MeasurementID);
+        _EQ_CHECK_INT(ie->value.present, F1AP_PositioningMeasurementUpdateIEs__value_PR_LMF_MeasurementID);
         out->lmf_measurement_id = ie->value.choice.LMF_MeasurementID;
         break;
       case F1AP_ProtocolIE_ID_id_RAN_MeasurementID:
-        _F1_EQ_CHECK_INT(ie->value.present, F1AP_PositioningMeasurementUpdateIEs__value_PR_RAN_MeasurementID);
+        _EQ_CHECK_INT(ie->value.present, F1AP_PositioningMeasurementUpdateIEs__value_PR_RAN_MeasurementID);
         out->ran_measurement_id = ie->value.choice.RAN_MeasurementID;
         break;
       case F1AP_ProtocolIE_ID_id_SRSConfiguration:
-        _F1_EQ_CHECK_INT(ie->value.present, F1AP_PositioningMeasurementUpdateIEs__value_PR_SRSConfiguration);
+        _EQ_CHECK_INT(ie->value.present, F1AP_PositioningMeasurementUpdateIEs__value_PR_SRSConfiguration);
         F1AP_SRSCarrier_List_t *f1_sRSCarrier_List = &ie->value.choice.SRSConfiguration.sRSCarrier_List;
         out->srs_configuration = calloc_or_fail(1, sizeof(*out->srs_configuration));
         f1ap_srs_carrier_list_t *srs_carrier_list = &out->srs_configuration->srs_carrier_list;
@@ -6389,9 +6379,9 @@ f1ap_positioning_measurement_update_t cp_positioning_measurement_update(const f1
 bool eq_positioning_measurement_update(const f1ap_positioning_measurement_update_t *a,
                                        const f1ap_positioning_measurement_update_t *b)
 {
-  _F1_EQ_CHECK_INT(a->transaction_id, b->transaction_id);
-  _F1_EQ_CHECK_INT(a->lmf_measurement_id, b->lmf_measurement_id);
-  _F1_EQ_CHECK_INT(a->ran_measurement_id, b->ran_measurement_id);
+  _EQ_CHECK_INT(a->transaction_id, b->transaction_id);
+  _EQ_CHECK_INT(a->lmf_measurement_id, b->lmf_measurement_id);
+  _EQ_CHECK_INT(a->ran_measurement_id, b->ran_measurement_id);
 
   /* optional: SRS Configuration */
   if ((a->srs_configuration == NULL) != (b->srs_configuration == NULL)) {

@@ -1,32 +1,10 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file log.c
-* \brief log implementaion
-* \author Navid Nikaein
-* \date 2009 - 2014
-* \version 0.5
-* @ingroup util
-
-*/
+/*!
+ * \brief log implementaion
+ */
 
 #define _GNU_SOURCE  /* required for pthread_getname_np */
 //#define LOG_TEST 1
@@ -541,13 +519,7 @@ void logTerm(void)
 }
 
 #include <sys/syscall.h>
-static inline int log_header(log_component_t *c,
-			     char *log_buffer,
-			     int buffsize,
-			     const char *file,
-			     const char *func,
-			     int line,
-			     int level)
+static inline int log_header(log_component_t *c, char *log_buffer, int buffsize, const char *func, int line, int level)
 {
   int flag = g_log->flag;
 
@@ -688,7 +660,7 @@ void log_dump(int component,
 
   if (wbuf != NULL) {
     va_start(args, format);
-    int pos=log_header(c, wbuf,MAX_LOG_TOTAL,"noFile","noFunc",0, OAILOG_INFO);
+    int pos = log_header(c, wbuf, MAX_LOG_TOTAL, "noFunc", 0, OAILOG_INFO);
     pos+=vsprintf(wbuf+pos,format, args);
     va_end(args);
 
@@ -897,6 +869,8 @@ void flush_mem_to_file(void)
 
 static void log_output_memory(log_component_t *c, const char *file, const char *func, int line, int comp, int level, const char* format,va_list args)
 {
+  UNUSED(comp);
+  UNUSED(file);
   //logRecord_mt(file,func,line, pthread_self(), comp, level, format, ##args)
   int len = 0;
   /* The main difference with the version above is the use of this local log_buffer.
@@ -909,7 +883,7 @@ static void log_output_memory(log_component_t *c, const char *file, const char *
 
   // make sure that for log trace the extra info is only printed once, reset when the level changes
   if (level < OAILOG_TRACE) {
-    int n = log_header(c, log_buffer+len, sizeof(log_buffer), file, func, line, level);
+    int n = log_header(c, log_buffer+len, sizeof(log_buffer), func, line, level);
     if (n > 0) {
       len += n;
       if (len > sizeof(log_buffer)) {

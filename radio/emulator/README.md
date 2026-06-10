@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 # RF emulator library
 
 The RF emulator is a simple network stack terminator on the RF side.  

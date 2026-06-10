@@ -1,30 +1,9 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file ngap_gNB_ue_context.c
+/*!
  * \brief ngap UE context management within gNB
- * \author Yoshio INOUE, Masayuki HARADA
- * \date 2020
- * \version 0.1
- * \email: yoshio.inoue@fujitsu.com,masayuki.harada@fujitsu.com (yoshio.inoue%40fujitsu.com%2cmasayuki.harada%40fujitsu.com)
  */ 
 
 #include "ngap_gNB_ue_context.h"
@@ -34,6 +13,8 @@
 #include "common/utils/T/T.h"
 #include "ngap_common.h"
 #include "tree.h"
+#include "intertask_interface.h"
+#define SCTP_LOOKUP_TIMER_TIMEOUT_SEC 30
 
 /* Tree of UE ordered by gNB_ue_ngap_id's
  * NO INSTANCE, the 32 bits id is large enough to handle all UEs, regardless the cell, gNB, ...
@@ -91,4 +72,32 @@ struct ngap_gNB_ue_context_s *ngap_detach_ue_context(uint32_t gNB_ue_ngap_id)
   }
   RB_REMOVE(ngap_ue_map, &ngap_ue_head, tmp);
   return tmp;
+}
+
+void ngap_release_ues_for_amf(ngap_gNB_amf_data_t *amf_desc_p)
+{
+  /* Release all UE contexts for this AMF */
+  ngap_gNB_ue_context_t *ue = NULL;
+  ngap_gNB_ue_context_t *next = NULL;
+  RB_FOREACH_SAFE(ue, ngap_ue_map, &ngap_ue_head, next) {
+    if (ue->amf_ref == amf_desc_p) {
+      LOG_I(NGAP, "Releasing UE context: gNB UE NGAP ID: %u | AMF UE NGAP ID: %lu\n", ue->gNB_ue_ngap_id, ue->amf_ue_ngap_id);
+      MessageDef *msg_p = itti_alloc_new_message(TASK_NGAP, 0, NGAP_UE_CONTEXT_RELEASE_COMMAND);
+      NGAP_UE_CONTEXT_RELEASE_COMMAND(msg_p).gNB_ue_ngap_id = ue->gNB_ue_ngap_id;
+      itti_send_msg_to_task(TASK_RRC_GNB, amf_desc_p->ngap_gNB_instance->instance, msg_p);
+    }
+  }
+  /* Reset AMF connection and set reconnect timer */
+  /* SCTP lookup timer */
+  long tid;
+  int rc = timer_setup(SCTP_LOOKUP_TIMER_TIMEOUT_SEC,
+                       0,
+                       TASK_NGAP,
+                       amf_desc_p->ngap_gNB_instance->instance,
+                       TIMER_PERIODIC,
+                       amf_desc_p,
+                       &tid);
+  if (rc == 0) {
+    amf_desc_p->t_reconnect = tid;
+  }
 }

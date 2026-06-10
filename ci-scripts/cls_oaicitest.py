@@ -1,23 +1,5 @@
-#/*
-# * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
-# * contributor license agreements.  See the NOTICE file distributed with
-# * this work for additional information regarding copyright ownership.
-# * The OpenAirInterface Software Alliance licenses this file to You under
-# * the OAI Public License, Version 1.1  (the "License"); you may not use this file
-# * except in compliance with the License.
-# * You may obtain a copy of the License at
-# *
-# *      http://www.openairinterface.org/?page_id=698
-# *
-# * Unless required by applicable law or agreed to in writing, software
-# * distributed under the License is distributed on an "AS IS" BASIS,
-# * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# * See the License for the specific language governing permissions and
-# * limitations under the License.
-# *-------------------------------------------------------------------------------
-# * For more information about the OpenAirInterface (OAI) Software Alliance:
-# *      contact@openairinterface.org
-# */
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 #---------------------------------------------------------------------
 # 
 #
@@ -32,7 +14,6 @@
 #-----------------------------------------------------------
 # Import Libs
 #-----------------------------------------------------------
-import sys		# arg
 import re		# reg
 import time		# sleep
 import os
@@ -41,7 +22,6 @@ import concurrent.futures
 import json
 
 #import our libs
-import helpreadme as HELP
 import constants as CONST
 
 import cls_module
@@ -84,6 +64,23 @@ def Iperf_ComputeTime(args):
 	if result is None:
 		raise Exception('Iperf time not found!')
 	return int(result.group('iperf_time'))
+
+def Iperf_UpdateBindPort(opts, ueIP, idx):
+	# search if bind address present. Extract if yes, add if no.
+	bind_m = re.search(r'(-B|--bind)\s+(?P<ip>\d+\.\d+\.\d+\.\d+)', opts)
+	if bind_m:
+		bindIP = bind_m.group('ip')
+	else:
+		bindIP = ueIP
+		opts += f" -B {ueIP}"
+	# search if port present. Extract if yes, add if no.
+	port_m = re.search(r'(-p|--port)\s+(?P<port>\d+)', opts)
+	if port_m:
+		port = port_m.group('port')
+	else:
+		port = 5002 + idx
+		opts += f" -p {port}"
+	return bindIP, port, opts
 
 def convert_to_mbps(value, magnitude):
 	value = float(value)
@@ -255,7 +252,7 @@ def Deploy_Physim(ctx, HTML, node, workdir, script, options):
 	logging.debug(f'Running physims on server {node} workdir {workdir}')
 	with cls_cmd.getConnection(node) as c:
 		sys_info = c.exec_script("scripts/sys-info.sh", 5)
-		ret = c.exec_script(script, 1000, options)
+		ret = c.exec_script(script, 1500, options)
 	logging.debug(f'"{script}" finished with code {ret.returncode}, output:\n{ret.stdout}')
 	HTML.CreateHtmlTestRowQueue('Query system info', 'OK', [sys_info.stdout])
 	with cls_cmd.getConnection(node) as ssh:
@@ -279,18 +276,46 @@ def Deploy_Physim(ctx, HTML, node, workdir, script, options):
 		logging.error('\u001B[1m Physical Simulator Fail\u001B[0m')
 	return test_status
 
+def DeployWithScript(HTML, node, script, options, tag):
+	logging.debug(f'Deploy with script {script} on node: {node}')
+	opt = options.replace('%%image_tag%%', tag)
+	with cls_cmd.getConnection(node) as c:
+		ret = c.exec_script(script, 600, opt)
+	logging.debug(f'"{script}" finished with code {ret.returncode}, output:\n{ret.stdout}')
+	HTML.CreateHtmlTestRowQueue(f'on node {node}', 'OK' if ret.returncode == 0 else 'KO', [f'{ret.stdout}'])
+	return ret.returncode == 0
+
+def UndeployWithScript(HTML, ctx, node, script, options):
+	logging.debug(f'Undeploy with script {script} on node: {node}')
+	remote_dir = '/tmp/undeploy'
+	opt = options.replace('%%log_dir%%', remote_dir)
+	with cls_cmd.getConnection(node) as c:
+		# create a directory for log collection
+		c.run(f'rm -rf {remote_dir}')
+		ret = c.run(f'mkdir {remote_dir}')
+		if ret.returncode != 0:
+			logging.error("cannot create directory for log collection")
+			return False
+		ret = c.exec_script(script, 600, opt)
+		logging.debug(f'"{script}" finished with code {ret.returncode}, output:\n{ret.stdout}')
+		ret_ls = c.run(f'ls -1 {remote_dir}')
+		files = ret_ls.stdout.strip().splitlines()
+		log_files = []
+		for lf in files:
+			name = archiveArtifact(c, ctx, f'{remote_dir}/{lf}')
+			log_files.append(name)
+	msg = "Log files:\n" + "\n".join([os.path.basename(lf) for lf in log_files])
+	HTML.CreateHtmlTestRowQueue(f'on node {node}', 'OK' if ret.returncode == 0 else 'KO', [f'{ret.stdout}\n\n{msg}'])
+	return ret.returncode == 0
+
 #-----------------------------------------------------------
 # OaiCiTest Class Definition
 #-----------------------------------------------------------
 class OaiCiTest():
 	
 	def __init__(self):
-		self.ranRepository = ''
-		self.ranBranch = ''
-		self.ranCommitID = ''
-		self.ranAllowMerge = False
-		self.ranTargetBranch = ''
-
+		self.repository = ''
+		self.branch = ''
 		self.testXMLfiles = []
 		self.ping_args = ''
 		self.ping_packetloss_threshold = ''
@@ -301,7 +326,6 @@ class OaiCiTest():
 		self.iperf_profile = ''
 		self.iperf_tcp_rate_target = ''
 		self.finalStatus = False
-		self.air_interface=''
 		self.ue_ids = []
 		self.svr_node = None
 		self.svr_id = None
@@ -478,7 +502,6 @@ class OaiCiTest():
 		svrIP = cn.getIP()
 		if not svrIP:
 			return (False, f"Iperf server {cn.getName()} has no IP address")
-
 		iperf_opt = self.iperf_args
 		jsonReport = "--json"
 		serverReport = ""
@@ -492,11 +515,11 @@ class OaiCiTest():
 			# note: enable server report collection on the UE side, no need to store and collect server report separately on the server side
 			serverReport = "--get-server-output"
 		iperf_time = Iperf_ComputeTime(self.iperf_args)
+		bindIP, port, iperf_opt = Iperf_UpdateBindPort(iperf_opt, ueIP, idx)
 		# hack: the ADB UEs don't have iperf in $PATH, so we need to hardcode for the moment
 		iperf_ue = '/data/local/tmp/iperf3' if re.search('adb', ue.getName()) else 'iperf3'
-		ue_header = f'UE {ue.getName()} ({ueIP})'
+		ue_header = f'UE {ue.getName()} ({bindIP})'
 		with cls_cmd.getConnection(ue.getHost()) as cmd_ue, cls_cmd.getConnection(cn.getHost()) as cmd_svr:
-			port = 5002 + idx
 			# note: some core setups start an iperf3 server automatically, indicated in ci_infra by runIperf3Server: False`
 			t = iperf_time * 2.5
 			cmd_ue.run(f'rm {client_filename}', reportNonZero=False, silent=True)
@@ -507,7 +530,7 @@ class OaiCiTest():
 				if ret.returncode == 0:
 					logging.warning(f'Iperf3 server on port {port} detected and terminated')
 				cmd_svr.run(f'{cn.getCmdPrefix()} timeout -vk3 {t} iperf3 -s -B {svrIP} -p {port} -1 {jsonReport} >> /dev/null &', timeout=t)
-			cmd_ue.run(f'{ue.getCmdPrefix()} timeout -vk3 {t} {iperf_ue} -B {ueIP} -c {svrIP} -p {port} {iperf_opt} {jsonReport} {serverReport} -O 5 >> {client_filename}', timeout=t)
+			client_ret = cmd_ue.run(f'{ue.getCmdPrefix()} timeout -vk3 {t} {iperf_ue} -c {svrIP} {iperf_opt} {jsonReport} {serverReport} -O 5 >> {client_filename}', timeout=t, reportNonZero=False)
 			dest_filename = archiveArtifact(cmd_ue, ctx, client_filename)
 		if udpIperf:
 			status, msg = Iperf_analyzeV3UDP(dest_filename, self.iperf_bitrate_threshold, self.iperf_packetloss_threshold, target_bitrate)
@@ -515,6 +538,10 @@ class OaiCiTest():
 			status, msg = Iperf_analyzeV3BIDIRJson(dest_filename)
 		else:
 			status, msg = Iperf_analyzeV3TCPJson(dest_filename, self.iperf_tcp_rate_target)
+
+		# add some diagnostic messages if the actual iperf command returned non-zero
+		if client_ret.returncode != 0:
+			msg = f'{msg}\nIperf client command failed on {bindIP} -> {svrIP}:{port} (return code: {client_ret.returncode})'
 
 		return (status, f'{ue_header}\n{msg}')
 
@@ -578,277 +605,6 @@ class OaiCiTest():
 		else:
 			HTML.CreateHtmlTestRowQueue(self.iperf_args, 'KO', [f'{ue_header}\n{msg}'])
 		return success
-
-	def AnalyzeLogFile_UE(self, UElogFile,HTML,RAN):
-		if (not os.path.isfile(f'{UElogFile}')):
-			return -1
-		ue_log_file = open(f'{UElogFile}', 'r')
-		exitSignalReceived = False
-		foundAssertion = False
-		msgAssertion = ''
-		msgLine = 0
-		foundSegFault = False
-		foundRealTimeIssue = False
-		uciStatMsgCount = 0
-		pdcpDataReqFailedCount = 0
-		badDciCount = 0
-		f1aRetransmissionCount = 0
-		fatalErrorCount = 0
-		macBsrTimerExpiredCount = 0
-		rrcConnectionRecfgComplete = 0
-		no_cell_sync_found = False
-		mib_found = False
-		frequency_found = False
-		plmn_found = False
-		nrUEFlag = False
-		nrDecodeMib = 0
-		nrFoundDCI = 0
-		nrCRCOK = 0
-		mbms_messages = 0
-		nbPduSessAccept = 0
-		nbPduDiscard = 0
-		HTML.htmlUEFailureMsg=''
-		global_status = CONST.ALL_PROCESSES_OK
-		for line in ue_log_file.readlines():
-			result = re.search('nr_synchro_time|Starting NR UE soft modem', str(line))
-			sidelink = re.search('sl-mode', str(line))
-			if result is not None:
-				nrUEFlag = True
-			if sidelink is not None:
-				nrUEFlag = False
-			if nrUEFlag:
-				result = re.search('decode mib', str(line))
-				if result is not None:
-					nrDecodeMib += 1
-				result = re.search('found 1 DCIs', str(line))
-				if result is not None:
-					nrFoundDCI += 1
-				result = re.search('CRC OK', str(line))
-				if result is not None:
-					nrCRCOK += 1
-				result = re.search('Received PDU Session Establishment Accept', str(line))
-				if result is not None:
-					nbPduSessAccept += 1
-				result = re.search('warning: discard PDU, sn out of window', str(line))
-				if result is not None:
-					nbPduDiscard += 1
-				result = re.search('--nfapi STANDALONE_PNF --node-number 2', str(line))
-				if result is not None:
-					frequency_found = True
-			result = re.search('Exiting OAI softmodem', str(line))
-			if result is not None:
-				exitSignalReceived = True
-			result = re.search('System error|[Ss]egmentation [Ff]ault|======= Backtrace: =========|======= Memory map: ========', str(line))
-			if result is not None and not exitSignalReceived:
-				foundSegFault = True
-			result = re.search('[Cc]ore [dD]ump', str(line))
-			if result is not None and not exitSignalReceived:
-				foundSegFault = True
-			result = re.search('[Aa]ssertion', str(line))
-			if result is not None and not exitSignalReceived:
-				foundAssertion = True
-			result = re.search('LLL', str(line))
-			if result is not None and not exitSignalReceived:
-				foundRealTimeIssue = True
-			if foundAssertion and (msgLine < 3):
-				msgLine += 1
-				msgAssertion += str(line)
-			result = re.search('uci->stat', str(line))
-			if result is not None and not exitSignalReceived:
-				uciStatMsgCount += 1
-			result = re.search('PDCP data request failed', str(line))
-			if result is not None and not exitSignalReceived:
-				pdcpDataReqFailedCount += 1
-			result = re.search('bad DCI 1', str(line))
-			if result is not None and not exitSignalReceived:
-				badDciCount += 1
-			result = re.search('Format1A Retransmission but TBS are different', str(line))
-			if result is not None and not exitSignalReceived:
-				f1aRetransmissionCount += 1
-			result = re.search('FATAL ERROR', str(line))
-			if result is not None and not exitSignalReceived:
-				fatalErrorCount += 1
-			result = re.search('MAC BSR Triggered ReTxBSR Timer expiry', str(line))
-			if result is not None and not exitSignalReceived:
-				macBsrTimerExpiredCount += 1
-			result = re.search('Generating RRCConnectionReconfigurationComplete', str(line))
-			if result is not None:
-				rrcConnectionRecfgComplete += 1
-			# No cell synchronization found, abandoning
-			result = re.search('No cell synchronization found, abandoning', str(line))
-			if result is not None:
-				no_cell_sync_found = True
-			if RAN.eNBmbmsEnables[0]:
-				result = re.search('TRIED TO PUSH MBMS DATA', str(line))
-				if result is not None:
-					mbms_messages += 1
-			result = re.search(r"MIB Information => ([a-zA-Z]{1,10}), ([a-zA-Z]{1,10}), NidCell (?P<nidcell>\d{1,3}), N_RB_DL (?P<n_rb_dl>\d{1,3}), PHICH DURATION (?P<phich_duration>\d), PHICH RESOURCE (?P<phich_resource>.{1,4}), TX_ANT (?P<tx_ant>\d)", str(line))
-			if result is not None and (not mib_found):
-				try:
-					mibMsg = "MIB Information: " + result.group(1) + ', ' + result.group(2)
-					HTML.htmlUEFailureMsg=HTML.htmlUEFailureMsg + mibMsg + '\n'
-					logging.debug(f'\033[94m{mibMsg}\033[0m')
-					mibMsg = "    nidcell = " + result.group('nidcell')
-					HTML.htmlUEFailureMsg=HTML.htmlUEFailureMsg + mibMsg
-					logging.debug(f'\033[94m{mibMsg}\033[0m')
-					mibMsg = "    n_rb_dl = " + result.group('n_rb_dl')
-					HTML.htmlUEFailureMsg=HTML.htmlUEFailureMsg + mibMsg + '\n'
-					logging.debug(f'\033[94m{mibMsg}\033[0m')
-					mibMsg = "    phich_duration = " + result.group('phich_duration')
-					HTML.htmlUEFailureMsg=HTML.htmlUEFailureMsg + mibMsg
-					logging.debug(f'\033[94m{mibMsg}\033[0m')
-					mibMsg = "    phich_resource = " + result.group('phich_resource')
-					HTML.htmlUEFailureMsg=HTML.htmlUEFailureMsg + mibMsg + '\n'
-					logging.debug(f'\033[94m{mibMsg}\033[0m')
-					mibMsg = "    tx_ant = " + result.group('tx_ant')
-					HTML.htmlUEFailureMsg=HTML.htmlUEFailureMsg + mibMsg + '\n'
-					logging.debug(f'\033[94m{mibMsg}\033[0m')
-					mib_found = True
-				except Exception as e:
-					logging.error(f'\033[91m MIB marker was not found \033[0m')
-			result = re.search("Initial sync: pbch decoded sucessfully", str(line))
-			if result is not None and (not frequency_found):
-				try:
-					mibMsg = f"UE decoded PBCH successfully"
-					HTML.htmlUEFailureMsg=HTML.htmlUEFailureMsg + mibMsg + '\n'
-					logging.debug(f'\033[94m{mibMsg}\033[0m')
-					frequency_found = True
-				except Exception as e:
-					logging.error(f'\033[91m UE did not find PBCH\033[0m')
-			result = re.search(r"PLMN MCC (?P<mcc>\d{1,3}), MNC (?P<mnc>\d{1,3}), TAC", str(line))
-			if result is not None and (not plmn_found):
-				try:
-					mibMsg = f"PLMN MCC = {result.group('mcc')} MNC = {result.group('mnc')}"
-					HTML.htmlUEFailureMsg=HTML.htmlUEFailureMsg + mibMsg + '\n'
-					logging.debug(f'\033[94m{mibMsg}\033[0m')
-					plmn_found = True
-				except Exception as e:
-					logging.error(f'\033[91m PLMN not found \033[0m')
-			result = re.search(r"Found (?P<operator>[\w,\s]{1,15}) \(name from internal table\)", str(line))
-			if result is not None:
-				try:
-					mibMsg = f"The operator is: {result.group('operator')}"
-					HTML.htmlUEFailureMsg=HTML.htmlUEFailureMsg + mibMsg + '\n'
-					logging.debug(f'\033[94m{mibMsg}\033[0m')
-				except Exception as e:
-					logging.error(f'\033[91m Operator name not found \033[0m')
-			result = re.search("SIB5 InterFreqCarrierFreq element (.{1,4})/(.{1,4})", str(line))
-			if result is not None:
-				try:
-					mibMsg = f'SIB5 InterFreqCarrierFreq element {result.group(1)}/{result.group(2)}'
-					HTML.htmlUEFailureMsg=HTML.htmlUEFailureMsg + mibMsg + ' -> '
-					logging.debug(f'\033[94m{mibMsg}\033[0m')
-				except Exception as e:
-					logging.error(f'\033[91m SIB5 InterFreqCarrierFreq element not found \033[0m')
-			result = re.search(r"DL Carrier Frequency/ARFCN : \-*(?P<carrier_frequency>\d{1,15}/\d{1,4})", str(line))
-			if result is not None:
-				try:
-					freq = result.group('carrier_frequency')
-					new_freq = re.sub('/[0-9]+','',freq)
-					float_freq = float(new_freq) / 1000000
-					HTML.htmlUEFailureMsg=HTML.htmlUEFailureMsg + 'DL Freq: ' + ('%.1f' % float_freq) + ' MHz'
-					logging.debug(f'\033[94m    DL Carrier Frequency is:  {freq}\033[0m')
-				except Exception as e:
-					logging.error(f'\033[91m    DL Carrier Frequency not found \033[0m')
-			result = re.search(r"AllowedMeasBandwidth : (?P<allowed_bandwidth>\d{1,7})", str(line))
-			if result is not None:
-				try:
-					prb = result.group('allowed_bandwidth')
-					HTML.htmlUEFailureMsg=HTML.htmlUEFailureMsg + ' -- PRB: ' + prb + '\n'
-					logging.debug(f'\033[94m    AllowedMeasBandwidth: {prb}\033[0m')
-				except Exception as e:
-					logging.error(f'\033[91m    AllowedMeasBandwidth not found \033[0m')
-		ue_log_file.close()
-		if rrcConnectionRecfgComplete > 0:
-			statMsg = f'UE connected to eNB ({rrcConnectionRecfgComplete}) RRCConnectionReconfigurationComplete message(s) generated)'
-			logging.debug(f'\033[94m{statMsg}\033[0m')
-			HTML.htmlUEFailureMsg=HTML.htmlUEFailureMsg + statMsg + '\n'
-		if nrUEFlag:
-			if nrDecodeMib > 0:
-				statMsg = f'UE showed {nrDecodeMib} "MIB decode" message(s)'
-				logging.debug(f'\u001B[1;30;43m{statMsg}\u001B[0m')
-				HTML.htmlUEFailureMsg=HTML.htmlUEFailureMsg + statMsg + '\n'
-			if nrFoundDCI > 0:
-				statMsg = f'UE showed {nrFoundDCI} "DCI found" message(s)'
-				logging.debug(f'\u001B[1;30;43m{statMsg}\u001B[0m')
-				HTML.htmlUEFailureMsg=HTML.htmlUEFailureMsg + statMsg + '\n'
-			if nrCRCOK > 0:
-				statMsg = f'UE showed {nrCRCOK} "PDSCH decoding" message(s)'
-				logging.debug(f'\u001B[1;30;43m{statMsg}\u001B[0m')
-				HTML.htmlUEFailureMsg=HTML.htmlUEFailureMsg + statMsg + '\n'
-			if not frequency_found:
-				statMsg = 'NR-UE could NOT synch!'
-				logging.error(f'\u001B[1;30;43m{statMsg}\u001B[0m')
-				HTML.htmlUEFailureMsg=HTML.htmlUEFailureMsg + statMsg + '\n'
-			if nbPduSessAccept > 0:
-				statMsg = f'UE showed {nbPduSessAccept} "Received PDU Session Establishment Accept" message(s)'
-				logging.debug(f'\u001B[1;30;43m{statMsg}\u001B[0m')
-				HTML.htmlUEFailureMsg=HTML.htmlUEFailureMsg + statMsg + '\n'
-			if nbPduDiscard > 0:
-				statMsg = f'UE showed {nbPduDiscard} "warning: discard PDU, sn out of window" message(s)'
-				logging.debug(f'\u001B[1;30;43m{statMsg}\u001B[0m')
-				HTML.htmlUEFailureMsg=HTML.htmlUEFailureMsg + statMsg + '\n'
-		if uciStatMsgCount > 0:
-			statMsg = f'UE showed {uciStatMsgCount} "uci->stat" message(s)'
-			logging.debug(f'\u001B[1;30;43m{statMsg}\u001B[0m')
-			HTML.htmlUEFailureMsg=HTML.htmlUEFailureMsg + statMsg + '\n'
-		if pdcpDataReqFailedCount > 0:
-			statMsg = f'UE showed {pdcpDataReqFailedCount} "PDCP data request failed" message(s)'
-			logging.debug(f'\u001B[1;30;43m{statMsg}\u001B[0m')
-			HTML.htmlUEFailureMsg=HTML.htmlUEFailureMsg + statMsg + '\n'
-		if badDciCount > 0:
-			statMsg = f'UE showed {badDciCount} "bad DCI 1(A)" message(s)'
-			logging.debug(f'\u001B[1;30;43m{statMsg}\u001B[0m')
-			HTML.htmlUEFailureMsg=HTML.htmlUEFailureMsg + statMsg + '\n'
-		if f1aRetransmissionCount > 0:
-			statMsg = f'UE showed {f1aRetransmissionCount} "Format1A Retransmission but TBS are different" message(s)'
-			logging.debug(f'\u001B[1;30;43m{statMsg}\u001B[0m')
-			HTML.htmlUEFailureMsg=HTML.htmlUEFailureMsg + statMsg + '\n'
-		if fatalErrorCount > 0:
-			statMsg = f'UE showed {fatalErrorCount} "FATAL ERROR:" message(s)'
-			logging.debug(f'\u001B[1;30;43m{statMsg}\u001B[0m')
-			HTML.htmlUEFailureMsg=HTML.htmlUEFailureMsg + statMsg + '\n'
-		if macBsrTimerExpiredCount > 0:
-			statMsg = f'UE showed {fatalErrorCount} "MAC BSR Triggered ReTxBSR Timer expiry" message(s)'
-			logging.debug(f'\u001B[1;30;43m{statMsg}\u001B[0m')
-			HTML.htmlUEFailureMsg=HTML.htmlUEFailureMsg + statMsg + '\n'
-		if RAN.eNBmbmsEnables[0]:
-			if mbms_messages > 0:
-				statMsg = f'UE showed {mbms_messages} "TRIED TO PUSH MBMS DATA" message(s)'
-				logging.debug(f'\u001B[1;30;43m{statMsg}\u001B[0m')
-			else:
-				statMsg = 'UE did NOT SHOW "TRIED TO PUSH MBMS DATA" message(s)'
-				logging.debug(f'\u001B[1;30;41m{statMsg}\u001B[0m')
-				global_status = CONST.OAI_UE_PROCESS_NO_MBMS_MSGS
-			HTML.htmlUEFailureMsg=HTML.htmlUEFailureMsg + statMsg + '\n'
-		if foundSegFault:
-			logging.debug('\u001B[1;37;41m UE ended with a Segmentation Fault! \u001B[0m')
-			if not nrUEFlag:
-				global_status = CONST.OAI_UE_PROCESS_SEG_FAULT
-			else:
-				if not frequency_found:
-					global_status = CONST.OAI_UE_PROCESS_SEG_FAULT
-		if foundAssertion:
-			logging.debug('\u001B[1;30;43m UE showed an assertion! \u001B[0m')
-			HTML.htmlUEFailureMsg=HTML.htmlUEFailureMsg + 'UE showed an assertion!\n'
-			if not nrUEFlag:
-				if not mib_found or not frequency_found:
-					global_status = CONST.OAI_UE_PROCESS_ASSERTION
-			else:
-				if not frequency_found:
-					global_status = CONST.OAI_UE_PROCESS_ASSERTION
-		if foundRealTimeIssue:
-			logging.debug('\u001B[1;37;41m UE faced real time issues! \u001B[0m')
-			HTML.htmlUEFailureMsg=HTML.htmlUEFailureMsg + 'UE faced real time issues!\n'
-		if nrUEFlag:
-			if not frequency_found:
-				global_status = CONST.OAI_UE_PROCESS_COULD_NOT_SYNC
-		else:
-			if no_cell_sync_found and not mib_found:
-				logging.debug('\u001B[1;37;41m UE could not synchronize ! \u001B[0m')
-				HTML.htmlUEFailureMsg=HTML.htmlUEFailureMsg + 'UE could not synchronize!\n'
-				global_status = CONST.OAI_UE_PROCESS_COULD_NOT_SYNC
-		return global_status
 
 	def TerminateUE(self, ctx, node, HTML):
 		ues = [cls_module.Module_UE(n.strip(), node) for n in self.ue_ids]

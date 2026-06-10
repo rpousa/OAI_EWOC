@@ -1,22 +1,5 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.0  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
 /*! \file PHY/NR_TRANSPORT/nr_dlsch_coding_slot.c
@@ -26,14 +9,12 @@
 #include "PHY/defs_gNB.h"
 #include "PHY/CODING/coding_extern.h"
 #include "PHY/CODING/coding_defs.h"
-#include "PHY/CODING/lte_interleaver_inline.h"
 #include "PHY/CODING/nrLDPC_coding/nrLDPC_coding_interface.h"
 #include "PHY/CODING/nrLDPC_extern.h"
 #include "PHY/NR_TRANSPORT/nr_transport_proto.h"
 #include "PHY/NR_TRANSPORT/nr_transport_common_proto.h"
 #include "PHY/NR_TRANSPORT/nr_dlsch.h"
 #include "SCHED_NR/sched_nr.h"
-#include "common/utils/LOG/vcd_signal_dumper.h"
 #include "common/utils/LOG/log.h"
 #include "common/utils/nr/nr_common.h"
 #include <syscall.h>
@@ -44,7 +25,7 @@
 
 void free_gNB_dlsch(NR_gNB_DLSCH_t *dlsch, uint16_t N_RB, const NR_DL_FRAME_PARMS *frame_parms)
 {
-  int max_layers = (frame_parms->nb_antennas_tx < NR_MAX_NB_LAYERS) ? frame_parms->nb_antennas_tx : NR_MAX_NB_LAYERS;
+  int max_layers = min(frame_parms->nb_antennas_tx, NR_MAX_NB_LAYERS);
   uint16_t a_segments = MAX_NUM_NR_DLSCH_SEGMENTS_PER_LAYER * max_layers;
 
   if (N_RB != 273) {
@@ -57,7 +38,7 @@ void free_gNB_dlsch(NR_gNB_DLSCH_t *dlsch, uint16_t N_RB, const NR_DL_FRAME_PARM
     dlsch->b = NULL;
   }
   if (dlsch->f) {
-    free16(dlsch->f, N_RB * NR_SYMBOLS_PER_SLOT * NR_NB_SC_PER_RB * 8 * NR_MAX_NB_LAYERS);
+    free16(dlsch->f, N_RB * frame_parms->symbols_per_slot * NR_NB_SC_PER_RB * 8 * NR_MAX_NB_LAYERS);
     dlsch->f = NULL;
   }
   for (int r = 0; r < a_segments; r++) {
@@ -69,7 +50,7 @@ void free_gNB_dlsch(NR_gNB_DLSCH_t *dlsch, uint16_t N_RB, const NR_DL_FRAME_PARM
 
 NR_gNB_DLSCH_t new_gNB_dlsch(NR_DL_FRAME_PARMS *frame_parms, uint16_t N_RB)
 {
-  int max_layers = (frame_parms->nb_antennas_tx < NR_MAX_NB_LAYERS) ? frame_parms->nb_antennas_tx : NR_MAX_NB_LAYERS;
+  int max_layers = min(frame_parms->nb_antennas_tx, NR_MAX_NB_LAYERS);
   uint16_t a_segments = MAX_NUM_NR_DLSCH_SEGMENTS_PER_LAYER * max_layers; // number of segments to be allocated
 
   if (N_RB != 273) {
@@ -96,9 +77,9 @@ NR_gNB_DLSCH_t new_gNB_dlsch(NR_DL_FRAME_PARMS *frame_parms, uint16_t N_RB)
     bzero(dlsch.c[r], 8448);
   }
 
-  dlsch.f = malloc16(N_RB * NR_SYMBOLS_PER_SLOT * NR_NB_SC_PER_RB * 8 * NR_MAX_NB_LAYERS);
+  dlsch.f = malloc16(N_RB * frame_parms->symbols_per_slot * NR_NB_SC_PER_RB * 8 * NR_MAX_NB_LAYERS);
   AssertFatal(dlsch.f, "cannot allocate dlsch->f\n");
-  bzero(dlsch.f, N_RB * NR_SYMBOLS_PER_SLOT * NR_NB_SC_PER_RB * 8 * NR_MAX_NB_LAYERS);
+  bzero(dlsch.f, N_RB * frame_parms->symbols_per_slot * NR_NB_SC_PER_RB * 8 * NR_MAX_NB_LAYERS);
 
   return (dlsch);
 }
@@ -108,18 +89,17 @@ int nr_dlsch_encoding(PHY_VARS_gNB *gNB,
                       NR_gNB_DLSCH_t *dlsch_array,
                       int frame,
                       uint8_t slot,
-                      NR_DL_FRAME_PARMS *frame_parms,
                       unsigned char *output,
                       time_stats_t *tinput,
+                      time_stats_t *tinput_memcpy,
                       time_stats_t *tprep,
                       time_stats_t *tparity,
                       time_stats_t *toutput,
+                      time_stats_t *tconcat,
                       time_stats_t *dlsch_rate_matching_stats,
                       time_stats_t *dlsch_interleaving_stats,
                       time_stats_t *dlsch_segmentation_stats)
 {
-  VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME(VCD_SIGNAL_DUMPER_FUNCTIONS_gNB_DLSCH_ENCODING, VCD_FUNCTION_IN);
-
   nrLDPC_TB_encoding_parameters_t TBs[n_dlsch];
   memset(TBs, 0, sizeof(TBs));
 
@@ -135,6 +115,7 @@ int nr_dlsch_encoding(PHY_VARS_gNB *gNB,
     if (rel15->rnti != SI_RNTI) {
       ws_trace_t tmp = {.nr = true,
                         .direction = DIRECTION_DOWNLINK,
+                        .type = gNB->frame_parms.frame_type == FDD ? FDD_RADIO : TDD_RADIO,
                         .pdu_buffer = a,
                         .pdu_buffer_size = rel15->TBSize[0],
                         .ueid = 0,
@@ -231,7 +212,8 @@ int nr_dlsch_encoding(PHY_VARS_gNB *gNB,
     }
 #endif
 
-    TB_parameters->nb_rb = rel15->rbSize;
+    int rbsize = dlsch->freq_alloc.num_rbs;
+    TB_parameters->nb_rb = rbsize;
     TB_parameters->Qm = rel15->qamModOrder[0];
     TB_parameters->mcs = rel15->mcsIndex[0];
     TB_parameters->nb_layers = rel15->nrOfLayers;
@@ -239,7 +221,7 @@ int nr_dlsch_encoding(PHY_VARS_gNB *gNB,
 
     int nb_re_dmrs =
         (rel15->dmrsConfigType == NFAPI_NR_DMRS_TYPE1) ? (6 * rel15->numDmrsCdmGrpsNoData) : (4 * rel15->numDmrsCdmGrpsNoData);
-    TB_parameters->G = nr_get_G(rel15->rbSize,
+    TB_parameters->G = nr_get_G(rbsize,
                                 rel15->NrOfSymbols,
                                 nb_re_dmrs,
                                 get_num_dmrs(rel15->dlDmrsSymbPos),
@@ -248,7 +230,6 @@ int nr_dlsch_encoding(PHY_VARS_gNB *gNB,
                                 rel15->nrOfLayers);
 
     TB_parameters->tbslbrm = rel15->maintenance_parms_v3.tbSizeLbrmBytes;
-
     TB_parameters->output = &output[dlsch_offset >> 3];
     TB_parameters->segments = &segments[segments_offset];
 
@@ -267,7 +248,7 @@ int nr_dlsch_encoding(PHY_VARS_gNB *gNB,
     /* output and its parts for each dlsch should be aligned on 64 bytes (or 8 * 64 bits)
      * => dlsch_offset should remain a multiple of 8 * 64 with enough offset to fit each dlsch
      */
-    const size_t dlsch_size = rel15->rbSize * NR_SYMBOLS_PER_SLOT * NR_NB_SC_PER_RB * rel15->qamModOrder[0] * rel15->nrOfLayers;
+    const size_t dlsch_size = rbsize * gNB->frame_parms.symbols_per_slot * NR_NB_SC_PER_RB * rel15->qamModOrder[0] * rel15->nrOfLayers;
     dlsch_offset += ceil_mod(dlsch_size, 8 * 64);
   }
 
@@ -291,7 +272,5 @@ int nr_dlsch_encoding(PHY_VARS_gNB *gNB,
       // merge_meas(, &segment_parameters->ts_ldpc_encode);
     }
   }
-
-  VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME(VCD_SIGNAL_DUMPER_FUNCTIONS_gNB_DLSCH_ENCODING, VCD_FUNCTION_OUT);
   return 0;
 }

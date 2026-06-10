@@ -1,4 +1,5 @@
 #!/bin/bash
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
 
 # this script is to be executed in the current folder. It takes one argument,
 # which is the directory in which the executables are.

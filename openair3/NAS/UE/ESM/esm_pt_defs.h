@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
+ */
+
 #ifndef _ESM_PT_DEFS_H
 #define _ESM_PT_DEFS_H
 

@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
+ */
+
 #ifndef NR_SOFTMODEM_H
 #define NR_SOFTMODEM_H
 
@@ -25,6 +29,8 @@
   {"T" ,                    CONFIG_HLP_ULBW_PHYTEST,   0,                .uptr=&target_ul_bw,                 .defintval=0,                     TYPE_UINT,   0},        \
   {"D" ,                    CONFIG_HLP_DLBM_PHYTEST,   0,                .u64ptr=&dlsch_slot_bitmap,          .defint64val=0,                   TYPE_UINT64, 0},        \
   {"U" ,                    CONFIG_HLP_ULBM_PHYTEST,   0,                .u64ptr=&ulsch_slot_bitmap,          .defint64val=0,                   TYPE_UINT64, 0},        \
+  {"Dmod" ,                 CONFIG_HLP_DLMOD_PHYTEST,   0,               .uptr=&dlsch_slot_modval,            .defintval=0,                     TYPE_UINT,   0},        \
+  {"Umod" ,                 CONFIG_HLP_ULMOD_PHYTEST,   0,               .uptr=&ulsch_slot_modval,            .defintval=0,                     TYPE_UINT,   0},        \
   {"usrp-tx-thread-config", CONFIG_HLP_USRP_THREAD,    0,                .iptr=&usrp_tx_thread,               .defstrval=0,                     TYPE_INT,    0},        \
   {"uecap_file",            CONFIG_HLP_UECAP_FILE,     0,                .strptr=&uecap_file,                 .defstrval="./uecap_ports1.xml",  TYPE_STRING, 0},        \
 }
@@ -39,6 +45,8 @@ extern uint32_t target_ul_bw;
 extern uint64_t dlsch_slot_bitmap;
 extern uint64_t ulsch_slot_bitmap;
 extern char *uecap_file;
+extern uint32_t dlsch_slot_modval;
+extern uint32_t ulsch_slot_modval;
 
 // In nr-gnb.c
 extern void init_gNB();

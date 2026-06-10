@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+
 services:
     oai-vnf:
         image: ${REGISTRY-oaisoftwarealliance/}${GNB_IMG:-oai-gnb}:${TAG:-develop}
@@ -10,7 +12,7 @@ services:
             - IPC_LOCK
         environment:
             TZ: Europe/Paris
-            USE_ADDITIONAL_OPTIONS: --nfapi VNF
+            USE_ADDITIONAL_OPTIONS: --nfapi VNF --log_config.global_log_options level,nocolor,utc_time
             NFAPI_TRACE_LEVEL: info
         volumes:
             - ../../conf_files/gnb-vnf.sa.band77.162prb.nfapi.4x4.conf:/opt/oai-gnb/etc/gnb.conf
@@ -30,7 +32,7 @@ services:
             - IPC_LOCK
         environment:
             TZ: Europe/Paris
-            USE_ADDITIONAL_OPTIONS: --nfapi PNF
+            USE_ADDITIONAL_OPTIONS: --nfapi PNF --log_config.global_log_options level,nocolor,utc_time
             NFAPI_TRACE_LEVEL: info
         volumes:
             - ../../conf_files/gnb-pnf.band77.usrpn310.4x4.conf:/opt/oai-gnb/etc/gnb.conf

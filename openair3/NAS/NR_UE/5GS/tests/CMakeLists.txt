@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 message(STATUS "Add test nas_lib_test")
 
 add_executable(nas_lib_test nas_lib_test.c)

@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 # SmallCellForum 5G (n)FAPI split
 
 This document describes the broad way in which the VNF and PNF work internally,

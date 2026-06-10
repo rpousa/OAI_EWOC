@@ -1,22 +1,5 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
 #ifndef __NR_MODULATION_H__
@@ -24,7 +7,6 @@
 
 #include <stdint.h>
 #include "PHY/defs_nr_common.h"
-#include "PHY/defs_gNB.h"
 
 #define DMRS_MOD_ORDER 2
 /*Precoding matices: W[pmi][antenna_port][layer]*/
@@ -97,7 +79,6 @@ void nr_beam_precoding(c16_t **txdataF,
                        c16_t **txdataF_BF,
                        NR_DL_FRAME_PARMS *frame_parms,
                        int32_t ***beam_weights,
-                       int slot,
                        int symbol,
                        int aa,
                        int nb_antenna_ports,
@@ -105,6 +86,7 @@ void nr_beam_precoding(c16_t **txdataF,
 
 void apply_nr_rotation_TX(const NR_DL_FRAME_PARMS *fp,
                           c16_t *txdataF,
+                          bool is_flat_buff,
                           const c16_t *symbol_rotation,
                           int slot,
                           int nb_rb,
@@ -118,7 +100,7 @@ void nr_ofdm_demod_and_rx_rotation(c16_t **rxdata,
                                    int slot,
                                    int slot_offsetF,
                                    enum nr_Link linktype,
-                                   bool was_symbol_used[NR_NUMBER_OF_SYMBOLS_PER_SLOT]);
+                                   bool was_symbol_used[NR_SYMBOLS_PER_SLOT]);
 
 void perform_symbol_rotation(NR_DL_FRAME_PARMS *fp, double f0, c16_t *symbol_rotation);
 
@@ -144,7 +126,7 @@ c16_t nr_layer_precoder_cm(int n_layers,
                            int symSz,
                            c16_t datatx_F_precoding[n_layers][symSz],
                            int ap,
-                           nfapi_nr_pm_pdu_t *pmi_pdu,
+                           c16_t weights[NR_MAX_NB_LAYERS][NR_MAX_CSI_PORTS],
                            int offset);
 
 /*! \brief Precoding with SIMDe, txdataF_precoded[] = prec_matrix[] * txdataF_res_mapped[]
@@ -157,8 +139,16 @@ void nr_layer_precoder_simd(const int n_layers,
                             const int symSz,
                             const c16_t txdataF_res_mapped[n_layers][symSz],
                             const int ant,
-                            const nfapi_nr_pm_pdu_t *pmi_pdu,
+                            c16_t weights[NR_MAX_NB_LAYERS][NR_MAX_CSI_PORTS],
                             const int sc_offset,
                             const int re_cnt,
                             c16_t *txdataF_precoded);
+
+void fft_shift(const c16_t *in,
+               uint32_t in_symb_sz,
+               uint16_t num_prb,
+               c16_t *out,
+               uint16_t fft_size_out,
+               uint16_t start_symb,
+               uint16_t num_symb);
 #endif

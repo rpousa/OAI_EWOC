@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 # F1AP Messages Encoding & Decoding Library
 
 [[_TOC_]]

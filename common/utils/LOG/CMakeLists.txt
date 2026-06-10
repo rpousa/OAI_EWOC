@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 add_library(log_headers INTERFACE)
 target_include_directories(log_headers INTERFACE .)
 target_link_libraries(log_headers INTERFACE T_headers)

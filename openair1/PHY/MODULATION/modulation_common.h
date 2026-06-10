@@ -1,22 +1,5 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
 #ifndef __MODULATION_COMMON__H__
@@ -26,6 +9,14 @@
 /** @addtogroup _PHY_MODULATION_
  * @{
 */
+
+/*! \brief Extension Type */
+typedef enum {
+  CYCLIC_PREFIX,
+  CYCLIC_SUFFIX,
+  ZEROS,
+  NONE
+} Extension_t;
 
 /**
    \fn void PHY_ofdm_mod(int *input,int *output,int fftsize,unsigned char nb_symbols,unsigned short nb_prefix_samples,Extension_t
@@ -53,7 +44,7 @@ void nr_normal_prefix_mod(c16_t *txdataF,
                           uint8_t nsymb,
                           const NR_DL_FRAME_PARMS *frame_parms,
                           uint32_t slot,
-                          bool was_symbol_used[NR_NUMBER_OF_SYMBOLS_PER_SLOT]);
+                          bool was_symbol_used[NR_SYMBOLS_PER_SLOT]);
 
 void do_OFDM_mod(c16_t **txdataF, c16_t **txdata, uint32_t frame,uint16_t next_slot, LTE_DL_FRAME_PARMS *frame_parms);
 

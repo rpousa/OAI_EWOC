@@ -1,33 +1,9 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/* \file config_ue.c
+/*!
  * \brief common utility functions for NR (gNB and UE)
- * \author R. Knopp,
- * \date 2019
- * \version 0.1
- * \company Eurecom
- * \email: knopp@eurecom.fr
- * \note
- * \warning
  */
 
 #include <stdint.h>
@@ -37,7 +13,6 @@
 #include "nr_common.h"
 #include <limits.h>
 #include <math.h>
-#include <simde/x86/gfni.h>
 
 #define C_SRS_NUMBER (64)
 #define B_SRS_NUMBER (4)
@@ -112,46 +87,6 @@ static const unsigned short srs_bandwidth_config[C_SRS_NUMBER][B_SRS_NUMBER][2] 
     /* 63 */ {{272, 1}, {16, 17}, {8, 2}, {4, 2}},
 };
 
-static const uint8_t bit_reverse_table_256[] = {
-    0x00, 0x80, 0x40, 0xC0, 0x20, 0xA0, 0x60, 0xE0, 0x10, 0x90, 0x50, 0xD0, 0x30, 0xB0, 0x70, 0xF0, 0x08, 0x88, 0x48, 0xC8,
-    0x28, 0xA8, 0x68, 0xE8, 0x18, 0x98, 0x58, 0xD8, 0x38, 0xB8, 0x78, 0xF8, 0x04, 0x84, 0x44, 0xC4, 0x24, 0xA4, 0x64, 0xE4,
-    0x14, 0x94, 0x54, 0xD4, 0x34, 0xB4, 0x74, 0xF4, 0x0C, 0x8C, 0x4C, 0xCC, 0x2C, 0xAC, 0x6C, 0xEC, 0x1C, 0x9C, 0x5C, 0xDC,
-    0x3C, 0xBC, 0x7C, 0xFC, 0x02, 0x82, 0x42, 0xC2, 0x22, 0xA2, 0x62, 0xE2, 0x12, 0x92, 0x52, 0xD2, 0x32, 0xB2, 0x72, 0xF2,
-    0x0A, 0x8A, 0x4A, 0xCA, 0x2A, 0xAA, 0x6A, 0xEA, 0x1A, 0x9A, 0x5A, 0xDA, 0x3A, 0xBA, 0x7A, 0xFA, 0x06, 0x86, 0x46, 0xC6,
-    0x26, 0xA6, 0x66, 0xE6, 0x16, 0x96, 0x56, 0xD6, 0x36, 0xB6, 0x76, 0xF6, 0x0E, 0x8E, 0x4E, 0xCE, 0x2E, 0xAE, 0x6E, 0xEE,
-    0x1E, 0x9E, 0x5E, 0xDE, 0x3E, 0xBE, 0x7E, 0xFE, 0x01, 0x81, 0x41, 0xC1, 0x21, 0xA1, 0x61, 0xE1, 0x11, 0x91, 0x51, 0xD1,
-    0x31, 0xB1, 0x71, 0xF1, 0x09, 0x89, 0x49, 0xC9, 0x29, 0xA9, 0x69, 0xE9, 0x19, 0x99, 0x59, 0xD9, 0x39, 0xB9, 0x79, 0xF9,
-    0x05, 0x85, 0x45, 0xC5, 0x25, 0xA5, 0x65, 0xE5, 0x15, 0x95, 0x55, 0xD5, 0x35, 0xB5, 0x75, 0xF5, 0x0D, 0x8D, 0x4D, 0xCD,
-    0x2D, 0xAD, 0x6D, 0xED, 0x1D, 0x9D, 0x5D, 0xDD, 0x3D, 0xBD, 0x7D, 0xFD, 0x03, 0x83, 0x43, 0xC3, 0x23, 0xA3, 0x63, 0xE3,
-    0x13, 0x93, 0x53, 0xD3, 0x33, 0xB3, 0x73, 0xF3, 0x0B, 0x8B, 0x4B, 0xCB, 0x2B, 0xAB, 0x6B, 0xEB, 0x1B, 0x9B, 0x5B, 0xDB,
-    0x3B, 0xBB, 0x7B, 0xFB, 0x07, 0x87, 0x47, 0xC7, 0x27, 0xA7, 0x67, 0xE7, 0x17, 0x97, 0x57, 0xD7, 0x37, 0xB7, 0x77, 0xF7,
-    0x0F, 0x8F, 0x4F, 0xCF, 0x2F, 0xAF, 0x6F, 0xEF, 0x1F, 0x9F, 0x5F, 0xDF, 0x3F, 0xBF, 0x7F, 0xFF};
-
-void reverse_bits_u8(uint8_t const* in, size_t sz, uint8_t* out)
-{
-  DevAssert(in != NULL);
-  DevAssert(out != NULL);
-
-// Bit reversal implementation based on https://wunkolo.github.io/post/2020/11/gf2p8affineqb-bit-reversal/
-#if defined(__GFNI__) && defined(__AVX512F__)
-  int simde_sz = 64;
-  int i = 0;
-  int simde_bound = sz - simde_sz;
-  for (; i <= simde_bound; i += simde_sz) {
-    __m512i input = _mm512_loadu_epi8(&in[i]);
-    __m512i reversed = _mm512_gf2p8affine_epi64_epi8(input, _mm512_set1_epi64(0x8040201008040201), 0);
-    _mm512_storeu_epi8(&out[i], reversed);
-  }
-
-  for (; i < sz; ++i) {
-    out[i] = bit_reverse_table_256[in[i]];
-  }
-#else
-  for(size_t i = 0; i < sz; ++i)
-    out[i] = bit_reverse_table_256[in[i]];
-#endif
-}
-
 /** @brief 3GPP TS 38.133 Table 10.1.6.1-1 mapping from dBm to RSRP index */
 uint8_t get_rsrp_index(int rsrp_dBm)
 {
@@ -161,31 +96,6 @@ uint8_t get_rsrp_index(int rsrp_dBm)
   if (rsrp_dBm < -140)
     index = 16;
   return (uint8_t)index;
-}
-
-// Reverse bits implementation based on http://graphics.stanford.edu/~seander/bithacks.html
-uint64_t reverse_bits(uint64_t in, int n_bits)
-{
-  // Reverse n_bits in uint64_t variable, example:
-  // n_bits: 10
-  // in:      10 0000 1111
-  // return:  11 1100 0001
-
-  AssertFatal(n_bits <= 64, "Maximum bits to reverse is 64, impossible to reverse %d bits!\n", n_bits);
-  uint64_t rev_bits = 0;
-  uint8_t *p = (uint8_t *)&in;
-  uint8_t *q = (uint8_t *)&rev_bits;
-  int n_bytes = n_bits >> 3;
-  for (int n = 0; n < n_bytes; n++) {
-    q[n_bytes - 1 - n] = bit_reverse_table_256[p[n]];
-  }
-
-  // Reverse remaining bits (not aligned with 8-bit)
-  rev_bits = rev_bits << (n_bits % 8);
-  for (int i = n_bytes * 8; i < n_bits; i++) {
-    rev_bits |= ((in >> i) & 0x1) << (n_bits - i - 1);
-  }
-  return rev_bits;
 }
 
 #define NUM_BW_ENTRIES 15
@@ -218,92 +128,123 @@ int get_smallest_supported_bandwidth_index(int scs, frequency_range_t frequency_
   return -1; // not found
 }
 
-// Table 5.2-1 NR operating bands in FR1 & FR2 (3GPP TS 38.101) (Rel.17)
+// Table 5.4.3.3-1 38-101
+uint8_t set_ssb_case(int scs, int nr_band)
+{
+  uint8_t ssb_case = 0;
+  switch (scs) {
+    case 0:
+      ssb_case = 0; // case A
+      break;
+    case 1:
+      if (nr_band == 5 || nr_band == 24 || nr_band == 66 || nr_band == 255)
+        ssb_case = 1; // case B
+      else
+        ssb_case = 2; // case C
+      break;
+    case 3:
+      ssb_case = 3; // case D
+      break;
+    case 4:
+      ssb_case = 4; // case E
+      break;
+    default:
+      AssertFatal(false, "Invalid sub-carrier spacing for SSB\n");
+  }
+  return ssb_case;
+}
+
+// Table 5.2-1 NR operating bands in FR1 & FR2 (3GPP TS 38.101) (Rel.18)
 // Table 5.4.2.3-1 Applicable NR-ARFCN per operating band in FR1 & FR2 (3GPP TS 38.101)
 // Notes:
-// - N_OFFs for bands from 80 to 89 and band 95 is referred to UL
 // - Frequencies are expressed in KHz
-// - col: NR_band ul_min  ul_max  dl_min  dl_max  step  N_OFFs_DL  deltaf_raster
-const nr_bandentry_t nr_bandtable[] = {{1, 1920000, 1980000, 2110000, 2170000, 20, 422000, 100},
-                                       {2, 1850000, 1910000, 1930000, 1990000, 20, 386000, 100},
-                                       {3, 1710000, 1785000, 1805000, 1880000, 20, 361000, 100},
-                                       {5, 824000, 849000, 869000, 894000, 20, 173800, 100},
-                                       {7, 2500000, 2570000, 2620000, 2690000, 20, 524000, 100},
-                                       {8, 880000, 915000, 925000, 960000, 20, 185000, 100},
-                                       {12, 699000, 716000, 729000, 746000, 20, 145800, 100},
-                                       {13, 777000, 787000, 746000, 756000, 20, 149200, 100},
-                                       {14, 788000, 798000, 758000, 768000, 20, 151600, 100},
-                                       {18, 815000, 830000, 860000, 875000, 20, 172000, 100},
-                                       {20, 832000, 862000, 791000, 821000, 20, 158200, 100},
-                                       {24, 1627500, 1656500, 1526000, 1536000, 20, 305000, 100},
-                                       {25, 1850000, 1915000, 1930000, 1995000, 20, 386000, 100},
-                                       {26, 814000, 849000, 859000, 894000, 20, 171800, 100},
-                                       {28, 703000, 758000, 758000, 813000, 20, 151600, 100},
-                                       {29, 000, 000, 717000, 728000, 20, 143400, 100},
-                                       {30, 2305000, 2315000, 2350000, 2360000, 20, 470000, 100},
-                                       {34, 2010000, 2025000, 2010000, 2025000, 20, 402000, 100},
-                                       {38, 2570000, 2620000, 2570000, 2630000, 20, 514000, 100},
-                                       {39, 1880000, 1920000, 1880000, 1920000, 20, 376000, 100},
-                                       {40, 2300000, 2400000, 2300000, 2400000, 20, 460000, 100},
-                                       {41, 2496000, 2690000, 2496000, 2690000, 3, 499200, 15},
-                                       {41, 2496000, 2690000, 2496000, 2690000, 6, 499200, 30},
-                                       {46, 5150000, 5925000, 5150000, 5925000, 1, 743334, 15},
-                                       {47, 5855000, 5925000, 5855000, 5925000, 1, 790334, 15},
-                                       {48, 3550000, 3700000, 3550000, 3700000, 1, 636667, 15},
-                                       {48, 3550000, 3700000, 3550000, 3700000, 2, 636668, 30},
-                                       {50, 1432000, 1517000, 1432000, 1517000, 20, 286400, 100},
-                                       {51, 1427000, 1432000, 1427000, 1432000, 20, 285400, 100},
-                                       {53, 2483500, 2495000, 2483500, 2495000, 20, 496700, 100},
-                                       {65, 1920000, 2010000, 2110000, 2200000, 20, 422000, 100},
-                                       {66, 1710000, 1780000, 2110000, 2200000, 20, 422000, 100},
-                                       {67, 000, 000, 738000, 758000, 20, 147600, 100},
-                                       {70, 1695000, 1710000, 1995000, 2020000, 20, 399000, 100},
-                                       {71, 663000, 698000, 617000, 652000, 20, 123400, 100},
-                                       {74, 1427000, 1470000, 1475000, 1518000, 20, 295000, 100},
-                                       {75, 000, 000, 1432000, 1517000, 20, 286400, 100},
-                                       {76, 000, 000, 1427000, 1432000, 20, 285400, 100},
-                                       {77, 3300000, 4200000, 3300000, 4200000, 1, 620000, 15},
-                                       {77, 3300000, 4200000, 3300000, 4200000, 2, 620000, 30},
-                                       {78, 3300000, 3800000, 3300000, 3800000, 1, 620000, 15},
-                                       {78, 3300000, 3800000, 3300000, 3800000, 2, 620000, 30},
-                                       {79, 4400010, 5000000, 4400010, 5000000, 1, 693334, 15},
-                                       {79, 4400010, 5000000, 4400010, 5000000, 2, 693334, 30},
-                                       {80, 1710000, 1785000, 000, 000, 20, 342000, 100},
-                                       {81, 880000, 915000, 000, 000, 20, 176000, 100},
-                                       {82, 832000, 862000, 000, 000, 20, 166400, 100},
-                                       {83, 703000, 748000, 000, 000, 20, 140600, 100},
-                                       {84, 1920000, 1980000, 000, 000, 20, 384000, 100},
-                                       {85, 698000, 716000, 728000, 746000, 20, 145600, 100},
-                                       {86, 1710000, 1785000, 000, 000, 20, 342000, 100},
-                                       {89, 824000, 849000, 000, 000, 20, 342000, 100},
-                                       {90, 2496000, 2690000, 2496000, 2690000, 3, 499200, 15},
-                                       {90, 2496000, 2690000, 2496000, 2690000, 6, 499200, 30},
-                                       {90, 2496000, 2690000, 2496000, 2690000, 20, 499200, 100},
-                                       {91, 832000, 862000, 1427000, 1432000, 20, 285400, 100},
-                                       {92, 832000, 862000, 1432000, 1517000, 20, 286400, 100},
-                                       {93, 880000, 915000, 1427000, 1432000, 20, 285400, 100},
-                                       {94, 880000, 915000, 1432000, 1517000, 20, 286400, 100},
-                                       {95, 2010000, 2025000, 000, 000, 20, 402000, 100},
-                                       {96, 5925000, 7125000, 5925000, 7125000, 1, 795000, 15},
-                                       {100, 874400, 880000, 919400, 925000, 20, 174880, 100},
-                                       {101, 1900000, 1910000, 1900000, 1910000, 20, 380000, 100},
-                                       {102, 5925000, 6425000, 5925000, 6425000, 1, 795000, 15},
-                                       {104, 6425000, 7125000, 6425000, 7125000, 1, 828334, 15},
-                                       {104, 6425000, 7125000, 6425000, 7125000, 2, 828334, 30},
-                                       {254, 1610000, 1626500, 2483500, 2500000, 20, 496700, 100},
-                                       {254, 1610000, 1626500, 2483500, 2500000, 2, 496700, 10},
-                                       {255, 1626500, 1660500, 1525000, 1559000, 20, 305000, 100},
-                                       {255, 1626500, 1660500, 1525000, 1559000, 2, 305000, 10},
-                                       {256, 1980000, 2010000, 2170000, 2200000, 20, 434000, 100},
-                                       {256, 1980000, 2010000, 2170000, 2200000, 2, 434000, 10},
-                                       {257, 26500020, 29500000, 26500020, 29500000, 1, 2054166, 60},
-                                       {257, 26500080, 29500000, 26500080, 29500000, 2, 2054167, 120},
-                                       {258, 24250080, 27500000, 24250080, 27500000, 1, 2016667, 60},
-                                       {258, 24250080, 27500000, 24250080, 27500000, 2, 2016667, 120},
-                                       {260, 37000020, 40000000, 37000020, 40000000, 1, 2229166, 60},
-                                       {260, 37000080, 40000000, 37000080, 40000000, 2, 2229167, 120},
-                                       {261, 27500040, 28350000, 27500040, 28350000, 1, 2070833, 60},
-                                       {261, 27500040, 28350000, 27500040, 28350000, 2, 2070833, 120}};
+// - col: NR_band ul_min   ul_max    dl_min    dl_max  ul_stepsize dl_stepsize  N_OFFs_UL N_OFFs_DL deltaf_raster
+const nr_bandentry_t nr_bandtable[] = {{1,    1920000,  1980000,  2110000,  2170000, 20, 20,  384000,  422000, 100},
+                                       {2,    1850000,  1910000,  1930000,  1990000, 20, 20,  370000,  386000, 100},
+                                       {3,    1710000,  1785000,  1805000,  1880000, 20, 20,  342000,  361000, 100},
+                                       {5,     824000,   849000,   869000,   894000, 20, 20,  164800,  173800, 100},
+                                       {7,    2500000,  2570000,  2620000,  2690000, 20, 20,  500000,  524000, 100},
+                                       {8,     880000,   915000,   925000,   960000, 20, 20,  176000,  185000, 100},
+                                       {12,    699000,   716000,   729000,   746000, 20, 20,  139800,  145800, 100},
+                                       {13,    777000,   787000,   746000,   756000, 20, 20,  155400,  149200, 100},
+                                       {14,    788000,   798000,   758000,   768000, 20, 20,  157600,  151600, 100},
+                                       {18,    815000,   830000,   860000,   875000, 20, 20,  163000,  172000, 100},
+                                       {20,    832000,   862000,   791000,   821000, 20, 20,  166400,  158200, 100},
+                                       {24,   1626500,  1660500,  1525000,  1559000, 20, 20,  325300,  305000, 100},
+                                       {25,   1850000,  1915000,  1930000,  1995000, 20, 20,  370000,  386000, 100},
+                                       {26,    814000,   849000,   859000,   894000, 20, 20,  162800,  171800, 100},
+                                       {28,    703000,   748000,   758000,   803000, 20, 20,  140600,  151600, 100},
+                                       {29,       000,      000,   717000,   728000,  0, 20,       0,  143400, 100},
+                                       {30,   2305000,  2315000,  2350000,  2360000, 20, 20,  461000,  470000, 100},
+                                       {34,   2010000,  2025000,  2010000,  2025000, 20, 20,  402000,  402000, 100},
+                                       {38,   2570000,  2620000,  2570000,  2620000, 20, 20,  514000,  514000, 100},
+                                       {39,   1880000,  1920000,  1880000,  1920000, 20, 20,  376000,  376000, 100},
+                                       {40,   2300000,  2400000,  2300000,  2400000, 20, 20,  460000,  460000, 100},
+                                       {41,   2496000,  2690000,  2496000,  2690000,  3,  3,  499200,  499200,  15},
+                                       {41,   2496000,  2690000,  2496000,  2690000,  6,  6,  499200,  499200,  30},
+                                       {46,   5150000,  5925000,  5150000,  5925000,  1,  1,  743334,  743334,  15},
+                                       {47,   5855000,  5925000,  5855000,  5925000,  1,  1,  790334,  790334,  15},
+                                       {48,   3550000,  3700000,  3550000,  3700000,  1,  1,  636667,  636667,  15},
+                                       {48,   3550000,  3700000,  3550000,  3700000,  2,  2,  636668,  636668,  30},
+                                       {50,   1432000,  1517000,  1432000,  1517000, 20, 20,  286400,  286400, 100},
+                                       {51,   1427000,  1432000,  1427000,  1432000, 20, 20,  285400,  285400, 100},
+                                       {53,   2483500,  2495000,  2483500,  2495000, 20, 20,  496700,  496700, 100},
+                                       {65,   1920000,  2010000,  2110000,  2200000, 20, 20,  384000,  422000, 100},
+                                       {66,   1710000,  1780000,  2110000,  2200000, 20, 20,  342000,  422000, 100},
+                                       {67,       000,      000,   738000,   758000,  0, 20,       0,  147600, 100},
+                                       {70,   1695000,  1710000,  1995000,  2020000, 20, 20,  339000,  399000, 100},
+                                       {71,    663000,   698000,   617000,   652000, 20, 20,  132600,  123400, 100},
+                                       {74,   1427000,  1470000,  1475000,  1518000, 20, 20,  285400,  295000, 100},
+                                       {75,       000,      000,  1432000,  1517000,  0, 20,       0,  286400, 100},
+                                       {76,       000,      000,  1427000,  1432000,  0, 20,       0,  285400, 100},
+                                       {77,   3300000,  4200000,  3300000,  4200000,  1,  1,  620000,  620000,  15},
+                                       {77,   3300000,  4200000,  3300000,  4200000,  2,  2,  620000,  620000,  30},
+                                       {78,   3300000,  3800000,  3300000,  3800000,  1,  1,  620000,  620000,  15},
+                                       {78,   3300000,  3800000,  3300000,  3800000,  2,  2,  620000,  620000,  30},
+                                       {79,   4400000,  5000000,  4400000,  5000000,  1,  1,  693334,  693334,  15},
+                                       {79,   4400000,  5000000,  4400000,  5000000,  2,  2,  693334,  693334,  30},
+                                       {80,   1710000,  1785000,      000,      000, 20,  0,  342000,       0, 100},
+                                       {81,    880000,   915000,      000,      000, 20,  0,  176000,       0, 100},
+                                       {82,    832000,   862000,      000,      000, 20,  0,  166400,       0, 100},
+                                       {83,    703000,   748000,      000,      000, 20,  0,  140600,       0, 100},
+                                       {84,   1920000,  1980000,      000,      000, 20,  0,  384000,       0, 100},
+                                       {85,    698000,   716000,   728000,   746000, 20, 20,  139600,  145600, 100},
+                                       {86,   1710000,  1780000,      000,      000, 20,  0,  342000,       0, 100},
+                                       {89,    824000,   849000,      000,      000, 20,  0,  342000,       0, 100},
+                                       {90,   2496000,  2690000,  2496000,  2690000,  3,  3,  499200,  499200,  15},
+                                       {90,   2496000,  2690000,  2496000,  2690000,  6,  6,  499200,  499200,  30},
+                                       {90,   2496000,  2690000,  2496000,  2690000, 20, 20,  499200,  499200, 100},
+                                       {91,    832000,   862000,  1427000,  1432000, 20, 20,  166400,  285400, 100},
+                                       {92,    832000,   862000,  1432000,  1517000, 20, 20,  166400,  286400, 100},
+                                       {93,    880000,   915000,  1427000,  1432000, 20, 20,  176000,  285400, 100},
+                                       {94,    880000,   915000,  1432000,  1517000, 20, 20,  176000,  286400, 100},
+                                       {95,   2010000,  2025000,      000,      000, 20, 20,  402000,  402000, 100},
+                                       {96,   5925000,  7125000,  5925000,  7125000,  1,  1,  795000,  795000,  15},
+                                       {100,   874400,   880000,   919400,   925000, 20, 20,  174880,  174880, 100},
+                                       {101,  1900000,  1910000,  1900000,  1910000, 20, 20,  380000,  380000, 100},
+                                       {102,  5925000,  6425000,  5925000,  6425000,  1,  1,  795000,  795000,  15},
+                                       {104,  6425000,  7125000,  6425000,  7125000,  1,  1,  828334,  828334,  15},
+                                       {104,  6425000,  7125000,  6425000,  7125000,  2,  2,  828334,  828334,  30},
+                                       {254,  1610000,  1626500,  2483500,  2500000, 20, 20,  322000,  496700, 100},
+                                       {254,  1610000,  1626500,  2483500,  2500000,  2,  2,  322000,  496700,  10},
+                                       {255,  1626500,  1660500,  1525000,  1559000, 20, 20,  325300,  305000, 100},
+                                       {255,  1626500,  1660500,  1525000,  1559000,  2,  2,  325300,  305000,  10},
+                                       {256,  1980000,  2010000,  2170000,  2200000, 20, 20,  396000,  434000, 100},
+                                       {256,  1980000,  2010000,  2170000,  2200000,  2,  2,  396000,  434000,  10},
+                                       {257, 26500020, 29500000, 26500020, 29500000,  1,  1, 2054166, 2054166,  60},
+                                       {257, 26500080, 29500000, 26500080, 29500000,  2,  2, 2054167, 2054167, 120},
+                                       {258, 24250080, 27500000, 24250080, 27500000,  1,  1, 2016667, 2016667,  60},
+                                       {258, 24250080, 27500000, 24250080, 27500000,  2,  2, 2016667, 2016667, 120},
+                                       {260, 37000020, 40000000, 37000020, 40000000,  1,  1, 2229166, 2229166,  60},
+                                       {260, 37000080, 40000000, 37000080, 40000000,  2,  2, 2229167, 2229167, 120},
+                                       {261, 27500040, 28350000, 27500040, 28350000,  1,  1, 2070833, 2070833,  60},
+                                       {261, 27500040, 28350000, 27500040, 28350000,  2,  2, 2070833, 2070833, 120},
+                                       {510, 27500000, 28350000, 17300000, 20200000,  1,  4, 2070833, 1553336,  60},
+                                       {510, 27500000, 28350000, 17300000, 20200000,  2,  8, 2070833, 1553336, 120},
+                                       {511, 28350000, 30000000, 17300000, 20200000,  1,  4, 2084999, 1553336,  60},
+                                       {511, 28350000, 30000000, 17300000, 20200000,  2,  8, 2084999, 1553336, 120},
+                                       {512, 27500000, 30000000, 17300000, 20200000,  1,  4, 2070833, 1553336,  60},
+                                       {512, 27500000, 30000000, 17300000, 20200000,  2,  8, 2070833, 1553336, 120}};
 
 // synchronization raster per band tables (Rel.17)
 // (38.101-1 Table 5.4.3.3-1 and 38.101-2 Table 5.4.3.3-1)
@@ -381,6 +322,13 @@ const sync_raster_t sync_raster[] = {
   {260, 4, 22996, 2, 23164},
   {261, 3, 22446, 1, 22492},
   {261, 4, 22446, 2, 22490},
+  {510, 3, 17448, 12, 19428},
+  {510, 4, 17472, 24, 19416},
+  {511, 3, 17448, 12, 19428},
+  {511, 4, 17472, 24, 19416},
+  {512, 3, 17448, 12, 19428},
+  {512, 4, 17472, 24, 19416},
+/***************************/
 };
 // clang-format on
 
@@ -457,77 +405,6 @@ bool compare_relative_ul_channel_bw(int nr_band, int scs, int channel_bandwidth,
   float limit = frame_type == TDD ? 0.04 : 0.03;
   float rel_bw = (float) (2 * channel_bandwidth * 1000) / (float) (nr_bandtable[index].ul_max - nr_bandtable[index].ul_min);
   return rel_bw > limit;
-}
-
-static bool check_delta_duplex(int index, uint64_t dlfreq_khz, uint64_t ulfreq_khz, int64_t dlbw, int64_t ulbw)
-{
-  int uldl_min_offset = nr_bandtable[index].dl_min - nr_bandtable[index].ul_min;
-  int txrx_offset = dlfreq_khz - ulfreq_khz;
-  LOG_I(NR_PHY, "dlfreq:%ld ulfreq:%ld deltaduplex:%d khz, uldl_min_offset:%d khz\n",
-                              dlfreq_khz, ulfreq_khz, txrx_offset, uldl_min_offset);
-  if (txrx_offset == uldl_min_offset)
-    return true;
-
-  int band = nr_bandtable[index].band;
-
-  // Refer to section 5.4.4 in spec 38.101-5
-  if (band == 256 && txrx_offset >= 165000 && txrx_offset <= 215000)
-    return true;
-  if (band == 255 && txrx_offset >= -130500 && txrx_offset <= -72500)
-    return true;
-  if (band == 254 && txrx_offset >= 862000 && txrx_offset <= 885000)
-    return true;
-
-  // Refer to section 5.4.4 in spec 38.101-1 for these bands 24, 91-94, 109
-  if (band == 24 && (txrx_offset == -101500 || txrx_offset == -120500))
-    return true;
-  //Delta duplex is also a range for these bands n91-n94, n109.
-  if ((band >= 91 && band <= 94) || band == 109) {
-    dlbw = ((dlbw / 1000) + 1)  * 1000;
-    ulbw = ((ulbw / 1000) + 1) * 1000;
-    int lower_limit = nr_bandtable[index].dl_min - nr_bandtable[index].ul_max + ((dlbw + ulbw) >> 1);
-    int upper_limit = nr_bandtable[index].dl_max - nr_bandtable[index].ul_min - ((dlbw + ulbw) >> 1);
-    LOG_I(NR_PHY, "Band %d dlbw:%ld Khz, ulbw: %ld Khz RXTX lower limit:%d khz, upper limit:%d khz\n",
-                                            band, dlbw, ulbw, lower_limit, upper_limit);
-
-    if (txrx_offset >= lower_limit && txrx_offset <= upper_limit)
-      return true;
-  }
-
-  return false;
-}
-
-uint16_t get_band(uint64_t downlink_frequency, int32_t delta_duplex, int64_t dlbw, int64_t ulbw)
-{
-  const int64_t dl_freq_khz = downlink_frequency / 1000;
-  const int32_t  delta_duplex_khz = delta_duplex / 1000;
-  const int64_t ul_freq_khz = dl_freq_khz + delta_duplex_khz;
-
-  uint16_t current_band = 0;
-
-  for (int ind = 0; ind < sizeofArray(nr_bandtable); ind++) {
-
-    if (dl_freq_khz < nr_bandtable[ind].dl_min || dl_freq_khz > nr_bandtable[ind].dl_max)
-      continue;
-
-    if (ul_freq_khz < nr_bandtable[ind].ul_min || ul_freq_khz > nr_bandtable[ind].ul_max)
-      continue;
-
-    if (!check_delta_duplex(ind, dl_freq_khz, ul_freq_khz, dlbw, ulbw))
-      continue;
-
-    current_band = nr_bandtable[ind].band;
-  }
-
-  printf("DL frequency %"PRIu64": band %d, UL frequency %"PRIu64"\n",
-        downlink_frequency, current_band, downlink_frequency+delta_duplex);
-
-  AssertFatal(current_band != 0,
-              "Can't find EUTRA band for frequency %" PRIu64 " and duplex_spacing %d\n",
-              downlink_frequency,
-              delta_duplex);
-
-  return current_band;
 }
 
 int NRRIV2BW(int locationAndBandwidth,int N_RB) {
@@ -653,52 +530,26 @@ int get_nb_periods_per_frame(uint8_t tdd_period)
   return nb_periods_per_frame;
 }
 
-void get_delta_arfcn(int i, uint32_t nrarfcn, uint64_t N_OFFs)
+uint32_t to_nrarfcn(uint64_t CarrierFreq)
 {
-  uint32_t delta_arfcn = nrarfcn - N_OFFs;
-
-  if(delta_arfcn % (nr_bandtable[i].step_size) != 0)
-    LOG_E(NR_MAC, "nrarfcn %u is not on the channel raster for step size %lu\n", nrarfcn, nr_bandtable[i].step_size);
-}
-
-uint32_t to_nrarfcn(int nr_bandP, uint64_t dl_CarrierFreq, uint8_t scs_index, uint32_t bw)
-{
-  uint64_t dl_CarrierFreq_by_1k = dl_CarrierFreq / 1000;
-  int bw_kHz = bw / 1000;
-  uint32_t nrarfcn;
-  int i = get_nr_table_idx(nr_bandP, scs_index);
-
-  LOG_D(NR_MAC, "Searching for nr band %d DL Carrier frequency %llu bw %u\n", nr_bandP, (long long unsigned int)dl_CarrierFreq, bw);
-
-  AssertFatal(dl_CarrierFreq_by_1k >= nr_bandtable[i].dl_min,
-              "Band %d, bw %u : DL carrier frequency %llu kHz < %llu\n",
-	      nr_bandP, bw, (long long unsigned int)dl_CarrierFreq_by_1k,
-	      (long long unsigned int)nr_bandtable[i].dl_min);
-  AssertFatal(dl_CarrierFreq_by_1k <= (nr_bandtable[i].dl_max - bw_kHz/2),
-              "Band %d, dl_CarrierFreq %llu bw %u: DL carrier frequency %llu kHz > %llu\n",
-	      nr_bandP, (long long unsigned int)dl_CarrierFreq,bw, (long long unsigned int)dl_CarrierFreq_by_1k,
-	      (long long unsigned int)(nr_bandtable[i].dl_max - bw_kHz/2));
-
+  uint64_t CarrierFreq_by_1k = CarrierFreq / 1000;
+  // FR2
   int deltaFglobal = 60;
   uint32_t N_REF_Offs = 2016667;
   uint64_t F_REF_Offs_khz = 24250080;
-
-  if (dl_CarrierFreq < 24.25e9) {
+  // FR1
+  if (CarrierFreq < 3e9) {
+    deltaFglobal = 5;
+    N_REF_Offs = 0;
+    F_REF_Offs_khz = 0;
+  } else if (CarrierFreq < 24.25e9) {
     deltaFglobal = 15;
     N_REF_Offs = 600000;
     F_REF_Offs_khz = 3000000;
   }
-  if (dl_CarrierFreq < 3e9) {
-    deltaFglobal = 5;
-    N_REF_Offs = 0;
-    F_REF_Offs_khz = 0;
-  }
 
   // This is equation before Table 5.4.2.1-1 in 38101-1-f30
-  // F_REF=F_REF_Offs + deltaF_Global(N_REF-NREF_REF_Offs)
-  nrarfcn =  (((dl_CarrierFreq_by_1k - F_REF_Offs_khz) / deltaFglobal) + N_REF_Offs);
-  //get_delta_arfcn(i, nrarfcn, nr_bandtable[i].N_OFFs_DL);
-
+  uint32_t nrarfcn =  (((CarrierFreq_by_1k - F_REF_Offs_khz) / deltaFglobal) + N_REF_Offs);
   return nrarfcn;
 }
 
@@ -709,7 +560,6 @@ uint64_t from_nrarfcn(int nr_bandP, uint8_t scs_index, uint32_t nrarfcn)
   int deltaFglobal = 5;
   uint32_t N_REF_Offs = 0;
   uint64_t F_REF_Offs_khz = 0;
-  uint64_t N_OFFs, frequency, freq_min;
   int i = get_nr_table_idx(nr_bandP, scs_index);
 
   if (nrarfcn > 599999 && nrarfcn < 2016667) {
@@ -723,42 +573,30 @@ uint64_t from_nrarfcn(int nr_bandP, uint8_t scs_index, uint32_t nrarfcn)
     F_REF_Offs_khz = 24250080;
   }
 
-  int32_t delta_duplex = get_delta_duplex(nr_bandP, scs_index);
+  // First check if the ARFCN is on the RASTER
+  uint32_t stepsize = nr_bandtable[i].dl_stepsize;
+  uint32_t N_OFFs = nr_bandtable[i].N_OFFs_DL;
 
-  if (delta_duplex <= 0){ // DL band >= UL band
-    if (nrarfcn >= nr_bandtable[i].N_OFFs_DL){ // is TDD of FDD DL
-      N_OFFs = nr_bandtable[i].N_OFFs_DL;
-      freq_min = nr_bandtable[i].dl_min;
-    } else {// is FDD UL
-      N_OFFs = nr_bandtable[i].N_OFFs_DL + delta_duplex/deltaFglobal;
-      freq_min = nr_bandtable[i].ul_min;
-    }
-  } else { // UL band > DL band
-    if (nrarfcn >= nr_bandtable[i].N_OFFs_DL + delta_duplex / deltaFglobal){ // is FDD UL
-      N_OFFs = nr_bandtable[i].N_OFFs_DL + delta_duplex / deltaFglobal;
-      freq_min = nr_bandtable[i].ul_min;
-    } else { // is FDD DL
-      N_OFFs = nr_bandtable[i].N_OFFs_DL;
-      freq_min = nr_bandtable[i].dl_min;
+  if (nrarfcn >= nr_bandtable[i].N_OFFs_UL) {
+    if (nr_bandtable[i].N_OFFs_UL > N_OFFs || nrarfcn < N_OFFs) {
+      N_OFFs = nr_bandtable[i].N_OFFs_UL;
+      stepsize = nr_bandtable[i].ul_stepsize;
     }
   }
 
-  LOG_D(NR_MAC, "Frequency from NR-ARFCN for N_OFFs %lu, duplex spacing %d KHz, deltaFglobal %d KHz\n",
-        N_OFFs,
-        delta_duplex,
-        deltaFglobal);
+  LOG_D(NR_MAC, "N_OFFs %u, deltaFglobal %d KHz, stepsize:%d\n", N_OFFs, deltaFglobal, stepsize);
 
-  AssertFatal(nrarfcn >= N_OFFs,"nrarfcn %u < N_OFFs[%d] %llu\n", nrarfcn, nr_bandtable[i].band, (long long unsigned int)N_OFFs);
-  get_delta_arfcn(i, nrarfcn, N_OFFs);
+  AssertFatal(nrarfcn >= N_OFFs,"nrarfcn %u < N_OFFs[%d] %u\n", nrarfcn, nr_bandtable[i].band, N_OFFs);
 
-  frequency = 1000 * (F_REF_Offs_khz + (nrarfcn - N_REF_Offs) * deltaFglobal);
+  if ((nrarfcn - N_OFFs) % stepsize != 0)
+    LOG_E(NR_MAC, "nrarfcn %u is not on the channel raster for step size %u. N_OFFS:%d\n",
+                  nrarfcn, stepsize, N_OFFs);
 
-  LOG_D(NR_MAC, "Computing frequency (nrarfcn %llu => %llu KHz (freq_min %llu KHz, NR band %d N_OFFs %llu))\n",
+  uint64_t frequency = 1000 * (F_REF_Offs_khz + (nrarfcn - N_REF_Offs) * deltaFglobal);
+  LOG_I(NR_MAC, "Computing frequency (nrarfcn %llu => %llu KHz, NR band %d\n",
         (unsigned long long)nrarfcn,
         (unsigned long long)frequency/1000,
-        (unsigned long long)freq_min,
-        nr_bandP,
-        (unsigned long long)N_OFFs);
+        nr_bandP);
 
   return frequency;
 }
@@ -860,6 +698,19 @@ int get_subband_size(int NPRB,int size) {
   if (NPRB<275) return (size==0 ? 16 : 32);
   AssertFatal(1==0,"Shouldn't get here, NPRB %d\n",NPRB);
  
+}
+
+void warn_higher_threequarter_fs(const int n_rb, const int mu)
+{
+  LOG_W(NR_PHY,
+        "3/4 sampling is not possible for current PRB size: %d and numerology: %d.\n "
+        "So 6/4 sampling is chosen to support x3xx type USRPs.\n "
+        "Note that this sampling rate increases fronthaul traffic, FFT buffer size and processing time by a factor of two compared "
+        "to 3/4 sampling rate.\n "
+        "Some PRACH configuration might not be supported with 6/4 FFT size.\n "
+        "Consider reducing the PRB size that would fit within the FFT size of 3/4 sampling\n",
+        n_rb,
+        mu);
 }
 
 void get_samplerate_and_bw(int mu,
@@ -1165,12 +1016,13 @@ uint32_t get_ssb_offset_to_pointA(uint32_t absoluteFrequencySSB,
   // only difference wrt NR-ARFCN is delta frequency 5kHz if f < 3 GHz for ARFCN
   uint32_t absolute_diff = (absoluteFrequencySSB - absoluteFrequencyPointA);
   const int scaling_5khz = absoluteFrequencyPointA < 600000 ? 3 : 1;
-  const int scaling = frequency_range == FR2 ? 1 << (ssbSubcarrierSpacing - 2) : 1 << ssbSubcarrierSpacing;
+  const int scaling = (absoluteFrequencyPointA >= 2016667) ? 1 << (ssbSubcarrierSpacing - 2) : 1 << ssbSubcarrierSpacing;
   const int scaled_abs_diff = absolute_diff / (scaling_5khz * scaling);
   // absoluteFrequencySSB is the central frequency of SSB which is made by 20RBs in total
-  const int ssb_offset_point_a = ((scaled_abs_diff / 12) - 10) * scaling;
+  const int ssb_offset_scaling = (frequency_range == FR2) ? 1 << (ssbSubcarrierSpacing - 2) : 1 << ssbSubcarrierSpacing;
+  const int ssb_offset_point_a = ((scaled_abs_diff / 12) - 10) * ssb_offset_scaling;
   // Offset to point A needs to be divisible by scaling
-  AssertFatal(ssb_offset_point_a % scaling == 0, "PRB offset %d not valid for scs %d\n", ssb_offset_point_a, ssbSubcarrierSpacing);
+  AssertFatal(ssb_offset_point_a % ssb_offset_scaling == 0, "PRB offset %d not valid for scs %d\n", ssb_offset_point_a, ssbSubcarrierSpacing);
   AssertFatal(ssb_offset_point_a >= 0, "ssb offset is negative %d for scs %d\n", ssb_offset_point_a, ssbSubcarrierSpacing);
   return ssb_offset_point_a;
 }
@@ -1447,13 +1299,41 @@ unsigned short get_N_b_srs(int c_srs, int b_srs) {
   return srs_bandwidth_config[c_srs][b_srs][1];
 }
 
+// TODO: Implement to b_SRS = 1 and b_SRS = 2
+long rrc_get_max_nr_csrs(const int max_rbs, const long b_SRS)
+{
+  if(b_SRS>0) {
+    LOG_E(NR_RRC,"rrc_get_max_nr_csrs(): Not implemented yet for b_SRS>0\n");
+    return 0; // This c_srs is always valid
+  }
+
+  const uint16_t m_SRS[64] = { 4, 8, 12, 16, 16, 20, 24, 24, 28, 32, 36, 40, 48, 48, 52, 56, 60, 64, 72, 72, 76, 80, 88,
+                               96, 96, 104, 112, 120, 120, 120, 128, 128, 128, 132, 136, 144, 144, 144, 144, 152, 160,
+                               160, 160, 168, 176, 184, 192, 192, 192, 192, 208, 216, 224, 240, 240, 240, 240, 256, 256,
+                               256, 264, 272, 272, 272 };
+
+  long c_srs = 0;
+  uint16_t m = 4;
+  for(int c = 1; c<64; c++) {
+    if(m_SRS[c]>m && m_SRS[c]<max_rbs) {
+      c_srs = c;
+      m = m_SRS[c];
+    }
+  }
+
+  return c_srs;
+}
+
 frequency_range_t get_freq_range_from_freq(uint64_t freq)
 {
-  // 3GPP TS 38.101-1 Version 19.0.0 Table 5.1-1: Definition of frequency ranges
+  // 3GPP TS 38.101-1,38.101-5 Version 19.0.0 Table 5.1-1: Definition of frequency ranges
   if (freq >= 410000000 && freq <= 7125000000)
     return FR1;
-
-  if (freq >= 24250000000 && freq <= 71000000000)
+  // 3GPP TS 38.101-1 Version 19.0.0 Table 5.1-1: Definition of frequency ranges
+  // FR2 is from 24250 MHz to 71000 MHz
+  // 3GPP TS 38.101-5 Version 19.0.0 Table 5.1-1: Definition of frequency ranges
+  // FR2 for NTN is from 17300 Mhz to 30000 MHz
+  if (freq >= 17300000000 && freq <= 71000000000)
     return FR2;
 
   AssertFatal(false, "Undefined Frequency Range for frequency %ld Hz\n", freq);
@@ -1464,8 +1344,11 @@ frequency_range_t get_freq_range_from_arfcn(uint32_t arfcn)
   // 3GPP TS 38.101-1 Version 19.0.0 Table 5.1-1: Definition of frequency ranges
   if (arfcn >= 82000 && arfcn <= 875000)
     return FR1;
-
-  if (arfcn >= 2016667 && arfcn <= 2795832)
+  // 3GPP TS 38.101-1 Version 19.0.0 Table 5.1-1: Definition of frequency ranges
+  // FR2 is from 24250 MHz to 71000 MHz (from ARFCN 2016667)
+  // 3GPP TS 38.101-5 Version 19.0.0 Table 5.1-1: Definition of frequency ranges
+  // FR2 for NTN is from 17300 Mhz to 30000 MHz, from ARFCN 1553336 (Table 5.4.2.3-3)
+  if (arfcn >= 1553336 && arfcn <= 2795832)
     return FR2;
 
   AssertFatal(false, "Undefined Frequency Range for ARFCN %d\n", arfcn);
@@ -1486,4 +1369,91 @@ float get_beta_dmrs(int num_cdm_groups_no_data, bool is_type2)
       beta_dmrs_pusch = powf(10.0, 4.77 / 20.0);
   }
   return beta_dmrs_pusch;
+}
+
+/** @brief Construct full 5G-S-TMSI from 5G-S-TMSI components
+ * @param amf_set_id AMF Set ID (10 bits)
+ * @param amf_pointer AMF Pointer (6 bits)
+ * @param m_tmsi 5G-TMSI (32 bits)
+ * @return Full 5G-S-TMSI (48 bits)
+ * @note The 5G-S-TMSI is constructed as a 48-bit value:
+ *       - Bits 38-47: AMF Set ID (10 bits)
+ *       - Bits 32-37: AMF Pointer (6 bits)
+ *       - Bits 0-31:  5G-TMSI (32 bits)
+ * @ref 3GPP TS 23.003 */
+uint64_t nr_construct_5g_s_tmsi(uint16_t amf_set_id, uint8_t amf_pointer, uint32_t m_tmsi)
+{
+  // Construct full 5G-S-TMSI: <AMF Set ID (10 bits)><AMF Pointer (6 bits)><5G-TMSI (32 bits)>
+  return ((uint64_t)amf_set_id << 38) | ((uint64_t)amf_pointer << 32) | m_tmsi;
+}
+
+/** @brief Extract 5G-S-TMSI-Part1 from full 5G-S-TMSI
+ * @param fiveg_s_tmsi Full 5G-S-TMSI (48 bits)
+ * @return 5G-S-TMSI-Part1 (rightmost 39 bits)
+ * @note 5G-S-TMSI-Part1 is the rightmost 39 bits of the full 5G-S-TMSI:
+ *       - Bits 32-37: AMF Pointer (6 bits)
+ *       - Bits 0-31:  5G-TMSI (32 bits)
+ * @ref 3GPP TS 23.003 */
+uint64_t nr_extract_5g_s_tmsi_part1(const uint64_t fiveg_s_tmsi)
+{
+  return fiveg_s_tmsi & ((1ULL << 39) - 1);
+}
+
+/** @brief Construct 5G-S-TMSI-Part1 from 5G-S-TMSI components
+ * @param amf_set_id AMF Set ID (10 bits)
+ * @param amf_pointer AMF Pointer (6 bits)
+ * @param m_tmsi 5G-TMSI (32 bits)
+ * @return 5G-S-TMSI-Part1 (rightmost 39 bits of the full 5G-S-TMSI)
+ * @note 5G-S-TMSI-Part1 is the rightmost 39 bits of the full 5G-S-TMSI:
+ *       - Bits 32-37: AMF Pointer (6 bits)
+ *       - Bits 0-31:  5G-TMSI (32 bits)
+ * @ref 3GPP TS 23.003 */
+uint64_t nr_construct_5g_s_tmsi_part1(uint16_t amf_set_id, uint8_t amf_pointer, uint32_t m_tmsi)
+{
+  // Construct full 5G-S-TMSI and extract Part1: rightmost 39 bits
+  uint64_t full_s_tmsi = nr_construct_5g_s_tmsi(amf_set_id, amf_pointer, m_tmsi);
+  return nr_extract_5g_s_tmsi_part1(full_s_tmsi);
+}
+
+/** @brief Extract 5G-S-TMSI-Part2 from full 5G-S-TMSI
+ * @param fiveg_s_tmsi Full 5G-S-TMSI (48 bits)
+ * @return 5G-S-TMSI-Part2 (leftmost 9 bits)
+ * @note 5G-S-TMSI-Part2 is the leftmost 9 bits of the full 5G-S-TMSI:
+ *       - Bits 39-47: AMF Set ID (9 bits)
+ * @ref 3GPP TS 23.003 */
+uint16_t nr_extract_5g_s_tmsi_part2(const uint64_t fiveg_s_tmsi)
+{
+  return (fiveg_s_tmsi >> 39) & ((1ULL << 9) - 1);
+}
+
+/** @brief Build full 5G-S-TMSI from Part1 and Part2
+ * @param part1 5G-S-TMSI-Part1 (rightmost 39 bits)
+ * @param part2 5G-S-TMSI-Part2 (leftmost 9 bits)
+ * @return Full 5G-S-TMSI (48 bits)
+ * @note Combines Part2 (leftmost 9 bits) and Part1 (rightmost 39 bits)
+ * @ref 3GPP TS 23.003 */
+uint64_t nr_build_full_5g_s_tmsi(const uint64_t part1, const uint16_t part2)
+{
+  return ((uint64_t)part2 << 39) | part1;
+}
+
+/** @brief Deconstruct full 5G-S-TMSI into its components
+ * @param fiveg_s_tmsi Full 5G-S-TMSI (48 bits)
+ * @param[out] amf_set_id Pointer to store AMF Set ID (10 bits)
+ * @param[out] amf_pointer Pointer to store AMF Pointer (6 bits)
+ * @param[out] m_tmsi Pointer to store 5G-TMSI (32 bits)
+ * @note The 5G-S-TMSI is deconstructed from a 48-bit value:
+ *       - Bits 38-47: AMF Set ID (10 bits)
+ *       - Bits 32-37: AMF Pointer (6 bits)
+ *       - Bits 0-31:  5G-TMSI (32 bits)
+ * @ref 3GPP TS 23.003 */
+void nr_deconstruct_5g_s_tmsi(const uint64_t fiveg_s_tmsi, uint16_t *amf_set_id, uint8_t *amf_pointer, uint32_t *m_tmsi)
+{
+  DevAssert(amf_set_id != NULL);
+  DevAssert(amf_pointer != NULL);
+  DevAssert(m_tmsi != NULL);
+
+  *amf_set_id = fiveg_s_tmsi >> 38;
+  *amf_pointer = (fiveg_s_tmsi >> 32) & 0x3F;
+  *m_tmsi = fiveg_s_tmsi;
 }

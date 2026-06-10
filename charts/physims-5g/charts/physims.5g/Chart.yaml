@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+
 apiVersion: v1
 name: oai-physims-5g
 description: A Helm subchart for 5G physims network function
@@ -28,7 +30,7 @@ keywords:
   - 5G
 
 sources:
-  - https://gitlab.eurecom.fr/oai/openairinterface5g
+  - https://github.com/duranta-project/openairinterface5g
 
 maintainers:
   - name:  OPENAIRINTERFACE

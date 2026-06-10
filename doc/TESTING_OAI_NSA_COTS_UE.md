@@ -1,6 +1,9 @@
-STATUS 2020/10/15 : added External Resources section and links  
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 
-**Table of Contents**
+# How to run an NSA setup with eNB/gNB
+
+This page details how to run an non-standalone (NSA) setup, using an eNB and
+gNB (both OAI). It might be outdated, but still contains valuable information.
 
 [[_TOC_]]
 
@@ -39,7 +42,7 @@ Our code might not work with all 5G phones yet, but we are constantly improving 
 
 ## Repository
 
-[OAI](https://gitlab.eurecom.fr/oai/openairinterface5g/tree/develop)
+[OAI](https://github.com/duranta-project/openairinterface5g)
 
 ## Architecture Setup
 
@@ -55,7 +58,7 @@ The photo depicts the FR1 setup part of the scheme above:
 ## Build and Install
 
 General guidelines to build eNB and gNB :
-See [Building UE, eNB and gNb executables](https://gitlab.eurecom.fr/oai/openairinterface5g/blob/develop/doc/BUILD.md#building-ues-enodeb-and-gnodeb-executables)
+See [Building UE, eNB and gNb executables](./BUILD.md)
 
 
 - **eNB**
@@ -225,6 +228,7 @@ Execute:
 
 ```
 
+You should see the X2 messages in Wireshark and at the eNB.
 
 ## Test Case
 

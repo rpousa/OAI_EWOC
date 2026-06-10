@@ -1,25 +1,9 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
 #include "nr_modulation.h"
+#include "openair1/PHY/TOOLS/tools_defs.h"
 #include "PHY/NR_REFSIG/nr_mod_table.h"
 #include "executables/softmodem-common.h"
 #include <simde/x86/avx512.h>
@@ -471,9 +455,9 @@ void nr_layer_mapping(int nbCodes,
 	tx0++;
         *(uint32_t *)tx1 = vgetq_lane_u32(d4, 1); 
 	tx1++;
-        *(uint32_t *)tx2 = vgetq_lane_u32(d4, 0); 
+        *(uint32_t *)tx2 = vgetq_lane_u32(d4, 2); 
 	tx2++;
-        *(uint32_t *)tx3 = vgetq_lane_u32(d4, 1); 
+        *(uint32_t *)tx3 = vgetq_lane_u32(d4, 3); 
 	tx3++;
       }
 #endif
@@ -705,12 +689,12 @@ c16_t nr_layer_precoder_cm(int n_layers,
                            int symSz,
                            c16_t datatx_F_precoding[n_layers][symSz],
                            int ap,
-                           nfapi_nr_pm_pdu_t *pmi_pdu,
+                           c16_t weights[NR_MAX_NB_LAYERS][NR_MAX_CSI_PORTS],
                            int offset)
 {
   c16_t precodatatx_F = {0};
   for (int al = 0; al < n_layers; al++) {
-    c16_t prec_weight = pmi_pdu->weights[al][ap];
+    c16_t prec_weight = weights[al][ap];
     precodatatx_F = c16maddShift(datatx_F_precoding[al][offset], prec_weight, precodatatx_F, 15);
   }
   return precodatatx_F;
@@ -760,6 +744,8 @@ static inline __attribute__((always_inline)) int16x8_t cmac0_prec128(int16x8_t x
     //
     int16x8_t xr = vuzp1q_s16(x, x);  // even lanes
     int16x8_t xi = vuzp2q_s16(x, x);  // odd  lanes
+#ifdef __ARM_FEATURE_QRDMX
+    // ARMv8.1-A: Use RDM instructions
     // real = ar*br - ai*bi  (Q15 scaling via high-half doubling muls)
     int16x8_t real = vqdmulhq_s16(xr, wr);      // ≈ round((2*xr*wr)/2^16)
     real = vqrdmlshq_s16(real, xi, wi);         // real -= round((2*xi*wi)/2^16)
@@ -767,7 +753,21 @@ static inline __attribute__((always_inline)) int16x8_t cmac0_prec128(int16x8_t x
     // imag = ar*bi + ai*br
     int16x8_t imag = vqdmulhq_s16(xr, wi);
     imag = vqrdmlahq_s16(imag, xi, wr);         // imag += round((2*xi*wr)/2^16)
-    //
+#else
+    // ARMv8.0-A fallback: Use standard 32-bit multiply
+    int32x4_t real_lo = vmull_s16(vget_low_s16(xr), vget_low_s16(wr));
+    int32x4_t real_hi = vmull_s16(vget_high_s16(xr), vget_high_s16(wr));
+    real_lo = vmlsl_s16(real_lo, vget_low_s16(xi), vget_low_s16(wi));
+    real_hi = vmlsl_s16(real_hi, vget_high_s16(xi), vget_high_s16(wi));
+
+    int32x4_t imag_lo = vmull_s16(vget_low_s16(xr), vget_low_s16(wi));
+    int32x4_t imag_hi = vmull_s16(vget_high_s16(xr), vget_high_s16(wi));
+    imag_lo = vmlal_s16(imag_lo, vget_low_s16(xi), vget_low_s16(wr));
+    imag_hi = vmlal_s16(imag_hi, vget_high_s16(xi), vget_high_s16(wr));
+
+    int16x8_t real = vcombine_s16(vqrshrn_n_s32(real_lo, 15), vqrshrn_n_s32(real_hi, 15));
+    int16x8_t imag = vcombine_s16(vqrshrn_n_s32(imag_lo, 15), vqrshrn_n_s32(imag_hi, 15));
+#endif
     // Re-interleave [real, imag]
     int16x8x2_t produ = vzipq_s16(real, imag);
     return produ.val[0];        
@@ -804,15 +804,15 @@ static inline __attribute__((always_inline)) __m128i cmac_prec128(__m128i y, __m
 #endif
 
 #define load_consts(Type, Instruct, Rank)                                          \
-  const Type w_c##Rank = Instruct(c16toI32(c16conj(pmi_pdu->weights[Rank][ant]))); \
-  const Type w_s##Rank = Instruct(c16toI32(c16swap(pmi_pdu->weights[Rank][ant]))); \
+  const Type w_c##Rank = Instruct(c16toI32(c16conj(weights[Rank][ant]))); \
+  const Type w_s##Rank = Instruct(c16toI32(c16swap(weights[Rank][ant]))); \
   const Type *in##Rank = (Type *)(txdataF_res_mapped[Rank] + sc_offset + (out-beginning));
 
 void nr_layer_precoder_simd(const int n_layers,
                             const int symSz,
                             const c16_t txdataF_res_mapped[n_layers][symSz],
                             const int ant,
-                            const nfapi_nr_pm_pdu_t *pmi_pdu,
+                            c16_t weights[NR_MAX_NB_LAYERS][NR_MAX_CSI_PORTS],
                             const int sc_offset,
                             const int re_cnt,
                             c16_t *txdataF_precoded)

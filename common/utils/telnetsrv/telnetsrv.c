@@ -1,34 +1,11 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file common/utils/telnetsrv/telnetsrv.c
+/*!
  * \brief: implementation of a telnet server
- * \author Francois TABURET
- * \date 2017
- * \version 0.1
- * \company NOKIA BellLabs France
- * \email: francois.taburet@nokia-bell-labs.com
- * \note
- * \warning
  */
+
 #define _GNU_SOURCE
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -57,6 +34,10 @@
 #include "common/utils/threadPool/notified_fifo.h"
 #include <readline/history.h>
 #include "common/oai_version.h"
+#include <netdb.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 
 
 #include "telnetsrv_phycmd.h"
@@ -79,7 +60,7 @@ paramdef_t telnetoptions[] = {
     /*                                            configuration parameters for telnet utility                                                                                      */
     /*   optname                              helpstr                paramflags           XXXptr                               defXXXval               type                 numelt */
     /*-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
-    {"listenaddr", "<listen ip address>\n", 0, .uptr = &telnetparams.listenaddr, .defstrval = "0.0.0.0", TYPE_IPV4ADDR, 0},
+    {"listenaddr", "<listen ip address>\n", 0, .strptr = &telnetparams.listenaddr, .defstrval = "0.0.0.0", TYPE_STRING, 0},
     {"listenport", "<local port>\n", 0, .uptr = &telnetparams.listenport, .defuintval = 9090, TYPE_UINT, 0},
     {"listenstdin", "enable input from stdin\n", PARAMFLAG_BOOL, .uptr = &telnetparams.listenstdin, .defuintval = 0, TYPE_UINT, 0},
     {"priority", "<scheduling policy (0-99)\n", 0, .iptr = &telnetparams.priority, .defuintval = 0, TYPE_INT, 0},
@@ -100,7 +81,6 @@ int get_phybsize(void) {
 };
 int add_telnetcmd(char *modulename,telnetshell_vardef_t *var, telnetshell_cmddef_t *cmd );
 int setoutput(char *buff, int debug, telnet_printfunc_t prnt);
-int wsetoutput(char *buff, int debug, telnet_printfunc_t prnt, ...);
 int setparam(char *buff, int debug, telnet_printfunc_t prnt);
 int wsetparam(char *buff, int debug, telnet_printfunc_t prnt, ...);
 int history_cmd(char *buff, int debug, telnet_printfunc_t prnt);
@@ -264,12 +244,9 @@ void redirstd(char *newfname,telnet_printfunc_t prnt ) {
   }
 }
 
-int wsetoutput(char *buffer, int debug, telnet_printfunc_t prnt, ...)
+int setoutput(char *buff, int debug, telnet_printfunc_t prnt)
 {
-  return 0;
-}
-
-int setoutput(char *buff, int debug, telnet_printfunc_t prnt) {
+  UNUSED(debug);
   char cmds[TELNET_MAX_MSGLENGTH/TELNET_CMD_MAXSIZE][TELNET_CMD_MAXSIZE];
   char *logfname;
   char stdout_str[64];
@@ -307,10 +284,16 @@ int setoutput(char *buff, int debug, telnet_printfunc_t prnt) {
 
 int wsetparam(char *buff, int debug, telnet_printfunc_t prnt, ...)
 {
+  UNUSED(buff);
+  UNUSED(debug);
+  UNUSED(prnt);
   return 0;
 }
 
-int setparam(char *buff, int debug, telnet_printfunc_t prnt) {
+int setparam(char *buff, int debug, telnet_printfunc_t prnt)
+{
+  UNUSED(debug);
+  UNUSED(prnt);
   char cmds[TELNET_MAX_MSGLENGTH/TELNET_CMD_MAXSIZE][TELNET_CMD_MAXSIZE];
   memset(cmds,0,sizeof(cmds));
   sscanf(buff,"%9s %9s %9s %9s %9s", cmds[0],cmds[1],cmds[2],cmds[3],cmds[4]  );
@@ -341,7 +324,9 @@ int setparam(char *buff, int debug, telnet_printfunc_t prnt) {
   return CMDSTATUS_NOTFOUND;
 } /* setparam */
 
-int history_cmd(char *buff, int debug, telnet_printfunc_t prnt) {
+int history_cmd(char *buff, int debug, telnet_printfunc_t prnt)
+{
+  UNUSED(debug);
   char cmds[TELNET_MAX_MSGLENGTH/TELNET_CMD_MAXSIZE][TELNET_CMD_MAXSIZE];
   memset(cmds,0,sizeof(cmds));
   sscanf(buff,"%9s %9s %9s %9s %9s", cmds[0],cmds[1],cmds[2],cmds[3],cmds[4]  );
@@ -521,7 +506,7 @@ void telnet_pushcmd(telnetshell_cmddef_t *cmd, char *cmdbuff, telnet_printfunc_t
   pushNotifiedFIFO(cmd->qptr, msg);
 }
 
-int process_command(char *buf, int iteration)
+int process_command(char *buf)
 {
   int i,j,k;
   char modulename[TELNET_CMD_MAXSIZE];
@@ -557,7 +542,7 @@ int process_command(char *buf, int iteration)
   }
 
   rt=CMDSTATUS_NOTFOUND;
-  j = sscanf(buf,"%19s %19s %m[^\t\n]",modulename,cmd,&cmdb);
+  j = sscanf(buf,"%19s %63s %m[^\t\n]",modulename,cmd,&cmdb);
 
   if (telnetparams.telnetdbg > 0)
     printf("process_command: %i words, module=%s cmd=%s, parameters= %s\n", j, modulename, cmd, (cmdb == NULL) ? "" : cmdb);
@@ -600,7 +585,7 @@ int process_command(char *buf, int iteration)
         char tbuff[64];
         client_printf(CSI "1J" CSI "1;10H         " STDFMT "%s %i/%i\n",
                       get_time(tbuff,sizeof(tbuff)),lc,telnetparams.loopcount );
-        process_command(buf + strlen("loop") + 1, lc);
+        process_command(buf + strlen("loop") + 1);
         errno=0;
         int rs = read(telnetparams.new_socket,dummybuff,sizeof(dummybuff));
 
@@ -626,7 +611,6 @@ int process_command(char *buf, int iteration)
 
 void run_telnetsrv(void) {
   int sock;
-  struct sockaddr_in name;
   char buf[TELNET_MAX_MSGLENGTH];
   struct sockaddr cli_addr;
   unsigned int cli_len = sizeof(cli_addr);
@@ -636,23 +620,42 @@ void run_telnetsrv(void) {
   char prompt[sizeof(TELNET_PROMPT_PREFIX)+10];
   pthread_setname_np(pthread_self(), "telnet");
   set_sched(pthread_self(),0,telnetparams.priority);
-  sock = socket(AF_INET, SOCK_STREAM, 0);
 
-  if (sock < 0)
-    fprintf(stderr,"[TELNETSRV] Error %s on socket call\n",strerror(errno));
+  struct addrinfo hints = {
+    .ai_family = AF_UNSPEC,
+    .ai_socktype = SOCK_STREAM,
+    .ai_flags = AI_NUMERICHOST,
+  };
 
-  setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof optval);
-  name.sin_family = AF_INET;
+  struct addrinfo *res;
+  sock = -1;
+  char port_str[6];
+  snprintf(port_str, sizeof(port_str), "%u", telnetparams.listenport);
 
-  if (telnetparams.listenaddr == 0)
-    name.sin_addr.s_addr = INADDR_ANY;
-  else
-    name.sin_addr.s_addr = telnetparams.listenaddr;
+  int ret = getaddrinfo(telnetparams.listenaddr, port_str, &hints, &res);
+  if (ret != 0) {
+    fprintf(stderr, "[TELNETSRV] Invalid listenaddr '%s': %s\n",
+            telnetparams.listenaddr, gai_strerror(ret));
+    exit(-1);
+  }
 
-  name.sin_port = htons((unsigned short)(telnetparams.listenport));
+  for (struct addrinfo *p = res; p != NULL; p = p-> ai_next){
 
-  if(bind(sock, (void *) &name, sizeof(name)))
-    fprintf(stderr,"[TELNETSRV] Error %s on bind call\n",strerror(errno));
+    sock = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
+    if (sock < 0) continue;
+    setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof optval);
+    if (bind(sock, p->ai_addr, p->ai_addrlen) == 0)
+      break;
+    close(sock);
+    sock = -1;
+  }
+
+  freeaddrinfo(res);
+
+  if (sock < 0) {
+    fprintf(stderr, "Failed to bind socket\n");
+    exit(-1);
+  }
 
   if(listen(sock, 1) == -1)
     fprintf(stderr,"[TELNETSRV] Error %s on listen call\n",strerror(errno));
@@ -711,7 +714,7 @@ void run_telnetsrv(void) {
       }
 
       if (strlen(buf) > 2 ) {
-        status = process_command(buf, 0);
+        status = process_command(buf);
       } else
         status=CMDSTATUS_NOCMD;
 
@@ -925,6 +928,12 @@ int add_telnetcmd(char *modulename, telnetshell_vardef_t *var, telnetshell_cmdde
       telnetparams.CmdParsers[i].cmd = cmd;
       telnetparams.CmdParsers[i].var = var;
       for (int j = 0; cmd[j].cmdfunc != NULL; j++) {
+        size_t cmdnamelen = strnlen(cmd[j].cmdname, TELNET_CMD_MAXSIZE);
+        AssertFatal(cmdnamelen < TELNET_CMD_MAXSIZE,
+                    "cmdname %s too long: %ld >= %d",
+                    cmd[j].cmdname,
+                    cmdnamelen,
+                    TELNET_CMD_MAXSIZE);
         if (cmd[j].cmdflags & TELNETSRV_CMDFLAG_PUSHINTPOOLQ) {
           if (afifo == NULL) {
             afifo = calloc_or_fail(1, sizeof(notifiedFIFO_t));

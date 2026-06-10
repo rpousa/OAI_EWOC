@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 add_subdirectory(generator_bnProc        ldpc/generator_bnProc)
 add_subdirectory(generator_bnProc_avx512 ldpc/generator_bnProc_avx512)
 add_subdirectory(generator_cnProc        ldpc/generator_cnProc)

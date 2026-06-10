@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: CC-BY-4.0
+
 This directory contains files implementing RS,DRS and SRS generation along with the LTE gold sequence generator
 
 lte_dl_cell_spec.c  : DL RS signal generation for TX and RX (channel estimation) 

@@ -1,40 +1,13 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
-
-/*! \file dlsim.c
- \brief Top-level DL simulator
- \author R. Knopp
- \date 2011 - 2014
- \version 0.1
- \company Eurecom
- \email: knopp@eurecom.fr
- \note
- \warning
-*/
 
 #include <string.h>
 #include <math.h>
 #include <unistd.h>
 #include <execinfo.h>
 #include <signal.h>
+#include "common/cmake_defs.h"
 #include "common/config/config_load_configmodule.h"
 #include "common/utils/LOG/log.h"
 #include "common/utils/var_array.h"
@@ -519,7 +492,8 @@ int main(int argc, char **argv) {
   DCI_ALLOC_t da;
   DCI_ALLOC_t *dci_alloc = &da;
   unsigned int coded_bits_per_codeword=0,nsymb; //,tbs=0;
-  unsigned int tx_lev=0,tx_lev_dB=0,trials;
+  unsigned int tx_lev = 0, trials;
+  int tx_lev_dB = 0;
   unsigned int errs[4],errs2[4],round_trials[4],dci_errors[4];//,num_layers;
   memset(errs,0,4*sizeof(unsigned int));
   memset(errs2,0,4*sizeof(unsigned int));
@@ -1493,7 +1467,7 @@ int main(int argc, char **argv) {
                                       eNB->frame_parms.samples_per_tti);
             }
 
-            tx_lev_dB = (unsigned int) dB_fixed(tx_lev);
+            tx_lev_dB = dB_fixed(tx_lev);
 
             if (n_frames==1) {
               printf("tx_lev = %u (%u dB)\n",tx_lev,tx_lev_dB);

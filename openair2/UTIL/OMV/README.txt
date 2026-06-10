@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: CC-BY-4.0
+
 OMV: openair mobility visualisor
 To compile: 
 1. install the required package: apt-get install qtcreator or go to http://qt.nokia.com/downloads to download the SDK 

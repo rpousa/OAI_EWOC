@@ -1,17 +1,7 @@
 /*
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Copyright 2017 Cisco Systems, Inc.
- * 
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- * 
- * http://www.apache.org/licenses/LICENSE-2.0
- * 
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
  */
 
 
@@ -80,12 +70,10 @@ typedef struct {
 
 } pnf_p7_rx_reassembly_queue_t;
 
+typedef struct pnf_p7_s {
+  nfapi_pnf_p7_config_t _public;
 
-struct pnf_p7_t {
-
-	nfapi_pnf_p7_config_t _public;
-
-	//private data
+  //private data
 	int p7_sock;
 
 	uint8_t terminate;
@@ -138,7 +126,7 @@ struct pnf_p7_t {
 	pnf_p7_stats_t stats;
 	pnf_p7_nr_stats_t nr_stats;
 
-};
+} pnf_p7_t;
 
 int pnf_p7_message_pump(pnf_p7_t* pnf_p7);
 int pnf_nr_p7_message_pump(pnf_p7_t* pnf_p7);

@@ -1,51 +1,16 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file nr_transport_ue.h
+/*!
  * \brief data structures for PDSCH/DLSCH/PUSCH/ULSCH physical and transport channel descriptors (TX/RX)
- * \author R. Knopp
- * \date 2011
- * \version 0.1
- * \company Eurecom
- * \email: raymond.knopp@eurecom.fr, florian.kaltenberger@eurecom.fr, oscar.tonelli@yahoo.it
- * \note
- * \warning
  */
 #ifndef __NR_TRANSPORT_UE__H__
 #define __NR_TRANSPORT_UE__H__
 #include <limits.h>
-#include "PHY/impl_defs_top.h"
-
 #include "PHY/CODING/nrLDPC_decoder/nrLDPC_types.h"
 #include "nfapi/open-nFAPI/nfapi/public_inc/fapi_nr_ue_interface.h"
 #include "../NR_TRANSPORT/nr_transport_common_proto.h"
-
-#define MAX_FA_BLOCKS 10
-typedef struct {
-  int start[MAX_FA_BLOCKS];
-  int end[MAX_FA_BLOCKS];
-  int num_rbs;
-  int num_blocks;
-  uint8_t bitmap[36];
-} freq_alloc_bitmap_t;
 
 typedef struct {
   /// Index of current HARQ round for this ULSCH
@@ -78,8 +43,13 @@ typedef struct {
   uint32_t Z;
 } NR_UL_UE_HARQ_t;
 
+typedef enum {
+  NR_SCH_IDLE = 0,
+  NR_ACTIVE
+} NR_SCH_status_t;
+
 typedef struct {
-  SCH_status_t status;
+  NR_SCH_status_t status;
   /// NDAPI struct for UE
   nfapi_nr_ue_pusch_pdu_t pusch_pdu;
   // UL number of harq processes
@@ -96,14 +66,14 @@ typedef struct {
   /// Indicator of first reception
   uint8_t first_rx;
   /// DLSCH status flag indicating
-  SCH_status_t status;
+  NR_SCH_status_t status;
   /// Pointer to the payload (38.212 V15.4.0 section 5.1)
   uint8_t *b;
-  /// Pointers to transport block segments
-  uint8_t **c;
+  /// Pointer to transport block segments
+  uint8_t *c;
   /// soft bits for each received segment ("d"-sequence)(for definition see 36-212 V8.6 2009-03, p.15)
   /// Accumulates the soft bits for each round to increase decoding success (HARQ)
-  int16_t **d;
+  int16_t *d;
   /// Index of current HARQ round for this DLSCH
   uint8_t DLround;
   /// Number of code segments 
@@ -127,16 +97,13 @@ typedef struct {
 } NR_DL_UE_HARQ_t;
 
 typedef struct {
+  fapi_nr_dl_cw_info_t cw_info;
   /// RNTI
   uint16_t rnti;
   /// RNTI type
   uint8_t rnti_type;
   /// Active flag for DLSCH demodulation
   bool active;
-  /// Structure to hold dlsch config from MAC
-  fapi_nr_dl_config_dlsch_pdu_rel15_t dlsch_config;
-  /// Number of MIMO layers (streams) 
-  uint8_t Nl;
   /// Maximum number of LDPC iterations
   uint8_t max_ldpc_iterations;
   /// number of iterations used in last turbo decoding

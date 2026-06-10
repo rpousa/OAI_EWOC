@@ -1,32 +1,9 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file ra_procedures.c
+/*!
  * \brief Routines for UE MAC-layer power control procedures
- * \author Francesco Mani
- * \date 2023
- * \version 0.1
- * \email: email@francescomani.it
- * \note
- * \warning
  */
 
 #include "LAYER2/NR_MAC_UE/mac_proto.h"
@@ -37,7 +14,7 @@
 // TODO: This should be part of mac instance
 /* TS 38.213 9.2.5.2 UE procedure for multiplexing HARQ-ACK/SR and CSI in a PUCCH */
 /* this is a counter of number of pucch format 4 per subframe */
-static int nb_pucch_format_4_in_subframes[LTE_NUMBER_OF_SUBFRAMES_PER_FRAME] = {0};
+static int nb_pucch_format_4_in_subframes[NR_NUMBER_OF_SUBFRAMES_PER_FRAME] = {0};
 
 /* TS 38.211 Table 6.4.1.3.3.2-1: DM-RS positions for PUCCH format 3 and 4 */
 static const int nb_symbols_excluding_dmrs[11][2][2]
@@ -59,7 +36,7 @@ static const int nb_symbols_excluding_dmrs[11][2][2]
 };
 
 // ∆MPR according to Table 6.2.2-3 38.101-1
-static float get_delta_mpr(uint16_t nr_band, frame_type_t frame_type, int scs, int channel_bandwidth, int n_prbs, int start_prb, int power_class)
+static float get_delta_mpr(uint16_t nr_band, frame_type_t frame_type, int scs, int channel_bandwidth, int power_class)
 {
   if (compare_relative_ul_channel_bw(nr_band, scs, channel_bandwidth, frame_type)) {
     if (power_class == 3) {
@@ -191,7 +168,7 @@ float nr_get_Pcmax(int p_Max,
     int delta_TC = 0;
 
     float MPR = get_mpr(Qm, N_RB_UL, is_transform_precoding, n_prbs, start_prb, power_class);
-    float delta_MPR = get_delta_mpr(nr_band, frame_type, scs, channel_bandwidth, n_prbs, start_prb, power_class);
+    float delta_MPR = get_delta_mpr(nr_band, frame_type, scs, channel_bandwidth, power_class);
     int A_MPR = 0; // TODO too complicated to implement for now (see 6.2.3 in 38.101-1)
     int delta_rx_SRS = 0; // TODO for SRS
     int P_MPR = 0; // to ensure compliance with applicable electromagnetic energy absorption requirements
@@ -241,9 +218,11 @@ int get_sum_delta_pucch(NR_UE_MAC_INST_t *mac, int slot, frame_t frame)
   const int num_dl_harq = get_nrofHARQ_ProcessesForPDSCH(&mac->sc_info);
 
   for (int i = 0; i < num_dl_harq; i++) {
-    if (mac->dl_harq_info[i].active && mac->dl_harq_info[i].ul_slot == slot && mac->dl_harq_info[i].ul_frame == frame) {
-      delta_tpc_sum += mac->dl_harq_info[i].delta_pucch;
-      mac->dl_harq_info[i].delta_pucch = 0;
+    for (int c = 0; c < 2; c++) {
+      if (mac->dl_harq_info[i][c].active && mac->dl_harq_info[i][c].ul_slot == slot && mac->dl_harq_info[i][c].ul_frame == frame) {
+        delta_tpc_sum += mac->dl_harq_info[i][c].delta_pucch;
+        mac->dl_harq_info[i][c].delta_pucch = 0;
+      }
     }
   }
   return delta_tpc_sum;

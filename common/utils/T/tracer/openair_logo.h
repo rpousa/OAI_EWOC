@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
+ */
+
 /* this file (minus this comment) was obtained by running:
  *   xxd -i openair_logo.png > openair_logo.h
  */

@@ -1,8 +1,10 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 set(COMPONENTS_LIST "")
 
 set(CPACK_PACKAGE_VERSION ${OAI_VERSION})
 set(CPACK_PACKAGE_VENDOR "OpenAirInterface")
-set(CPACK_PACKAGE_CONTACT "Robert Schmidt <robert.schmidt@openairinterface.org>") #Even though it does not appear on CPACK global documention it works, it appears here: https://cmake.org/cmake/help/latest/cpack_gen/deb.html#variable:CPACK_DEBIAN_PACKAGE_MAINTAINER
+set(CPACK_PACKAGE_CONTACT "OAI Maintainers <oaicicdteam@openairinterface.org>") #Even though it does not appear on CPACK global documention it works, it appears here: https://cmake.org/cmake/help/latest/cpack_gen/deb.html#variable:CPACK_DEBIAN_PACKAGE_MAINTAINER
 set(CPACK_MONOLITHIC_INSTALL OFF)
 set(CPACK_PACKAGING_INSTALL_PREFIX "/")
 
@@ -16,7 +18,7 @@ if(PACKAGING_RPM)
   set(CPACK_RPM_COMPONENT_INSTALL ON)
   set(CPACK_RPM_PACKAGE_ARCHITECTURE ${CMAKE_SYSTEM_PROCESSOR})
   set(CPACK_RPM_PACKAGE_URL "https://openairinterface.org")
-  set(CPACK_RPM_PACKAGE_LICENSE "OAI Public License v1.1")
+  set(CPACK_RPM_PACKAGE_LICENSE "Collaborative Standards Software License v1.0")
   set(CPACK_RPM_PACKAGE_GROUP "Development/Tools")
   set(SYSTEMD_UNIT_DIR "/usr/lib/systemd/system")
   set(CPACK_RPM_DEBUGINFO_PACKAGE ON)
@@ -62,7 +64,7 @@ if(PACKAGING_LTE)
     set(CPACK_RPM_PACKAGE_OAI-LTE_SUMMARY "OpenAirInterface LTE package")
     set(CPACK_RPM_PACKAGE_OAI-LTE_DESCRIPTION "${LTE_PACKAGE_DESCRIPTION}")
   else()
-    set(CPACK_DEBIAN_OAI-LTE_PACKAGE_DEPENDS "liboai-common, libblas3, liblapacke")
+    set(CPACK_DEBIAN_OAI-LTE_PACKAGE_DEPENDS "liboai-common")
     set(CPACK_DEBIAN_OAI-LTE_SUMMARY "OpenAirInterface LTE package")
     set(CPACK_DEBIAN_OAI-LTE_DESCRIPTION "${LTE_PACKAGE_DESCRIPTION}")
   endif()

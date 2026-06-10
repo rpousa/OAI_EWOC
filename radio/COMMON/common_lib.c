@@ -1,34 +1,11 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file common_lib.c
+/*!
  * \brief common APIs for different RF frontend device
- * \author HongliangXU, Navid Nikaein
- * \date 2015
- * \version 0.2
- * \company Eurecom
- * \maintainer:  navid.nikaein@eurecom.fr
- * \note
- * \warning
  */
+#include <pthread.h>
 #include <stdio.h>
 #include <strings.h>
 #include <dlfcn.h>
@@ -40,8 +17,10 @@
 #include "assertions.h"
 #include "common/utils/load_module_shlib.h"
 #include "common/utils/LOG/log.h"
-//#include "targets/RT/USER/lte-softmodem.h"
 #include "executables/softmodem-common.h"
+#include "common/config/config_paramdesc.h"
+#include "common/config/config_userapi.h"
+#include "common/cmake_defs.h"
 
 #define MAX_GAP 100ULL
 const char *const devtype_names[MAX_RF_DEV_TYPE] =
@@ -148,6 +127,8 @@ int openair0_device_load(openair0_device_t *device, openair0_config_t *openair0_
   } else
     AssertFatal(false, "can't open the radio device: %s\n", get_devname(device->type));
 
+  pthread_mutex_init(&device->reOrder.mutex_store, NULL);
+  pthread_mutex_init(&device->reOrder.mutex_write, NULL);
   return rc;
 }
 
@@ -218,7 +199,7 @@ static void writerProcessWaitingQueue(nrue_ru_write_t nrue_ru_write, PHY_VARS_NR
           else
             wroteSamples = device->trx_write_func(device, timestamp, txp, nsamps, nbAnt, flags);
           if (wroteSamples != nsamps)
-            LOG_E(HW, "Failed to write to rf\n");
+            LOG_W(HW, "Failed to write to RF: wrote %d out of %d samples\n", wroteSamples, nsamps);
         }
         ctx->nextTS = timestamp + nsamps;
         pthread_mutex_lock(&ctx->mutex_store);
@@ -245,12 +226,15 @@ int openair0_write_reorder_common(nrue_ru_write_t nrue_ru_write,
   int wroteSamples = 0;
   re_order_t *ctx = &device->reOrder;
   LOG_D(HW, "received write order ts: %lu, nb samples %d, next ts %luflags %d\n", timestamp, nsamps, timestamp + nsamps, flags);
+  pthread_mutex_lock(&ctx->mutex_store);
   if (!ctx->initDone) {
     ctx->nextTS = timestamp;
-    pthread_mutex_init(&ctx->mutex_write, NULL);
-    pthread_mutex_init(&ctx->mutex_store, NULL);
+    for (int i = 0; i < WRITE_QUEUE_SZ; i++) {
+      ctx->queue[i].txp = malloc(sizeof(void *) * NB_ANTENNAS_TX);
+    }
     ctx->initDone = true;
   }
+  pthread_mutex_unlock(&ctx->mutex_store);
   if (pthread_mutex_trylock(&ctx->mutex_write) == 0) {
     // We have the write exclusivity
     if (llabs(timestamp - ctx->nextTS) < MAX_GAP) { // We are writing in sequence of the previous write
@@ -259,6 +243,8 @@ int openair0_write_reorder_common(nrue_ru_write_t nrue_ru_write,
           wroteSamples = nrue_ru_write(UE, timestamp, txp, nsamps, nbAnt, flags);
         else
           wroteSamples = device->trx_write_func(device, timestamp, txp, nsamps, nbAnt, flags);
+        if (wroteSamples != nsamps)
+          LOG_W(HW, "Failed to write to RF: wrote %d out of %d samples\n", wroteSamples, nsamps);
       } else
         wroteSamples = nsamps;
       ctx->nextTS = timestamp + nsamps;
@@ -291,11 +277,13 @@ void openair0_write_reorder_clear_context(openair0_device_t *device)
     return;
   if (pthread_mutex_trylock(&ctx->mutex_write) != 0)
     LOG_E(HW, "write_reorder_clear_context call while still writing on the device\n");
-  pthread_mutex_destroy(&ctx->mutex_write);
+  else
+    pthread_mutex_unlock(&ctx->mutex_write);
   pthread_mutex_lock(&ctx->mutex_store);
-  for (int i = 0; i < WRITE_QUEUE_SZ; i++)
+  for (int i = 0; i < WRITE_QUEUE_SZ; i++) {
     ctx->queue[i].active = false;
-  pthread_mutex_unlock(&ctx->mutex_store);
-  pthread_mutex_destroy(&ctx->mutex_store);
+    free(ctx->queue[i].txp);
+  }
   ctx->initDone = false;
+  pthread_mutex_unlock(&ctx->mutex_store);
 }

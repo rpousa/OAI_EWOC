@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: CC-BY-4.0
+
 This directory contains files related to parameter estimation
 
 adjust_gain.c                     : gain control loop for UE rx 

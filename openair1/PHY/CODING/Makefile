@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 TURBO_SRC    = 3gpplte_sse.c 3gpplte_turbo_decoder_sse.c crc_byte.c
 RATE13CC_SRC = ccoding_byte_lte.c viterbi_lte.c crc_byte.c
 RATE12CC_SRC = ccoding_byte.c viterbi.c crc_byte.c

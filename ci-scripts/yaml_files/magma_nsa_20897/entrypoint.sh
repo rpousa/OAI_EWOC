@@ -1,4 +1,5 @@
 #!/bin/bash
+# SPDX-License-Identifier: MIT
 
 INSTANCE=1
 PREFIX='/magma-mme/etc'

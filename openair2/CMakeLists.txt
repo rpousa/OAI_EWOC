@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
+add_compile_options(-Wunused-parameter)
 add_subdirectory(E1AP)
 if(E2_AGENT)
   add_subdirectory(E2AP)

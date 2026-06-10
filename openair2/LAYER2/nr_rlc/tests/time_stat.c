@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
+ */
+
 #include "../../../../common/utils/time_stat.h"
 
 time_average_t *time_average_new(int duration, int initial_size)

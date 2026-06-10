@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 set(X2AP_GRAMMAR ASN1/R15/x2ap-15.6.0.asn1)
 
 set(x2ap_source

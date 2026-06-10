@@ -1,22 +1,5 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
 #include "nr_rlc_entity_um.h"
@@ -28,6 +11,7 @@
 
 #include "LOG/log.h"
 #include "common/utils/time_stat.h"
+#include "common/platform_types.h"
 
 /* for a given SDU/SDU segment, computes the corresponding PDU header size */
 static int compute_pdu_header_size(nr_rlc_entity_um_t *entity,
@@ -156,6 +140,12 @@ static void reassemble_and_deliver(nr_rlc_entity_um_t *entity, int sn)
 
   /* reassemble - free 'data' of each segment after processing */
   while (pdu != NULL && pdu->sn == sn) {
+    if (pdu->so > so && !bad_sdu) {
+      /* pdu->so > so is possible when the other end sends bogus data */
+      LOG_E(RLC, "%s:%d:%s: inconsistent SDU, discarding\n",
+            __FILE__, __LINE__, __FUNCTION__);
+      bad_sdu = 1;
+    }
     int len = pdu->size - (so - pdu->so);
     if (so + len > NR_SDU_MAX && !bad_sdu) {
       LOG_E(RLC, "%s:%d:%s: bad SDU, too big, discarding\n",
@@ -534,9 +524,9 @@ static int generate_tx_pdu(nr_rlc_entity_um_t *entity, char *buffer, int size)
   return ret;
 }
 
-nr_rlc_entity_buffer_status_t nr_rlc_entity_um_buffer_status(
-    nr_rlc_entity_t *_entity, int maxsize)
+nr_rlc_entity_buffer_status_t nr_rlc_entity_um_buffer_status(nr_rlc_entity_t *_entity, int maxsize)
 {
+  UNUSED(maxsize);
   nr_rlc_entity_um_t *entity = (nr_rlc_entity_um_t *)_entity;
   nr_rlc_entity_buffer_status_t ret;
 

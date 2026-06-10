@@ -1,34 +1,10 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file openair2/NR_PHY_INTERFACE/NR_IF_Module.c
-* \brief data structures for PHY/MAC interface modules
-* \author EURECOM/NTUST
-* \date 2018
-* \version 0.1
-* \company Eurecom, NTUST
-* \email: raymond.knopp@eurecom.fr, kroempa@gmail.com
-* \note
-* \warning
-*/
+/*!
+ * \brief data structures for PHY/MAC interface modules
+ */
 
 #include "openair2/NR_PHY_INTERFACE/NR_IF_Module.h"
 #include <stdbool.h>
@@ -378,7 +354,6 @@ static void match_crc_rx_pdu(nfapi_nr_rx_data_indication_t *rx_ind, nfapi_nr_crc
   }
 }
 
-extern void handle_nr_slot_ind(uint16_t sfn, uint16_t slot, NR_Sched_Rsp_t *sched_response);
 static void pnf_send_slot_ind(const nfapi_nr_slot_indication_scf_t *ind, NR_Sched_Rsp_t *rsp)
 {
   module_id_t module_id = 0;

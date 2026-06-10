@@ -1,33 +1,9 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file ethernet_lib.c 
+/*!
  * \brief API to stream I/Q samples over standard ethernet
- * \author  add alcatel Katerina Trilyraki, Navid Nikaein, Pedro Dinis, Lucio Ferreira, Raymond Knopp
- * \date 2015
- * \version 0.2
- * \company Eurecom
- * \maintainer:  navid.nikaein@eurecom.fr
- * \note
- * \warning 
  */
 
 // _GNU_SOURCE needed to have sched_getcpu() from sched.h
@@ -389,7 +365,8 @@ void *trx_eth_write_udp_cmd(udpTXelem_t *udpTXelem)
 int trx_eth_write_udp(openair0_device_t *device, openair0_timestamp_t timestamp, void **buff, int fd_ind, int nsamps, int flags, int nant)
 {
     union udpTXReqUnion id = {.s={(uint64_t)timestamp,nsamps,0}};
-    notifiedFIFO_elt_t *req=newNotifiedFIFO_elt(sizeof(udpTXelem_t), id.p, device->utx[fd_ind]->resp,NULL);
+    eth_state_t *eth = (eth_state_t*)device->priv;
+    notifiedFIFO_elt_t *req=newNotifiedFIFO_elt(sizeof(udpTXelem_t), id.p, eth->utx[fd_ind]->resp,NULL);
     udpTXelem_t * udptxelem=(udpTXelem_t *) NotifiedFifoData(req);
     udptxelem->device = device;
     udptxelem->timestamp = timestamp;
@@ -399,7 +376,7 @@ int trx_eth_write_udp(openair0_device_t *device, openair0_timestamp_t timestamp,
     udptxelem->nsamps = nsamps;
     udptxelem->flags = flags;
     udptxelem->nant = nant;
-    pushNotifiedFIFO(device->utx[fd_ind]->resp, req);
+    pushNotifiedFIFO(eth->utx[fd_ind]->resp, req);
     LOG_D(PHY,"Pushed to TX FH FIFO, TS %llu, nsamps %d, nant %d buffs[0] %p buffs[1] %p\n",
           (unsigned long long)timestamp,nsamps,nant,udptxelem->buff[0],udptxelem->buff[1]);
     return(0);
@@ -410,14 +387,11 @@ void *udp_write_thread(void *arg) {
    utx->resp = malloc(sizeof(*utx->resp));
    initNotifiedFIFO(utx->resp);
    LOG_D(PHY,"UDP write thread started on core %d\n",sched_getcpu()); 
-   reset_meas(&utx->device->tx_fhaul);
    while (oai_exit == 0) {
       notifiedFIFO_elt_t *res = pullNotifiedFIFO(utx->resp);
       udpTXelem_t *udptxelem = (udpTXelem_t *)NotifiedFifoData(res);
       LOG_D(PHY,"Pulled from TX FH FIFO, TS %llu, nsamps %d, nant %d\n",(unsigned long long)udptxelem->timestamp,udptxelem->nsamps,udptxelem->nant);
-      start_meas(&utx->device->tx_fhaul);
       trx_eth_write_udp_cmd(udptxelem);
-      stop_meas(&utx->device->tx_fhaul);
       // send data to RU
       delNotifiedFIFO_elt(res);
    }

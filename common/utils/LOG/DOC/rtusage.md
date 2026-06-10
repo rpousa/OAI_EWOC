@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 ## configuring the logging facility
 The logging facility is fully configurable and it uses the [config module](../../../../common/config/DOC/config.md) to get its parameters at init time. The [telnet server](../../telnetsrv/DOC/telnetsrv.md) includes a set of commands which can be used to dynamically modify the logging facility behavior
 
@@ -274,4 +276,3 @@ The telnet server includes a `log` command which can be used to dymically modify
 [telnet server ***softmodem log*** commands](../../telnetsrv/DOC/telnetlog.md)
 
 [logging facility  main page](log.md)
-[oai Wikis home](https://gitlab.eurecom.fr/oai/openairinterface5g/wikis/home)

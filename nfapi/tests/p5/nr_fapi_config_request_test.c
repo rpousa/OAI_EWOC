@@ -1,22 +1,5 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 #include "nfapi/tests/nr_fapi_test.h"
 #include "nr_fapi_p5.h"
@@ -156,6 +139,9 @@ static void fill_config_request_tlv_tdd_rand(nfapi_nr_config_request_scf_t *nfap
   FILL_TLV(nfapi_resp->ssb_table.ssb_offset_point_a, NFAPI_NR_CONFIG_SSB_OFFSET_POINT_A_TAG, rand16());
   nfapi_resp->num_tlv++;
 
+  FILL_TLV(nfapi_resp->ssb_table.beta_pss, NFAPI_NR_CONFIG_BETA_PSS_TAG, rand8());
+  nfapi_resp->num_tlv++;
+
   FILL_TLV(nfapi_resp->ssb_table.ssb_period, NFAPI_NR_CONFIG_SSB_PERIOD_TAG, rand16());
   nfapi_resp->num_tlv++;
 
@@ -175,6 +161,9 @@ static void fill_config_request_tlv_tdd_rand(nfapi_nr_config_request_scf_t *nfap
     FILL_TLV(nfapi_resp->ssb_table.ssb_beam_id_list[i].beam_id, NFAPI_NR_CONFIG_BEAM_ID_TAG, rand8());
     nfapi_resp->num_tlv++;
   }
+
+  FILL_TLV(nfapi_resp->ssb_table.case_v3, NFAPI_NR_FAPI_SSB_CASE_VENDOR_EXTENSION_TAG, rand8());
+  nfapi_resp->num_tlv++;
 
   FILL_TLV(nfapi_resp->tdd_table.tdd_period, NFAPI_NR_CONFIG_TDD_PERIOD_TAG, 6 /* ms5 */);
   nfapi_resp->num_tlv++;
@@ -437,6 +426,8 @@ static void fill_config_request_tlv_fdd(nfapi_nr_config_request_scf_t *req)
   /* SSB table */
   FILL_TLV(req->ssb_table.ssb_offset_point_a, NFAPI_NR_CONFIG_SSB_OFFSET_POINT_A_TAG, 4);
   req->num_tlv++;
+  FILL_TLV(req->ssb_table.beta_pss, NFAPI_NR_CONFIG_BETA_PSS_TAG, 0);
+  req->num_tlv++;
   FILL_TLV(req->ssb_table.ssb_period, NFAPI_NR_CONFIG_SSB_PERIOD_TAG, 2);
   req->num_tlv++;
   FILL_TLV(req->ssb_table.ssb_subcarrier_offset, NFAPI_NR_CONFIG_SSB_SUBCARRIER_OFFSET_TAG, 0);
@@ -504,7 +495,7 @@ static void test_config_req_fdd(void)
   free_config_request(&req);
 }
 
-int main(int n, char *v[])
+int main()
 {
   fapi_test_init();
   test_config_req_rand();

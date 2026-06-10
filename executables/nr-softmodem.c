@@ -1,22 +1,5 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
 
@@ -72,7 +55,6 @@ unsigned short config_frames[4] = {2,9,11,13};
 #include "gnb_paramdef.h"
 #include "intertask_interface.h"
 #include "nfapi/oai_integration/vendor_ext.h"
-#include "nfapi_interface.h"
 #include "nfapi_nr_interface_scf.h"
 #include "ngap_gNB.h"
 #include "nr-softmodem-common.h"
@@ -88,6 +70,7 @@ unsigned short config_frames[4] = {2,9,11,13};
 #include "openair1/SCHED_NR/sched_nr.h"
 #include "openair2/SDAP/nr_sdap/nr_sdap.h"
 
+RAN_CONTEXT_t RC;
 pthread_cond_t nfapi_sync_cond;
 pthread_mutex_t nfapi_sync_mutex;
 int nfapi_sync_var=-1; //!< protected by mutex \ref nfapi_sync_mutex
@@ -101,7 +84,7 @@ int oai_exit = 0;
 unsigned int mmapped_dma=0;
 
 uint64_t downlink_frequency[MAX_NUM_CCs][4];
-int32_t uplink_frequency_offset[MAX_NUM_CCs][4];
+int64_t uplink_frequency_offset[MAX_NUM_CCs][4];
 char *uecap_file;
 
 runmode_t mode = normal_txrx;
@@ -117,13 +100,6 @@ double rx_gain[MAX_NUM_CCs][4] = {{110,0,0,0},{20,0,0,0}};
 int chain_offset = 0;
 int numerology = 0;
 double cpuf;
-
-/* hack: pdcp_run() is required by 4G scheduler which is compiled into
- * nr-softmodem because of linker issues */
-void pdcp_run(const protocol_ctxt_t *const ctxt_pP)
-{
-  abort();
-}
 
 /*------------------------------------------------------------------------*/
 
@@ -149,13 +125,18 @@ void exit_function(const char *file, const char *function, const int line, const
     printf("%s:%d %s() Exiting OAI softmodem: %s\n",file,line, function, s);
   }
 
-  oai_exit = 1;
-
   if (RC.ru == NULL)
     exit(-1); // likely init not completed, prevent crash or hang, exit now...
 
   for (ru_id=0; ru_id<RC.nb_RU; ru_id++) {
-    if (RC.ru[ru_id] && RC.ru[ru_id]->rfdevice.trx_end_func) {
+    if (RC.ru[ru_id] == NULL) {
+      continue;
+    }
+    if (RC.ru[ru_id]->ifdevice.trx_stop_func) {
+      RC.ru[ru_id]->ifdevice.trx_stop_func(&RC.ru[ru_id]->ifdevice);
+      RC.ru[ru_id]->ifdevice.trx_stop_func = NULL;
+    }
+    if (RC.ru[ru_id]->rfdevice.trx_end_func) {
       if (RC.ru[ru_id]->rfdevice.trx_get_stats_func) {
         RC.ru[ru_id]->rfdevice.trx_get_stats_func(&RC.ru[ru_id]->rfdevice);
         RC.ru[ru_id]->rfdevice.trx_get_stats_func = NULL;
@@ -164,6 +145,10 @@ void exit_function(const char *file, const char *function, const int line, const
       RC.ru[ru_id]->rfdevice.trx_end_func = NULL;
     }
 
+    if (RC.ru[ru_id]->ifdevice.trx_stop_func) {
+      RC.ru[ru_id]->ifdevice.trx_stop_func(&RC.ru[ru_id]->ifdevice);
+      RC.ru[ru_id]->ifdevice.trx_stop_func = NULL;
+    }
     if (RC.ru[ru_id] && RC.ru[ru_id]->ifdevice.trx_end_func) {
       if (RC.ru[ru_id]->ifdevice.trx_get_stats_func) {
         RC.ru[ru_id]->ifdevice.trx_get_stats_func(&RC.ru[ru_id]->ifdevice);
@@ -173,6 +158,8 @@ void exit_function(const char *file, const char *function, const int line, const
       RC.ru[ru_id]->ifdevice.trx_end_func = NULL;
     }
   }
+
+  oai_exit = 1;
 
   if (assert) {
     abort();
@@ -376,9 +363,6 @@ int stop_L1(module_id_t gnb_id)
   if (RC.nb_nr_L1_inst > 0)
     stop_gNB(RC.nb_nr_L1_inst);
 
-  if (RC.nb_RU > 0)
-    stop_RU(RC.nb_RU);
-
   /* stop trx devices, multiple carrier currently not supported by RU */
   if (ru->rfdevice.trx_get_stats_func) {
     ru->rfdevice.trx_get_stats_func(&ru->rfdevice);
@@ -395,6 +379,9 @@ int stop_L1(module_id_t gnb_id)
     ru->ifdevice.trx_stop_func(&ru->ifdevice);
     LOG_I(GNB_APP, "turned off RU ifdevice\n");
   }
+
+  if (RC.nb_RU > 0)
+    stop_RU(RC.nb_RU);
 
   /* release memory used by the RU/gNB threads (incomplete), after all
    * threads have been stopped (they partially use the same memory) */
@@ -450,7 +437,7 @@ int start_L1L2(module_id_t gnb_id)
   return 0;
 }
 
-static  void wait_nfapi_init(char *thread_name)
+static void wait_nfapi_init()
 {
   pthread_mutex_lock( &nfapi_sync_mutex );
 
@@ -514,7 +501,7 @@ int main( int argc, char **argv ) {
   start_background_system();
 
   ///static configuration for NR at the moment
-  if ((uniqCfg = load_configmodule(argc, argv, CONFIG_ENABLECMDLINEONLY)) == NULL) {
+  if ((uniqCfg = load_configmodule(argc, argv, CONFIG_ENABLECMDLINEONLY)) == NULL || CONFIG_ISFLAGSET(CONFIG_ABORT)) {
     exit_fun("[SOFTMODEM] Error, configuration module init failed\n");
   }
 
@@ -527,11 +514,6 @@ int main( int argc, char **argv ) {
   logInit();
   lock_memory_to_ram();
   get_options(uniqCfg);
-
-  if (CONFIG_ISFLAGSET(CONFIG_ABORT) ) {
-    fprintf(stderr,"Getting configuration failed\n");
-    exit(-1);
-  }
 
   if (!has_cap_sys_nice())
     LOG_W(UTIL,
@@ -617,7 +599,6 @@ int main( int argc, char **argv ) {
                          : TIME_SOURCE_REALTIME);
 
   // start the main threads
-  number_of_cards = 1;
 
   wait_gNBs();
   int sl_ahead = NFAPI_MODE == NFAPI_MODE_AERIAL ? 0 : 6;
@@ -672,7 +653,7 @@ int main( int argc, char **argv ) {
     RC.gNB[idx]->if_inst->sl_ahead = sl_ahead;
 
   if (NFAPI_MODE==NFAPI_MODE_PNF) {
-    wait_nfapi_init("main?");
+    wait_nfapi_init();
   }
 
   if (IS_SOFTMODEM_IMSCOPE_ENABLED || IS_SOFTMODEM_IMSCOPE_RECORD_ENABLED) {

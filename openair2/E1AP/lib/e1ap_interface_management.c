@@ -1,22 +1,5 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
 #include <string.h>
@@ -179,15 +162,15 @@ bool decode_e1ap_cuup_setup_request(const E1AP_E1AP_PDU_t *pdu, e1ap_setup_req_t
     AssertFatal(ie != NULL, "in->protocolIEs.list.array[i] shall not be null");
     switch (ie->id) {
       case E1AP_ProtocolIE_ID_id_TransactionID:
-        _E1_EQ_CHECK_INT(ie->value.present, E1AP_GNB_CU_UP_E1SetupRequestIEs__value_PR_TransactionID);
+        _EQ_CHECK_INT(ie->value.present, E1AP_GNB_CU_UP_E1SetupRequestIEs__value_PR_TransactionID);
         out->transac_id = ie->value.choice.TransactionID;
         break;
       case E1AP_ProtocolIE_ID_id_gNB_CU_UP_ID:
-        _E1_EQ_CHECK_INT(ie->value.present, E1AP_GNB_CU_UP_E1SetupRequestIEs__value_PR_GNB_CU_UP_ID);
+        _EQ_CHECK_INT(ie->value.present, E1AP_GNB_CU_UP_E1SetupRequestIEs__value_PR_GNB_CU_UP_ID);
         asn_INTEGER2ulong(&ie->value.choice.GNB_CU_UP_ID, &out->gNB_cu_up_id);
         break;
       case E1AP_ProtocolIE_ID_id_gNB_CU_UP_Name:
-        _E1_EQ_CHECK_INT(ie->value.present, E1AP_GNB_CU_UP_E1SetupRequestIEs__value_PR_GNB_CU_UP_Name);
+        _EQ_CHECK_INT(ie->value.present, E1AP_GNB_CU_UP_E1SetupRequestIEs__value_PR_GNB_CU_UP_Name);
         // gNB-CU-UP Name (O)
         E1AP_LIB_FIND_IE(E1AP_GNB_CU_UP_E1SetupRequestIEs_t, ie, in, E1AP_ProtocolIE_ID_id_gNB_CU_UP_Name, false);
         if (ie != NULL) {
@@ -196,12 +179,12 @@ bool decode_e1ap_cuup_setup_request(const E1AP_E1AP_PDU_t *pdu, e1ap_setup_req_t
         }
         break;
       case E1AP_ProtocolIE_ID_id_CNSupport:
-        _E1_EQ_CHECK_INT(ie->value.present, E1AP_GNB_CU_UP_E1SetupRequestIEs__value_PR_CNSupport);
-        _E1_EQ_CHECK_INT(ie->value.choice.CNSupport, E1AP_CNSupport_c_5gc); // only 5GC CN Support supported
+        _EQ_CHECK_INT(ie->value.present, E1AP_GNB_CU_UP_E1SetupRequestIEs__value_PR_CNSupport);
+        _EQ_CHECK_LONG((long)ie->value.choice.CNSupport, (long)E1AP_CNSupport_c_5gc); // only 5GC CN Support supported
         out->cn_support = ie->value.choice.CNSupport;
         break;
       case E1AP_ProtocolIE_ID_id_SupportedPLMNs:
-        _E1_EQ_CHECK_INT(ie->value.present, E1AP_GNB_CU_UP_E1SetupRequestIEs__value_PR_SupportedPLMNs_List);
+        _EQ_CHECK_INT(ie->value.present, E1AP_GNB_CU_UP_E1SetupRequestIEs__value_PR_SupportedPLMNs_List);
         out->supported_plmns = ie->value.choice.SupportedPLMNs_List.list.count;
 
         for (int i = 0; i < out->supported_plmns; i++) {
@@ -275,19 +258,19 @@ void free_e1ap_cuup_setup_request(e1ap_setup_req_t *msg)
  */
 bool eq_e1ap_cuup_setup_request(const e1ap_setup_req_t *a, const e1ap_setup_req_t *b)
 {
-  _E1_EQ_CHECK_INT(a->transac_id, b->transac_id);
-  _E1_EQ_CHECK_INT(a->gNB_cu_up_id, b->gNB_cu_up_id);
+  _EQ_CHECK_UINT64(a->transac_id, b->transac_id);
+  _EQ_CHECK_UINT64(a->gNB_cu_up_id, b->gNB_cu_up_id);
   if (a->gNB_cu_up_name && b->gNB_cu_up_name)
-    _E1_EQ_CHECK_STR(a->gNB_cu_up_name, b->gNB_cu_up_name)
-  _E1_EQ_CHECK_INT(a->supported_plmns, b->supported_plmns);
+    _EQ_CHECK_STR(a->gNB_cu_up_name, b->gNB_cu_up_name);
+  _EQ_CHECK_INT(a->supported_plmns, b->supported_plmns);
   for (int i = 0; i < a->supported_plmns; i++) {
-    _E1_EQ_CHECK_INT(a->plmn[i].id.mcc, b->plmn[i].id.mcc);
-    _E1_EQ_CHECK_INT(a->plmn[i].id.mnc, b->plmn[i].id.mnc);
-    _E1_EQ_CHECK_INT(a->plmn[i].id.mnc_digit_length, b->plmn[i].id.mnc_digit_length);
-    _E1_EQ_CHECK_INT(a->plmn[i].supported_slices, b->plmn[i].supported_slices);
+    _EQ_CHECK_INT(a->plmn[i].id.mcc, b->plmn[i].id.mcc);
+    _EQ_CHECK_INT(a->plmn[i].id.mnc, b->plmn[i].id.mnc);
+    _EQ_CHECK_INT(a->plmn[i].id.mnc_digit_length, b->plmn[i].id.mnc_digit_length);
+    _EQ_CHECK_INT(a->plmn[i].supported_slices, b->plmn[i].supported_slices);
     for (int s = 0; s < a->plmn[i].supported_slices; ++s) {
-      _E1_EQ_CHECK_INT(a->plmn[i].slice[s].sst, b->plmn[i].slice[s].sst);
-      _E1_EQ_CHECK_INT(a->plmn[i].slice[s].sd, b->plmn[i].slice[s].sd);
+      _EQ_CHECK_INT(a->plmn[i].slice[s].sst, b->plmn[i].slice[s].sst);
+      _EQ_CHECK_INT(a->plmn[i].slice[s].sd, b->plmn[i].slice[s].sd);
     }
   }
   return true;
@@ -372,9 +355,9 @@ E1AP_E1AP_PDU_t *encode_e1ap_cuup_setup_response(const e1ap_setup_resp_t *msg)
  */
 bool decode_e1ap_cuup_setup_response(const E1AP_E1AP_PDU_t *pdu, e1ap_setup_resp_t *out)
 {
-  _E1_EQ_CHECK_INT(pdu->present, E1AP_E1AP_PDU_PR_successfulOutcome);
-  _E1_EQ_CHECK_INT(pdu->choice.successfulOutcome->procedureCode, E1AP_ProcedureCode_id_gNB_CU_UP_E1Setup);
-  _E1_EQ_CHECK_INT(pdu->choice.successfulOutcome->value.present, E1AP_SuccessfulOutcome__value_PR_GNB_CU_UP_E1SetupResponse);
+  _EQ_CHECK_INT(pdu->present, E1AP_E1AP_PDU_PR_successfulOutcome);
+  _EQ_CHECK_LONG(pdu->choice.successfulOutcome->procedureCode, E1AP_ProcedureCode_id_gNB_CU_UP_E1Setup);
+  _EQ_CHECK_INT(pdu->choice.successfulOutcome->value.present, E1AP_SuccessfulOutcome__value_PR_GNB_CU_UP_E1SetupResponse);
   const E1AP_GNB_CU_UP_E1SetupResponse_t *in = &pdu->choice.successfulOutcome->value.choice.GNB_CU_UP_E1SetupResponse;
   E1AP_GNB_CU_UP_E1SetupResponseIEs_t *ie;
   // Transaction ID (M)
@@ -391,7 +374,7 @@ bool decode_e1ap_cuup_setup_response(const E1AP_E1AP_PDU_t *pdu, e1ap_setup_resp
       case E1AP_ProtocolIE_ID_id_gNB_CU_CP_Name:
         // gNB-CU-CP Name (O)
         E1AP_LIB_FIND_IE(E1AP_GNB_CU_UP_E1SetupResponseIEs_t, ie, in, E1AP_ProtocolIE_ID_id_gNB_CU_CP_Name, false);
-        _E1_EQ_CHECK_INT(ie->value.present, E1AP_GNB_CU_UP_E1SetupResponseIEs__value_PR_GNB_CU_CP_Name);
+        _EQ_CHECK_INT(ie->value.present, E1AP_GNB_CU_UP_E1SetupResponseIEs__value_PR_GNB_CU_CP_Name);
         if (ie != NULL) {
           out->gNB_cu_cp_name = calloc_or_fail(ie->value.choice.GNB_CU_CP_Name.size + 1, sizeof(char));
           memcpy(out->gNB_cu_cp_name, ie->value.choice.GNB_CU_CP_Name.buf, ie->value.choice.GNB_CU_CP_Name.size);
@@ -474,30 +457,30 @@ void free_e1ap_cuup_setup_response(e1ap_setup_resp_t *msg)
  */
 bool eq_e1ap_cuup_setup_response(const e1ap_setup_resp_t *a, const e1ap_setup_resp_t *b)
 {
-  _E1_EQ_CHECK_LONG(a->transac_id, b->transac_id);
+  _EQ_CHECK_LONG(a->transac_id, b->transac_id);
   if ((a->gNB_cu_cp_name && !b->gNB_cu_cp_name) || (!a->gNB_cu_cp_name && b->gNB_cu_cp_name))
     return false;
   if (a->gNB_cu_cp_name && b->gNB_cu_cp_name)
-    _E1_EQ_CHECK_STR(a->gNB_cu_cp_name, b->gNB_cu_cp_name);
+    _EQ_CHECK_STR(a->gNB_cu_cp_name, b->gNB_cu_cp_name);
   if ((a->tnla_info && !b->tnla_info) || (!a->tnla_info && b->tnla_info))
     return false;
   if (a->tnla_info && b->tnla_info) {
-    _E1_EQ_CHECK_INT(a->tnla_info->num_addresses_to_add, b->tnla_info->num_addresses_to_add);
-    _E1_EQ_CHECK_INT(a->tnla_info->num_addresses_to_remove, b->tnla_info->num_addresses_to_remove);
+    _EQ_CHECK_INT(a->tnla_info->num_addresses_to_add, b->tnla_info->num_addresses_to_add);
+    _EQ_CHECK_INT(a->tnla_info->num_addresses_to_remove, b->tnla_info->num_addresses_to_remove);
     for (int i = 0; i < a->tnla_info->num_addresses_to_add; i++) {
       tnl_address_info_item_t *a_to_add = &a->tnla_info->addresses_to_add[i];
       tnl_address_info_item_t *b_to_add = &b->tnla_info->addresses_to_add[i];
-      _E1_EQ_CHECK_LONG(a_to_add->ipsec_tl_address, b_to_add->ipsec_tl_address);
+      _EQ_CHECK_UINT32(a_to_add->ipsec_tl_address, b_to_add->ipsec_tl_address);
       for (int j = 0; j < a_to_add->num_gtp_tl_addresses; j++) {
-        _E1_EQ_CHECK_LONG(a_to_add->gtp_tl_addresses[j], b_to_add->gtp_tl_addresses[j]);
+        _EQ_CHECK_UINT32(a_to_add->gtp_tl_addresses[j], b_to_add->gtp_tl_addresses[j]);
       }
     }
     for (int i = 0; i < a->tnla_info->num_addresses_to_remove; i++) {
       tnl_address_info_item_t *a_to_rem = &a->tnla_info->addresses_to_remove[i];
       tnl_address_info_item_t *b_to_rem = &b->tnla_info->addresses_to_remove[i];
-      _E1_EQ_CHECK_LONG(a_to_rem->ipsec_tl_address, b_to_rem->ipsec_tl_address);
+      _EQ_CHECK_UINT32(a_to_rem->ipsec_tl_address, b_to_rem->ipsec_tl_address);
       for (int j = 0; j < a_to_rem->num_gtp_tl_addresses; j++) {
-        _E1_EQ_CHECK_LONG(a_to_rem->gtp_tl_addresses[j], b_to_rem->gtp_tl_addresses[j]);
+        _EQ_CHECK_UINT32(a_to_rem->gtp_tl_addresses[j], b_to_rem->gtp_tl_addresses[j]);
       }
     }
   }
@@ -558,8 +541,8 @@ E1AP_E1AP_PDU_t *encode_e1ap_cuup_setup_failure(const e1ap_setup_fail_t *msg)
  */
 bool decode_e1ap_cuup_setup_failure(const E1AP_E1AP_PDU_t *pdu, e1ap_setup_fail_t *out)
 {
-  _E1_EQ_CHECK_INT(pdu->present, E1AP_E1AP_PDU_PR_unsuccessfulOutcome);
-  _E1_EQ_CHECK_INT(pdu->choice.unsuccessfulOutcome->procedureCode, E1AP_ProcedureCode_id_gNB_CU_UP_E1Setup);
+  _EQ_CHECK_INT(pdu->present, E1AP_E1AP_PDU_PR_unsuccessfulOutcome);
+  _EQ_CHECK_LONG(pdu->choice.unsuccessfulOutcome->procedureCode, E1AP_ProcedureCode_id_gNB_CU_UP_E1Setup);
   const E1AP_GNB_CU_UP_E1SetupFailure_t *in = &pdu->choice.unsuccessfulOutcome->value.choice.GNB_CU_UP_E1SetupFailure;
   E1AP_GNB_CU_UP_E1SetupFailureIEs_t *ie;
   // Check mandatory IEs first
@@ -647,25 +630,25 @@ void free_e1ap_cuup_setup_failure(e1ap_setup_fail_t *msg)
  */
 bool eq_e1ap_cuup_setup_failure(const e1ap_setup_fail_t *a, const e1ap_setup_fail_t *b)
 {
-  _E1_EQ_CHECK_LONG(a->transac_id, b->transac_id);
-  _E1_EQ_CHECK_INT(a->cause.type, b->cause.type);
-  _E1_EQ_CHECK_INT(a->cause.value, b->cause.value);
+  _EQ_CHECK_LONG(a->transac_id, b->transac_id);
+  _EQ_CHECK_INT(a->cause.type, b->cause.type);
+  _EQ_CHECK_INT(a->cause.value, b->cause.value);
   if (a->time_to_wait && b->time_to_wait)
-    _E1_EQ_CHECK_LONG(*a->time_to_wait, *b->time_to_wait);
+    _EQ_CHECK_LONG(*a->time_to_wait, *b->time_to_wait);
   if (a->crit_diag && b->crit_diag) {
     if (a->crit_diag->procedure_code && b->crit_diag->procedure_code)
-      _E1_EQ_CHECK_LONG(*(a->crit_diag->procedure_code), *(b->crit_diag->procedure_code));
+      _EQ_CHECK_INT(*(a->crit_diag->procedure_code), *(b->crit_diag->procedure_code));
     if (a->crit_diag->triggering_msg && b->crit_diag->triggering_msg)
-      _E1_EQ_CHECK_LONG(*(a->crit_diag->triggering_msg), *(b->crit_diag->triggering_msg));
+      _EQ_CHECK_UINT32(*(a->crit_diag->triggering_msg), *(b->crit_diag->triggering_msg));
     if (a->crit_diag->procedure_criticality && b->crit_diag->procedure_criticality)
-      _E1_EQ_CHECK_LONG(*(a->crit_diag->procedure_criticality), *(b->crit_diag->procedure_criticality));
-    _E1_EQ_CHECK_INT(a->crit_diag->num_errors, b->crit_diag->num_errors);
+      _EQ_CHECK_UINT32(*(a->crit_diag->procedure_criticality), *(b->crit_diag->procedure_criticality));
+    _EQ_CHECK_INT(a->crit_diag->num_errors, b->crit_diag->num_errors);
     for (int i = 0; i < a->crit_diag->num_errors; i++) {
       const criticality_diagnostics_ie_t *a_err = &a->crit_diag->errors[i];
       const criticality_diagnostics_ie_t *b_err = &b->crit_diag->errors[i];
-      _E1_EQ_CHECK_INT(a_err->ie_id, b_err->ie_id);
-      _E1_EQ_CHECK_INT(a_err->error_type, b_err->error_type);
-      _E1_EQ_CHECK_INT(a_err->criticality, b_err->criticality);
+      _EQ_CHECK_INT(a_err->ie_id, b_err->ie_id);
+      _EQ_CHECK_INT(a_err->error_type, b_err->error_type);
+      _EQ_CHECK_INT(a_err->criticality, b_err->criticality);
     }
   }
   return true;

@@ -1,17 +1,7 @@
 /*
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Copyright 2017 Cisco Systems, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
  */
 
 #ifndef _NFAPI_H_
@@ -62,7 +52,7 @@ uint32_t pullarray32(uint8_t **values_to_pull,
 uint32_t pullarrays32(uint8_t **in, int32_t out[], uint32_t max_len, uint32_t len, uint8_t *end);
 
 uint32_t pusharray8(uint8_t in[], uint32_t max_len, uint32_t len, uint8_t **out, uint8_t *end);
-uint32_t pusharray16(uint16_t in[], uint32_t max_len, uint32_t len, uint8_t **out, uint8_t *end);
+uint32_t pusharray16(const uint16_t in[], uint32_t max_len, uint32_t len, uint8_t **out, uint8_t *end);
 uint32_t pusharrays16(int16_t in[], uint32_t max_len, uint32_t len, uint8_t **out, uint8_t *end);
 uint32_t pusharray32(const uint32_t *values_to_push,
                      uint32_t max_num_values_to_push,
@@ -177,9 +167,6 @@ uint8_t unpack_ipv6_address_value(void *tlv, uint8_t **ppReadPackedMsg, uint8_t 
 
 uint8_t pack_stop_response(void *msg, uint8_t **ppWritePackedMsg, uint8_t *end, nfapi_p4_p5_codec_config_t *config);
 uint8_t unpack_stop_response(uint8_t **ppReadPackedMsg, uint8_t *end, void *msg, nfapi_p4_p5_codec_config_t *config);
-
-uint8_t pack_measurement_request(void *msg, uint8_t **ppWritePackedMsg, uint8_t *end, nfapi_p4_p5_codec_config_t *config);
-uint8_t unpack_measurement_request(uint8_t **ppReadPackedMsg, uint8_t *end, void *msg, nfapi_p4_p5_codec_config_t *config);
 
 uint8_t pack_uint32_tlv_value(void *tlv, uint8_t **ppWritePackedMsg, uint8_t *end);
 uint8_t unpack_uint32_tlv_value(void *tlv, uint8_t **ppReadPackedMsg, uint8_t *end);

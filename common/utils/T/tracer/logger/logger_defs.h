@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
+ */
+
 #ifndef _LOGGER_DEFS_H_
 #define _LOGGER_DEFS_H_
 

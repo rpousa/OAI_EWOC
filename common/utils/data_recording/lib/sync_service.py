@@ -1,39 +1,10 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
 
-# /*
-# * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
-# * contributor license agreements.  See the NOTICE file distributed with
-# * this work for additional information regarding copyright ownership.
-# * The OpenAirInterface Software Alliance licenses this file to You under
-# * the OAI Public License, Version 1.1  (the "License"); you may not use this file
-# * except in compliance with the License.
-# * You may obtain a copy of the License at
-# *
-# *      http://www.openairinterface.org/?page_id=698
-# *
-# * Unless required by applicable law or agreed to in writing, software
-# * distributed under the License is distributed on an "AS IS" BASIS,
-# * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# * See the License for the specific language governing permissions and
-# * limitations under the License.
-# *-------------------------------------------------------------------------------
-# * For more information about the OpenAirInterface (OAI) Software Alliance:
-# *      contact@openairinterface.org
-# */
 # ---------------------------------------------------------------------
-# file common/utils/data_recording/lib/sync_service.py
-# brief Sync service between captured Data from 5GNR gNB and UE
-# author Abdo Gaber
-# date 2025
-# version 1.0
-# company Emerson, NI Test and Measurement
-# email:
-# note
-# warning
+# brief Sync service between captured Data from 5G NR gNB and UE
 
-import struct
 from lib import data_recording_messages_def
-
-DEBUG_POW_MEAS_SYNC = True
+from lib import shared_memory_interface
 
 
 # check if first frame ahead:
@@ -56,34 +27,55 @@ def is_frame_ahead(frame1, frame2, max_frame=1023):
 
 
 # find the frame and slot start
-def find_frame_slot_start(dataset1_start, dataset2_start):
+def find_frame_slot_start(dataset1_start_info, dataset2_start_info, is_dataset2_pow_monitoring):
     """
     Function to find the frame and slot start for data sync
     Args:
     dataset1_start_info: Dictionary containing the start information of dataset1
     dataset2_start_info: Dictionary containing the start information of dataset2
+    is_dataset2_pow_monitoring: Boolean indicating if dataset2 is pow monitoring
     Returns:
     sync_info: Dictionary containing the sync information
         sync_info["frame"] = frame_start
         sync_info["slot"]  = slot_start
+    Note: if is_dataset2_pow_monitoring is true, then the slot start is taken from dataset1
+    Since the pow monitoring is capturing all slots while the gNB and UE are capturing only data slots
 
     """
     sync_info = {}
 
-    if dataset1_start["frame"] == dataset2_start["frame"]:
+    if dataset1_start_info["frame"] == dataset2_start_info["frame"] :
         frame_diff = 0
-        frame_start = dataset1_start["frame"]
-        slot_start = max(dataset1_start["slot"], dataset2_start["slot"])
+        frame_start = dataset1_start_info["frame"] 
+        if is_dataset2_pow_monitoring:
+            if dataset1_start_info["slot"] >= dataset2_start_info["slot"]:
+                slot_start = dataset1_start_info["slot"]
+            elif dataset1_start_info["slot"] < dataset2_start_info["slot"]:
+                # Go to next frame and use data slot as reference
+                frame_start = (frame_start + 1) % 1024
+                # Use the slot from dataset1 as reference
+                slot_start = dataset1_start_info["slot"]
+        else:
+            slot_start = max(dataset1_start_info["slot"], dataset2_start_info["slot"])
 
-    elif is_frame_ahead(dataset1_start["frame"], dataset2_start["frame"]):
-        frame_start = dataset1_start["frame"]
-        slot_start = dataset1_start["slot"]
-        frame_diff = (dataset1_start["frame"]- dataset2_start["frame"] + 1024) % 1024
-    elif is_frame_ahead(dataset2_start["frame"], dataset1_start["frame"]):
-        frame_start = dataset2_start["frame"]
-        slot_start = dataset2_start["slot"]
-        frame_diff = (dataset2_start["frame"] - dataset1_start["frame"] + 1024) % 1024
-    # check first if the delta time between the two datasets is larger than expected offset time.
+    elif is_frame_ahead(dataset1_start_info["frame"], dataset2_start_info["frame"]):
+        frame_start = dataset1_start_info["frame"]
+        slot_start = dataset1_start_info["slot"]
+        frame_diff = (dataset1_start_info["frame"]- dataset2_start_info["frame"] + 1024) % 1024
+    elif is_frame_ahead(dataset2_start_info["frame"], dataset1_start_info["frame"]):
+        frame_start = dataset2_start_info["frame"]
+        if is_dataset2_pow_monitoring:
+            if dataset1_start_info["slot"] >= dataset2_start_info["slot"]:
+                slot_start = dataset1_start_info["slot"]
+            elif dataset1_start_info["slot"] < dataset2_start_info["slot"]:
+                # Go to next frame and use data slot as reference
+                frame_start = (frame_start + 1) % 1024
+                # Use the slot from dataset1 as reference
+                slot_start = dataset1_start_info["slot"]
+        else:
+            slot_start = dataset2_start_info["slot"]
+        frame_diff = (dataset2_start_info["frame"] - dataset1_start_info["frame"] + 1024) % 1024
+    # check first if the delta time between the two datasets is larger than expected offset time. 
     # So, the sync will not be applied
     # check during the calculation of the frame the ramp-around from 1023 to 0
     if abs(frame_diff) > 6:
@@ -97,54 +89,34 @@ def find_frame_slot_start(dataset1_start, dataset2_start):
     sync_info["slot"] = slot_start
     return sync_info
 
+# Sync data across N NR tracer nodes
+def sync_multiple_nr_nodes(node_shm_readings):
+    """Sync frame/slot across N NR tracer nodes.
 
-# Read data from gNB T-tracer Application
-def get_frame_slot_start(shm_reading, bufIdx, general_msg_header_list,
-                         general_message_header_length):
-        buf = shm_reading.read(bufIdx + general_message_header_length)
-        msg_id = struct.unpack("<H", buf[bufIdx: bufIdx + general_msg_header_list.get("msg_id")])[0]
-        bufIdx += general_msg_header_list.get("msg_id")
-        frame = struct.unpack("<H", buf[bufIdx: bufIdx + general_msg_header_list.get("frame")])[0]
-        bufIdx += general_msg_header_list.get("frame")
-        slot = struct.unpack("B", buf[bufIdx: bufIdx + general_msg_header_list.get("slot")])[0]
-        return frame, slot
-
-
-# Sync data between gNB and UE
-def sync_gnb_ue_captured_data(shm_reading_gnb, shm_reading_ue):
-    """
-    Function to get the sync (frame, slot) data between gNB and UE
     Args:
-    shm_reading_gnb: Shared memory for gNB
-    shm_reading_ue: Shared memory for UE
-    Returns:
-    sync_info: Dictionary containing the sync information between gNB and UE
-        sync_info["frame"] = frame_start
-        sync_info["slot"]  = slot_start
-    """
-    # get general message header list
-    general_msg_header_list, general_message_header_length = (
-        data_recording_messages_def.get_general_msg_header_list())
+        node_shm_readings: dict {node_id: shm_reading}
 
-    # Read data from gNB T-tracer Application
-    bufIdx = 0
-    frame_gnb, slot_gnb = get_frame_slot_start(
-        shm_reading_gnb, bufIdx, general_msg_header_list, general_message_header_length)
-    # Read data from UE T-tracer Application
-    bufIdx = 0
-    frame_ue, slot_ue = get_frame_slot_start(
-        shm_reading_ue, bufIdx, general_msg_header_list, general_message_header_length)
-    dataset1_start = {}
-    dataset1_start["frame"] = frame_gnb
-    dataset1_start["slot"] = slot_gnb
-    dataset2_start = {}
-    dataset2_start["frame"] = frame_ue
-    dataset2_start["slot"] = slot_ue
-    # Sync data between gNB and UE
-    # We noticed that the maximum difference between the frame number of gNB and UE is 3 frames
-    # Calculate the frame difference considering the wrap-around from 1023 to 0
-    sync_info = find_frame_slot_start(dataset1_start, dataset2_start)
-    print(" gNB Start info: ", dataset1_start)
-    print(" UE Start info: ", dataset2_start)
-    print(" gNB and UE Sync info: ", sync_info)
+    Returns:
+        sync_info: dict with 'frame' and 'slot' of the common sync point
+    """
+    sync_header_msg, sync_header_msg_length = (
+        data_recording_messages_def.get_sync_header_msg_list())
+
+    # Get frame/slot from each node
+    node_start_infos = {}
+    for node_id, shm_reading in node_shm_readings.items():
+        frame, slot = shared_memory_interface.get_frame_slot_start(
+            shm_reading, 0, sync_header_msg, sync_header_msg_length)
+        node_start_infos[node_id] = {"frame": frame, "slot": slot}
+        print(f"  [NR Node Sync] {node_id} start: frame={frame}, slot={slot}")
+
+    # Find the latest common frame/slot by pairwise comparison
+    node_ids = list(node_start_infos.keys())
+    sync_info = node_start_infos[node_ids[0]]
+    for i in range(1, len(node_ids)):
+        sync_info = find_frame_slot_start(sync_info, node_start_infos[node_ids[i]],
+                                          is_dataset2_pow_monitoring=False)
+
+    print(f"  [NR Node Sync] Multi-node sync point: frame={sync_info['frame']}, slot={sync_info['slot']}")
     return sync_info
+

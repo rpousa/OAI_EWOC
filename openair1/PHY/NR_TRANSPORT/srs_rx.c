@@ -1,22 +1,5 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
 /*! \file PHY/NR_TRANSPORT/srs_rx.c
@@ -46,38 +29,32 @@
 
 void nr_fill_srs(PHY_VARS_gNB *gNB, frame_t frame, slot_t slot, nfapi_nr_srs_pdu_t *srs_pdu)
 {
-  bool found = false;
-  for (int i = 0; i < gNB->max_nb_srs; i++) {
-    NR_gNB_SRS_t *srs = &gNB->srs[i];
-    if (srs->active == false) {
-      found = true;
-      srs->frame = frame;
-      srs->slot = slot;
-      srs->active = true;
-      srs->beam_nb = 0;
-      if (gNB->common_vars.beam_id) {
-        const uint8_t l0 = gNB->frame_parms.symbols_per_slot - 1 - srs_pdu->time_start_position;
-        int bitmap = SL_to_bitmap(l0, 1 << srs_pdu->num_symbols);
-        int fapi_beam_idx = srs_pdu->beamforming.prgs_list[0].dig_bf_interface_list[0].beam_idx;
-        srs->beam_nb = beam_index_allocation(gNB->enable_analog_das,
-                                             fapi_beam_idx,
-                                             &gNB->common_vars,
-                                             slot,
-                                             NR_NUMBER_OF_SYMBOLS_PER_SLOT,
-                                             bitmap);
-      }
-      memcpy((void *)&srs->srs_pdu, (void *)srs_pdu, sizeof(nfapi_nr_srs_pdu_t));
-      break;
-    }
+  NR_gNB_SRS_job_t srs = {.frame = frame, .slot = slot, .srs_pdu = *srs_pdu};
+  if (gNB->common_vars.beam_id) {
+    const uint8_t l0 = srs_pdu->time_start_position; // L2 already sends the absolute symbol index
+    int bitmap = SL_to_bitmap(l0, 1 << srs_pdu->num_symbols);
+    int fapi_beam_idx = srs_pdu->beamforming.prgs_list[0].dig_bf_interface_list[0].beam_idx;
+    const nfapi_v4_srs_parameters_t *p = &srs_pdu->srs_parameters_v4;
+    // We assume the ports are sequential so taking the first port index here
+    const uint16_t ant_port_start = p->num_ul_spatial_streams_ports > 0 ? p->Ul_spatial_stream_ports[0] : 0;
+    beam_index_allocation(fapi_beam_idx,
+                          ant_port_start,
+                          p->num_ul_spatial_streams_ports,
+                          NR_SYMBOLS_PER_SLOT,
+                          slot,
+                          bitmap,
+                          gNB->frame_parms.nb_antennas_rx,
+                          gNB->common_vars.beam_id);
   }
-  AssertFatal(found, "SRS list is full\n");
+  bool found = spsc_q_put(&gNB->srs_queue, &srs, sizeof(srs));
+  if (!found)
+    LOG_W(NR_PHY, "SRS list is full: dropping SRS UE %04x\n", srs_pdu->rnti);
 }
 
 int nr_get_srs_signal(PHY_VARS_gNB *gNB,
                       c16_t **rxdataF,
-                      frame_t frame,
                       slot_t slot,
-                      nfapi_nr_srs_pdu_t *srs_pdu,
+                      const nfapi_nr_srs_pdu_t *srs_pdu,
                       nr_srs_info_t *nr_srs_info,
                       c16_t srs_received_signal[][gNB->frame_parms.ofdm_symbol_size * (1 << srs_pdu->num_symbols)],
                       c16_t srs_received_noise[][gNB->frame_parms.ofdm_symbol_size * (1 << srs_pdu->num_symbols)])
@@ -85,7 +62,7 @@ int nr_get_srs_signal(PHY_VARS_gNB *gNB,
   const NR_DL_FRAME_PARMS *frame_parms = &gNB->frame_parms;
 
   const uint16_t n_symbols = (slot % RU_RX_SLOT_DEPTH) * frame_parms->symbols_per_slot; // number of symbols until this slot
-  const uint8_t l0 = frame_parms->symbols_per_slot - 1 - srs_pdu->time_start_position; // starting symbol in this slot
+  const uint8_t l0 = srs_pdu->time_start_position; // starting symbol in this slot (L2 sends absolute symbol index)
   const uint64_t symbol_offset = (n_symbols + l0) * frame_parms->ofdm_symbol_size;
   const uint64_t subcarrier_offset = frame_parms->first_carrier_offset + srs_pdu->bwp_start * NR_NB_SC_PER_RB;
 
@@ -93,9 +70,10 @@ int nr_get_srs_signal(PHY_VARS_gNB *gNB,
   const uint8_t N_symb_SRS = 1 << srs_pdu->num_symbols;
   const uint8_t K_TC = 2 << srs_pdu->comb_size;
   const uint16_t M_sc_b_SRS = get_m_srs(srs_pdu->config_index, srs_pdu->bandwidth_index) * NR_NB_SC_PER_RB / K_TC;
+  const uint8_t num_sp_streams = srs_pdu->srs_parameters_v4.num_ul_spatial_streams_ports;
 
   bool no_srs_signal = true;
-  for (int ant = 0; ant < frame_parms->nb_antennas_rx; ant++) {
+  for (int ant = 0; ant < num_sp_streams; ant++) {
     memset(srs_received_signal[ant], 0, frame_parms->ofdm_symbol_size * sizeof(c16_t));
     memset(srs_received_noise[ant], 0, frame_parms->ofdm_symbol_size * sizeof(c16_t));
     c16_t *rx_signal = &rxdataF[ant][symbol_offset];

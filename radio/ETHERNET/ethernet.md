@@ -1,12 +1,10 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 # Ethernet drivers 
 
 This directory contains ethernet-based drivers for fronthaul. The only functional versions today are ECPRI time-domain (split 8) over UDP for AW2S and IF4.5 (split 7) for OAI RU over UDP. The RAW ethernet implementation is currently not tested and quite possibly obsolete.
 
 
-## license
-    Author:
-      Raymond Knopp, EURECOM 
-      OAI License V1.1
 # Top-level
 
 The files implement the OAI IF device interface which provides the transmit/receive (trx) functions for generic ethernet-based devices. Some minimal control-plane socket handling for IF4p5 is also provided. It comprises the following top-level functions (ethernet_lib.c) which are mapped to the OAI device structure:

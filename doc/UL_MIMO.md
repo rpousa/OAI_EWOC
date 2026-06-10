@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 # UpLink Multiple Input Multiple Output (UL MIMO)
 ## What is UL MIMO ?
 

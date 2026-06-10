@@ -1,36 +1,11 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file PHY/NR_ESTIMATION/nr_measurements_gNB.c
-* \brief gNB measurement routines
-* \author Ahmed Hussein, G. Casati, K. Saaifan
-* \date 2019
-* \version 0.1
-* \company Fraunhofer IIS
-* \email: ahmed.hussein@iis.fraunhofer.de, guido.casati@iis.fraunhofer.de, khodr.saaifan@iis.fraunhofer.de
-* \note
-* \warning
-*/
+/*!
+ * \brief gNB measurement routines
+ */
 
-#include "PHY/types.h"
 #include "PHY/defs_gNB.h"
 #include "nr_ul_estimation.h"
 
@@ -148,30 +123,33 @@ void dump_nr_I0_stats(FILE *fd, PHY_VARS_gNB *gNB)
   fprintf(fd, "\nPRACH I0 = %d.%d dB\n", gNB->measurements.prach_I0 / 10, gNB->measurements.prach_I0 % 10);
 }
 
-void gNB_I0_measurements(PHY_VARS_gNB *gNB, int slot, int first_symb, int num_symb, uint32_t rb_mask_ul[14][9])
+void gNB_I0_measurements(PHY_VARS_gNB *gNB, int slot, int first_symb, int num_symb, uint32_t rb_mask_ul[14][MAX_BWP_SIZE])
 {
   NR_DL_FRAME_PARMS *frame_parms = &gNB->frame_parms;
   NR_gNB_COMMON *common_vars = &gNB->common_vars;
   PHY_MEASUREMENTS_gNB *measurements = &gNB->measurements;
-  int nb_symb[275]={0};
+  int nb_symb[MAX_BWP_SIZE] = {0};
 
   unsigned int tmp_n0_subband[frame_parms->nb_antennas_rx][frame_parms->N_RB_UL];
   memset(tmp_n0_subband, 0, sizeof(tmp_n0_subband));
 
-  // TODO modify the measurements to take into account concurrent beams
+  /* Noise measurements is done on all spatial streams here. Later these
+  measurements are used in estimating SNR of individual signal with their
+  corresponding streams.
+  */
   for (int s = first_symb; s < first_symb + num_symb; s++) {
     int offset0 = ((slot % RU_RX_SLOT_DEPTH) * frame_parms->symbols_per_slot + s) * frame_parms->ofdm_symbol_size;
     for (int rb = 0; rb < frame_parms->N_RB_UL; rb++) {
-      if ((rb_mask_ul[s][rb >> 5] & (1U << (rb & 31))) == 0 && // check that rb was not used in this subframe
+      if (rb_mask_ul[s][rb] == 0 && // check that rb was not used in this subframe
           !(I0_SKIP_DC && rb == frame_parms->N_RB_UL >> 1)) { // skip middle PRB because of artificial noise possibly created by FFT
         int offset = offset0 + (frame_parms->first_carrier_offset + (rb*12))%frame_parms->ofdm_symbol_size;
         nb_symb[rb]++;
         for (int aarx = 0; aarx < frame_parms->nb_antennas_rx; aarx++) {
-          c16_t *ul_ch = &common_vars->rxdataF[0][aarx][offset];
+          c16_t *ul_ch = &common_vars->rxdataF[aarx][offset];
           int32_t signal_energy;
           if (((frame_parms->N_RB_UL & 1) == 1) && (rb == (frame_parms->N_RB_UL >> 1))) {
             signal_energy = signal_energy_nodc(ul_ch, 6);
-            ul_ch = &common_vars->rxdataF[0][aarx][offset0];
+            ul_ch = &common_vars->rxdataF[aarx][offset0];
             signal_energy += signal_energy_nodc(ul_ch, 6);
           } else {
             signal_energy = signal_energy_nodc(ul_ch, 12);
@@ -187,6 +165,7 @@ void gNB_I0_measurements(PHY_VARS_gNB *gNB, int slot, int first_symb, int num_sy
   int32_t n0_subband_tot_perANT[frame_parms->nb_antennas_rx];
   memset(n0_subband_tot_perANT, 0, sizeof(n0_subband_tot_perANT));
 
+  bool init_meas = measurements->n0_subband_power == NULL;
   allocCast2D(n0_subband_power,
               unsigned int,
               measurements->n0_subband_power,
@@ -199,6 +178,9 @@ void gNB_I0_measurements(PHY_VARS_gNB *gNB, int slot, int first_symb, int num_sy
     if (nb_symb[rb] > 0) {
       for (int aarx = 0; aarx < frame_parms->nb_antennas_rx; aarx++) {
         tmp_n0_subband[aarx][rb] /= nb_symb[rb];
+        // Initialize n0_subband_power from the first measurement before EMA
+        if (init_meas)
+          n0_subband_power[aarx][rb] = tmp_n0_subband[aarx][rb];
         // apply exponential moving average to smooth noise measurements
         n0_subband_power[aarx][rb] = 0.9 * n0_subband_power[aarx][rb] + 0.1 * tmp_n0_subband[aarx][rb];
         n0_subband_tot_perPRB += n0_subband_power[aarx][rb];

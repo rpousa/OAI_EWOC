@@ -1,39 +1,11 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
- */
-
-/*! \file nr_mac_common.c
- * \brief Common MAC/PHY functions for NR UE and gNB
- * \author  Florian Kaltenberger and Raymond Knopp
- * \date 2019
- * \version 0.1
- * \company Eurecom, NTUST
- * \email: florian.kalteberger@eurecom.fr, raymond.knopp@eurecom.fr
- * @ingroup _mac
-
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
 #include <math.h>
 #include "nr_mac.h"
 #include "nr_mac_common.h"
-#include "common/utils/nr/nr_common.h"
+#include "common/utils/bits.h"
 #include <limits.h>
 #include <executables/softmodem-common.h>
 
@@ -1184,6 +1156,7 @@ typedef struct {
 } nr_prach_info_3gpp_fr2_t;
 
 // Table 6.3.3.2-4: Random access configurations for FR2 and unpaired spectrum
+// and NTN-FR2 and paired as defined in 38.211v18.06
 static const nr_prach_info_3gpp_fr2_t table_6_3_3_2_4_prachConfig_Index[256] = {
     // format,      format,       x,          y,           y,              SFN_nbr,       star_symb,   slots_sfn,  occ_slot,
     // duration
@@ -1458,7 +1431,8 @@ int get_format0(uint8_t index, uint8_t unpaired, frequency_range_t frequency_ran
     if (frequency_range==FR1)
       format = table_6_3_3_2_2_prachConfig_Index[index].format;
     else
-      AssertFatal(0==1,"no paired spectrum for FR2\n");
+      // Table defined for NTN-FR2 and paired in 3GPP Spec 38.211v18.06
+      format = table_6_3_3_2_4_prachConfig_Index[index].format;
   }
   return format;
 }
@@ -3059,7 +3033,7 @@ uint16_t nr_dci_size(const NR_UE_DL_BWP_t *DL_BWP,
       size += 8;
       // TB2
       long *maxCWperDCI = pdsch_Config ? pdsch_Config->maxNrofCodeWordsScheduledByDCI : NULL;
-      if ((maxCWperDCI != NULL) && (*maxCWperDCI == 2)) {
+      if (maxCWperDCI && (*maxCWperDCI == NR_PDSCH_Config__maxNrofCodeWordsScheduledByDCI_n2)) {
         size += 8;
       }
       // HARQ process number – 5 bits if higher layer parameter harq-ProcessNumberSizeDCI-1-1 is configured;
@@ -4155,19 +4129,16 @@ uint16_t compute_pucch_prb_size(uint8_t format,
               O_crc,
               nr_prbs);
 
-  if (format==2){
-    // TODO fix this for multiple CSI reports
-    for (int i = nr_prbs; i > 0; i--) {
-      // compute code rate factor for next prb value
-      int next_prb_factor = (i - 1) * n_symb * Qm * n_re_ctrl * r;
-      // if it does not sa
-      if (O_tot > next_prb_factor)
-        return i;
-    }
+  // TODO fix this for multiple CSI reports
+  for (int i = nr_prbs; i > 0; i--) {
+    // compute code rate factor for next prb value
+    int next_prb_factor = (i - 1) * n_symb * Qm * n_re_ctrl * r;
+    // if it does not sa
+    if (O_tot > next_prb_factor)
+      return i;
   }
-  else{
-    AssertFatal(1==0,"Not yet implemented");
-  }
+
+  AssertFatal(false , "Couldn't find adequate number of PRBs\n");
   return 0;
 }
 
@@ -4649,11 +4620,11 @@ static void compute_cqi_bitlen(const NR_CSI_ReportConfig_t *csi_reportconfig, ui
   struct NR_CodebookConfig__codebookType__type1 *type1 = NULL;
   if (codebookConfig && codebookConfig->codebookType.present == NR_CodebookConfig__codebookType_PR_type1)
     type1 = codebookConfig->codebookType.choice.type1;
-  else
+  else if (codebookConfig)
     LOG_E(NR_MAC, "Only type1 codebook configuration is supported\n");
   if (type1 && type1->subType.present == NR_CodebookConfig__codebookType__type1__subType_PR_typeI_SinglePanel)
     type1single = type1->subType.choice.typeI_SinglePanel;
-  else
+  else if (codebookConfig)
     LOG_E(NR_MAC, "Only type1 single panel codebook configuration is supported\n");
 
   struct NR_CSI_ReportConfig__reportFreqConfiguration *freq_config = csi_reportconfig->reportFreqConfiguration;

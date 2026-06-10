@@ -1,27 +1,10 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
 #include "tools_defs.h"
 
-// Approximate 10*log10(x) in fixed point : x = 0...(2^32)-1
+// Approximate 10*log10(x) in fixed point : x = 0...(2^32)-1, where the output is truncated to 10*log10(2^30) = 90 dB
 
 static const int8_t dB_table[256] = {
     0,  3,  5,  6,  7,  8,  8,  9,  10, 10, 10, 11, 11, 11, 12, 12, 12, 13, 13, 13, 13, 13, 14, 14, 14, 14, 14, 14, 15, 15, 15, 15,
@@ -131,60 +114,60 @@ int16_t dB_fixed_x10(uint32_t x) {
 
 int16_t dB_fixed_times10(uint32_t x)
 {
-  int16_t dB_power=0;
+  int16_t dB_power = 0;
 
-  if (x==0) {
-    dB_power = 0;
-  } else if ( (x&0xff000000) != 0 ) {
-    dB_power = dB_table_times10[((x>>24)&255)-1];
-    dB_power += 3*dB_table_times10[255];
-  } else if ( (x&0x00ff0000) != 0 ) {
-    dB_power = dB_table_times10[((x>>16)&255)-1];
-    dB_power += 2*dB_table_times10[255];
-  } else if ( (x&0x0000ff00) != 0 ) {
-    dB_power = dB_table_times10[((x>>8)&255)-1];
+  if (x == 0) {
+    dB_power = -900; // 0 in dB is -INF, but since we're dealing with integer variables, we'll put 10*log10(2^-30) x 10 in the output
+  } else if ((x & 0xff000000) != 0) {
+    dB_power = dB_table_times10[((x >> 24) & 255) - 1];
+    dB_power += 3 * dB_table_times10[255];
+  } else if ((x & 0x00ff0000) != 0) {
+    dB_power = dB_table_times10[((x >> 16) & 255) - 1];
+    dB_power += 2 * dB_table_times10[255];
+  } else if ((x & 0x0000ff00) != 0) {
+    dB_power = dB_table_times10[((x >> 8) & 255) - 1];
     dB_power += dB_table_times10[255];
   } else {
-    dB_power = dB_table_times10[(x&255)-1];
+    dB_power = dB_table_times10[(x & 255) - 1];
   }
 
   if (dB_power > 900)
-    return(900);
+    return (900);
 
   return dB_power;
 }
-
 
 int8_t dB_fixed(uint32_t x)
 {
-  int8_t dB_power=0;
+  int8_t dB_power = 0;
 
-  if (x==0) {
-    dB_power = 0;
-  } else if ( (x&0xff000000) != 0 ) {
-    dB_power = dB_table[((x>>24)&255)-1];
-    dB_power += 3*dB_table[255];
-  } else if ( (x&0x00ff0000) != 0 ) {
-    dB_power = dB_table[((x>>16)&255)-1];
-    dB_power += 2*dB_table[255];
-  } else if ( (x&0x0000ff00) != 0 ) {
-    dB_power = dB_table[((x>>8)&255)-1];
+  if (x == 0) {
+    dB_power = -90; // 0 in dB is -INF, but since we're dealing with integer variables, we'll put 10*log10(2^-30) in the output
+  } else if ((x & 0xff000000) != 0) {
+    dB_power = dB_table[((x >> 24) & 255) - 1];
+    dB_power += 3 * dB_table[255];
+  } else if ((x & 0x00ff0000) != 0) {
+    dB_power = dB_table[((x >> 16) & 255) - 1];
+    dB_power += 2 * dB_table[255];
+  } else if ((x & 0x0000ff00) != 0) {
+    dB_power = dB_table[((x >> 8) & 255) - 1];
     dB_power += dB_table[255];
   } else {
-    dB_power = dB_table[(x&255)-1];
+    dB_power = dB_table[(x & 255) - 1];
   }
 
   if (dB_power > 90)
-    return(90);
+    return (90);
 
   return dB_power;
 }
 
-
-uint8_t dB_fixed64(uint64_t x)
+int8_t dB_fixed64(uint64_t x)
 {
-  if ((x<(((uint64_t)1)<<32))) return(dB_fixed((uint32_t)x));
-  else                         return(4*dB_table[255]+dB_fixed((uint32_t)(x>>32)));
+  if ((x < (((uint64_t)1) << 32)))
+    return (dB_fixed((uint32_t)x));
+  else
+    return (4 * dB_table[255] + dB_fixed((uint32_t)(x >> 32)));
 }
 
 

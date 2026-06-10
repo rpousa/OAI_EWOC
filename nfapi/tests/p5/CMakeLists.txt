@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 set(Test_Labels fapi p5)
 set(_fapi_p5_messages "param_request;param_response;config_request;config_response;start_request;start_response;stop_request;stop_indication;error_indication")
 

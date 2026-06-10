@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 if (OAI_AERIAL)
     message(STATUS "Building with support for Aerial")
     add_library(aerial_lib
@@ -21,6 +23,7 @@ if (OAI_AERIAL)
     target_compile_definitions(aerial_lib PUBLIC ENABLE_L2_SLT_RSP)
     target_link_libraries(aerial_lib PRIVATE asn1_lte_rrc_hdrs asn1_nr_rrc_hdrs)
     target_link_libraries(aerial_lib PRIVATE nr_fapi_p5 nr_fapi_p7)
+    target_link_libraries(aerial_lib PRIVATE nfapi_vnf_lib)
     target_link_libraries(aerial_lib PRIVATE "${NVLOG_LIB}" "${NVIPC_LIB}")
 else ()
     message(STATUS "No Support for Aerial")

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+
 services:
   build-ran-base:
     image: ran-base

@@ -1,31 +1,9 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file rrc_eNB.c
+/*!
  * \brief rrc procedures for eNB
- * \author Navid Nikaein and  Raymond Knopp
- * \date 2011 - 2014
- * \version 1.0
- * \company Eurecom
- * \email: navid.nikaein@eurecom.fr and raymond.knopp@eurecom.fr
  */
 #define RRC_ENB
 #include "oai_asn1.h"
@@ -1426,8 +1404,8 @@ rrc_eNB_process_RRCConnectionReestablishmentComplete(
       ue_context_pP->ue_context.ue_release_timer = 0;
       ue_context_pP->ue_context.ue_reestablishment_timer = 0;
       ue_context_pP->ue_context.ul_failure_timer = 20000; // set ul_failure to 20000 for triggering rrc_eNB_send_S1AP_UE_CONTEXT_RELEASE_REQ
-      rrc_eNB_free_UE(ctxt_pP->module_id,ue_context_pP);
       ue_context_pP->ue_context.ul_failure_timer = 0;
+      rrc_eNB_free_UE(ctxt_pP->module_id,ue_context_pP);
       put_UE_in_freelist(ctxt_pP->module_id, ctxt_pP->rntiMaybeUEid, 0);
       return;
     }

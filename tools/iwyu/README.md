@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 # Overview
 
 IWYU - [include what you use](https://github.com/include-what-you-use/include-what-you-use)

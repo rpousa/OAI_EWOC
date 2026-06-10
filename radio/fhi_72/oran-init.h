@@ -1,22 +1,5 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
 #ifndef ORAN_INIT_H
@@ -32,7 +15,7 @@ typedef struct oran_bufs {
   struct xran_flat_buffer rx_prbmap[XRAN_MAX_ANTENNA_NR][XRAN_N_FE_BUF_LEN];
 
   struct xran_flat_buffer prach[XRAN_MAX_ANTENNA_NR][XRAN_N_FE_BUF_LEN][XRAN_NUM_OF_SYMBOL_PER_SLOT];
-  struct xran_flat_buffer prachdecomp[XRAN_MAX_ANTENNA_NR][XRAN_N_FE_BUF_LEN][XRAN_NUM_OF_SYMBOL_PER_SLOT];
+  struct xran_flat_buffer prachdecomp[XRAN_MAX_ANTENNA_NR][XRAN_N_FE_BUF_LEN];
 } oran_bufs_t;
 
 typedef struct oran_buf_list {
@@ -58,9 +41,13 @@ typedef struct oran_port_instance_t {
 } oran_port_instance_t;
 
 extern struct xran_fh_config gxran_fh_config[XRAN_PORTS_NUM];
+#if defined F_RELEASE
 extern void *gxran_handle;
+#elif defined K_RELEASE
+extern void *gxran_handle[XRAN_PORTS_NUM];
+#endif
 
-int *oai_oran_initialize(struct xran_fh_init *fh_init, struct xran_fh_config *fh_config);
+void *oai_oran_initialize(struct xran_fh_init *fh_init, struct xran_fh_config *fh_config);
 
 oran_buf_list_t *get_xran_buffers(uint32_t port_id);
 struct xran_fh_init *get_xran_fh_init(void);

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 set(NR_RRC_GRAMMAR ASN.1/nr-rrc-17.3.0.asn1)
 
 set(nr_rrc_source

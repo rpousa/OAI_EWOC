@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
+ */
+
 #ifndef _NAS_PROC_DEFS_H
 #define _NAS_PROC_DEFS_H
 

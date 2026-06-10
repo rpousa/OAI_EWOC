@@ -1,22 +1,5 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
 /**********************************************************************
@@ -39,7 +22,6 @@
 #include "PHY/defs_nr_UE.h"
 
 #include "PHY/NR_REFSIG/ss_pbch_nr.h"
-#include "common/utils/LOG/vcd_signal_dumper.h"
 
 #define DEFINE_VARIABLES_PSS_NR_H
 #include "PHY/NR_REFSIG/pss_nr.h"
@@ -50,24 +32,12 @@
 
 //#define DBG_PSS_NR
 static time_stats_t generic_time[TIME_LAST];
-int pss_search_time_nr(const c16_t **rxdata,
-                       const NR_DL_FRAME_PARMS *frame_parms,
-                       const c16_t pssTime[NUMBER_PSS_SEQUENCE][frame_parms->ofdm_symbol_size],
-                       bool fo_flag,
-                       int is,
-                       int target_Nid_cell,
-                       int *nid2,
-                       int *f_off,
-                       int *pssPeak,
-                       int *pssAvg,
-                       int search_start,
-                       int search_length);
 
-static int16_t primary_synchro_nr2[NUMBER_PSS_SEQUENCE][LENGTH_PSS_NR] = {0};
+static int16_t d_pss[NUMBER_PSS_SEQUENCE][LENGTH_PSS_NR] = {0};
 static c16_t primary_synchro[NUMBER_PSS_SEQUENCE][LENGTH_PSS_NR] = {0};
 int16_t *get_primary_synchro_nr2(const int nid2)
 {
-  return primary_synchro_nr2[nid2];
+  return d_pss[nid2];
 }
 
 /*******************************************************************
@@ -87,11 +57,8 @@ int16_t *get_primary_synchro_nr2(const int nid2)
 void generate_pss_nr(NR_DL_FRAME_PARMS *fp, int N_ID_2)
 {
   AssertFatal(fp->ofdm_symbol_size > 127,"Illegal ofdm_symbol_size %d\n",fp->ofdm_symbol_size);
-  AssertFatal(N_ID_2>=0 && N_ID_2 <=2,"Illegal N_ID_2 %d\n",N_ID_2);
-  int16_t d_pss[LENGTH_PSS_NR];
+  AssertFatal(N_ID_2 >= 0 && N_ID_2 <= 2, "Illegal N_ID_2 %d\n", N_ID_2);
   int16_t x[LENGTH_PSS_NR];
-
-  int16_t *primary_synchro2 = primary_synchro_nr2[N_ID_2]; /* pss in complex with alternatively i then q */
 
 #define INITIAL_PSS_NR (7)
   const int16_t x_initial[INITIAL_PSS_NR] = {0, 1, 1, 0, 1, 1, 1};
@@ -100,16 +67,15 @@ void generate_pss_nr(NR_DL_FRAME_PARMS *fp, int N_ID_2)
 
   for (int i = 0; i < (LENGTH_PSS_NR - INITIAL_PSS_NR); i++)
     x[i + INITIAL_PSS_NR] = (x[i + 4] + x[i]) % (2);
-
+  int16_t *pss = d_pss[N_ID_2];
   for (int n=0; n < LENGTH_PSS_NR; n++) {
     const int m = (n + 43 * N_ID_2) % (LENGTH_PSS_NR);
-    d_pss[n] = 1 - 2*x[m];
+    pss[n] = 1 - 2 * x[m];
   }
 
   /* PSS is directly mapped to subcarrier without modulation 38.211 */
   for (int i=0; i < LENGTH_PSS_NR; i++) {
-    primary_synchro[N_ID_2][i].r = (d_pss[i] * SHRT_MAX) >> SCALING_PSS_NR; /* Maximum value for type short int ie int16_t */
-    primary_synchro2[i] = d_pss[i];
+    primary_synchro[N_ID_2][i].r = (pss[i] * SHRT_MAX) >> SCALING_PSS_NR; /* Maximum value for type short int ie int16_t */
   }
 
 #ifdef DBG_PSS_NR
@@ -151,12 +117,13 @@ void generate_pss_nr(NR_DL_FRAME_PARMS *fp, int N_ID_2)
 void generate_pss_nr_time(const NR_DL_FRAME_PARMS *fp, const int N_ID_2, int ssbFirstSCS, c16_t pssTime[fp->ofdm_symbol_size])
 {
   unsigned int subcarrier_start = get_softmodem_params()->sl_mode == 0 ? PSS_SSS_SUB_CARRIER_START : PSS_SSS_SUB_CARRIER_START_SL;
-  unsigned int k = fp->first_carrier_offset + ssbFirstSCS + subcarrier_start;
-  if (k>= fp->ofdm_symbol_size) k-=fp->ofdm_symbol_size;
   c16_t synchroF_tmp[fp->ofdm_symbol_size] __attribute__((aligned(32)));
   memset(synchroF_tmp, 0, sizeof(synchroF_tmp));
+  unsigned int k = fp->first_carrier_offset + ssbFirstSCS + subcarrier_start;
   for (int i=0; i < LENGTH_PSS_NR; i++) {
-    synchroF_tmp[k % fp->ofdm_symbol_size] = primary_synchro[N_ID_2][i];
+    if (k >= fp->ofdm_symbol_size)
+      k -= fp->ofdm_symbol_size;
+    synchroF_tmp[k] = primary_synchro[N_ID_2][i];
     k++;
   }
 
@@ -182,54 +149,6 @@ void generate_pss_nr_time(const NR_DL_FRAME_PARMS *fp, const int N_ID_2, int ssb
     LOG_M(output_file, sequence_name, synchroF_tmp, length, 1, 1);
   }
 
-#endif
-
-
-
-#if 0
-
-/* it allows checking that process of idft on a signal and then dft gives same signal with limited errors */
-
-  if ((N_ID_2 == 0) && (length == 256)) {
-
-    LOG_M("pss_f00.m","pss_f00",synchro_tmp,length,1,1);
-
-
-    bzero(synchroF_tmp, size);
-
-  
-
-    /* get pss in the time domain by applying an inverse FFT */
-    dft((int16_t)get_dft(length),
-    	synchro_tmp,           /* complex input */
-        synchroF_tmp,          /* complex output */
-        1);                 /* scaling factor */
-
-    if ((N_ID_2 == 0) && (length == 256)) {
-      LOG_M("pss_f_0.m","pss_f_0",synchroF_tmp,length,1,1);
-    }
-
-    /* check Pss */
-    k = length - (LENGTH_PSS_NR/2);
-
-#define LIMIT_ERROR_FFT   (10)
-
-    for (int i=0; i < LENGTH_PSS_NR; i++) {
-      if (abs(synchroF_tmp[2*k] - primary_synchro[i].r) > LIMIT_ERROR_FFT) {
-      printf("Pss Error[%d] Compute %d Reference %d \n", k, synchroF_tmp[2*k], primary_synchro[i].r);
-      }
-    
-      if (abs(synchroF_tmp[2*k+1] - primary_synchro[i].i) > LIMIT_ERROR_FFT) {
-        printf("Pss Error[%d] Compute %d Reference %d\n", (2*k+1), synchroF_tmp[2*k+1], primary_synchro[i].i);
-      }
-
-      k++;
-
-      if (k >= length) {
-        k-=length;
-      }
-    }
-  }
 #endif
 }
 
@@ -391,60 +310,36 @@ int pss_synchro_nr(const c16_t **rxdata,
                    int *pssPeak,
                    int *pssAvg)
 {
-  VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME(VCD_SIGNAL_DUMPER_FUNCTIONS_PSS_SYNCHRO_NR, VCD_FUNCTION_IN);
 #ifdef DBG_PSS_NR
-
-  LOG_M("rxdata0_rand.m","rxd0_rand", &PHY_vars_UE->common_vars.rxdata[0][0], frame_parms->samples_per_frame, 1, 1);
-
-#endif
-
-#ifdef DBG_PSS_NR
-
-  LOG_M("rxdata0_des.m","rxd0_des", &rxdata[0][0], frame_parms->samples_per_frame,1,1);
-
+  LOG_M("rxdata0_rand.m", "rxd0_rand", &PHY_vars_UE->common_vars.rxdata[0][0], frame_parms->samples_per_frame, 1, 1);
+  LOG_M("rxdata0_des.m", "rxd0_des", &rxdata[0][0], frame_parms->samples_per_frame, 1, 1);
 #endif
 
   start_meas(&generic_time[TIME_PSS]);
-
-  VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME(VCD_SIGNAL_DUMPER_FUNCTIONS_PSS_SEARCH_TIME_NR, VCD_FUNCTION_IN);
-
   int synchro_position =
       pss_search_time_nr(rxdata, frame_parms, pssTime, fo_flag, is, target_Nid_cell, nid2, f_off, pssPeak, pssAvg, -1, -1);
-
-  VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME(VCD_SIGNAL_DUMPER_FUNCTIONS_PSS_SEARCH_TIME_NR, VCD_FUNCTION_OUT);
+  stop_meas(&generic_time[TIME_PSS]);
 
 #if TEST_SYNCHRO_TIMING_PSS
 
-  stop_meas(&generic_time[TIME_PSS]);
-
-  int duration_ms = generic_time[TIME_PSS].p_time/(cpuf*1000.0);
-
-  #ifndef NR_UNIT_TEST
-
-  LOG_D(PHY,"PSS execution duration %4d microseconds \n", duration_ms);
-
-  #endif
-
+  int duration_ms = generic_time[TIME_PSS].p_time / (cpuf * 1000.0);
+#ifndef NR_UNIT_TEST
+  LOG_D(PHY, "PSS execution duration %4d microseconds \n", duration_ms);
+#endif
 #endif
 
 #ifdef SYNCHRO_DECIMAT
-
   if (rate_change != 1) {
-
     if (rxdata[0] != NULL) {
-
       for (int aa=0;aa<frame_parms->nb_antennas_rx;aa++) {
         free(rxdata[aa]);
       }
-
       free(rxdata);
     }
-
-    restore_frame_context_pss_nr(frame_parms, rate_change);  
+    restore_frame_context_pss_nr(frame_parms, rate_change);
   }
 #endif
 
-  VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME(VCD_SIGNAL_DUMPER_FUNCTIONS_PSS_SYNCHRO_NR, VCD_FUNCTION_OUT);
   return synchro_position;
 }
 
@@ -511,11 +406,6 @@ int pss_search_time_nr(const c16_t **rxdata,
                        int search_start,
                        int search_length)
 {
-  unsigned int n, ar, peak_position, pss_source;
-  int64_t peak_value;
-  int64_t avg[NUMBER_PSS_SEQUENCE] = {0};
-  double ffo_est = 0;
-
   // Determine search window
   unsigned int start, length;
   if (search_start >= 0 && search_length > 0) {
@@ -531,11 +421,7 @@ int pss_search_time_nr(const c16_t **rxdata,
       length = frame_parms->samples_per_frame;
   }
 
-  AssertFatal(length>0,"illegal length %d\n",length);
-  peak_value = 0;
-  peak_position = 0;
-  pss_source = 0;
-
+  AssertFatal(length > 0, "illegal length %d\n", length);
   int maxval=0;
   int max_size = get_softmodem_params()->sl_mode == 0 ?  NUMBER_PSS_SEQUENCE : NUMBER_PSS_SEQUENCE_SL;
   for (int j = 0; j < max_size; j++)
@@ -549,53 +435,55 @@ int pss_search_time_nr(const c16_t **rxdata,
   /* This is required by SIMD (single instruction Multiple Data) Extensions of Intel processors. */
   /* Correlation computation is based on a a dot product which is realized thank to SIMS extensions */
 
-  uint16_t pss_index_start = 0;
-  uint16_t pss_index_end = get_softmodem_params()->sl_mode == 0 ? NUMBER_PSS_SEQUENCE : NUMBER_PSS_SEQUENCE_SL;
+  int pss_index_start;
+  int pss_index_end;
   if (target_Nid_cell != -1) {
     pss_index_start = GET_NID2(target_Nid_cell);
     pss_index_end = pss_index_start + 1;
+  } else {
+    pss_index_start = 0;
+    pss_index_end = max_size;
   }
 
+  int64_t avg[NUMBER_PSS_SEQUENCE] = {0};
+  int64_t peak_value = 0;
+  unsigned int peak_position = 0;
+  unsigned int pss_source = 0;
   for (int pss_index = pss_index_start; pss_index < pss_index_end; pss_index++) {
-    for (n = start; n < start + length; n += 4) { //
-
-      int64_t pss_corr_ue=0;
+    for (int n = start; n < start + length; n += 4) { //
+      int64_t pss_corr_ue = 0;
       /* calculate dot product of primary_synchro_time_nr and rxdata[ar][n]
        * (ar=0..nb_ant_rx) and store the sum in temp[n]; */
-      for (ar=0; ar<frame_parms->nb_antennas_rx; ar++) {
-
+      for (int ar = 0; ar < frame_parms->nb_antennas_rx; ar++) {
         /* perform correlation of rx data and pss sequence ie it is a dot product */
         const c32_t result = dot_product(pssTime[pss_index],
-                                         &(rxdata[ar][n + is * frame_parms->samples_per_frame]),
+                                         &rxdata[ar][n + is * frame_parms->samples_per_frame],
                                          frame_parms->ofdm_symbol_size,
                                          shift);
         const c64_t r64 = {.r = result.r, .i = result.i};
         pss_corr_ue += squaredMod(r64);
-        //((short*)pss_corr_ue[pss_index])[2*n] += ((short*) &result)[0];   /* real part */
-        //((short*)pss_corr_ue[pss_index])[2*n+1] += ((short*) &result)[1]; /* imaginary part */
-        //((short*)&synchro_out)[0] += ((int*) &result)[0];               /* real part */
-        //((short*)&synchro_out)[1] += ((int*) &result)[1];               /* imaginary part */
-
       }
-      
+
       /* calculate the absolute value of sync_corr[n] */
-      avg[pss_index]+=pss_corr_ue;
+      avg[pss_index] += pss_corr_ue;
       if (pss_corr_ue > peak_value) {
         peak_value = pss_corr_ue;
         peak_position = n;
         pss_source = pss_index;
-        
+
 #ifdef DEBUG_PSS_NR
         printf("pss_index %d: n %6u peak_value %15llu\n", pss_index, n, (unsigned long long)pss_corr_ue[n]);
 #endif
       }
     }
+    avg[pss_index] /= (length / 4);
   }
-  
-  if (fo_flag){
 
-	  // fractional frequency offset computation according to Cross-correlation Synchronization Algorithm Using PSS
-	  // Shoujun Huang, Yongtao Su, Ying He and Shan Tang, "Joint time and frequency offset estimation in LTE downlink," 7th International Conference on Communications and Networking in China, 2012.
+  double ffo_est = 0;
+  if (fo_flag) {
+    // fractional frequency offset computation according to Cross-correlation Synchronization Algorithm Using PSS
+    // Shoujun Huang, Yongtao Su, Ying He and Shan Tang, "Joint time and frequency offset estimation in LTE downlink," 7th
+    // International Conference on Communications and Networking in China, 2012.
 
     // Computing cross-correlation at peak on half the symbol size for first half of data
     c32_t r1 = dot_product(pssTime[pss_source],
@@ -613,15 +501,11 @@ int pss_search_time_nr(const c16_t **rxdata,
     ffo_est = atan2(r1d.r * r2d.i - r2d.r * r1d.i, r1d.r * r2d.r + r1d.i * r2d.i) / M_PI;
 
 #ifdef DBG_PSS_NR
-	  printf("ffo %lf\n",ffo_est);
+    printf("ffo %lf\n", ffo_est);
 #endif
   }
-
   // computing absolute value of frequency offset
-  *f_off = ffo_est*frame_parms->subcarrier_spacing;
-
-  for (int pss_index = pss_index_start; pss_index < pss_index_end; pss_index++)
-    avg[pss_index] /= (length / 4);
+  *f_off = ffo_est * frame_parms->subcarrier_spacing;
 
   *nid2 = pss_source;
   *pssPeak = dB_fixed64(peak_value);
@@ -638,22 +522,18 @@ int pss_search_time_nr(const c16_t **rxdata,
         ffo_est);
 
   if ((search_start < 0 || search_length == 0) && peak_value < 5 * avg[pss_source])
-    return(-1);
-
+    return (-1);
 
 #ifdef DBG_PSS_NR
-
   static int debug_cnt = 0;
-
   if (debug_cnt == 0) {
     if (is)
-      LOG_M("rxdata1.m","rxd0",rxdata[frame_parms->samples_per_frame],length,1,1); 
+      LOG_M("rxdata1.m", "rxd0", rxdata[frame_parms->samples_per_frame], length, 1, 1);
     else
-      LOG_M("rxdata0.m","rxd0",rxdata[0],length,1,1);
+      LOG_M("rxdata0.m", "rxd0", rxdata[0], length, 1, 1);
   } else {
     debug_cnt++;
   }
-
 #endif
 
   return peak_position;

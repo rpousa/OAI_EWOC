@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 # web server interface principles
 
 The web server interface is implemented in two parts: a back-end, included in the softmodem process and a front-end which is a browser application.

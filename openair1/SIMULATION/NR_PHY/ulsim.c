@@ -1,22 +1,5 @@
 /*
-* Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
-* contributor license agreements.  See the NOTICE file distributed with
-* this work for additional information regarding copyright ownership.
-* The OpenAirInterface Software Alliance licenses this file to You under
-* the OAI Public License, Version 1.1  (the "License"); you may not use this file
-* except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*      http://www.openairinterface.org/?page_id=698
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*-------------------------------------------------------------------------------
-* For more information about the OpenAirInterface (OAI) Software Alliance:
-*      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
 */
 
 #include <limits.h>
@@ -70,6 +53,7 @@
 #include "common/openairinterface5g_limits.h"
 #include "common/ran_context.h"
 #include "common/utils/LOG/log.h"
+#include "common/utils/bits.h"
 #include "common/utils/T/T.h"
 #include "common/utils/nr/nr_common.h"
 #include "common/utils/threadPool/thread-pool.h"
@@ -90,6 +74,12 @@
 #include "time_meas.h"
 #include "utils.h"
 
+#ifdef CHANNEL_SIM_CUDA
+#include <cuda.h>
+#include <cuda_runtime.h>
+#include "SIMULATION/TOOLS/oai_cuda.h"
+#endif
+
 //#define DEBUG_ULSIM
 
 const char *__asan_default_options()
@@ -98,20 +88,15 @@ const char *__asan_default_options()
   return "detect_leaks=0";
 }
 PHY_VARS_gNB *gNB;
-PHY_VARS_NR_UE *UE;
 RAN_CONTEXT_t RC;
 char *uecap_file;
-int32_t uplink_frequency_offset[MAX_NUM_CCs][4];
+int64_t uplink_frequency_offset[MAX_NUM_CCs][4];
 
 double cpuf;
 //uint8_t nfapi_mode = 0;
 uint64_t downlink_frequency[MAX_NUM_CCs][4];
 THREAD_STRUCT thread_struct;
 nfapi_ue_release_request_body_t release_rntis;
-
-//Fixme: Uniq dirty DU instance, by global var, datamodel need better management
-instance_t DUuniqInstance=0;
-instance_t CUuniqInstance=0;
 
 // NTN cellSpecificKoffset-r17, but in slots for DL SCS
 unsigned int NTN_UE_Koffset = 0;
@@ -128,8 +113,6 @@ void nr_derive_key_ng_ran_star(uint16_t pci, uint64_t nr_arfcn_dl, const uint8_t
 void signal_rrc_msg(void /*const nr_rrc_class_e nr_channel, const uint32_t rrc_msg_id, const byte_array_t rrc_ba*/ ) { abort(); }
 void signal_rrc_state_changed_to(void /* const gNB_RRC_UE_t *rrc_ue_context, const rrc_state_e2sm_rc_e rrc_state */) { abort(); }
 void signal_ue_id(void /* const gNB_RRC_UE_t *rrc_ue_context, const uint16_t class, const uint32_t msg_id */) { abort(); }
-
-extern void fix_scd(NR_ServingCellConfig_t *scd);// forward declaration
 
 void e1_bearer_context_setup(const e1ap_bearer_setup_req_t *req) { abort(); }
 void e1_bearer_context_modif(const e1ap_bearer_mod_req_t *req) { abort(); }
@@ -286,7 +269,7 @@ int main(int argc, char *argv[])
   int slot = 8, frame = 1;
   int do_SRS = 0;
   FILE *output_fd = NULL;
-  double **s_re,**s_im,**r_re,**r_im;
+  float **s_interleaved, **r_re, **r_im;
   //uint8_t write_output_file = 0;
   int trial, n_trials = 1, n_false_positive = 0, delay = 0;
   double maxDoppler = 0.0;
@@ -298,6 +281,7 @@ int main(int argc, char *argv[])
   SCM_t channel_model = AWGN;  //Rayleigh1_anticorr;
   corr_level_t corr_level = CORR_LEVEL_LOW;
   uint16_t N_RB_DL = 106, N_RB_UL = 106, mu = 1;
+  uint8_t length_dmrs = pusch_len1;
 
   // unsigned char frame_type = 0;
   int loglvl = OAILOG_WARNING;
@@ -337,7 +321,6 @@ int main(int argc, char *argv[])
   int ilbrm = 0;
 
   UE_nr_rxtx_proc_t UE_proc;
-  FILE *scg_fd=NULL;
   FILE *uci_ulsch_matlab_vec = NULL;
   int file_offset = 0;
 
@@ -364,7 +347,19 @@ int main(int argc, char *argv[])
   int c;
   bool setAffinity=false;
   char gNBthreads[128]="n";
-  while ((c = getopt(argc, argv, "--:O:a:b:c:d:ef:g:h:i:jk:m:n:o::p:q:r:s:t:u:v:w:y:z:A:C:F:G:H:I:M:N:PR:S:T:U:L:ZW:E:X:Y:"))
+  int use_cuda = 0;
+
+  void *h_tx_sig_pinned = NULL;
+
+#ifdef CHANNEL_SIM_CUDA
+  void *d_tx_sig = NULL, *d_intermediate_sig = NULL, *d_final_output = NULL;
+  void *d_curand_states = NULL;
+  void *h_final_output_pinned = NULL;
+  float *h_channel_coeffs = NULL;
+  void *d_channel_coeffs_gpu = NULL;
+#endif
+
+  while ((c = getopt(argc, argv, "--:O:a:b:c:d:ef:g:h:i:jk:l:m:n:o::p:q:r:s:t:u:v:w:y:z:A:C:F:G:H:I:M:N:PR:S:T:U:L:ZW:E:X:Y:"))
          != -1) {
     /* ignore long options starting with '--', option '-O' and their arguments that are handled by configmodule */
     /* with this opstring getopt returns 1 for non-option arguments, refer to 'man 3 getopt' */
@@ -373,7 +368,6 @@ int main(int argc, char *argv[])
 
     printf("handling optarg %c\n",c);
     switch (c) {
-
     case 'a':
       start_symbol = atoi(optarg);
       AssertFatal(start_symbol >= 0 && start_symbol < 13,"start_symbol %d is not in 0..12\n",start_symbol);
@@ -398,15 +392,17 @@ int main(int argc, char *argv[])
       break;
 
     case 'f':
-      scg_fd = fopen(optarg, "r");
-      
-      if (scg_fd == NULL) {
-        printf("Error opening %s\n", optarg);
+#ifdef CHANNEL_SIM_CUDA
+      if (strcmp(optarg, "cuda") == 0) {
+        use_cuda = 1;
+      } else
+#endif
+      {
+        printf("Unsupported flag '%s' for -f. Run '-h' to see the list of available options.\n", optarg);
         exit(-1);
       }
-
       break;
-      
+
     case 'g':
 
       switch ((char) *optarg) {
@@ -469,6 +465,12 @@ int main(int argc, char *argv[])
       threequarter_fs = 1;
       break;
 
+    case 'l':
+      length_dmrs = atoi(optarg);
+      AssertFatal(length_dmrs == 1 || length_dmrs == 2, "Illegal PUSCH DMRS length %d\n", length_dmrs);
+      printf("PUSCH DMRS length %d\n", length_dmrs);
+      break;
+
     case 'm':
       Imcs = atoi(optarg);
       break;
@@ -489,6 +491,9 @@ int main(int argc, char *argv[])
 
     case 'W':
       precod_nbr_layers = atoi(optarg);
+      AssertFatal(precod_nbr_layers > 0 && precod_nbr_layers <= 4,
+                  "Number of layers per UE %d should be less than or equal to 4\n",
+                  precod_nbr_layers);
       break;
 
     case 'n':
@@ -658,12 +663,18 @@ int main(int argc, char *argv[])
       printf("-c RNTI\n");
       printf("-d Introduce delay in terms of number of samples\n");
       printf("-e To simulate MSG3 configuration\n");
-      printf("-f Input file to read from\n");// file not used in the code
+      printf("-f <flag> Enable optional feature flag. Available flags:\n");
+#ifdef CHANNEL_SIM_CUDA
+      printf("          cuda    Enable CUDA channel simulation\n");
+#else
+      printf("          (none)  No optional features were compiled into this executable\n");
+#endif
       printf("-g Channel model configuration. Arguments list: Number of arguments = 3, {Channel model: [A] TDLA30, [B] TDLB100, [C] TDLC300}, {Correlation: [l] Low, [m] Medium, [h] High}, {Maximum Doppler shift} e.g. -g A,l,10\n");
       printf("-h This message\n");
       printf("-i Change channel estimation technique. Arguments list: Number of arguments=2, Frequency domain {0:Linear interpolation, 1:PRB based averaging}, Time domain {0:Estimates of last DMRS symbol, 1:Average of DMRS symbols}. e.g. -i 1,0\n");
       printf("-j Save signal buffers in binary format.");
       printf("-k 3/4 sampling\n");
+      printf("-l PUSCH DMRS length: 1 or 2\n");
       printf("-m MCS value\n");
       printf("-n Number of trials to simulate\n");
       printf("-o Enable UCI on PUSCH. Optionally accepts input file (without space). This feature is not yet available in gNB so only used to verify with MATLAB generated vector\n");
@@ -700,6 +711,12 @@ int main(int argc, char *argv[])
 
     }
   }
+
+  AssertFatal(precod_nbr_layers <= min(n_tx, n_rx),
+              "Number of layers %d cannot be more than min(n_tx %d, n_rx %d)\n",
+              precod_nbr_layers,
+              n_tx,
+              n_rx);
 
   logInit();
   set_glog(loglvl);
@@ -741,15 +758,14 @@ int main(int argc, char *argv[])
   gNB->pusch_thres = -20;
   gNB->frame_parms.N_RB_DL = N_RB_DL;
   gNB->frame_parms.N_RB_UL = N_RB_UL;
-  gNB->frame_parms.Ncp = extended_prefix_flag ? EXTENDED : NORMAL;
+  gNB->frame_parms.Ncp = extended_prefix_flag ? NR_EXTENDED : NR_NORMAL;
 
   AssertFatal((gNB->if_inst = NR_IF_Module_init(0)) != NULL, "Cannot register interface");
   gNB->if_inst->NR_PHY_config_req = nr_phy_config_request;
 
-  s_re = malloc(n_tx*sizeof(double*));
-  s_im = malloc(n_tx*sizeof(double*));
-  r_re = malloc(n_rx*sizeof(double*));
-  r_im = malloc(n_rx*sizeof(double*));
+  s_interleaved = malloc(n_tx * sizeof(float *));
+  r_re = malloc(n_rx * sizeof(float *));
+  r_im = malloc(n_rx * sizeof(float *));
 
   NR_ServingCellConfigCommon_t *scc = calloc(1,sizeof(*scc));;
   prepare_scc(scc);
@@ -784,7 +800,8 @@ int main(int argc, char *argv[])
                                 .timer_config.n310 = 10,
                                 .timer_config.t311 = 3000,
                                 .timer_config.n311 = 1,
-                                .timer_config.t319 = 400};
+                                .timer_config.t319 = 400,
+                                .spatial_stream_index = {0, 1, 2, 3, 4, 5, 6, 7}};
   const nr_rlc_configuration_t rlc_config = {
     .srb = {
       .t_poll_retransmit = 45,
@@ -811,17 +828,16 @@ int main(int argc, char *argv[])
   };
 
   RC.nb_nr_macrlc_inst = 1;
-  RC.nb_nr_mac_CC = (int*)malloc(RC.nb_nr_macrlc_inst*sizeof(int));
-  for (i = 0; i < RC.nb_nr_macrlc_inst; i++)
-    RC.nb_nr_mac_CC[i] = 1;
   mac_top_init_gNB(ngran_gNB, scc, &conf, &rlc_config);
+  RC.nrmac[0]->beam_info = (NR_beam_info_t){.beams_per_period = 1};
   nr_mac_config_scc(RC.nrmac[0], scc, &conf);
 
   NR_UE_NR_Capability_t* UE_Capability_nr = CALLOC(1,sizeof(NR_UE_NR_Capability_t));
   prepare_sim_uecap(UE_Capability_nr, scc, mu, N_RB_UL, 0, mcs_table);
   rnti_t rnti = 0x1234;
   int uid = 0;
-  NR_CellGroupConfig_t *secondaryCellGroup = get_default_secondaryCellGroup(scc, UE_Capability_nr, 0, 1, &conf, uid);
+  int ssb_index = 0;
+  NR_CellGroupConfig_t *secondaryCellGroup = get_default_secondaryCellGroup(scc, UE_Capability_nr, 0, 1, &conf, uid, ssb_index);
   secondaryCellGroup->spCellConfig->reconfigurationWithSync = get_reconfiguration_with_sync(rnti, uid, scc, frame);
 
   NR_BCCH_BCH_Message_t *mib = get_new_MIB_NR(scc);
@@ -842,7 +858,7 @@ int main(int argc, char *argv[])
   /* RU handles rxdataF, and gNB just has a pointer. Here, we don't have an RU,
    * so we need to allocate that memory as well. */
   for (i = 0; i < n_rx; i++)
-    gNB->common_vars.rxdataF[0][i] = malloc16_clear(gNB->frame_parms.samples_per_frame_wCP*sizeof(int32_t));
+    gNB->common_vars.rxdataF[i] = malloc16_clear(gNB->frame_parms.samples_per_frame_wCP * sizeof(int32_t));
   N_RB_DL = gNB->frame_parms.N_RB_DL;
 
   /* no RU: need to have rxdata */
@@ -873,11 +889,40 @@ int main(int argc, char *argv[])
     exit(-1);
   }
 
+  const int num_samples_alloc = 153600;
+#ifdef CHANNEL_SIM_CUDA
+  init_cuda_chsim_buffers(use_cuda,
+                          n_tx,
+                          n_rx,
+                          &d_tx_sig,
+                          &d_intermediate_sig,
+                          &d_final_output,
+                          &d_curand_states,
+                          &h_tx_sig_pinned,
+                          &h_final_output_pinned,
+                          &d_channel_coeffs_gpu);
+  if (use_cuda) {
+    int num_links = n_tx * n_rx;
+    h_channel_coeffs = (float *)malloc(num_links * UE2gNB->channel_length * sizeof(float2));
+  }
+#endif
+
+#if !defined(CHANNEL_SIM_CUDA) || !use_cuda
+  printf("Pre-allocating padded host memory for the CPU channel pipeline...\n");
+  const int max_padding_alloc = 256 - 1;
+  size_t padded_tx_alloc_bytes = n_tx * (num_samples_alloc + max_padding_alloc) * 2 * sizeof(float);
+  h_tx_sig_pinned = malloc(padded_tx_alloc_bytes);
+  if (h_tx_sig_pinned == NULL) {
+    printf("Error: Failed to allocate host buffer for CPU path\n");
+    exit(-1);
+  }
+#endif
+
   // Configure UE
-  UE = calloc(1, sizeof(PHY_VARS_NR_UE));
-  PHY_vars_UE_g = malloc(sizeof(PHY_VARS_NR_UE**));
-  PHY_vars_UE_g[0] = malloc(sizeof(PHY_VARS_NR_UE*));
-  PHY_vars_UE_g[0][0] = UE;
+  nrPHY_vars_UE_g = malloc(sizeof(PHY_VARS_NR_UE **));
+  nrPHY_vars_UE_g[0] = malloc(sizeof(PHY_VARS_NR_UE *));
+  PHY_VARS_NR_UE *UE = calloc(1, sizeof(PHY_VARS_NR_UE));
+  nrPHY_vars_UE_g[0][0] = UE;
   UE->frame_parms = gNB->frame_parms;
   UE->frame_parms.nb_antennas_tx = n_tx;
   UE->frame_parms.nb_antennas_rx = 0;
@@ -915,7 +960,10 @@ int main(int argc, char *argv[])
   NR_Sched_Rsp_t *Sched_INFO = malloc16_clear(sizeof(*Sched_INFO));
   memset((void*)Sched_INFO,0,sizeof(*Sched_INFO));
   nfapi_nr_ul_tti_request_t *UL_tti_req = &Sched_INFO->UL_tti_req;
-  Sched_INFO->sched_response_id = -1;
+
+  time_stats_t channel_stats = {0};
+  time_stats_t noise_stats = {0};
+  time_stats_t pipeline_stats = {0};
 
   nr_phy_data_tx_t phy_data = {0};
 
@@ -957,7 +1005,6 @@ int main(int argc, char *argv[])
     num_dmrs_cdm_grps_no_data = dmrs_arg[3];
   }
 
-  uint8_t  length_dmrs = pusch_len1;
   uint16_t l_prime_mask = get_l_prime(nb_symb_sch, mapping_type, add_pos, length_dmrs, start_symbol, NR_MIB__dmrs_TypeA_Position_pos2);
   int number_dmrs_symbols = count_bits64_with_mask(l_prime_mask, start_symbol, nb_symb_sch);
   uint8_t  nb_re_dmrs = (dmrs_config_type == pusch_dmrs_type1) ? 6 : 4;
@@ -1045,14 +1092,13 @@ int main(int argc, char *argv[])
   printf("[ULSIM]: VALUE OF G: %u, TBS: %u\n", available_bits, TBS);
 
   int frame_length_complex_samples = gNB->frame_parms.samples_per_subframe * NR_NUMBER_OF_SUBFRAMES_PER_FRAME;
-  for (int aatx=0; aatx<n_tx; aatx++) {
-    s_re[aatx] = calloc(1,frame_length_complex_samples*sizeof(double));
-    s_im[aatx] = calloc(1,frame_length_complex_samples*sizeof(double));
+  for (int aatx = 0; aatx < n_tx; aatx++) {
+    s_interleaved[aatx] = calloc(1, frame_length_complex_samples * 2 * sizeof(float));
   }
 
-  for (int aarx=0; aarx<n_rx; aarx++) {
-    r_re[aarx] = calloc(1,frame_length_complex_samples*sizeof(double));
-    r_im[aarx] = calloc(1,frame_length_complex_samples*sizeof(double));
+  for (int aarx = 0; aarx < n_rx; aarx++) {
+    r_re[aarx] = calloc(1, frame_length_complex_samples * sizeof(float));
+    r_im[aarx] = calloc(1, frame_length_complex_samples * sizeof(float));
   }
 
   //for (int i=0;i<16;i++) printf("%f\n",gaussdouble(0.0,1.0));
@@ -1114,8 +1160,7 @@ int main(int argc, char *argv[])
     csv_file = fopen(filename_csv, "a");
     if (csv_file == NULL) {
       printf("Can't open file \"%s\", errno %d\n", filename_csv, errno);
-      free(s_re);
-      free(s_im);
+      free(s_interleaved);
       free(r_re);
       free(r_im);
       return 1;
@@ -1141,6 +1186,11 @@ int main(int argc, char *argv[])
     reset_meas(&gNB->rx_pusch_stats);
     reset_meas(&gNB->rx_pusch_init_stats);
     reset_meas(&gNB->rx_pusch_symbol_processing_stats);
+    reset_meas(&gNB->pusch_extraction_stats);
+    reset_meas(&gNB->pusch_channel_compensation_stats);
+    reset_meas(&gNB->ulsch_llr_stats);
+    reset_meas(&gNB->ulsch_layer_demapping_stats);
+    reset_meas(&gNB->ulsch_unscrambling_stats);
     reset_meas(&gNB->ulsch_decoding_stats);
     reset_meas(&gNB->ts_deinterleave);
     reset_meas(&gNB->ts_rate_unmatch);
@@ -1176,6 +1226,7 @@ int main(int argc, char *argv[])
       uint8_t round = 0;
       crc_status = 1;
       errors_decoding = 0;
+      NR_gNB_PUSCH *pusch_vars = &gNB->pusch_vars[UE_id];
 
       while (round < max_rounds && crc_status && !stop) {
 
@@ -1246,6 +1297,8 @@ int main(int argc, char *argv[])
         pusch_pdu->pusch_ptrs.ptrs_ports_list = (nfapi_nr_ptrs_ports_t *)malloc(2 * sizeof(nfapi_nr_ptrs_ports_t));
         pusch_pdu->pusch_ptrs.ptrs_ports_list[0].ptrs_re_offset = 0;
         pusch_pdu->maintenance_parms_v3.ldpcBaseGraph = get_BG(TBS, code_rate);
+        pusch_pdu->param_v4.numSpatialStreamIndices = conf.pusch_AntennaPorts;
+        memcpy(pusch_pdu->param_v4.spatialStreamIndices, conf.spatial_stream_index, sizeof(conf.spatial_stream_index));
 
         // if transform precoding is enabled
         if (transform_precoding == transformPrecoder_enabled) {
@@ -1270,16 +1323,17 @@ int main(int argc, char *argv[])
           srs_pdu->subcarrier_spacing = gNB->frame_parms.subcarrier_spacing;
           srs_pdu->num_ant_ports = n_tx == 4 ? 2 : n_tx == 2 ? 1 : 0;
           srs_pdu->sequence_id = 40;
-          srs_pdu->time_start_position = 0;
+          srs_pdu->time_start_position = gNB->frame_parms.symbols_per_slot - 1;
           srs_pdu->config_index = rrc_get_max_nr_csrs(srs_pdu->bwp_size, srs_pdu->bandwidth_index);
           srs_pdu->resource_type = NR_SRS_Resource__resourceType_PR_periodic;
           srs_pdu->t_srs = 1;
           srs_pdu->srs_parameters_v4.srs_bandwidth_size = m_SRS[srs_pdu->config_index];
-          srs_pdu->srs_parameters_v4.usage = 1 << NR_SRS_ResourceSet__usage_codebook;
+          srs_pdu->srs_parameters_v4.usage = 1 << NFAPI_NR_SRS_BEAMMANAGEMENT; // to get SNR
           srs_pdu->srs_parameters_v4.report_type[0] = 1;
           srs_pdu->srs_parameters_v4.iq_representation = 1;
           srs_pdu->srs_parameters_v4.prg_size = 1;
           srs_pdu->srs_parameters_v4.num_total_ue_antennas = 1 << srs_pdu->num_ant_ports;
+          srs_pdu->srs_parameters_v4.num_ul_spatial_streams_ports = n_rx;
           srs_pdu->beamforming.num_prgs = m_SRS[srs_pdu->config_index];
           srs_pdu->beamforming.prg_size = 1;
         }
@@ -1366,7 +1420,7 @@ int main(int argc, char *argv[])
           srs_config_pdu->sequence_id = 40;
           srs_config_pdu->resource_type = NR_SRS_Resource__resourceType_PR_periodic;
           srs_config_pdu->t_srs = 1;
-          srs_config_pdu->time_start_position = 0;
+          srs_config_pdu->time_start_position = gNB->frame_parms.symbols_per_slot - 1;
         }
 
         for (int i = 0; i < (TBS / 8); i++)
@@ -1413,27 +1467,113 @@ int main(int argc, char *argv[])
           double sigma =
               compute_noise_variance(txlev_sum, gNB->frame_parms.ofdm_symbol_size, nb_rb, precod_nbr_layers, SNR, n_trials);
 
-          for (i = 0; i < slot_length; i++) {
-            for (int aa = 0; aa < UE->frame_parms.nb_antennas_tx; aa++) {
-              s_re[aa][i] = (double)UE->common_vars.txData[aa][slot_offset + i].r;
-              s_im[aa][i] = (double)UE->common_vars.txData[aa][slot_offset + i].i;
+          for (int aa = 0; aa < UE->frame_parms.nb_antennas_tx; aa++) {
+            for (i = 0; i < slot_length; i++) {
+              s_interleaved[aa][2 * i] = (float)UE->common_vars.txData[aa][slot_offset + i].r;
+              s_interleaved[aa][2 * i + 1] = (float)UE->common_vars.txData[aa][slot_offset + i].i;
             }
           }
 
-          multipath_channel(UE2gNB, s_re, s_im, r_re, r_im, slot_length, 0, (n_trials == 1) ? 1 : 0);
-          add_noise(rxdata,
-                    (const double **)r_re,
-                    (const double **)r_im,
-                    sigma,
-                    slot_length,
-                    slot_offset,
-                    ts,
-                    delay,
-                    pdu_bit_map,
-                    PUSCH_PDU_BITMAP_PUSCH_PTRS,
-                    gNB->frame_parms.nb_antennas_rx);
+          const int padding_len = UE2gNB->channel_length - 1;
+          const int padded_slot_length = slot_length + padding_len;
+          float *h_tx_ptr = (float *)h_tx_sig_pinned;
+          size_t total_padded_bytes_for_slot = n_tx * padded_slot_length * 2 * sizeof(float);
+          memset(h_tx_ptr, 0, total_padded_bytes_for_slot);
 
-        } /*End input_fd */
+          for (int j = 0; j < n_tx; j++) {
+            float *data_start_ptr = h_tx_ptr + (j * padded_slot_length + padding_len) * 2;
+            memcpy(data_start_ptr, s_interleaved[j], slot_length * 2 * sizeof(float));
+          }
+
+#ifdef CHANNEL_SIM_CUDA
+          if (use_cuda) {
+#if defined(USE_UNIFIED_MEMORY)
+#if defined(CUDA_VERSION) && CUDA_VERSION >= 13000
+            struct cudaMemLocation deviceId;
+            deviceId.type = cudaMemLocationTypeDevice;
+            cudaGetDevice(&deviceId.id);
+            const int padding_len = UE2gNB->channel_length - 1;
+            const int padded_slot_length = slot_length + padding_len;
+            cudaMemPrefetchAsync(d_tx_sig, n_tx * padded_slot_length * 2 * sizeof(float), deviceId, 0, 0);
+#else		  
+            int deviceId;
+            cudaGetDevice(&deviceId);
+            const int padding_len = UE2gNB->channel_length - 1;
+            const int padded_slot_length = slot_length + padding_len;
+            cudaMemPrefetchAsync(d_tx_sig, n_tx * padded_slot_length * 2 * sizeof(float), deviceId, 0);
+#endif
+#endif
+            start_meas(&pipeline_stats);
+            random_channel(UE2gNB, 0);
+            int num_links = UE2gNB->nb_tx * UE2gNB->nb_rx;
+            if (h_channel_coeffs == NULL) {
+              h_channel_coeffs = (float *)malloc(num_links * 256 * sizeof(float2));
+            }
+
+            for (int link = 0; link < num_links; link++) {
+              for (int l = 0; l < UE2gNB->channel_length; l++) {
+                int idx = link * UE2gNB->channel_length + l;
+                ((float2 *)h_channel_coeffs)[idx].x = (float)UE2gNB->ch[link][l].r;
+                ((float2 *)h_channel_coeffs)[idx].y = (float)UE2gNB->ch[link][l].i;
+              }
+            }
+
+            run_channel_pipeline_cuda(rxdata,
+                                      n_tx,
+                                      n_rx,
+                                      UE2gNB->channel_length,
+                                      slot_length,
+                                      h_channel_coeffs,
+                                      (float)sigma,
+                                      ts,
+                                      pdu_bit_map,
+                                      PUSCH_PDU_BITMAP_PUSCH_PTRS,
+                                      slot_offset,
+                                      delay,
+                                      d_tx_sig,
+                                      d_intermediate_sig,
+                                      d_final_output,
+                                      d_curand_states,
+                                      h_tx_sig_pinned,
+                                      h_final_output_pinned,
+                                      d_channel_coeffs_gpu);
+            cudaDeviceSynchronize();
+            stop_meas(&pipeline_stats);
+
+          } else
+#endif
+          {
+            float **tx_sig_for_cpu = malloc(n_tx * sizeof(float *));
+            float *h_tx_ptr = (float *)h_tx_sig_pinned;
+            const int padding_len = UE2gNB->channel_length - 1;
+            const int padded_slot_length = slot_length + padding_len;
+
+            for (int j = 0; j < n_tx; j++) {
+              tx_sig_for_cpu[j] = h_tx_ptr + (j * padded_slot_length + padding_len) * 2;
+            }
+
+            start_meas(&channel_stats);
+            multipath_channel_float(UE2gNB, tx_sig_for_cpu, r_re, r_im, slot_length, 0, (n_trials == 1) ? 1 : 0);
+            stop_meas(&channel_stats);
+
+            free(tx_sig_for_cpu);
+
+            bool apply_phase_noise = (pdu_bit_map & PUSCH_PDU_BITMAP_PUSCH_PTRS);
+            start_meas(&noise_stats);
+            add_noise_float(rxdata,
+                            (const float **)r_re,
+                            (const float **)r_im,
+                            (float)sigma,
+                            slot_length,
+                            slot_offset,
+                            ts,
+                            delay,
+                            apply_phase_noise,
+                            gNB->frame_parms.nb_antennas_rx);
+            stop_meas(&noise_stats);
+          }
+        }
+        /*End input_fd */
 
         //----------------------------------------------------------
         //------------------- gNB phy procedures -------------------
@@ -1449,7 +1589,7 @@ int main(int argc, char *argv[])
           was_symbol_used[i] = true;
         }
         nr_ofdm_demod_and_rx_rotation(rxdata,
-                                      gNB->common_vars.rxdataF[0],
+                                      gNB->common_vars.rxdataF,
                                       &gNB->frame_parms,
                                       gNB->frame_parms.nb_antennas_rx,
                                       slot,
@@ -1461,30 +1601,19 @@ int main(int argc, char *argv[])
 
         if (n_trials == 1 && round == 0) {
           LOG_M("rxsig0.m", "rx0", &rxdata[0][slot_offset], slot_length, 1, 1 | log_format);
-          LOG_M("rxsigF0.m", "rxsF0", gNB->common_vars.rxdataF[0][0], 14 * gNB->frame_parms.ofdm_symbol_size, 1, 1 | log_format);
+          LOG_M("rxsigF0.m", "rxsF0", gNB->common_vars.rxdataF[0], 14 * gNB->frame_parms.ofdm_symbol_size, 1, 1 | log_format);
           if (precod_nbr_layers > 1) {
             LOG_M("rxsig1.m", "rx1", &rxdata[1][slot_offset], slot_length, 1, 1);
-            LOG_M("rxsigF1.m", "rxsF1", gNB->common_vars.rxdataF[0][1], 14 * gNB->frame_parms.ofdm_symbol_size, 1, 1 | log_format);
+            LOG_M("rxsigF1.m", "rxsF1", gNB->common_vars.rxdataF[1], 14 * gNB->frame_parms.ofdm_symbol_size, 1, 1 | log_format);
             if (precod_nbr_layers == 4) {
               LOG_M("rxsig2.m", "rx2", &rxdata[2][slot_offset], slot_length, 1, 1);
               LOG_M("rxsig3.m", "rx3", &rxdata[3][slot_offset], slot_length, 1, 1);
-              LOG_M("rxsigF2.m",
-                    "rxsF2",
-                    gNB->common_vars.rxdataF[0][2],
-                    14 * gNB->frame_parms.ofdm_symbol_size,
-                    1,
-                    1 | log_format);
-              LOG_M("rxsigF3.m",
-                    "rxsF3",
-                    gNB->common_vars.rxdataF[0][3],
-                    14 * gNB->frame_parms.ofdm_symbol_size,
-                    1,
-                    1 | log_format);
+              LOG_M("rxsigF2.m", "rxsF2", gNB->common_vars.rxdataF[2], 14 * gNB->frame_parms.ofdm_symbol_size, 1, 1 | log_format);
+              LOG_M("rxsigF3.m", "rxsF3", gNB->common_vars.rxdataF[3], 14 * gNB->frame_parms.ofdm_symbol_size, 1, 1 | log_format);
             }
           }
         }
 
-        NR_gNB_PUSCH *pusch_vars = &gNB->pusch_vars[UE_id];
         if (n_trials == 1 && round == 0) {
           __attribute__((unused)) int off = ((nb_rb & 1) == 1) ? 4 : 0;
 
@@ -1632,13 +1761,20 @@ int main(int argc, char *argv[])
       if (!crc_status)
         effRate += ((double)TBS) / (double)round;
 
-      sum_pusch_delay += ulsch_gNB->delay.est_delay;
-      min_pusch_delay = min(ulsch_gNB->delay.est_delay, min_pusch_delay);
-      max_pusch_delay = max(ulsch_gNB->delay.est_delay, max_pusch_delay);
+      sum_pusch_delay += pusch_vars->delay.est_delay;
+      min_pusch_delay = min(pusch_vars->delay.est_delay, min_pusch_delay);
+      max_pusch_delay = max(pusch_vars->delay.est_delay, max_pusch_delay);
       delay_pusch_est_count++;
 
       if (do_SRS == 1) {
-        sum_srs_snr += gNB->srs->snr;
+        DevAssert(UL_INFO.srs_ind.number_of_pdus == 1); // there must be SRS indication
+        const nfapi_nr_srs_indication_pdu_t *srs_ind = &UL_INFO.srs_ind.pdu_list[0];
+        DevAssert(srs_ind->srs_usage == NFAPI_NR_SRS_BEAMMANAGEMENT);
+        nfapi_nr_srs_beamforming_report_t bf_rep;
+        unpack_nr_srs_beamforming_report((void *)srs_ind->report_tlv.value, srs_ind->report_tlv.length, &bf_rep, sizeof(bf_rep));
+        DevAssert(bf_rep.wide_band_snr != 0xff);
+        int8_t snr = (bf_rep.wide_band_snr >> 1) - 64;
+        sum_srs_snr += snr;
         srs_snr_count++;
       }
     } // trial loop
@@ -1716,9 +1852,22 @@ int main(int argc, char *argv[])
       printStatIndent3(&gNB->pusch_channel_estimation_antenna_processing_stats, "Antenna Processing time");
       printStatIndent2(&gNB->rx_pusch_init_stats, "RX PUSCH Initialization time");
       printStatIndent2(&gNB->rx_pusch_symbol_processing_stats, "RX PUSCH Symbol Processing time");
+      gNB->pusch_extraction_stats.trials = gNB->rx_pusch_symbol_processing_stats.trials;
+      printStatIndent3(&gNB->pusch_extraction_stats, "RX PUSCH extraction");
+      gNB->pusch_channel_compensation_stats.trials = gNB->rx_pusch_symbol_processing_stats.trials;
+      printStatIndent3(&gNB->pusch_channel_compensation_stats, "RX PUSCH channel compensation");
+      gNB->ulsch_llr_stats.trials = gNB->rx_pusch_symbol_processing_stats.trials;
+      printStatIndent3(&gNB->ulsch_llr_stats, "RX PUSCH LLR");
+      gNB->ulsch_layer_demapping_stats.trials = gNB->rx_pusch_symbol_processing_stats.trials;
+      printStatIndent3(&gNB->ulsch_layer_demapping_stats, "RX PUSCH layer demapping");
+      gNB->ulsch_unscrambling_stats.trials = gNB->rx_pusch_symbol_processing_stats.trials;
+      printStatIndent3(&gNB->ulsch_unscrambling_stats, "RX PUSCH unscrambling");
       printStatIndent(&gNB->ulsch_decoding_stats,"ULSCH total decoding time");
+      gNB->ts_deinterleave.trials = n_trials;
       printStatIndent2(&gNB->ts_deinterleave, "ULSCH segment deinterleaving time");
+      gNB->ts_rate_unmatch.trials = n_trials;
       printStatIndent2(&gNB->ts_rate_unmatch, "ULSCH segment rate matching time");
+      gNB->ts_ldpc_decode.trials = n_trials;
       printStatIndent2(&gNB->ts_ldpc_decode, "ULSCH segments decoding time");
       printStatIndent(&gNB->rx_srs_stats,"RX SRS time");
       printStatIndent2(&gNB->generate_srs_stats,"Generate SRS sequence time");
@@ -1728,6 +1877,13 @@ int main(int argc, char *argv[])
       printStatIndent2(&gNB->srs_report_tlv_stats,"SRS report TLV build time");
       printStatIndent3(&gNB->srs_beam_report_stats,"SRS beam report build time");
       printStatIndent3(&gNB->srs_iq_matrix_stats,"SRS IQ matrix build time");
+
+      if (use_cuda) {
+        printStatIndent(&pipeline_stats, "GPU Channel Pipeline");
+      } else {
+        printStatIndent(&channel_stats, "Multipath Channel (CPU)");
+        printStatIndent(&noise_stats, "Add Noise (CPU)");
+      }
       printf("\n");
     }
 
@@ -1770,9 +1926,6 @@ int main(int argc, char *argv[])
   if (input_fd)
     fclose(input_fd);
 
-  if (scg_fd)
-    fclose(scg_fd);
-
   // closing csv file
   if (filename_csv != NULL) { // means we are asked to print stats to CSV
     fclose(csv_file);
@@ -1783,6 +1936,22 @@ int main(int argc, char *argv[])
     fclose(uci_ulsch_matlab_vec);
 
   free_and_zero(UE->phy_sim_test_buf);
+
+  free(nrPHY_vars_UE_g[0][0]);
+  free(nrPHY_vars_UE_g[0]);
+  free(nrPHY_vars_UE_g);
+
+#ifdef CHANNEL_SIM_CUDA
+  free_cuda_chsim_buffers(use_cuda,
+                          &d_tx_sig,
+                          &d_intermediate_sig,
+                          &d_final_output,
+                          &d_curand_states,
+                          &h_tx_sig_pinned,
+                          &h_final_output_pinned,
+                          &h_channel_coeffs,
+                          &d_channel_coeffs_gpu);
+#endif
 
   return ret;
 }

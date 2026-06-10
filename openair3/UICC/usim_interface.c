@@ -1,24 +1,5 @@
 /*
-* Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
-* contributor license agreements.  See the NOTICE file distributed with
-* this work for additional information regarding copyright ownership.
-* The OpenAirInterface Software Alliance licenses this file to You under
-* the OAI Public License, Version 1.1  (the "License"); you may not use this file
-* except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*      http://www.openairinterface.org/?page_id=698
-*
-* Author and copyright: Laurent Thomas, open-cells.com
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*-------------------------------------------------------------------------------
-* For more information about the OpenAirInterface (OAI) Software Alliance:
-*      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
 */
 #include <ctype.h>
 
@@ -33,21 +14,26 @@ extern uint16_t NB_UE_INST;
   "        key:  cyphering key\n"\
   "        opc:  cyphering OPc\n"\
   "        imiesv: string with IMEISV value\n"
+#define DEFAULT_HOME_NETWORK_PUBLIC_KEY "5a8d38864820197c3394b92613b20b91633cbd897119273bf8e4a6f4eec0a650"
 /*-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 /*                                            configuration parameters for the rfsimulator device                                                                              */
 /*   optname                     helpstr                     paramflags           XXXptr                               defXXXval                          type         numelt  */
 /*-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
-#define UICC_PARAMS_DESC {                                              \
-      {"imsi",             "USIM IMSI\n",          0,         .strptr=&uicc->imsiStr,              .defstrval="2089900007487",           TYPE_STRING,    0 }, \
-      {"nmc_size"          "number of digits in NMC", 0,      .iptr=&uicc->nmc_size,               .defintval=2,         TYPE_INT,       0 }, \
-      {"key",              "USIM Ki\n",            0,         .strptr=&uicc->keyStr,               .defstrval="fec86ba6eb707ed08905757b1bb44b8f", TYPE_STRING,    0 }, \
-      {"opc",              "USIM OPc\n",           0,         .strptr=&uicc->opcStr,               .defstrval="c42449363bbad02b66d16bc975d77cc1", TYPE_STRING,    0 }, \
-      {"amf",              "USIM amf\n",           0,         .strptr=&uicc->amfStr,               .defstrval="8000",    TYPE_STRING,    0 }, \
-      {"sqn",              "USIM sqn\n",           0,         .strptr=&uicc->sqnStr,               .defstrval="000000",  TYPE_STRING,    0 }, \
-      {"dnn",              "UE dnn (apn)\n",       0,         .strptr=&uicc->dnnStr,               .defstrval="oai",     TYPE_STRING,    0 }, \
-      {"nssai_sst",        "UE nssai\n",           0,         .iptr=&uicc->nssai_sst,              .defintval=1,    TYPE_INT,    0 }, \
-      {"nssai_sd",         "UE nssai\n",           0,         .iptr=&uicc->nssai_sd,               .defintval=0xffffff,  TYPE_INT,       0 }, \
-      {"imeisv",           "IMEISV\n",             0,         .strptr=&uicc->imeisvStr,            .defstrval="6754567890123413",           TYPE_STRING,    0 }, \
+#define UICC_PARAMS_DESC {                                                                                                                                                         \
+      {"imsi",                       "USIM IMSI\n",                  0, .strptr=&uicc->imsiStr,                    .defstrval="2089900007487",                    TYPE_STRING, 0}, \
+      {"nmc_size",                   "number of digits in NMC",      0, .iptr=&uicc->nmc_size,                     .defintval=2,                                  TYPE_INT,    0}, \
+      {"key",                        "USIM Ki\n",                    0, .strptr=&uicc->keyStr,                     .defstrval="fec86ba6eb707ed08905757b1bb44b8f", TYPE_STRING, 0}, \
+      {"opc",                        "USIM OPc\n",                   0, .strptr=&uicc->opcStr,                     .defstrval="c42449363bbad02b66d16bc975d77cc1", TYPE_STRING, 0}, \
+      {"amf",                        "USIM amf\n",                   0, .strptr=&uicc->amfStr,                     .defstrval="8000",                             TYPE_STRING, 0}, \
+      {"sqn",                        "USIM sqn\n",                   0, .strptr=&uicc->sqnStr,                     .defstrval="000000",                           TYPE_STRING, 0}, \
+      {"dnn",                        "UE dnn (apn)\n",               0, .strptr=&uicc->dnnStr,                     .defstrval="oai",                              TYPE_STRING, 0}, \
+      {"nssai_sst",                  "UE nssai\n",                   0, .iptr=&uicc->nssai_sst,                    .defintval=1,                                  TYPE_INT,    0}, \
+      {"nssai_sd",                   "UE nssai\n",                   0, .iptr=&uicc->nssai_sd,                     .defintval=0xffffff,                           TYPE_INT,    0}, \
+      {"imeisv",                     "IMEISV\n",                     0, .strptr=&uicc->imeisvStr,                  .defstrval="6754567890123413",                 TYPE_STRING, 0}, \
+      {"routing_indicator", "Routing Indicator\n",                   0, .strptr = &uicc->routing_indicatorStr,     .defstrval="0000",                             TYPE_STRING, 0}, \
+      {"protection_scheme", "SUCI Profile Scheme\n",                 0, .iptr = &uicc->protection_scheme,          .defintval=0,                                  TYPE_INT,    0}, \
+      {"home_network_public_key_id", "Home Network Public Key ID\n", 0, .iptr=&uicc->home_network_public_key_id,   .defintval=1,                                  TYPE_INT,    0}, \
+      {"home_network_public_key",    "Home Network Public Key\n",    0, .strptr=&uicc->home_network_public_keyStr, .defstrval=DEFAULT_HOME_NETWORK_PUBLIC_KEY,    TYPE_STRING, 0}, \
   };
 
 static uicc_t** uiccArray=NULL;
@@ -81,6 +67,7 @@ uicc_t *init_uicc(char *sectionName) {
   to_hex(uicc->opcStr,uicc->opc, sizeof(uicc->opc) );
   to_hex(uicc->sqnStr,uicc->sqn, sizeof(uicc->sqn) );
   to_hex(uicc->amfStr,uicc->amf, sizeof(uicc->amf) );
+  to_hex(uicc->home_network_public_keyStr, uicc->home_network_public_key, sizeof(uicc->home_network_public_key));
   return uicc;
 }
 

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 set(XNAP_VERSION 16 2 0)
 make_version(XNAP_cc ${XNAP_VERSION})
 #add_definitions(-DXNAP_VERSION=${XNAP_cc})

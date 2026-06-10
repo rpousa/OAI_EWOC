@@ -1,30 +1,9 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file ngap_gNB_handlers.c
+/*!
  * \brief ngap messages handlers for gNB part
- * \author Yoshio INOUE, Masayuki HARADA
- * \email yoshio.inoue@fujitsu.com,masayuki.harada@fujitsu.com (yoshio.inoue%40fujitsu.com%2cmasayuki.harada%40fujitsu.com)
- * \date 2020
- * \version 0.1
  */
  
 #include "ngap_gNB_handlers.h"
@@ -47,8 +26,10 @@
 #include "ngap_gNB_nnsf.h"
 #include "ngap_gNB_management_procedures.h"
 #include "ngap_gNB_mobility_management.h"
+#include "ngap_gNB_pdu_session_management.h"
 #include "ngap_gNB_nas_procedures.h"
-#include "ngap_gNB_trace.h"
+#include "ngap_gNB_paging.h"
+#include "ngap_gNB_NRPPa_transport_procedures.h"
 #include "ngap_gNB_ue_context.h"
 #include "ngap_messages_types.h"
 #include "oai_asn1.h"
@@ -75,6 +56,8 @@ void ngap_handle_ng_setup_message(ngap_gNB_amf_data_t *amf_desc_p, int sctp_shut
         /* Decrease associated AMF number */
         amf_desc_p->ngap_gNB_instance->ngap_amf_associated_nb --;
       }
+      /* Release UE context and start reconnection process*/
+      ngap_release_ues_for_amf(amf_desc_p);
 
       /* If there are no more associated AMF, inform gNB app */
       if (amf_desc_p->ngap_gNB_instance->ngap_amf_associated_nb == 0) {
@@ -84,9 +67,17 @@ void ngap_handle_ng_setup_message(ngap_gNB_amf_data_t *amf_desc_p, int sctp_shut
       }
     }
   } else {
+    if (amf_desc_p->t_reconnect != -1 && amf_desc_p->ngap_gNB_instance->ngap_amf_associated_nb > 0) {
+      timer_remove(amf_desc_p->t_reconnect);
+      amf_desc_p->t_reconnect = -1;
+      NGAP_INFO("reconnected to AMF\n");
+    }
+
     /* Check that at least one setup message is pending */
-    DevCheck(amf_desc_p->ngap_gNB_instance->ngap_amf_pending_nb > 0, amf_desc_p->ngap_gNB_instance->instance,
-             amf_desc_p->ngap_gNB_instance->ngap_amf_pending_nb, 0);
+    DevCheck(amf_desc_p->ngap_gNB_instance->ngap_amf_pending_nb > 0,
+             amf_desc_p->ngap_gNB_instance->instance,
+             amf_desc_p->ngap_gNB_instance->ngap_amf_pending_nb,
+             0);
 
     if (amf_desc_p->ngap_gNB_instance->ngap_amf_pending_nb > 0) {
       /* Decrease pending messages number */
@@ -699,6 +690,7 @@ static int ngap_gNB_handle_error_indication(sctp_assoc_t assoc_id, uint32_t stre
  *        Decode the NGAP message and transfer to RRC */
 static int ngap_gNB_handle_handover_request(sctp_assoc_t assoc_id, uint32_t stream, NGAP_NGAP_PDU_t *pdu)
 {
+  UNUSED(stream);
   DevAssert(pdu != NULL);
 
   ngap_gNB_amf_data_t *amf_desc_p = ngap_gNB_get_AMF(NULL, assoc_id, 0);
@@ -859,6 +851,7 @@ static int ngap_gNB_handle_initial_context_request(sctp_assoc_t assoc_id, uint32
 
 static int ngap_gNB_handle_ue_context_release_command(sctp_assoc_t assoc_id, uint32_t stream, NGAP_NGAP_PDU_t *pdu)
 {
+  UNUSED(stream);
   ngap_gNB_amf_data_t *amf_desc_p = NULL;
   MessageDef            *message_p        = NULL;
   uint64_t                            amf_ue_ngap_id;
@@ -990,7 +983,10 @@ static int ngap_gNB_handle_pdusession_setup_request(sctp_assoc_t assoc_id, uint3
     // S-NSSAI
     msg->pdusession[i].nssai = decode_ngap_nssai(&item_p->s_NSSAI);
 
-    msg->pdusession[i].nas_pdu = create_byte_array(item_p->pDUSessionNAS_PDU->size, item_p->pDUSessionNAS_PDU->buf);
+    // NAS PDU (optional)
+    if (item_p->pDUSessionNAS_PDU)
+      msg->pdusession[i].nas_pdu = create_byte_array(item_p->pDUSessionNAS_PDU->size, item_p->pDUSessionNAS_PDU->buf);
+
     bool ret = decodePDUSessionResourceSetup(&msg->pdusession[i].pdusessionTransfer, item_p->pDUSessionResourceSetupRequestTransfer);
     if (!ret) {
       NGAP_ERROR("Failed to decode pDUSessionResourceSetupRequestTransfer in NG Setup Request\n");
@@ -1096,21 +1092,28 @@ static int ngap_gNB_handle_handover_cancel_ack(sctp_assoc_t assoc_id, uint32_t s
   return 0;
 }
 
+/**
+ * @brief Handle NGAP Paging message from AMF
+ * @param assoc_id SCTP association ID
+ * @param stream SCTP stream ID (must be 0 for paging per TS 38.412 Clause 7)
+ * @param pdu NGAP PDU containing Paging message
+ * @return 0 on success, -1 on failure */
 static int ngap_gNB_handle_paging(sctp_assoc_t assoc_id, uint32_t stream, NGAP_NGAP_PDU_t *pdu)
 {
   ngap_gNB_amf_data_t   *amf_desc_p        = NULL;
   ngap_gNB_instance_t   *ngap_gNB_instance = NULL;
-  NGAP_Paging_t         *container;
-  NGAP_PagingIEs_t      *ie;
   DevAssert(pdu != NULL);
-  container = &pdu->choice.initiatingMessage->value.choice.Paging;
   // received Paging Message from AMF
   NGAP_DEBUG("[SCTP %u] Received Paging Message From AMF\n",assoc_id);
 
-  /* Paging procedure -> stream != 0 */
-  if (stream == 0) {
-    LOG_W(NGAP,"[SCTP %d] Received Paging procedure on stream (%d)\n",
-          assoc_id, stream);
+  /* Per 3GPP TS 38.412 Clause 7 (Transport layer):
+   * Paging is classified as "non-UE-associated signalling" because:
+   * - UE is in RRC_IDLE or RRC_INACTIVE state
+   * - No active UE context exists in the RAN
+   * - Paging targets UE by 5G-S-TMSI, not by RAN-UE-NGAP-ID
+   * Non-UE-associated signalling MUST use stream 0 (or a reserved stream pair) */
+  if (stream != 0) {
+    LOG_W(NGAP,"[SCTP %d] Received Paging procedure on stream != 0 (expected stream 0 per TS 38.412)\n", assoc_id);
     return -1;
   }
 
@@ -1129,70 +1132,23 @@ static int ngap_gNB_handle_paging(sctp_assoc_t assoc_id, uint32_t stream, NGAP_N
   }
 
    MessageDef *message_p = itti_alloc_new_message(TASK_NGAP, 0, NGAP_PAGING_IND);
-   ngap_paging_ind_t * msg=&NGAP_PAGING_IND(message_p);
-   memset(msg, 0, sizeof(*msg));
+   ngap_paging_ind_t *msg = &NGAP_PAGING_IND(message_p);
 
-   /* convert NGAP_PagingIEs_t to ngap_paging_ind_t */
-   /* id-UEIdentityIndexValue : convert UE Identity Index value */
-   NGAP_FIND_PROTOCOLIE_BY_ID(NGAP_PagingIEs_t, ie, container, NGAP_ProtocolIE_ID_id_UEPagingIdentity, true);
-
-   struct NGAP_FiveG_S_TMSI *fiveG_S_TMSI = ie->value.choice.UEPagingIdentity.choice.fiveG_S_TMSI;
-   OCTET_STRING_TO_INT16(&fiveG_S_TMSI->aMFSetID, msg->ue_paging_identity.s_tmsi.amf_set_id);
-   OCTET_STRING_TO_INT8(&fiveG_S_TMSI->aMFPointer, msg->ue_paging_identity.s_tmsi.amf_pointer);
-   OCTET_STRING_TO_INT32(&fiveG_S_TMSI->fiveG_TMSI, msg->ue_paging_identity.s_tmsi.m_tmsi);
-
-   NGAP_DEBUG("[SCTP %u] Received Paging Identity amf_set_id %d, amf_pointer %d, m_tmsi %d\n",
-              assoc_id,
-              msg->ue_paging_identity.s_tmsi.amf_set_id,
-              msg->ue_paging_identity.s_tmsi.amf_pointer,
-              msg->ue_paging_identity.s_tmsi.m_tmsi);
-
-   msg->paging_drx = NGAP_PAGING_DRX_256;
-   /* id-pagingDRX */
-   NGAP_FIND_PROTOCOLIE_BY_ID(NGAP_PagingIEs_t, ie, container, NGAP_ProtocolIE_ID_id_PagingDRX, false);
-
-   /* optional */
-   if (ie) {
-     msg->paging_drx = ie->value.choice.PagingDRX;
-   } else {
-     msg->paging_drx = NGAP_PAGING_DRX_256;
+   /* Decode NGAP Paging message */
+   if (!decode_ng_paging(msg, pdu)) {
+     NGAP_ERROR("[SCTP %u] Failed to decode NGAP Paging message\n", assoc_id);
+     free_ng_paging(msg);
+     itti_free(TASK_NGAP, message_p);
+     return -1;
    }
 
-  /* id-TAIList */
-  NGAP_FIND_PROTOCOLIE_BY_ID(NGAP_PagingIEs_t, ie, container,
-                             NGAP_ProtocolIE_ID_id_TAIListForPaging, true);
+   /* send message to RRC */
+   itti_send_msg_to_task(TASK_RRC_GNB, ngap_gNB_instance->instance, message_p);
 
-  NGAP_INFO("[SCTP %u] Received Paging taiList For Paging: count %d\n", assoc_id, ie->value.choice.TAIListForPaging.list.count);
-
-  for (int i = 0; i < ie->value.choice.TAIListForPaging.list.count; i++) {
-    NGAP_TAIListForPagingItem_t *item_p;
-    item_p = (NGAP_TAIListForPagingItem_t *)ie->value.choice.TAIListForPaging.list.array[i];
-    TBCD_TO_MCC_MNC(&(item_p->tAI.pLMNIdentity), msg->plmn_identity[i].mcc, msg->plmn_identity[i].mnc, msg->plmn_identity[i].mnc_digit_length);
-    OCTET_STRING_TO_INT16(&(item_p->tAI.tAC), msg->tac[i]);
-    msg->tai_size++;
-    plmn_id_t *p = &msg->plmn_identity[i];
-    LOG_D(NGAP,
-          "[SCTP %u] PLMN in TAI list for Paging: MCC=%03d, MNC=%0*d, TAC=%d\n",
-          assoc_id,
-          p->mcc,
-          p->mnc_digit_length,
-          p->mnc,
-          msg->tac[i]);
-  }
-
-  //paging parameter values
-  NGAP_DEBUG("[SCTP %u] Received Paging parameters: Paging Identity amf_set_id %d amf_pointer %d m_tmsi %d paging_drx %d paging_priority %d\n",assoc_id,
-             msg->ue_paging_identity.s_tmsi.amf_set_id,
-             msg->ue_paging_identity.s_tmsi.amf_pointer,
-             msg->ue_paging_identity.s_tmsi.m_tmsi,
-             msg->paging_drx, msg->paging_priority);
-  /* send message to RRC */
-  itti_send_msg_to_task(TASK_RRC_GNB, ngap_gNB_instance->instance, message_p);
-
-  return 0;
+   return 0;
 }
 
-static bool decodePDUSessionResourceModify(pdusession_transfer_t *out, const OCTET_STRING_t in)
+static bool decodePDUSessionResourceModify(pdusession_mod_req_transfer_t *out, const OCTET_STRING_t in)
 {
   void *decoded = decode_pdusession_transfer(&asn_DEF_NGAP_PDUSessionResourceModifyRequestTransfer, in);
   if (!decoded) {
@@ -1200,23 +1156,69 @@ static bool decodePDUSessionResourceModify(pdusession_transfer_t *out, const OCT
     return false;
   }
 
+  // Reset counters
+  out->nb_qos_to_add_modify = 0;
+  out->nb_qos_to_release = 0;
+
   NGAP_PDUSessionResourceModifyRequestTransfer_t *pdusessionTransfer = (NGAP_PDUSessionResourceModifyRequestTransfer_t *)decoded;
   for (int j = 0; j < pdusessionTransfer->protocolIEs.list.count; j++) {
     NGAP_PDUSessionResourceModifyRequestTransferIEs_t *pdusessionTransfer_ies = pdusessionTransfer->protocolIEs.list.array[j];
+    if (!pdusessionTransfer_ies) {
+      LOG_E(NGAP, "NULL protocol IE at index %d in PDUSessionResourceModifyRequestTransfer\n", j);
+      ASN_STRUCT_FREE(asn_DEF_NGAP_PDUSessionResourceModifyRequestTransfer, pdusessionTransfer);
+      return false;
+    }
     switch (pdusessionTransfer_ies->id) {
         /* optional QosFlowAddOrModifyRequestList */
-      case NGAP_ProtocolIE_ID_id_QosFlowAddOrModifyRequestList:
-        out->nb_qos = pdusessionTransfer_ies->value.choice.QosFlowAddOrModifyRequestList.list.count;
-        for (int i = 0; i < out->nb_qos; i++) {
-          NGAP_QosFlowAddOrModifyRequestItem_t *item =
-              pdusessionTransfer_ies->value.choice.QosFlowAddOrModifyRequestList.list.array[i];
-          out->qos[i] = fill_qos(item->qosFlowIdentifier, item->qosFlowLevelQosParameters);
+      case NGAP_ProtocolIE_ID_id_QosFlowAddOrModifyRequestList: {
+        NGAP_QosFlowAddOrModifyRequestList_t *addmod = &pdusessionTransfer_ies->value.choice.QosFlowAddOrModifyRequestList;
+        out->nb_qos_to_add_modify = addmod->list.count;
+        if (out->nb_qos_to_add_modify > MAX_QOS_FLOWS) {
+          LOG_E(NGAP, "QosFlowAddOrModifyRequestList count %d exceeds MAX_QOS_FLOWS %d\n",
+                out->nb_qos_to_add_modify, MAX_QOS_FLOWS);
+          ASN_STRUCT_FREE(asn_DEF_NGAP_PDUSessionResourceModifyRequestTransfer, pdusessionTransfer);
+          return false;
+        }
+        for (int i = 0; i < out->nb_qos_to_add_modify; i++) {
+          NGAP_QosFlowAddOrModifyRequestItem_t *item = addmod->list.array[i];
+          if (!item) {
+            LOG_E(NGAP, "NULL QosFlowAddOrModifyRequestItem at index %d\n", i);
+            ASN_STRUCT_FREE(asn_DEF_NGAP_PDUSessionResourceModifyRequestTransfer, pdusessionTransfer);
+            return false;
+          }
+          if (!item->qosFlowLevelQosParameters) {
+            LOG_E(NGAP, "NULL qosFlowLevelQosParameters for QFI %ld\n", item->qosFlowIdentifier);
+            ASN_STRUCT_FREE(asn_DEF_NGAP_PDUSessionResourceModifyRequestTransfer, pdusessionTransfer);
+            return false;
+          }
+          out->qos_to_add_modify[i] = fill_qos(item->qosFlowIdentifier, item->qosFlowLevelQosParameters);
         }
         break;
-
+      }
+      case NGAP_ProtocolIE_ID_id_QosFlowToReleaseList: {
+        NGAP_QosFlowListWithCause_t *list = &pdusessionTransfer_ies->value.choice.QosFlowListWithCause;
+        out->nb_qos_to_release = list->list.count;
+        if (out->nb_qos_to_release > MAX_QOS_FLOWS) {
+          LOG_E(NGAP, "QosFlowToReleaseList count %d exceeds MAX_QOS_FLOWS %d\n",
+                out->nb_qos_to_release, MAX_QOS_FLOWS);
+          ASN_STRUCT_FREE(asn_DEF_NGAP_PDUSessionResourceModifyRequestTransfer, pdusessionTransfer);
+          return false;
+        }
+        for (int i = 0; i < out->nb_qos_to_release; i++) {
+          NGAP_QosFlowWithCauseItem_t *item = list->list.array[i];
+          if (!item) {
+            LOG_E(NGAP, "NULL QosFlowWithCauseItem at index %d\n", i);
+            ASN_STRUCT_FREE(asn_DEF_NGAP_PDUSessionResourceModifyRequestTransfer, pdusessionTransfer);
+            return false;
+          }
+          out->qos_to_release[i].qfi = item->qosFlowIdentifier;
+          out->qos_to_release[i].cause = decode_ngap_cause(&item->cause);
+        }
+        break;
+      }
       default:
-        LOG_E(NR_RRC, "Unhandled optional IE %ld\n", pdusessionTransfer_ies->id);
-        return false;
+        LOG_W(NGAP, "Unhandled optional IE %ld\n", pdusessionTransfer_ies->id);
+        continue;
     }
   }
   ASN_STRUCT_FREE(asn_DEF_NGAP_PDUSessionResourceModifyRequestTransfer, pdusessionTransfer);
@@ -1306,7 +1308,8 @@ static int ngap_gNB_handle_pdusession_modify_request(sctp_assoc_t assoc_id, uint
     if (item_p->nAS_PDU != NULL && item_p->nAS_PDU->size > 0) {
       msg->pdusession[i].nas_pdu = create_byte_array(item_p->nAS_PDU->size, item_p->nAS_PDU->buf);
       if (!decodePDUSessionResourceModify(&msg->pdusession[i].pdusessionTransfer, item_p->pDUSessionResourceModifyRequestTransfer)) {
-        NGAP_ERROR("Failed to decode pDUSessionResourceModifyRequestTransfer\n");
+        NGAP_ERROR("Failed to decode pDUSessionResourceModifyRequestTransfer for PDU session %lu\n", item_p->pDUSessionID);
+        itti_free(TASK_NGAP, message_p);
         return -1;
       }
     } else {
@@ -1416,24 +1419,6 @@ static int ngap_gNB_handle_pdusession_release_command(sctp_assoc_t assoc_id, uin
   return 0;
 }
 
-static int ngap_gNB_handle_ng_path_switch_request_ack(sctp_assoc_t assoc_id, uint32_t stream, NGAP_NGAP_PDU_t *pdu)
-{
-  // TODO
-  return 0;
-}
-
-static int ngap_gNB_handle_ng_path_switch_request_failure(sctp_assoc_t assoc_id, uint32_t stream, NGAP_NGAP_PDU_t *pdu)
-{
-  // TODO
-  return 0;
-}
-
-static int ngap_gNB_handle_ng_ENDC_pdusession_modification_confirm(sctp_assoc_t assoc_id, uint32_t stream, NGAP_NGAP_PDU_t *pdu)
-{
-  LOG_W(NGAP, "Implementation of NGAP Pdusession Modification confirm handler is pending...\n");
-	return 0;
-}
-
 static int ngap_gNB_handle_dl_ran_status_transfer(sctp_assoc_t assoc_id, uint32_t stream, NGAP_NGAP_PDU_t *pdu)
 {
   DevAssert(pdu != NULL);
@@ -1528,17 +1513,19 @@ static int ngap_gNB_handle_dl_ran_status_transfer(sctp_assoc_t assoc_id, uint32_
   return 0;
 }
 
+typedef int (*ngap_message_decoded_callback)(sctp_assoc_t assoc_id, uint32_t stream, NGAP_NGAP_PDU_t *pdu);
+
 /* Handlers matrix. Only gNB related procedure present here */
 const ngap_message_decoded_callback ngap_messages_callback[][3] = {
     {0, 0, 0}, /* AMFConfigurationUpdate */
     {0, 0, 0}, /* AMFStatusIndication */
     {0, 0, 0}, /* CellTrafficTrace */
-    {ngap_gNB_handle_deactivate_trace, 0, 0}, /* DeactivateTrace */
+    {0, 0, 0}, /* DeactivateTrace */
     {ngap_gNB_handle_nas_downlink, 0, 0}, /* DownlinkNASTransport */
-    {0, 0, 0}, /* DownlinkNonUEAssociatedNRPPaTransport */
+    {ngap_gNB_handle_downlink_non_ue_associated_nrppa_transport, 0, 0}, /* DownlinkNonUEAssociatedNRPPaTransport */
     {0, 0, 0}, /* DownlinkRANConfigurationTransfer */
     {ngap_gNB_handle_dl_ran_status_transfer, 0, 0}, /* DownlinkRANStatusTransfer */
-    {0, 0, 0}, /* DownlinkUEAssociatedNRPPaTransport */
+    {ngap_gNB_handle_downlink_ue_associated_nrppa_transport, 0, 0}, /* DownlinkUEAssociatedNRPPaTransport */
     {ngap_gNB_handle_error_indication, 0, 0}, /* ErrorIndication */
     {0, ngap_gNB_handle_handover_cancel_ack, 0}, /* HandoverCancel */
     {0, 0, 0}, /* HandoverNotification */
@@ -1555,9 +1542,9 @@ const ngap_message_decoded_callback ngap_messages_callback[][3] = {
     {0, 0, 0}, /* OverloadStart */
     {0, 0, 0}, /* OverloadStop */
     {ngap_gNB_handle_paging, 0, 0}, /* Paging */
-    {0, ngap_gNB_handle_ng_path_switch_request_ack, ngap_gNB_handle_ng_path_switch_request_failure}, /* PathSwitchRequest */
+    {0, 0, 0}, /* PathSwitchRequest */
     {ngap_gNB_handle_pdusession_modify_request, 0, 0}, /* PDUSessionResourceModify */
-    {0, ngap_gNB_handle_ng_ENDC_pdusession_modification_confirm, 0}, /* PDUSessionResourceModifyIndication */
+    {0, 0, 0}, /* PDUSessionResourceModifyIndication */
     {ngap_gNB_handle_pdusession_release_command, 0, 0}, /* PDUSessionResourceRelease */
     {ngap_gNB_handle_pdusession_setup_request, 0, 0}, /* PDUSessionResourceSetup */
     {0, 0, 0}, /* PDUSessionResourceNotify */
@@ -1569,7 +1556,7 @@ const ngap_message_decoded_callback ngap_messages_callback[][3] = {
     {0, 0, 0}, /* RerouteNASRequest */
     {0, 0, 0}, /* RRCInactiveTransitionReport */
     {0, 0, 0}, /* TraceFailureIndication */
-    {ngap_gNB_handle_trace_start, 0, 0}, /* TraceStart */
+    {0, 0, 0}, /* TraceStart */
     {0, 0, 0}, /* UEContextModification */
     {ngap_gNB_handle_ue_context_release_command, 0, 0}, /* UEContextRelease */
     {0, 0, 0}, /* UEContextReleaseRequest */
@@ -1599,7 +1586,7 @@ int ngap_gNB_handle_message(sctp_assoc_t assoc_id, int32_t stream, const uint8_t
   }
 
   /* Checking procedure Code and direction of message */
-  if (pdu.choice.initiatingMessage->procedureCode >= sizeof(ngap_messages_callback) / (3 * sizeof(ngap_message_decoded_callback)) || (pdu.present > NGAP_NGAP_PDU_PR_unsuccessfulOutcome)) {
+  if (pdu.choice.initiatingMessage->procedureCode >= (long)(sizeof(ngap_messages_callback) / (3 * sizeof(ngap_message_decoded_callback))) || (pdu.present > NGAP_NGAP_PDU_PR_unsuccessfulOutcome)) {
     NGAP_ERROR("[SCTP %u] Either procedureCode %ld or direction %d exceed expected\n", assoc_id, pdu.choice.initiatingMessage->procedureCode, pdu.present);
     ASN_STRUCT_FREE_CONTENTS_ONLY(asn_DEF_NGAP_NGAP_PDU, &pdu);
     return -1;

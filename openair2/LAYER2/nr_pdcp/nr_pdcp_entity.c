@@ -1,22 +1,5 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
 #include "nr_pdcp_entity.h"
@@ -303,7 +286,7 @@ static int nr_pdcp_entity_process_sdu(nr_pdcp_entity_t *entity,
   return header_size + size + integrity_size;
 }
 
-static bool nr_pdcp_entity_check_integrity(struct nr_pdcp_entity_t *entity,
+static bool nr_pdcp_entity_check_integrity(nr_pdcp_entity_t *entity,
                                            const uint8_t *buffer,
                                            int buffer_size,
                                            const nr_pdcp_integrity_data_t *msg_integrity)
@@ -329,8 +312,7 @@ static bool nr_pdcp_entity_check_integrity(struct nr_pdcp_entity_t *entity,
 }
 
 /* may be called several times, take care to clean previous settings */
-static void nr_pdcp_entity_set_security(struct nr_pdcp_entity_t *entity,
-                                        const nr_pdcp_entity_security_keys_and_algos_t *parameters)
+static void nr_pdcp_entity_set_security(nr_pdcp_entity_t *entity, const nr_pdcp_entity_security_keys_and_algos_t *parameters)
 {
   if (parameters->integrity_algorithm != -1) {
     entity->security_keys_and_algos.integrity_algorithm = parameters->integrity_algorithm;
@@ -453,7 +435,7 @@ static void check_t_reordering(nr_pdcp_entity_t *entity)
   }
 }
 
-static void nr_pdcp_entity_set_time(struct nr_pdcp_entity_t *entity, uint64_t now)
+static void nr_pdcp_entity_set_time(nr_pdcp_entity_t *entity, uint64_t now)
 {
   entity->t_current = now;
 
@@ -697,12 +679,13 @@ nr_pdcp_entity_t *new_nr_pdcp_entity(
     int pdusession_id,
     bool has_sdap_rx,
     bool has_sdap_tx,
-    void (*deliver_sdu)(void *deliver_sdu_data, struct nr_pdcp_entity_t *entity,
-                        char *buf, int size,
+    void (*deliver_sdu)(void *deliver_sdu_data,
+                        nr_pdcp_entity_t *entity,
+                        char *buf,
+                        int size,
                         const nr_pdcp_integrity_data_t *msg_integrity),
     void *deliver_sdu_data,
-    void (*deliver_pdu)(void *deliver_pdu_data, ue_id_t ue_id, int rb_id,
-                        char *buf, int size, int sdu_id),
+    void (*deliver_pdu)(void *deliver_pdu_data, ue_id_t ue_id, int rb_id, char *buf, int size, int sdu_id),
     void *deliver_pdu_data,
     int sn_size,
     int t_reordering,

@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 # Overview
 
 This implements a shared memory realtime and near-realtime radio interface.
@@ -8,7 +10,8 @@ interface.
 
 The `vrtsim` architecture follows a server-client model:
 
-- **Server (gNB)**: On startup, the server writes a file, default location is
+- **Server (gNB)**: On startup, the server writes connection information to a
+  file as provided in `--vrtsim.descriptor`, default location is
   `/tmp/vrtsim_connection`. This file contains information required by the client
   to establish communication.
 - **Client (UE)**: The client reads this file from, verifies its contents, and uses
@@ -30,6 +33,13 @@ On the UE and gNB: use `device.name vrtsim` command line argument.
 Additionally on gNB use `vrtsim.role server` and optionally
 `vrtsim.timescale <timescale>` to set the timescale. Timescale 1.0
 is the default and means realtime.
+
+To use `vrtsim` in containers, you have to enable inter-process communication,
+and mount the directory of the connection information in a shared volume
+between server and clients. For instance, in docker and default
+`vrtsim.connection_descriptor`, set `ipc: host` and share the server's and
+client's `/tmp` directory through a volume. For an example, refer to
+[this docker-compose file](../../ci-scripts/yaml_files/5g_vrtsim_cirdb/docker-compose.yaml).
 
 Channel modelling can be enabled by adding `vrtsim.chanmod 1` to the
 command line and should work the same as channel modelling in rfsimulator,

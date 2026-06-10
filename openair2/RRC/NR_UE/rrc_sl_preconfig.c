@@ -1,22 +1,5 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
 
@@ -438,9 +421,7 @@ int configure_NR_SL_Preconfig(NR_UE_RRC_INST_t *rrc,int sync_source)
 }
 
 /*decode SL-BCH (SL-MIB) message*/
-static int8_t nr_sl_rrc_ue_decode_SL_MIB(const uint8_t gNB_index,
-                                         uint8_t *const bufferP,
-                                         const uint8_t buffer_len)
+static int8_t nr_sl_rrc_ue_decode_SL_MIB(uint8_t *const bufferP, const uint8_t buffer_len)
 {
   NR_MasterInformationBlockSidelink_t *sl_mib = NULL;
 
@@ -473,15 +454,12 @@ static int8_t nr_sl_rrc_ue_decode_SL_MIB(const uint8_t gNB_index,
 
 
 void nr_rrc_ue_decode_NR_SBCCH_SL_BCH_Message(NR_UE_RRC_INST_t *rrc,
-                                              const uint8_t gNB_index,
-                                              const frame_t frame,
-                                              const int slot,
                                               uint8_t* pduP,
                                               const sdu_size_t pdu_len,
                                               const uint16_t rx_slss_id)
 {
 
-  nr_sl_rrc_ue_decode_SL_MIB(gNB_index, (uint8_t*)pduP, pdu_len);
+  nr_sl_rrc_ue_decode_SL_MIB((uint8_t*)pduP, pdu_len);
 
   DevAssert(rrc->sl_preconfig);
 

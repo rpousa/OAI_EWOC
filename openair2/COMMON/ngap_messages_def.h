@@ -1,30 +1,9 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
 /*
  * ngap_messages_def.h
- *
- *  Created on: 2020
- *      Author: Yoshio INOUE, Masayuki HARADA
- *      Email: yoshio.inoue@fujitsu.com,masayuki.harada@fujitsu.com (yoshio.inoue%40fujitsu.com%2cmasayuki.harada%40fujitsu.com)
  */
 
 /* Messages for NGAP logging */
@@ -47,8 +26,6 @@ MESSAGE_DEF(NGAP_PAGING_LOG    , MESSAGE_PRIORITY_MED, IttiMsgText              
 MESSAGE_DEF(NGAP_PDUSESSION_RELEASE_REQUEST_LOG   , MESSAGE_PRIORITY_MED, IttiMsgText                      , ngap_pdusession_release_request_log)
 MESSAGE_DEF(NGAP_PDUSESSION_RELEASE_RESPONSE_LOG  , MESSAGE_PRIORITY_MED, IttiMsgText                      , ngap_pdusession_release_response_log)
 MESSAGE_DEF(NGAP_ERROR_INDICATION_LOG        , MESSAGE_PRIORITY_MED, IttiMsgText                      , ngap_error_indication_log)
-MESSAGE_DEF(NGAP_PATH_SWITCH_REQ_LOG         , MESSAGE_PRIORITY_MED, IttiMsgText                      , ngap_path_switch_req_log)
-MESSAGE_DEF(NGAP_PATH_SWITCH_REQ_ACK_LOG     , MESSAGE_PRIORITY_MED, IttiMsgText                      , ngap_path_switch_req_ack_log)
 
 /* gNB application layer -> NGAP messages */
 MESSAGE_DEF(NGAP_REGISTER_GNB_REQ          , MESSAGE_PRIORITY_MED, ngap_register_gnb_req_t          , ngap_register_gnb_req)
@@ -65,8 +42,6 @@ MESSAGE_DEF(NGAP_INITIAL_CONTEXT_SETUP_RESP, MESSAGE_PRIORITY_MED, ngap_initial_
 MESSAGE_DEF(NGAP_INITIAL_CONTEXT_SETUP_FAIL, MESSAGE_PRIORITY_MED, ngap_initial_context_setup_fail_t, ngap_initial_context_setup_fail)
 MESSAGE_DEF(NGAP_NAS_NON_DELIVERY_IND      , MESSAGE_PRIORITY_MED, ngap_nas_non_delivery_ind_t      , ngap_nas_non_delivery_ind)
 MESSAGE_DEF(NGAP_UE_CONTEXT_RELEASE_COMPLETE, MESSAGE_PRIORITY_MED, ngap_ue_release_complete_t      , ngap_ue_release_complete)
-MESSAGE_DEF(NGAP_UE_CTXT_MODIFICATION_RESP , MESSAGE_PRIORITY_MED, ngap_ue_ctxt_modification_resp_t , ngap_ue_ctxt_modification_resp)
-MESSAGE_DEF(NGAP_UE_CTXT_MODIFICATION_FAIL , MESSAGE_PRIORITY_MED, ngap_ue_ctxt_modification_fail_t , ngap_ue_ctxt_modification_fail)
 MESSAGE_DEF(NGAP_PDUSESSION_SETUP_RESP          , MESSAGE_PRIORITY_MED, ngap_pdusession_setup_resp_t          , ngap_pdusession_setup_resp)
 MESSAGE_DEF(NGAP_PDUSESSION_MODIFY_RESP          , MESSAGE_PRIORITY_MED, ngap_pdusession_modify_resp_t          , ngap_pdusession_modify_resp)
 MESSAGE_DEF(NGAP_PDUSESSION_RELEASE_RESPONSE    , MESSAGE_PRIORITY_MED, ngap_pdusession_release_resp_t        , ngap_pdusession_release_resp)
@@ -77,11 +52,11 @@ MESSAGE_DEF(NGAP_HANDOVER_NOTIFY, MESSAGE_PRIORITY_MED, ngap_handover_notify_t, 
 MESSAGE_DEF(NGAP_HANDOVER_CANCEL, MESSAGE_PRIORITY_MED, ngap_handover_cancel_t, ngap_handover_cancel)
 MESSAGE_DEF(NGAP_UL_RAN_STATUS_TRANSFER, MESSAGE_PRIORITY_MED, ngap_ran_status_transfer_t, ngap_ul_ran_status_transfer)
 MESSAGE_DEF(NGAP_DL_RAN_STATUS_TRANSFER, MESSAGE_PRIORITY_MED, ngap_ran_status_transfer_t, ngap_dl_ran_status_transfer)
+MESSAGE_DEF(NGAP_RECONNECT_TIMER, MESSAGE_PRIORITY_MED, IttiMsgText, ngap_gNB_amf_data)
 
 /* NGAP -> RRC messages */
 MESSAGE_DEF(NGAP_DOWNLINK_NAS              , MESSAGE_PRIORITY_MED, ngap_downlink_nas_t              , ngap_downlink_nas )
 MESSAGE_DEF(NGAP_INITIAL_CONTEXT_SETUP_REQ , MESSAGE_PRIORITY_MED, ngap_initial_context_setup_req_t , ngap_initial_context_setup_req )
-MESSAGE_DEF(NGAP_UE_CTXT_MODIFICATION_REQ  , MESSAGE_PRIORITY_MED, ngap_ue_ctxt_modification_req_t  , ngap_ue_ctxt_modification_req)
 MESSAGE_DEF(NGAP_PAGING_IND                , MESSAGE_PRIORITY_MED, ngap_paging_ind_t                , ngap_paging_ind )
 MESSAGE_DEF(NGAP_PDUSESSION_SETUP_REQ            , MESSAGE_PRIORITY_MED, ngap_pdusession_setup_req_t        , ngap_pdusession_setup_req )
 MESSAGE_DEF(NGAP_PDUSESSION_MODIFY_REQ           , MESSAGE_PRIORITY_MED, ngap_pdusession_modify_req_t        , ngap_pdusession_modify_req )
@@ -93,3 +68,18 @@ MESSAGE_DEF(NGAP_HANDOVER_CANCEL_ACK, MESSAGE_PRIORITY_MED, ngap_handover_cancel
 
 /* NGAP <-> RRC messages (can be initiated either by MME or gNB) */
 MESSAGE_DEF(NGAP_UE_CONTEXT_RELEASE_REQ    , MESSAGE_PRIORITY_MED, ngap_ue_release_req_t            , ngap_ue_release_req)
+
+/* NGAP -> NRPPA messages*/
+MESSAGE_DEF(NGAP_DOWNLINKUEASSOCIATEDNRPPA,
+            MESSAGE_PRIORITY_MED,
+            ngap_downlink_ue_associated_nrppa_t,
+            ngap_downlink_ue_associated_nrppa)
+MESSAGE_DEF(NGAP_DOWNLINKNONUEASSOCIATEDNRPPA,
+            MESSAGE_PRIORITY_MED,
+            ngap_downlink_non_ue_associated_nrppa_t,
+            ngap_downlink_non_ue_associated_nrppa)
+MESSAGE_DEF(NGAP_UPLINKUEASSOCIATEDNRPPA, MESSAGE_PRIORITY_MED, ngap_uplink_ue_associated_nrppa_t, ngap_uplink_ue_associated_nrppa)
+MESSAGE_DEF(NGAP_UPLINKNONUEASSOCIATEDNRPPA,
+            MESSAGE_PRIORITY_MED,
+            ngap_uplink_non_ue_associated_nrppa_t,
+            ngap_uplink_non_ue_associated_nrppa)

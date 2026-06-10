@@ -1,10 +1,6 @@
 /*
-                                nfapi_nr_interface.h
-                             -------------------
-  AUTHOR  : Raymond Knopp, Guy de Souza, WEI-TAI CHEN
-  COMPANY : EURECOM, NTUST
-  EMAIL   : Lionel.Gauthier@eurecom.fr, desouza@eurecom.fr, kroempa@gmail.com
-*/
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
+ */
 
 #ifndef _NFAPI_NR_INTERFACE_H_
 #define _NFAPI_NR_INTERFACE_H_
@@ -31,6 +27,7 @@
 #define NFAPI_NR_NFAPI_TIMING_INFO_PERIOD_TAG 0x0120
 #define NFAPI_NR_FAPI_NUM_BEAMS_PERIOD_VENDOR_EXTENSION_TAG 0xA000
 #define NFAPI_NR_FAPI_ANALOG_BF_VENDOR_EXTENSION_TAG 0xA001
+#define NFAPI_NR_FAPI_SSB_CASE_VENDOR_EXTENSION_TAG 0xA002
 
 typedef struct {
   uint16_t phy_id;

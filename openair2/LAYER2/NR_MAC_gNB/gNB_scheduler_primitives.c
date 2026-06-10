@@ -1,32 +1,9 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file gNB_scheduler_primitives.c
+/*!
  * \brief primitives used by gNB for BCH, RACH, ULSCH, DLSCH scheduling
- * \author  Raymond Knopp, Guy De Souza
- * \date 2018, 2019
- * \email: knopp@eurecom.fr, desouza@eurecom.fr
- * \version 1.0
- * \company Eurecom
- * @ingroup _mac
  */
 
 #include <softmodem-common.h>
@@ -34,22 +11,17 @@
 
 #include "NR_MAC_gNB/nr_mac_gNB.h"
 #include "NR_MAC_gNB/mac_proto.h"
+#include "common/utils/bits.h"
 #include "common/utils/LOG/log.h"
-#include "common/utils/LOG/vcd_signal_dumper.h"
-#include "common/utils/nr/nr_common.h"
 #include "UTIL/OPT/opt.h"
 
 #include "openair2/LAYER2/nr_rlc/nr_rlc_oai_api.h"
-#include "F1AP_CauseRadioNetwork.h"
-
 #include "intertask_interface.h"
 #include "openair2/F1AP/f1ap_ids.h"
 #include "F1AP_CauseRadioNetwork.h"
 
 #include "T.h"
-
 #include "uper_encoder.h"
-#include "uper_decoder.h"
 
 #include "SIMULATION/TOOLS/sim.h" // for taus
 
@@ -120,10 +92,14 @@ static const uint16_t cqi_table3[16][2] = {{0, 0},
                                            {6, 6660},
                                            {6, 7720}};
 
-static void determine_aggregation_level_search_order(int agg_level_search_order[NUM_PDCCH_AGG_LEVELS],
-                                                     float pdcch_cl_adjust);
-
-static int nr_mac_interrupt_ue_transmission(gNB_MAC_INST *mac, NR_UE_info_t *UE, int slots, int slots_per_frame);
+int get_ssbidx_from_beam(gNB_MAC_INST *mac, int beam_idx)
+{
+  for (int i = 0; i < MAX_NUM_OF_SSB; i++)
+    if (beam_idx == mac->beam_index_list[i])
+      return i;
+  AssertFatal(false, "beam_idx %d not found\n", beam_idx);
+  return 0;
+}
 
 uint8_t get_dl_nrOfLayers(const NR_UE_sched_ctrl_t *sched_ctrl, const nr_dci_format_t dci_format)
 {
@@ -133,14 +109,6 @@ uint8_t get_dl_nrOfLayers(const NR_UE_sched_ctrl_t *sched_ctrl, const nr_dci_for
     return 1;
   else
     return sched_ctrl->CSI_report.cri_ri_li_pmi_cqi_report.ri + 1;
-}
-
-int get_ul_nrOfLayers(const NR_UE_sched_ctrl_t *sched_ctrl, const nr_dci_format_t dci_format)
-{
-  if(dci_format == NR_UL_DCI_FORMAT_0_0)
-    return 1;
-  else
-    return sched_ctrl->srs_feedback.ul_ri + 1;
 }
 
 // Table 5.2.2.2.1-3 and Table 5.2.2.2.1-4 in 38.214
@@ -585,6 +553,21 @@ int find_pdcch_candidate(const gNB_MAC_INST *mac,
   return -1;
 }
 
+/// @brief Orders PDCCH aggregation levels so that we first check desired aggregation level according to
+///        pdcch_cl_adjust
+/// @param agg_level_search_order in/out 5-element array of aggregation levels from 0 to 4
+/// @param pdcch_cl_adjust value from 0 to 1 indication channel impariments (0 - good channel, 1 - bad channel)
+static void determine_aggregation_level_search_order(int agg_level_search_order[NUM_PDCCH_AGG_LEVELS], float pdcch_cl_adjust)
+{
+  int desired_agg_level_index = round(4 * pdcch_cl_adjust);
+  int agg_level_search_index = 0;
+  for (int i = desired_agg_level_index; i < NUM_PDCCH_AGG_LEVELS; i++) {
+    agg_level_search_order[agg_level_search_index++] = i;
+  }
+  for (int i = desired_agg_level_index - 1; i >= 0; i--) {
+    agg_level_search_order[agg_level_search_index++] = i;
+  }
+}
 
 int get_cce_index(const gNB_MAC_INST *nrmac,
                   const int CC_id,
@@ -711,6 +694,73 @@ bool nr_find_nb_rb(uint16_t Qm,
   return *tbs >= bytes && *nb_rb <= nb_rb_max;
 }
 
+// Find the largest contiguous block of free RBs in the VRB map.
+// Returns the block size, or 0 if no free RB is found. out_start is set to the
+// first RB of the largest block when the returned size is nonzero.
+int find_largest_free_block(const uint16_t *vrb_map, uint16_t slbitmap, int bwp_start, int bwp_size, int *out_start)
+{
+  int best_start = 0, best_len = 0;
+  int cur_start = 0, cur_len = 0;
+  for (int rb = 0; rb < bwp_size; rb++) {
+    if (!(vrb_map[rb + bwp_start] & slbitmap)) {
+      if (cur_len == 0)
+        cur_start = rb;
+      cur_len++;
+    } else {
+      if (cur_len > best_len) {
+        best_start = cur_start;
+        best_len = cur_len;
+      }
+      cur_len = 0;
+    }
+  }
+  if (cur_len > best_len) {
+    best_start = cur_start;
+    best_len = cur_len;
+  }
+  *out_start = best_start;
+  return best_len;
+}
+
+bool get_rb_alloc(int rbSize_min,
+                  int rbSize_max,
+                  int bwpStart,
+                  int bwpSize,
+                  const uint16_t *vrb_map,
+                  uint16_t sym_mask,
+                  int *rbStart_ptr,
+                  int *rbSize_ptr)
+{
+  const uint16_t *bwp_map = &vrb_map[bwpStart];
+  int rbStart = 0;
+  while (rbStart + rbSize_min <= bwpSize) {
+    // 1. Find the first free RB
+    if ((bwp_map[rbStart] & sym_mask) != 0) {
+      rbStart++;
+      continue;
+    }
+
+    // 2. Measure contiguous block
+    int current_limit = min(rbStart + rbSize_max, bwpSize);
+    int rbEnd = rbStart + 1;
+    while (rbEnd < current_limit && (bwp_map[rbEnd] & sym_mask) == 0) {
+      rbEnd++;
+    }
+    int rbSize = rbEnd - rbStart;
+
+    // 3. Validate
+    if (rbSize >= rbSize_min) {
+      *rbStart_ptr = rbStart;
+      *rbSize_ptr = rbSize;
+      return true;
+    }
+
+    // Skip the block we just checked + the occupied one that stopped us
+    rbStart = rbEnd + 1;
+  }
+  return false;
+}
+
 const NR_DMRS_UplinkConfig_t *get_DMRS_UplinkConfig(const NR_PUSCH_Config_t *pusch_Config, const NR_tda_info_t *tda_info)
 {
   if (pusch_Config == NULL)
@@ -781,47 +831,51 @@ NR_pusch_dmrs_t get_ul_dmrs_params(const NR_ServingCellConfigCommon_t *scc,
 
 #define BLER_UPDATE_FRAME 10
 #define BLER_FILTER 0.9f
-int get_mcs_from_bler(const NR_bler_options_t *bler_options,
-                      const NR_mac_dir_stats_t *stats,
-                      NR_bler_stats_t *bler_stats,
-                      int max_mcs,
-                      frame_t frame)
+int nr_adapt_mcs_from_bler(int current_mcs, int min_mcs, int max_mcs, float bler, float bler_lower, float bler_upper, int num_sched)
+{
+  int mcs = current_mcs;
+  if (bler < bler_lower && mcs < max_mcs && num_sched > 3)
+    mcs++;
+  else if (bler > bler_upper || num_sched <= 3) // above threshold or no activity
+    mcs--;
+  return max(min_mcs, min(mcs, max_mcs));
+}
+
+bool update_bler_stats(const NR_bler_options_t *bler_options,
+                       const NR_mac_dir_stats_t *stats,
+                       NR_bler_stats_t *bler_stats,
+                       frame_t frame)
 {
   int diff = frame - bler_stats->last_frame;
   if (diff < 0) // wrap around
     diff += 1024;
 
-  max_mcs = min(max_mcs, bler_options->max_mcs);
-  const uint8_t old_mcs = min(bler_stats->mcs, max_mcs);
   if (diff < BLER_UPDATE_FRAME)
-    return old_mcs; // no update
+    return false;
 
-  // last update is longer than x frames ago
   const int num_dl_sched = (int)(stats->rounds[0] - bler_stats->rounds[0]);
   const int num_dl_retx = (int)(stats->rounds[1] - bler_stats->rounds[1]);
-  const float bler_window = num_dl_sched > 0 ? (float) num_dl_retx / num_dl_sched : bler_stats->bler;
+  const float bler_window = num_dl_sched > 0 ? (float)num_dl_retx / num_dl_sched : bler_stats->bler;
   bler_stats->bler = BLER_FILTER * bler_stats->bler + (1 - BLER_FILTER) * bler_window;
 
-  int new_mcs = old_mcs;
-  if (bler_stats->bler < bler_options->lower && old_mcs < max_mcs && num_dl_sched > 3)
-    new_mcs += 1;
-  else if (bler_stats->bler > bler_options->upper || num_dl_sched <= 3) // above threshold or no activity
-    new_mcs -= 1;
-  // else we are within threshold boundaries
-
-  new_mcs = max(new_mcs, bler_options->min_mcs);
   bler_stats->last_frame = frame;
-  bler_stats->mcs = new_mcs;
+  bler_stats->last_num_sched = num_dl_sched;
   memcpy(bler_stats->rounds, stats->rounds, sizeof(stats->rounds));
-  LOG_D(MAC, "frame %4d MCS %d -> %d (num_dl_sched %d, num_dl_retx %d, BLER wnd %.3f avg %.6f)\n",
-        frame, old_mcs, new_mcs, num_dl_sched, num_dl_retx, bler_window, bler_stats->bler);
-  return new_mcs;
+  LOG_D(MAC,
+        "frame %4d BLER update (num_sched %d, num_retx %d, BLER wnd %.3f avg %.6f)\n",
+        frame,
+        num_dl_sched,
+        num_dl_retx,
+        bler_window,
+        bler_stats->bler);
+  return true;
 }
 
 nfapi_nr_dl_dci_pdu_t *prepare_dci_pdu(nfapi_nr_dl_tti_pdcch_pdu_rel15_t *pdcch_pdu,
                                        const NR_ServingCellConfigCommon_t *scc,
                                        const NR_SearchSpace_t *ss,
                                        const NR_ControlResourceSet_t *coreset,
+                                       const uint16_t *spatial_stream_idx,
                                        int aggregation_level,
                                        int cce_index,
                                        int beam_index,
@@ -848,8 +902,18 @@ nfapi_nr_dl_dci_pdu_t *prepare_dci_pdu(nfapi_nr_dl_tti_pdcch_pdu_rel15_t *pdcch_
   dci_pdu->powerControlOffsetSS = 1;
   dci_pdu->precodingAndBeamforming.num_prgs = 1;
   dci_pdu->precodingAndBeamforming.prg_size = N_rb;
-  dci_pdu->precodingAndBeamforming.dig_bf_interfaces = 1;
   dci_pdu->precodingAndBeamforming.prgs_list[0].pm_idx = 0;
+
+  // Spatial stream indexing for MU-MIMO
+  const int num_ant_ports_per_dci = 1; // Only one stream per DCI for now
+  pdcch_pdu->param_v4.numSpatialStreams = (pdcch_pdu->numDlDci + 1 /*count this dci too*/) * num_ant_ports_per_dci;
+  for (uint_fast16_t i = 0; i < num_ant_ports_per_dci; i++) {
+    pdcch_pdu->param_v4.dci_spatialStreamIndices[pdcch_pdu->numDlDci * num_ant_ports_per_dci + i].dci_index = pdcch_pdu->numDlDci;
+    // Map the spatial stream index from the corresponding PDSCH signal
+    pdcch_pdu->param_v4.dci_spatialStreamIndices[pdcch_pdu->numDlDci * num_ant_ports_per_dci + i].spatial_stream_index =
+        spatial_stream_idx[i];
+  }
+  dci_pdu->precodingAndBeamforming.dig_bf_interfaces = num_ant_ports_per_dci;
   dci_pdu->precodingAndBeamforming.prgs_list[0].dig_bf_interface_list[0].beam_idx = beam_index;
   return dci_pdu;
 }
@@ -861,6 +925,7 @@ dci_pdu_rel15_t prepare_dci_dl_payload(const gNB_MAC_INST *gNB_mac,
                                        const nfapi_nr_dl_tti_pdsch_pdu_rel15_t *pdsch_pdu,
                                        const NR_sched_pdsch_t *sched_pdsch,
                                        const NR_sched_pucch_t *pucch,
+                                       int tpc,
                                        int harq_pid,
                                        int tb_scaling,
                                        bool is_sib1)
@@ -894,7 +959,7 @@ dci_pdu_rel15_t prepare_dci_dl_payload(const gNB_MAC_INST *gNB_mac,
   const NR_UE_sched_ctrl_t *sched_ctrl = &UE->UE_sched_ctrl;
   dci_payload.dmrs_sequence_initialization.val = pdsch_pdu->SCID;
   dci_payload.antenna_ports.val = sched_pdsch->dmrs_parms.dmrs_ports_id;
-  dci_payload.tpc = sched_ctrl->tpc1;
+  dci_payload.tpc = tpc;
   const NR_UE_harq_t *harq = &sched_ctrl->harq_processes[harq_pid];
   AssertFatal(harq, "HARQ process should be available for DCI with RNTI %s\n", rnti_types(rnti_type));
   dci_payload.harq_pid.val = harq_pid;
@@ -1262,13 +1327,6 @@ const int default_pucch_numbsymb[]  = {2,2,2,2,4,4,4,4,10,10,10,10,14,14,14,14,1
 const int default_pucch_prboffset[] = {0,0,3,0,0,2,4,0,0,2,4,0,0,2,4,-1};
 const int default_pucch_csset[]     = {2,3,3,2,4,4,4,2,4,4,4,2,4,4,4,4};
 
-int nr_get_default_pucch_res(int pucch_ResourceCommon) {
-
-  AssertFatal(pucch_ResourceCommon>=0 && pucch_ResourceCommon < 16, "illegal pucch_ResourceCommon %d\n",pucch_ResourceCommon);
-
-  return(default_pucch_csset[pucch_ResourceCommon]);
-}
-
 void nr_configure_pdcch(nfapi_nr_dl_tti_pdcch_pdu_rel15_t *pdcch_pdu, NR_ControlResourceSet_t *coreset, NR_sched_pdcch_t *pdcch)
 {
   pdcch_pdu->BWPSize = pdcch->BWPSize;
@@ -1324,7 +1382,8 @@ void nr_configure_pucch(nfapi_nr_pucch_pdu_t *pucch_pdu,
                         uint16_t O_ack,
                         uint8_t O_sr,
                         int r_pucch,
-                        nr_beam_mode_t beam_mode)
+                        nr_beam_mode_t beam_mode,
+                        uint16_t ant_port_idx)
 {
   NR_PUCCH_Resource_t *pucchres;
   NR_PUCCH_FormatConfig_t *pucchfmt;
@@ -1518,13 +1577,17 @@ void nr_configure_pucch(nfapi_nr_pucch_pdu_t *pucch_pdu,
     pucch_pdu->freq_hop_flag = 1;
     pucch_pdu->second_hop_prb = second_hop_prb;
     pucch_pdu->format_type = default_pucch_fmt[rsetindex];
-    pucch_pdu->initial_cyclic_shift = r_pucch%default_pucch_csset[rsetindex];
-    if (rsetindex==3||rsetindex==7||rsetindex==11) pucch_pdu->initial_cyclic_shift*=6;
-    else if (rsetindex==1||rsetindex==2) pucch_pdu->initial_cyclic_shift*=4;
-    else pucch_pdu->initial_cyclic_shift*=3;
+    int initial_cyclic_shift_idx = (r_pucch % 8) % default_pucch_csset[rsetindex];
+    if (rsetindex == 3 || rsetindex == 7 || rsetindex == 11)
+      pucch_pdu->initial_cyclic_shift = initial_cyclic_shift_idx * 6;
+    else if (rsetindex == 1 || rsetindex == 2)
+      pucch_pdu->initial_cyclic_shift = initial_cyclic_shift_idx * 4;
+    else
+      pucch_pdu->initial_cyclic_shift = initial_cyclic_shift_idx * 3;
     pucch_pdu->nr_of_symbols = nr_of_symb;
     pucch_pdu->start_symbol_index = start_symb;
-    if (pucch_pdu->format_type == 1) pucch_pdu->time_domain_occ_idx = 0; // check this!!
+    if (pucch_pdu->format_type == 1)
+      pucch_pdu->time_domain_occ_idx = 0; // check this!!
     pucch_pdu->sr_flag = O_sr;
     pucch_pdu->prb_size=1;
   }
@@ -1534,6 +1597,8 @@ void nr_configure_pucch(nfapi_nr_pucch_pdu_t *pucch_pdu,
   pucch_pdu->beamforming.dig_bf_interface = 1;
   const uint16_t fapi_beam = convert_to_fapi_beam(UE->UE_beam_index, beam_mode);
   pucch_pdu->beamforming.prgs_list[0].dig_bf_interface_list[0].beam_idx = fapi_beam;
+  pucch_pdu->param_v4.numSpatialStreamIndices = 1;
+  pucch_pdu->param_v4.spatialStreamIndices[0] = ant_port_idx;
 }
 
 void set_r_pucch_parms(int rsetindex,
@@ -1542,21 +1607,14 @@ void set_r_pucch_parms(int rsetindex,
                        int *prb_start,
                        int *second_hop_prb,
                        int *nr_of_symbols,
-                       int *start_symbol_index) {
-
+                       int *start_symbol_index)
+{
   // procedure described in 38.213 section 9.2.1
-
-  int prboffset = r_pucch/default_pucch_csset[rsetindex];
-  int prboffsetm8 = (r_pucch-8)/default_pucch_csset[rsetindex];
-
-  *prb_start = (r_pucch>>3)==0 ?
-              default_pucch_prboffset[rsetindex] + prboffset:
-              bwp_size-1-default_pucch_prboffset[rsetindex]-prboffsetm8;
-
-  *second_hop_prb = (r_pucch>>3)==0?
-                   bwp_size-1-default_pucch_prboffset[rsetindex]-prboffset:
-                   default_pucch_prboffset[rsetindex] + prboffsetm8;
-
+  int prboffset = (r_pucch % 8) / default_pucch_csset[rsetindex];
+  int offset1 = default_pucch_prboffset[rsetindex] + prboffset;
+  int offset2 = bwp_size - 1 - default_pucch_prboffset[rsetindex] - prboffset;
+  *prb_start = (r_pucch >> 3) == 0 ? offset1 : offset2;
+  *second_hop_prb = (r_pucch >> 3) == 0 ? offset2 : offset1;
   *nr_of_symbols = default_pucch_numbsymb[rsetindex];
   *start_symbol_index = default_pucch_firstsymb[rsetindex];
 }
@@ -1565,6 +1623,7 @@ static void prepare_dci_X1(const NR_UE_ServingCell_Info_t *servingCellInfo,
                            const NR_UE_DL_BWP_t *current_BWP,
                            const NR_ControlResourceSet_t *coreset,
                            dci_pdu_rel15_t *dci_pdu_rel15,
+                           int srs_request,
                            nr_dci_format_t format)
 {
   const NR_PDSCH_Config_t *pdsch_Config = current_BWP ? current_BWP->pdsch_Config : NULL;
@@ -1580,7 +1639,7 @@ static void prepare_dci_X1(const NR_UE_ServingCell_Info_t *servingCellInfo,
       if (servingCellInfo->supplementaryUplink != NULL)
         AssertFatal(1==0,"Supplementary Uplink currently not supported\n");
       // SRS request
-      dci_pdu_rel15->srs_request.val = 0;
+      dci_pdu_rel15->srs_request.val = srs_request;
       dci_pdu_rel15->ulsch_indicator = 1;
       break;
     case NR_DL_DCI_FORMAT_1_1:
@@ -1641,6 +1700,7 @@ void fill_dci_pdu_rel15(const NR_UE_ServingCell_Info_t *servingCellInfo,
                         dci_pdu_rel15_t *dci_pdu_rel15,
                         int dci_format,
                         int rnti_type,
+                        int srs_request,
                         NR_SearchSpace_t *ss,
                         NR_ControlResourceSet_t *coreset,
                         long pdsch_HARQ_ACK_Codebook,
@@ -1709,7 +1769,7 @@ void fill_dci_pdu_rel15(const NR_UE_ServingCell_Info_t *servingCellInfo,
   pdcch_dci_pdu->PayloadSizeBits = dci_size;
   AssertFatal(dci_size <= 64, "DCI sizes above 64 bits not yet supported");
   if (dci_format == NR_DL_DCI_FORMAT_1_1 || dci_format == NR_UL_DCI_FORMAT_0_1)
-    prepare_dci_X1(servingCellInfo, current_DL_BWP, coreset, dci_pdu_rel15, dci_format);
+    prepare_dci_X1(servingCellInfo, current_DL_BWP, coreset, dci_pdu_rel15, srs_request, dci_format);
 
   /// Payload generation
   switch (dci_format) {
@@ -2484,7 +2544,7 @@ NR_UE_info_t *find_ra_UE(NR_UEs_t *UEs, rnti_t rntiP)
   return NULL;
 }
 
-void delete_nr_ue_data(NR_UE_info_t *UE, NR_COMMON_channels_t *ccPtr, uid_allocator_t *uia)
+void delete_nr_ue_data(NR_UE_info_t *UE, uid_allocator_t *uia)
 {
   ASN_STRUCT_FREE(asn_DEF_NR_CellGroupConfig, UE->CellGroup);
   ASN_STRUCT_FREE(asn_DEF_NR_CellGroupConfig, UE->reconfigCellGroup);
@@ -2528,7 +2588,7 @@ void free_transportBlock_buffer(byte_array_t *tb)
   free_byte_array(*tb);
 }
 
-void set_max_fb_time(NR_UE_UL_BWP_t *UL_BWP, const NR_UE_DL_BWP_t *DL_BWP)
+static void set_max_fb_time(NR_UE_UL_BWP_t *UL_BWP)
 {
   UL_BWP->max_fb_time = 8; // default value
   // take the maximum in dl_DataToUL_ACK list
@@ -2737,7 +2797,7 @@ void configure_UE_BWP(gNB_MAC_INST *nr_mac,
     UL_BWP->configuredGrantConfig = ubwpd->configuredGrantConfig ? ubwpd->configuredGrantConfig->choice.setup : NULL;
     UL_BWP->pusch_Config = ubwpd->pusch_Config->choice.setup;
     UL_BWP->pucch_Config = ubwpd->pucch_Config->choice.setup;
-    UL_BWP->srs_Config = ubwpd->srs_Config->choice.setup;
+    UL_BWP->srs_Config = ubwpd->srs_Config ? ubwpd->srs_Config->choice.setup : NULL;
   } else {
     DL_BWP->bwp_id = 0;
     UL_BWP->bwp_id = 0;
@@ -2914,8 +2974,7 @@ void configure_UE_BWP(gNB_MAC_INST *nr_mac,
     AssertFatal(sched_ctrl->search_space != NULL, "SearchSpace cannot be null for RA\n");
 
     sched_ctrl->coreset = get_coreset(nr_mac, scc, bwpd, *sched_ctrl->search_space->controlResourceSetId);
-    NR_COMMON_channels_t *cc = &nr_mac->common_channels[0];
-    int ssb_index = cc->ssb_index[UE->UE_beam_index];
+    int ssb_index = get_ssbidx_from_beam(nr_mac, UE->UE_beam_index);
     sched_ctrl->sched_pdcch = set_pdcch_structure(nr_mac,
                                                   sched_ctrl->search_space,
                                                   sched_ctrl->coreset,
@@ -2931,7 +2990,7 @@ void configure_UE_BWP(gNB_MAC_INST *nr_mac,
   create_dl_harq_list(sched_ctrl, sc_info, format_00_10);
   create_ul_harq_list(sched_ctrl, sc_info, format_00_10);
 
-  set_max_fb_time(UL_BWP, DL_BWP);
+  set_max_fb_time(UL_BWP);
   set_sched_pucch_list(sched_ctrl, UL_BWP, scc, &nr_mac->frame_structure);
 
   // Set MCS tables
@@ -2966,15 +3025,24 @@ static void init_bler_stats(const NR_bler_options_t *bler_options, NR_bler_stats
  * It will be typically added to the access_ue_list, but not always (e.g.,
  * phytest mode), so this is not done in this function (and also, to allow
  * error handling). Remove with delete_nr_ue_data().  */
-NR_UE_info_t *get_new_nr_ue_inst(uid_allocator_t *uia, rnti_t rnti, NR_CellGroupConfig_t *CellGroup)
+NR_UE_info_t *get_new_nr_ue_inst(uid_allocator_t *uia, rnti_t rnti, NR_CellGroupConfig_t *CellGroup, const nr_mac_config_t *config)
 {
   NR_UE_info_t *UE = calloc_or_fail(1, sizeof(NR_UE_info_t));
+  for (int i = 0; i < MAX_NUM_OF_SSB; i++)
+    UE->beam_rsrp[i] = UE->beam_sinr[i] = INT16_MIN;
   UE->uid = uid_linear_allocator_new(uia);
   UE->rnti = rnti;
   UE->CellGroup = CellGroup;
   UE->ra = calloc(1, sizeof(*UE->ra));
   NR_UE_sched_ctrl_t *sched_ctrl = &UE->UE_sched_ctrl;
   sched_ctrl->ta_update = 31;
+
+  nr_mac_set_target_snrx10(&sched_ctrl->pucch_pc, config->pucch.target_snrx10);
+  sched_ctrl->pucch_pc.avg_snr = config->pucch.target_snrx10 / 10.0f; // set initial SNR to what we would expect on average
+  nr_mac_set_rssi_threshold(&sched_ctrl->pucch_pc, config->pucch.rssi_threshold);
+  nr_mac_set_target_snrx10(&sched_ctrl->pusch_pc, config->pusch.target_snrx10);
+  sched_ctrl->pusch_pc.avg_snr = config->pusch.target_snrx10 / 10.0f; // set initial SNR to what we would expect on average
+  nr_mac_set_rssi_threshold(&sched_ctrl->pusch_pc, config->pusch.rssi_threshold);
 
   /* Set default BWPs */
   AssertFatal(UE->sc_info.n_ul_bwp <= NR_MAX_NUM_BWP, "uplinkBWP_ToAddModList has %d BWP!\n", UE->sc_info.n_ul_bwp);
@@ -3042,13 +3110,17 @@ bool add_connected_nr_ue(gNB_MAC_INST *nr_mac, NR_UE_info_t *UE)
   bool success = add_UE_to_list(MAX_MOBILES_PER_GNB, UE_info->connected_ue_list, UE);
   if (!success) {
     LOG_E(NR_MAC,"Try to add UE %04x but the list is full\n", UE->rnti);
-    delete_nr_ue_data(UE, NULL, &UE_info->uid_allocator);
+    delete_nr_ue_data(UE, &UE_info->uid_allocator);
     return false;
   }
 
   NR_UE_sched_ctrl_t *sched_ctrl = &UE->UE_sched_ctrl;
   sched_ctrl->dl_max_mcs = 28; /* do not limit MCS for individual UEs */
   sched_ctrl->pdcch_cl_adjust = 0;
+  if (nr_mac->radio_config.do_SRS == APERIODIC_SRS) {
+    nr_timer_setup(&sched_ctrl->aperiodic_srs_trigger, 160, 1); // for now aperiodic hardcoded every 160 slots
+    nr_timer_start(&sched_ctrl->aperiodic_srs_trigger);
+  }
   reset_srs_stats(UE);
 
   // Initialize bler_stats
@@ -3109,22 +3181,22 @@ void mac_remove_nr_ue(gNB_MAC_INST *nr_mac, rnti_t rnti)
   NR_UEs_t *UE_info = &nr_mac->UE_info;
   NR_UE_info_t *UE = remove_UE_from_list(MAX_MOBILES_PER_GNB + 1, UE_info->connected_ue_list, rnti);
   if (UE)
-    delete_nr_ue_data(UE, nr_mac->common_channels, &UE_info->uid_allocator);
+    delete_nr_ue_data(UE, &UE_info->uid_allocator);
   else
     nr_release_ra_UE(nr_mac, rnti);
 }
 
-// all values passed to this function are in dB x10
-uint8_t nr_get_tpc(int target, uint8_t cqi, int incr, int tx_power)
+/**
+ * @brief Returns the number of dBs for given transmit power control (TPC)
+ * command. Asserts on illegal TPC.
+ * @param tpc TPC command in range 0..3
+ * @return The dB value expressed by the TPC command
+ */
+static int tpc_to_db(int tpc)
 {
-  // al values passed to this function are x10
-  int snrx10 = (cqi * 5) - 640 - (tx_power * 10);
-  LOG_D(NR_MAC, "tpc : target %d, cqi %d, snrx10 %d, tx_power %d\n", target, ((int)cqi * 5) - 640, snrx10, tx_power);
-  if (snrx10 > target + incr) return 0; // decrease 1dB
-  if (snrx10 < target - (3*incr)) return 3; // increase 3dB
-  if (snrx10 < target - incr) return 2; // increase 1dB
-  LOG_D(NR_MAC,"tpc : target %d, snrx10 %d\n",target,snrx10);
-  return 1; // no change
+  DevAssert(tpc >= 0 && tpc <= 3);
+  const int db[] = {-1, 0, 1, 3};
+  return db[tpc];
 }
 
 /**
@@ -3139,7 +3211,7 @@ uint8_t nr_get_tpc(int target, uint8_t cqi, int incr, int tx_power)
  * @param rssi_threshold RSSI threshold in 0.1 dBm/dBFS, range -1280 to 0
  * @return The adjusted TPC command after applying the RSSI threshold check.
  */
-uint8_t nr_limit_tpc(int tpc, int rssi, int rssi_threshold)
+static uint8_t nr_limit_tpc(int tpc, int rssi, int rssi_threshold)
 {
   if (rssi == 0xFFFF) {
     // RSSI not available, keep tpc
@@ -3149,11 +3221,10 @@ uint8_t nr_limit_tpc(int tpc, int rssi, int rssi_threshold)
   const int fapi_rssi_0dBm_or_0dBFS = 1280;
   int rssi_fapi_threshold = fapi_rssi_0dBm_or_0dBFS + rssi_threshold;
   // Further limit TPC if above or near RSSI threshold
-  int tpc_to_db[] = {-1, 0, 1, 3};
   if (rssi > rssi_fapi_threshold) {
     // RSSI above theshold, reduce power
     return 0;
-  } else if (rssi + tpc_to_db[tpc] * 10 > rssi_fapi_threshold) {
+  } else if (rssi + tpc_to_db(tpc) * 10 > rssi_fapi_threshold) {
     // Cannot apply required TPC, check 1 dB increment
     if (rssi + 10 > rssi_fapi_threshold) {
       // Still cannot apply required TPC, keep power
@@ -3213,35 +3284,62 @@ void nr_csirs_scheduling(int Mod_idP, frame_t frame, slot_t slot, nfapi_nr_dl_tt
 
     NR_CSI_MeasConfig_t *csi_measconfig = UE->sc_info.csi_MeasConfig;
 
-    // looking for the correct CSI-RS resource in current BWP
-    NR_NZP_CSI_RS_ResourceSetId_t *nzp = NULL;
-    for (int csi_list=0; csi_list<csi_measconfig->csi_ResourceConfigToAddModList->list.count; csi_list++) {
+    // Need all three lists in order to resolve CSI-ResourceConfig -> ResourceSet -> Resource.
+    if (csi_measconfig->nzp_CSI_RS_ResourceToAddModList == NULL || csi_measconfig->nzp_CSI_RS_ResourceSetToAddModList == NULL
+        || csi_measconfig->csi_ResourceConfigToAddModList == NULL)
+      continue;
+
+    nfapi_nr_dl_tti_request_body_t *dl_req = &DL_req->dl_tti_request_body;
+
+    for (int csi_list = 0; csi_list < csi_measconfig->csi_ResourceConfigToAddModList->list.count; csi_list++) {
       NR_CSI_ResourceConfig_t *csires = csi_measconfig->csi_ResourceConfigToAddModList->list.array[csi_list];
-      if (csires->bwp_Id > 1)
+
+      // Transmitting CSI-RS only for current BWP
+      if (csires->bwp_Id > 1) {
         LOG_E(NR_MAC, "Invalid CSI resource BWP ID %ld, we only configure BWP up to 1\n", csires->bwp_Id);
-      else if (csires->csi_RS_ResourceSetList.present == NR_CSI_ResourceConfig__csi_RS_ResourceSetList_PR_nzp_CSI_RS_SSB &&
-               csires->csi_RS_ResourceSetList.choice.nzp_CSI_RS_SSB->nzp_CSI_RS_ResourceSetList) {
-        nzp = csires->csi_RS_ResourceSetList.choice.nzp_CSI_RS_SSB->nzp_CSI_RS_ResourceSetList->list.array[0];
+        continue;
       }
-    }
+      if (csires->csi_RS_ResourceSetList.present != NR_CSI_ResourceConfig__csi_RS_ResourceSetList_PR_nzp_CSI_RS_SSB
+          || !csires->csi_RS_ResourceSetList.choice.nzp_CSI_RS_SSB->nzp_CSI_RS_ResourceSetList)
+        continue;
 
-    if (csi_measconfig->nzp_CSI_RS_ResourceToAddModList != NULL && nzp != NULL) {
+      // Iterate over every NZP-CSI-RS-ResourceSet ID referenced by this CSI-ResourceConfig
+      for (int s = 0; s < csires->csi_RS_ResourceSetList.choice.nzp_CSI_RS_SSB->nzp_CSI_RS_ResourceSetList->list.count; s++) {
+        NR_NZP_CSI_RS_ResourceSetId_t target_set_id =
+            *csires->csi_RS_ResourceSetList.choice.nzp_CSI_RS_SSB->nzp_CSI_RS_ResourceSetList->list.array[s];
 
-      NR_NZP_CSI_RS_Resource_t *nzpcsi;
-      int period, offset;
-
-      nfapi_nr_dl_tti_request_body_t *dl_req = &DL_req->dl_tti_request_body;
-
-      for (int id = 0; id < csi_measconfig->nzp_CSI_RS_ResourceToAddModList->list.count; id++){
-        nzpcsi = csi_measconfig->nzp_CSI_RS_ResourceToAddModList->list.array[id];
-        // transmitting CSI-RS only for current BWP
-        if (nzpcsi->nzp_CSI_RS_ResourceId != *nzp)
+        // Resolve the ResourceSet by its set ID
+        NR_NZP_CSI_RS_ResourceSet_t *nzp_set = NULL;
+        for (int k = 0; k < csi_measconfig->nzp_CSI_RS_ResourceSetToAddModList->list.count; k++) {
+          if (csi_measconfig->nzp_CSI_RS_ResourceSetToAddModList->list.array[k]->nzp_CSI_ResourceSetId == target_set_id) {
+            nzp_set = csi_measconfig->nzp_CSI_RS_ResourceSetToAddModList->list.array[k];
+            break;
+          }
+        }
+        if (!nzp_set)
           continue;
 
-        NR_CSI_RS_ResourceMapping_t  resourceMapping = nzpcsi->resourceMapping;
-        csi_period_offset(NULL, nzpcsi->periodicityAndOffset, &period, &offset);
+        // For each NZP-CSI-RS-Resource ID listed inside this ResourceSet, resolve the matching NZP-CSI-RS-Resource and
+        // try to schedule its transmission in this slot.
+        for (int r = 0; r < nzp_set->nzp_CSI_RS_Resources.list.count; r++) {
+          NR_NZP_CSI_RS_ResourceId_t target_res_id = *nzp_set->nzp_CSI_RS_Resources.list.array[r];
 
-        if((frame * n_slots_frame + slot - offset) % period == 0) {
+          NR_NZP_CSI_RS_Resource_t *nzpcsi = NULL;
+          for (int q = 0; q < csi_measconfig->nzp_CSI_RS_ResourceToAddModList->list.count; q++) {
+            if (csi_measconfig->nzp_CSI_RS_ResourceToAddModList->list.array[q]->nzp_CSI_RS_ResourceId == target_res_id) {
+              nzpcsi = csi_measconfig->nzp_CSI_RS_ResourceToAddModList->list.array[q];
+              break;
+            }
+          }
+          if (!nzpcsi)
+            continue;
+
+          NR_CSI_RS_ResourceMapping_t resourceMapping = nzpcsi->resourceMapping;
+          int period, offset;
+          csi_period_offset(NULL, nzpcsi->periodicityAndOffset, &period, &offset);
+
+          if ((frame * n_slots_frame + slot - offset) % period != 0)
+            continue;
 
           LOG_D(NR_MAC,"Scheduling CSI-RS in frame %d slot %d Resource ID %ld\n", frame, slot, nzpcsi->nzp_CSI_RS_ResourceId);
           NR_beam_alloc_t beam_csi = beam_allocation_procedure(&gNB_mac->beam_info, frame, slot, UE->UE_beam_index, n_slots_frame);
@@ -3260,7 +3358,16 @@ void nr_csirs_scheduling(int Mod_idP, frame_t frame, slot_t slot, nfapi_nr_dl_tt
           csirs_pdu_rel15->precodingAndBeamforming.dig_bf_interfaces = 1;
           csirs_pdu_rel15->precodingAndBeamforming.prgs_list[0].pm_idx = 0;
           const uint16_t fapi_beam = convert_to_fapi_beam(UE->UE_beam_index, gNB_mac->beam_info.beam_mode);
+          // TODO: set correctly dig_bf_interface_list when ports of same CDM group is used and PMI if used.
           csirs_pdu_rel15->precodingAndBeamforming.prgs_list[0].dig_bf_interface_list[0].beam_idx = fapi_beam;
+          const nr_pdsch_AntennaPorts_t *p = &gNB_mac->radio_config.pdsch_AntennaPorts;
+          const uint16_t num_max_csi_ports = p->N1 * p->N2 * p->XP;
+          /* The L1 does not take number of spatial streams parameter into
+          consideration because the CSI-RS generation function uses information
+          in mapping params to determine number of ports and maps to contiguous
+          logical ports. Hence we set only the first port for CSI-RS here. */
+          csirs_pdu_rel15->param_v4.numSpatialStreamIndices = 1;
+          csirs_pdu_rel15->param_v4.spatialStreamIndices[0] = beam_csi.idx * num_max_csi_ports;
           csirs_pdu_rel15->bwp_size = dl_bwp->BWPSize;
           csirs_pdu_rel15->bwp_start = dl_bwp->BWPStart;
           csirs_pdu_rel15->subcarrier_spacing = dl_bwp->scs;
@@ -3428,6 +3535,25 @@ void nr_csirs_scheduling(int Mod_idP, frame_t frame, slot_t slot, nfapi_nr_dl_tt
   }
 }
 
+static void nr_mac_interrupt_ue_transmission(gNB_MAC_INST *mac, NR_UE_info_t *UE, int slots, int slots_per_frame)
+{
+  DevAssert(mac != NULL);
+  DevAssert(UE != NULL);
+  NR_SCHED_ENSURE_LOCKED(&mac->sched_lock);
+
+  nr_timer_setup(&UE->UE_sched_ctrl.transm_interrupt, slots, 1);
+  nr_timer_start(&UE->UE_sched_ctrl.transm_interrupt);
+
+  // it might happen that timing advance command should be sent during the UE inactivity time.
+  // To prevent this, delay next TA command just after the UE inactivity time.
+  const int inactive_frames = slots / slots_per_frame + 1;
+  if ((UE->UE_sched_ctrl.ta_frame - mac->frame + MAX_FRAME_NUMBER) % MAX_FRAME_NUMBER < inactive_frames)
+    UE->UE_sched_ctrl.ta_frame = (mac->frame + inactive_frames) % MAX_FRAME_NUMBER;
+
+  LOG_D(NR_MAC, "UE %04x: Interrupt UE transmission (%d slots)\n", UE->rnti, slots);
+}
+
+
 void nr_measgap_scheduling(gNB_MAC_INST *nr_mac, frame_t frame, sub_frame_t slot)
 {
   NR_SCHED_ENSURE_LOCKED(&nr_mac->sched_lock);
@@ -3497,25 +3623,6 @@ int nr_mac_get_reconfig_delay_slots(NR_SubcarrierSpacing_t scs)
   return (delay_ms << scs) + sl_ahead;
 }
 
-static int nr_mac_interrupt_ue_transmission(gNB_MAC_INST *mac, NR_UE_info_t *UE, int slots, int slots_per_frame)
-{
-  DevAssert(mac != NULL);
-  DevAssert(UE != NULL);
-  NR_SCHED_ENSURE_LOCKED(&mac->sched_lock);
-
-  nr_timer_setup(&UE->UE_sched_ctrl.transm_interrupt, slots, 1);
-  nr_timer_start(&UE->UE_sched_ctrl.transm_interrupt);
-
-  // it might happen that timing advance command should be sent during the UE inactivity time.
-  // To prevent this, delay next TA command just after the UE inactivity time.
-  const int inactive_frames = slots / slots_per_frame + 1;
-  if ((UE->UE_sched_ctrl.ta_frame - mac->frame + MAX_FRAME_NUMBER) % MAX_FRAME_NUMBER < inactive_frames)
-    UE->UE_sched_ctrl.ta_frame = (mac->frame + inactive_frames) % MAX_FRAME_NUMBER;
-
-  LOG_D(NR_MAC, "UE %04x: Interrupt UE transmission (%d slots)\n", UE->rnti, slots);
-  return 0;
-}
-
 static void nr_mac_ue_transmission_timeout(gNB_MAC_INST *mac, NR_UE_info_t *UE, int slots)
 {
   DevAssert(mac != NULL);
@@ -3569,13 +3676,14 @@ void nr_mac_release_ue(gNB_MAC_INST *mac, int rnti)
   mac_remove_nr_ue(mac, rnti);
 }
 
-static void beam_switching_procedure(NR_UE_info_t *UE, int new_beam_index)
+void beam_switching_procedure(gNB_MAC_INST *mac, NR_UE_info_t *UE, int new_beam_index)
 {
   LOG_I(NR_MAC, "[UE %x] Switching to beam with ID %d (from %d)\n", UE->rnti, new_beam_index, UE->UE_beam_index);
   UE->UE_beam_index = new_beam_index;
+  nr_mac_trigger_reconfiguration(mac, UE, -1, true);
 }
 
-void nr_mac_update_timers(module_id_t module_id, frame_t frame, slot_t slot)
+void nr_mac_update_timers(module_id_t module_id)
 {
   gNB_MAC_INST *mac = RC.nrmac[module_id];
 
@@ -3586,7 +3694,7 @@ void nr_mac_update_timers(module_id_t module_id, frame_t frame, slot_t slot)
   UE_iterator(UE_info->connected_ue_list, UE) {
     NR_UE_sched_ctrl_t *sched_ctrl = &UE->UE_sched_ctrl;
 
-    if (nr_mac_check_release(sched_ctrl, UE->rnti)) {
+    if (nr_mac_check_release(sched_ctrl)) {
       // trigger release first as nr_mac_release_ue() invalidates UE ptr
       nr_mac_trigger_release_complete(mac, UE->rnti);
       nr_mac_release_ue(mac, UE->rnti);
@@ -3615,8 +3723,9 @@ void nr_mac_update_timers(module_id_t module_id, frame_t frame, slot_t slot)
     }
     if (nr_timer_tick(&sched_ctrl->tci_beam_switch)) {
       nr_timer_stop(&sched_ctrl->tci_beam_switch);
-      beam_switching_procedure(UE, sched_ctrl->UE_mac_ce_ctrl.tci_state_ind.tciStateId);
+      beam_switching_procedure(mac, UE, sched_ctrl->UE_mac_ce_ctrl.tci_state_ind.tciStateId);
     }
+    nr_timer_tick(&sched_ctrl->aperiodic_srs_trigger);
   }
 }
 
@@ -3743,20 +3852,20 @@ void reset_beam_status(NR_beam_info_t *beam_info, int frame, int slot, int16_t b
   }
 }
 
-void beam_selection_procedures(gNB_MAC_INST *mac, NR_UE_info_t *UE)
+int beam_selection_procedures(gNB_MAC_INST *mac, NR_UE_info_t *UE)
 {
   // do not perform beam procedures if there is no beam information
   if (mac->beam_info.beam_mode == NO_BEAM_MODE)
-    return;
+    return -1;
 
   // simple beam switching algorithm -> we select beam with highest RSRP from CSI report
   NR_UE_sched_ctrl_t *sched_ctrl = &UE->UE_sched_ctrl;
-  RSRP_report_t *rsrp_report = &sched_ctrl->CSI_report.ssb_rsrp_report;
-  int new_bf_index = get_beam_from_ssbidx(mac, rsrp_report->resource_id[0]);
+  RSRP_report_list_t *rsrp_report = &sched_ctrl->CSI_report.ssb_rsrp_report;
+  int new_bf_index = get_beam_from_ssbidx(mac, rsrp_report->r[0].resource_id);
   if (!mac->radio_config.do_TCI) { // if not TCI is configure we switch beam directly
-    if (UE->UE_beam_index != new_bf_index)
-      beam_switching_procedure(UE, new_bf_index);
-    return;
+    if (UE->UE_beam_index == new_bf_index)
+      return -1; // no beam change needed
+    return new_bf_index;
   }
 
   tciStateInd_t *tci = &sched_ctrl->UE_mac_ce_ctrl.tci_state_ind;
@@ -3765,7 +3874,7 @@ void beam_selection_procedures(gNB_MAC_INST *mac, NR_UE_info_t *UE)
       LOG_I(NR_MAC, "[UE %x] Stopping procedure to switch beam, old beam reported as best again\n", UE->rnti);
       tci->is_scheduled = false;
     }
-    return; // no beam change needed
+    return -1; // no beam change needed
   }
 
   LOG_I(NR_MAC, "[UE %x] Starting procedure to switch beam\n", UE->rnti);
@@ -3775,6 +3884,7 @@ void beam_selection_procedures(gNB_MAC_INST *mac, NR_UE_info_t *UE)
   tci->is_scheduled = true;
   tci->coresetId = sched_ctrl->coreset->controlResourceSetId;
   tci->tciStateId = new_bf_index; // assumption: this correspond to the TCI index
+  return new_bf_index;
 }
 
 void send_initial_ul_rrc_message(int rnti, const uint8_t *sdu, sdu_size_t sdu_len, void *data)
@@ -3828,7 +3938,8 @@ bool prepare_initial_ul_rrc_message(gNB_MAC_INST *mac, NR_UE_info_t *UE)
   int CC_id = 0;
   int srb_id = 1;
   const NR_ServingCellConfigCommon_t *scc = mac->common_channels[CC_id].ServingCellConfigCommon;
-  NR_CellGroupConfig_t *cellGroupConfig = get_initial_cellGroupConfig(UE->uid, scc, &mac->radio_config, &mac->rlc_config);
+  int ssb_index = get_ssbidx_from_beam(mac, UE->UE_beam_index);
+  NR_CellGroupConfig_t *cellGroupConfig = get_initial_cellGroupConfig(UE->uid, scc, &mac->radio_config, &mac->rlc_config, ssb_index);
   ASN_STRUCT_FREE(asn_DEF_NR_CellGroupConfig, UE->CellGroup);
   UE->CellGroup = cellGroupConfig;
   UE->local_bwp_id = mac->radio_config.first_active_bwp;
@@ -3853,7 +3964,7 @@ void nr_mac_trigger_release_timer(NR_UE_sched_ctrl_t *sched_ctrl, NR_SubcarrierS
   sched_ctrl->release_timer = 100 << subcarrier_spacing;
 }
 
-bool nr_mac_check_release(NR_UE_sched_ctrl_t *sched_ctrl, int rnti)
+bool nr_mac_check_release(NR_UE_sched_ctrl_t *sched_ctrl)
 {
   if (sched_ctrl->release_timer == 0)
     return false;
@@ -3954,24 +4065,40 @@ static bool verify_bwp_switch(const NR_UE_info_t *UE, const nr_mac_config_t *con
   return false;
 }
 
-void nr_mac_trigger_reconfiguration(const gNB_MAC_INST *nrmac, NR_UE_info_t *UE, int new_bwp_id)
+void nr_mac_trigger_reconfiguration(const gNB_MAC_INST *nrmac, NR_UE_info_t *UE, int new_bwp_id, bool new_beam)
 {
   DevAssert(UE->CellGroup != NULL);
   NR_CellGroupConfig_t *cellGroup_for_UE = NULL;
-  if (new_bwp_id >= 0) {
-    AssertFatal(UE->current_DL_BWP.bwp_id == UE->current_UL_BWP.bwp_id, "We only support same BWP for UL and DL\n");
-    if (!verify_bwp_switch(UE, &nrmac->radio_config, new_bwp_id))
-      return;
-    else {
+  if (new_beam) {
       UE->sc_info.csi_MeasConfig = NULL;  // to avoid segfault when freeing csi_MeasConfig in configDedicated
-      UE->local_bwp_id = new_bwp_id;
-      cellGroup_for_UE = update_cellGroupConfig_for_BWP_switch(UE->CellGroup,
+      NR_UE_UL_BWP_t *current_BWP = &UE->current_UL_BWP;
+      current_BWP->srs_Config = NULL;
+      int ssb_index = nrmac->common_channels[0].ssb_index[UE->UE_beam_index];
+      cellGroup_for_UE = update_cellGroupConfig_for_beam_switch(UE->CellGroup,
                                                                &nrmac->radio_config,
                                                                UE->capability,
                                                                nrmac->common_channels[0].ServingCellConfigCommon,
                                                                UE->uid,
                                                                UE->current_DL_BWP.bwp_id,
-                                                               new_bwp_id);
+                                                               ssb_index);
+  } else {
+    if (new_bwp_id >= 0) {
+      AssertFatal(UE->current_DL_BWP.bwp_id == UE->current_UL_BWP.bwp_id, "We only support same BWP for UL and DL\n");
+      if (!verify_bwp_switch(UE, &nrmac->radio_config, new_bwp_id))
+        return;
+      else {
+        UE->sc_info.csi_MeasConfig = NULL;  // to avoid segfault when freeing csi_MeasConfig in configDedicated
+        UE->local_bwp_id = new_bwp_id;
+        int ssb_index = nrmac->common_channels[0].ssb_index[UE->UE_beam_index];
+        cellGroup_for_UE = update_cellGroupConfig_for_BWP_switch(UE->CellGroup,
+                                                                &nrmac->radio_config,
+                                                                UE->capability,
+                                                                nrmac->common_channels[0].ServingCellConfigCommon,
+                                                                UE->uid,
+                                                                UE->current_DL_BWP.bwp_id,
+                                                                new_bwp_id,
+                                                                ssb_index);
+      }
     }
   }
   uint8_t buf[2048];
@@ -4081,22 +4208,6 @@ bool nr_mac_get_new_rnti(NR_UEs_t *UEs, rnti_t *rnti)
   return loop < 100; // nothing found: loop count 100
 }
 
-/// @brief Orders PDCCH aggregation levels so that we first check desired aggregation level according to
-///        pdcch_cl_adjust
-/// @param agg_level_search_order in/out 5-element array of aggregation levels from 0 to 4
-/// @param pdcch_cl_adjust value from 0 to 1 indication channel impariments (0 - good channel, 1 - bad channel)
-static void determine_aggregation_level_search_order(int agg_level_search_order[NUM_PDCCH_AGG_LEVELS], float pdcch_cl_adjust)
-{
-  int desired_agg_level_index = round(4 * pdcch_cl_adjust);
-  int agg_level_search_index = 0;
-  for (int i = desired_agg_level_index; i < NUM_PDCCH_AGG_LEVELS; i++) {
-    agg_level_search_order[agg_level_search_index++] = i;
-  }
-  for (int i = desired_agg_level_index - 1; i >= 0; i--) {
-    agg_level_search_order[agg_level_search_index++] = i;
-  }
-}
-
 /// @brief Update PDCCH closed loop adjust for UE depending on detection of feedback.
 /// @param sched_ctrl UE scheduling control info
 /// @param feedback_not_detected Whether feedback (PUSCH or HARQ) was detected
@@ -4107,4 +4218,143 @@ void nr_mac_update_pdcch_closed_loop_adjust(NR_UE_sched_ctrl_t *sched_ctrl, bool
   } else {
     sched_ctrl->pdcch_cl_adjust = max(0, sched_ctrl->pdcch_cl_adjust - 0.01);
   }
+}
+
+/**
+ * @brief Calculate the current average SNR for the given power control loop.
+ * @param pc the power control loop
+ * @return the current average SNR
+ */
+float nr_mac_get_snr(const nr_power_control_t *pc)
+{
+  return pc->avg_snr + pc->tpc_in_flight;
+}
+
+/**
+ * @brief Calculates the difference of current average SNR to the target SNR
+ * set in the power control loop.
+ * @param pc the power control loop
+ * @return the SNR difference
+ */
+static float get_snr_diff(const nr_power_control_t *pc)
+{
+  float snr = nr_mac_get_snr(pc);
+  float delta = (snr * 10.0f - pc->target_snrx10) / 10.0f;
+  LOG_D(NR_MAC, "target %.2f snr %.2f delta %.2f\n", pc->target_snrx10 / 10.0f, snr, delta);
+  return delta;
+}
+
+/// averaging constant for power control (used for SNR, RSSI).
+#define PC_AVG_CNST 0.975f
+/**
+ * @brief Enter new SNR and RSSI value for the latest UL transmission, and
+ * update the average SNR and average RSSI of the corresponding UE.
+ *
+ * Since the SNR is averaged, any changes through transmit power control (TPC)
+ * commands will take time to reflect in the averaged SNR. To allow a
+ * continuous tracking of necessary TPC, as well as a continuous adjustment of
+ * the target SNR, the algorithm keeps track of "TPC in flight" which is a
+ * moving average of the last TPC commands sent to the UE. The sum of the
+ * averaged SNR and "TPC in flight" is the actual, current SNR. The RSSI in
+ * turn is used to limit TPC commands (see also nr_limit_tpc()).
+ *
+ * @param pc the power control loop
+ * @param snrx10 the current SNR measurement multiplied by 10
+ * @param rssi the current RSSI measurement
+ */
+void nr_mac_pc_snr(nr_power_control_t *pc, int snrx10, int rssi)
+{
+  pc->avg_snr = PC_AVG_CNST * pc->avg_snr + (1.0f - PC_AVG_CNST) * 0.1 * snrx10;
+  pc->avg_rssi = PC_AVG_CNST * pc->avg_rssi + (1.0f - PC_AVG_CNST) * rssi;
+  // use an EMA to average out tpc_in_flight as fast as EMA for avg_snr.
+  // this will ensure that on TPC change, avg_snr approximates real SNR as
+  // fast as tpc_in_flight returns to 0.
+  pc->tpc_in_flight = PC_AVG_CNST * pc->tpc_in_flight; // + (1 - PC_AVG_CNST) * 0.0f
+}
+
+/**
+ * @brief Enter new SNR and RSSI value for the latest UL transmission as new
+ * fixed averages. Reset "TPC in flight" to zero.
+ *
+ * @param pc the power control loop
+ * @param snrx10 the current SNR measurement multiplied by 10
+ * @param rssi the current RSSI measurement
+ */
+void nr_mac_pc_reset_snr(nr_power_control_t *pc, int snrx10, int rssi)
+{
+  pc->avg_snr = 0.1f * snrx10;
+  pc->avg_rssi = rssi;
+  pc->tpc_in_flight = 0.0f;
+}
+
+/**
+ * @brief Set a new target SNR for this power control loop, which can be
+ * updated on a continuous basis, and will be reflected immediately upon
+ * calls to nr_mac_get_tpc() (no "settle time" necessary).
+ *
+ * @param pc the power control loop
+ * @param target_snrx10 the target SNR to be set times 10.
+ */
+void nr_mac_set_target_snrx10(nr_power_control_t *pc, int target_snrx10)
+{
+  pc->target_snrx10 = target_snrx10;
+}
+
+/**
+ * @brif Set a new RSSI threshold for this power control loop. Will be used to
+ * limit TPCs, see also nr_limit_tpc().
+ *
+ * @param pc the power control loop
+ * @param rssi_threshold the RSSI threshold
+ */
+void nr_mac_set_rssi_threshold(nr_power_control_t *pc, int rssi_threshold)
+{
+  pc->rssi_threshold = rssi_threshold;
+}
+
+/**
+ * @brief Signal that this power control loop experienced a discontinuous
+ * transmission (DTC), aka "no reception".. This will decrease the "TPC in
+ * flight" to artificially reduce the current SNR, which will trigger a TPC
+ * command to increase the power. Repeated DTX will lead to more TPC.
+ *
+ * @param pc the power control loop
+ */
+void nr_mac_signal_dtx(nr_power_control_t *pc)
+{
+  // repeated DTX will make nr_mac_get_tpc() return positive TPCs, see
+  // nr_mac_pc_snr(). The more DTX, the more TPC increase, which will
+  // eventually zero out and return back to target SNR (change is temporary).
+  // Also, this will only send positive TPC changes.
+  pc->tpc_in_flight = max(pc->tpc_in_flight - 1.0f, -5.0f); // TODO threshold good?
+}
+
+/**
+ * @brief Get a transmit power control (TPC) command for the given power
+ * control loop according to current and target SNR. This function can be
+ * called continuously on every UL transmission occasion, and keeps track of
+ * past TPC commands. It also limits TPC commands according to RSSI, see
+ * nr_limit_tpc() for more information.
+ *
+ * @param pc the power control loop
+ * @return the next TPC command.
+ */
+int nr_mac_get_tpc(nr_power_control_t *pc)
+{
+  float diff = get_snr_diff(pc);
+  int tpc = 1;
+  if (diff <= -3.0f) {
+    tpc = 3; // increase 3dB
+  } else if (diff <= -1.0f) {
+    tpc = 2; // increase 1dB
+  } else if (diff >= 2.0f) {
+    tpc = 0; // decrease 1dB
+  } else {
+    tpc = 1; // within -1<=target<=2dB => is ok.
+  }
+  tpc = nr_limit_tpc(tpc, pc->avg_rssi, pc->rssi_threshold);
+  int change = tpc_to_db(tpc);
+  pc->tpc_in_flight += change;
+  LOG_D(NR_MAC, "tpc %d => %d\n", tpc, change);
+  return tpc;
 }

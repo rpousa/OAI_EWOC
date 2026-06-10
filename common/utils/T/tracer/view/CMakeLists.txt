@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 add_library(tracer_view STATIC
             stdout.c textlist.c xy.c tti.c time.c ticktime.c scrolltti.c)
 target_link_libraries(tracer_view PRIVATE pthread)

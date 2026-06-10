@@ -1,37 +1,16 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file asn1_msg.h
-* \brief primitives to build the asn1 messages
-* \author Raymond Knopp and Navid Nikaein, WIE-TAI CHEN
-* \date 2011, 2018
-* \version 1.0
-* \company Eurecom, NTUST
-* \email: raymond.knopp@eurecom.fr and  navid.nikaein@eurecom.fr, kroempa@gmail.com
-*/
+/*!
+ * \brief primitives to build the asn1 messages
+ */
 
 #ifndef __RRC_NR_MESSAGES_ASN1_MSG__H__
 #define __RRC_NR_MESSAGES_ASN1_MSG__H__
 
 #include <common/utils/assertions.h>
+#include "common/platform_constants.h"
 #include <stdint.h>
 #include <stdio.h>
 #include "NR_ARFCN-ValueNR.h"
@@ -52,10 +31,13 @@
 #include "NR_SecurityConfig.h"
 #include "NR_MeasurementReport.h"
 #include "NR_MeasurementTimingConfiguration.h"
+#include "NR_UE-NR-Capability.h"
 #include "NR_UE-CapabilityRAT-ContainerList.h"
+#include "NR_SIB2.h"
+#include "NR_SIB3.h"
+#include "NR_SIB4.h"
 #include "ds/seq_arr.h"
 #include "ds/byte_array.h"
-#include "rrc_messages_types.h"
 #include "openair2/LAYER2/nr_pdcp/nr_pdcp_configuration.h"
 #include "common/utils/nr/nr_common.h"
 struct asn_TYPE_descriptor_s;
@@ -86,7 +68,9 @@ typedef struct {
  */
 int xer_sprint_NR(char *string, size_t string_size, struct asn_TYPE_descriptor_s *td, void *sptr);
 
-int do_SIB2_NR(uint8_t **msg_SIB2, NR_SSB_MTC_t *ssbmtc);
+byte_array_t do_SIB2_NR(const NR_SIB2_t *sib2);
+byte_array_t do_SIB3_NR(const NR_SIB3_t *sib3);
+byte_array_t do_SIB4_NR(NR_SIB4_t *sib4);
 
 int do_RRCReject(uint8_t *const buffer);
 
@@ -95,7 +79,6 @@ int do_RRCSetup(uint8_t *const buffer,
                 const uint8_t transaction_id,
                 const uint8_t *masterCellGroup,
                 int masterCellGroup_len,
-                const gNB_RrcConfigurationReq *configuration,
                 NR_SRB_ToAddModList_t *SRBs);
 
 int do_NR_SecurityModeCommand(uint8_t *const buffer,
@@ -162,7 +145,6 @@ int do_RRCReestablishmentComplete(uint8_t *buffer, size_t buffer_size, int64_t r
 
 NR_MeasConfig_t *get_MeasConfig(const NR_MeasTiming_t *mt,
                                 int band,
-                                int scs,
                                 int nr_pci,
                                 NR_ReportConfigToAddMod_t *rc_PER,
                                 NR_ReportConfigToAddMod_t *rc_A2,
@@ -172,7 +154,7 @@ NR_MeasConfig_t *get_MeasConfig(const NR_MeasTiming_t *mt,
 void free_MeasConfig(NR_MeasConfig_t *mc);
 int do_NR_Paging(uint8_t Mod_id, uint8_t *buffer, uint32_t tmsi);
 
-byte_array_t get_HandoverPreparationInformation(nr_rrc_reconfig_param_t *params, int scell_pci);
+byte_array_t get_HandoverPreparationInformation(nr_rrc_reconfig_param_t *params);
 byte_array_t get_HandoverCommandMessage(nr_rrc_reconfig_param_t *params);
 void fill_removal_lists_from_source_measConfig(NR_MeasConfig_t *measConfig, byte_array_t prep_info);
 byte_array_t doRRCReconfiguration_from_HandoverCommand(byte_array_t handoverCommand);

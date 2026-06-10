@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+
 include:
   - ../local_common_overrides/build_images.yaml
   - ../local_common_overrides/rebuild_nr_softmodems.yaml

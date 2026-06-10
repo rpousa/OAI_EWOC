@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 add_library(usim_lib OBJECT
     ${OPENAIR_DIR}/common/utils/mem/memory.c
     aka_functions.c

@@ -1,22 +1,5 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
 
@@ -29,30 +12,24 @@
 #include "T.h"
 #include "common/oai_version.h"
 #include "assertions.h"
-#include "PHY/types.h"
 #include "PHY/defs_nr_UE.h"
 #include "SCHED_NR_UE/defs.h"
 #include "common/ran_context.h"
 #include "common/config/config_userapi.h"
 #include "common/utils/load_module_shlib.h"
-//#undef FRAME_LENGTH_COMPLEX_SAMPLES //there are two conflicting definitions, so we better make sure we don't use it at all
 #include "common/utils/nr/nr_common.h"
-
 #include "radio/COMMON/common_lib.h"
 #include "radio/ETHERNET/if_defs.h"
-
-//#undef FRAME_LENGTH_COMPLEX_SAMPLES //there are two conflicting definitions, so we better make sure we don't use it at all
 #include "openair1/PHY/MODULATION/nr_modulation.h"
 #include "PHY/CODING/nrLDPC_coding/nrLDPC_coding_interface.h"
 #include "PHY/phy_vars_nr_ue.h"
 #include "PHY/NR_UE_TRANSPORT/nr_transport_proto_ue.h"
-#include "PHY/NR_TRANSPORT/nr_dlsch.h"
-//#include "../../SIMU/USER/init_lte.h"
 
 #include "PHY_INTERFACE/phy_interface_vars.h"
 #include "NR_IF_Module.h"
 #include "openair1/SIMULATION/TOOLS/sim.h"
 #include "openair2/RRC/NR_UE/L2_interface_ue.h"
+#include "openair1/PHY/phy_extern_nr_ue.h"
 
 #ifdef SMBV
 #include "PHY/TOOLS/smbv.h"
@@ -60,7 +37,6 @@ unsigned short config_frames[4] = {2,9,11,13};
 #endif
 #include "common/utils/LOG/log.h"
 #include "common/utils/time_manager/time_manager.h"
-#include "common/utils/LOG/vcd_signal_dumper.h"
 
 #include "UTIL/OPT/opt.h"
 #include "LAYER2/nr_pdcp/nr_pdcp_oai_api.h"
@@ -87,16 +63,10 @@ unsigned short config_frames[4] = {2,9,11,13};
 #include "executables/thread-common.h"
 
 #include "nr_nas_msg.h"
-#include <openair1/PHY/MODULATION/nr_modulation.h>
-#include "openair2/GNB_APP/gnb_paramdef.h"
 #include "actor.h"
 
 THREAD_STRUCT thread_struct;
 nrUE_params_t nrUE_params = {0};
-
-// not used in UE
-instance_t CUuniqInstance=0;
-instance_t DUuniqInstance=0;
 
 int get_node_type() {return -1;}
 
@@ -104,7 +74,7 @@ RAN_CONTEXT_t RC;
 int oai_exit = 0;
 
 uint64_t        downlink_frequency[MAX_NUM_CCs][4];
-int32_t         uplink_frequency_offset[MAX_NUM_CCs][4];
+int64_t         uplink_frequency_offset[MAX_NUM_CCs][4];
 uint64_t        sidelink_frequency[MAX_NUM_CCs][4];
 
 // UE and OAI config variables
@@ -139,6 +109,7 @@ void exit_function(const char *file, const char *function, const int line, const
 
   oai_exit = 1;
 
+  nrue_ru_stop();
   nrue_ru_end();
 
   if (assert) {
@@ -166,8 +137,6 @@ static void get_options(configmodule_interface_t *cfg)
   paramdef_t cmdline_params[] = CMDLINE_NRUEPARAMS_DESC;
   int numparams = sizeofArray(cmdline_params);
   config_get(cfg, cmdline_params, numparams, NULL);
-  if (nrUE_params.vcdflag > 0)
-    ouput_vcd = 1;
   AssertFatal(nrUE_params.extra_pdu_id == -1,
               "Add additional PDU sessions in uicc.pdu_sessions array instead\n");
 }
@@ -214,11 +183,6 @@ static void set_fp_options(int cell_id, int ru_id)
   LOG_I(PHY, "Set UE nb_rx_antenna %d, nb_tx_antenna %d, threequarter_fs %d, ofdm_offset_divisor %d\n", fp->nb_antennas_rx, fp->nb_antennas_tx, fp->threequarter_fs, fp->ofdm_offset_divisor);
 }
 
-// Stupid function addition because UE itti messages queues definition is common with eNB
-void *rrc_enb_process_msg(void *notUsed) {
-  return NULL;
-}
-
 static bool stop_immediately = false;
 static void trigger_stop(int sig)
 {
@@ -243,6 +207,13 @@ static void trigger_deregistration(int sig)
   }
 }
 
+void *nrue_ru_start_thread(void *arg)
+{
+  (void)arg;
+  nrue_ru_start();
+  return NULL;
+}
+
 int NB_UE_INST = 1;
 configmodule_interface_t *uniqCfg = NULL;
 nrLDPC_coding_interface_t nrLDPC_coding_interface = {0};
@@ -251,7 +222,7 @@ int main(int argc, char **argv)
 {
   start_background_system();
 
-  if ((uniqCfg = load_configmodule(argc, argv, CONFIG_ENABLECMDLINEONLY)) == NULL) {
+  if ((uniqCfg = load_configmodule(argc, argv, CONFIG_ENABLECMDLINEONLY)) == NULL || CONFIG_ISFLAGSET(CONFIG_ABORT)) {
     exit_fun("[SOFTMODEM] Error, configuration module init failed\n");
   }
   //set_softmodem_sighandler();
@@ -282,23 +253,20 @@ int main(int argc, char **argv)
 
   init_opt();
 
-  int ret_loader = load_nrLDPC_coding_interface(NULL, &nrLDPC_coding_interface);
+  int ret_loader = load_nrLDPC_coding_interface(NULL, &nrLDPC_coding_interface, 32);
   AssertFatal(ret_loader == 0, "error loading LDPC library\n");
 
-  if (ouput_vcd) {
-    vcd_signal_dumper_init("/tmp/openair_dump_nrUE.vcd");
-  }
   // strdup to put the sring in the core file for post mortem identification
   char *pckg = strdup(OAI_PACKAGE_VERSION);
   LOG_I(HW, "Version: %s\n", pckg);
 
-  PHY_vars_UE_g = calloc_or_fail(NB_UE_INST, sizeof(*PHY_vars_UE_g));
+  nrPHY_vars_UE_g = calloc_or_fail(NB_UE_INST, sizeof(*nrPHY_vars_UE_g));
   for (int inst = 0; inst < NB_UE_INST; inst++) {
-    PHY_vars_UE_g[inst] = calloc_or_fail(MAX_NUM_CCs, sizeof(*PHY_vars_UE_g[inst]));
+    nrPHY_vars_UE_g[inst] = calloc_or_fail(MAX_NUM_CCs, sizeof(*nrPHY_vars_UE_g[inst]));
     for (int CC_id = 0; CC_id < MAX_NUM_CCs; CC_id++) {
-      PHY_vars_UE_g[inst][CC_id] = calloc_or_fail(1, sizeof(*PHY_vars_UE_g[inst][CC_id]));
+      nrPHY_vars_UE_g[inst][CC_id] = calloc_or_fail(1, sizeof(*nrPHY_vars_UE_g[inst][CC_id]));
       // All instances use the same coding interface
-      PHY_vars_UE_g[inst][CC_id]->nrLDPC_coding_interface = nrLDPC_coding_interface;
+      nrPHY_vars_UE_g[inst][CC_id]->nrLDPC_coding_interface = nrLDPC_coding_interface;
     }
   }
 
@@ -359,7 +327,7 @@ int main(int argc, char **argv)
     NR_UE_MAC_INST_t *mac = get_mac_inst(inst);
 
     for (int CC_id = 0; CC_id < MAX_NUM_CCs; CC_id++) {
-      PHY_VARS_NR_UE *UE_CC = PHY_vars_UE_g[inst][CC_id];
+      PHY_VARS_NR_UE *UE_CC = nrPHY_vars_UE_g[inst][CC_id];
 
       AssertFatal(cell_id >= 0 && cell_id < nrue_get_cell_count(),
                   "There are not enough cell definitions for all UEs! NB_UE_INST = %d, MAX_NUM_CCs = %d, nrue_cell_count = %d\n",
@@ -391,7 +359,7 @@ int main(int argc, char **argv)
         fapi_nr_config_request_t *nrUE_config = &UE_CC->nrUE_config;
         nr_init_frame_parms_ue(fp, nrUE_config, mac->nr_band);
 
-        cell.band = fp->nr_band;
+        cell.band = mac->nr_band;
         cell.rf_frequency = fp->dl_CarrierFreq;
         cell.rf_freq_offset = fp->ul_CarrierFreq - fp->dl_CarrierFreq;
         cell.numerology = fp->numerology_index;
@@ -445,24 +413,27 @@ int main(int argc, char **argv)
   lock_memory_to_ram();
 
   if (IS_SOFTMODEM_DOSCOPE) {
-    load_softscope("nr", PHY_vars_UE_g[0][0]);
+    load_softscope("nr", nrPHY_vars_UE_g[0][0]);
   }
   if (IS_SOFTMODEM_IMSCOPE_ENABLED) {
-    load_softscope("im", PHY_vars_UE_g[0][0]);
+    load_softscope("im", nrPHY_vars_UE_g[0][0]);
   }
   AssertFatal(!(IS_SOFTMODEM_IMSCOPE_ENABLED && IS_SOFTMODEM_IMSCOPE_RECORD_ENABLED),
               "Data recoding and ImScope cannot be enabled at the same time\n");
   if (IS_SOFTMODEM_IMSCOPE_RECORD_ENABLED) {
-    load_module_shlib("imscope_record", NULL, 0, PHY_vars_UE_g[0][0]);
+    load_module_shlib("imscope_record", NULL, 0, nrPHY_vars_UE_g[0][0]);
   }
 
-  nrue_ru_start();
+  // Launch a temporary high-priority thread to start the UE RU, ensuring radio library threads inherit this priority
+  pthread_t ru_start_thread;
+  threadCreate(&ru_start_thread, nrue_ru_start_thread, NULL, "ru_start_thread", -1, OAI_PRIORITY_RT_MAX);
+  int ret = pthread_join(ru_start_thread, NULL);
+  AssertFatal(ret == 0, "pthread_join error %d, errno %d (%s)\n", ret, errno, strerror(errno));
 
   for (int inst = 0; inst < NB_UE_INST; inst++) {
     LOG_I(PHY,"Intializing UE Threads for instance %d ...\n", inst);
-    init_NR_UE_threads(PHY_vars_UE_g[inst][0]);
+    init_NR_UE_threads(nrPHY_vars_UE_g[inst][0]);
   }
-  printf("UE threads created by %ld\n", gettid());
 
   // wait for end of program
   printf("TYPE <CTRL-C> TO TERMINATE\n");
@@ -479,12 +450,11 @@ int main(int argc, char **argv)
   LOG_W(NR_PHY, "Returned from ITTI signal handler\n");
   oai_exit = 1;
 
-  if (ouput_vcd)
-    vcd_signal_dumper_close();
+  nrue_ru_stop();
 
-  if (PHY_vars_UE_g && PHY_vars_UE_g[0]) {
+  if (nrPHY_vars_UE_g && nrPHY_vars_UE_g[0]) {
     for (int CC_id = 0; CC_id < MAX_NUM_CCs; CC_id++) {
-      PHY_VARS_NR_UE *phy_vars = PHY_vars_UE_g[0][CC_id];
+      PHY_VARS_NR_UE *phy_vars = nrPHY_vars_UE_g[0][CC_id];
       if (phy_vars) {
         for (int i = 0; i < get_nrUE_params()->num_ul_actors; i++) {
           shutdown_actor(&phy_vars->ul_actors[i]);
@@ -509,6 +479,7 @@ int main(int argc, char **argv)
   time_manager_finish();
 
   free(pckg);
+  printf("Bye.\n");
   return 0;
 }
 

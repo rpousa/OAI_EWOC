@@ -1,12 +1,9 @@
-/*! \file oaiori.c
+/*
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
+ */
+
+/*!
  * \brief AW2S ORI API isolator 
- * \author  Raymond Knopp
- * \date 2019
- * \version 0.1
- * \company Eurecom
- * \maintainer:  raymond.knopp@eurecom.fr
- * \note
- * \warning
  */
 
 #include <arpa/inet.h>
@@ -417,10 +414,7 @@ int aw2s_startstreaming(openair0_device_t *device)
   return (0);
 }
 
-uint32_t to_nrarfcn(int nr_bandP,
-                    uint64_t dl_CarrierFreq,
-                    uint8_t scs_index,
-                    uint32_t bw);
+uint32_t to_nrarfcn(uint64_t dl_CarrierFreq);
 
 int aw2s_oriinit(openair0_device_t *device)
 {
@@ -543,7 +537,7 @@ int aw2s_oriinit(openair0_device_t *device)
     txParams.TxNRFDD.axcB = 0;
     txParams.TxNRFDD.chanBW = openair0_cfg->tx_bw/100e3;
 
-    txParams.TxNRFDD.AWS_arfcn = to_nrarfcn(openair0_cfg->nr_band,(long long int)openair0_cfg->tx_freq[0],openair0_cfg->nr_scs_for_raster,(uint32_t)openair0_cfg->tx_bw);
+    txParams.TxNRFDD.AWS_arfcn = to_nrarfcn((long long int)openair0_cfg->tx_freq[0]);
     txParams.TxNRFDD.maxTxPwr = 430-((int)openair0_cfg->tx_gain[0]*10);
   }
   else if (openair0_cfg->duplex_mode == duplex_mode_TDD && openair0_cfg->nr_flag == 0) {
@@ -562,7 +556,7 @@ int aw2s_oriinit(openair0_device_t *device)
     txParams.TxNRTDD.axcW = 1;
     txParams.TxNRTDD.axcB = 0;
     txParams.TxNRTDD.chanBW = openair0_cfg->tx_bw/100e3;
-    txParams.TxNRTDD.AWS_arfcn = to_nrarfcn(openair0_cfg->nr_band,(long long int)openair0_cfg->tx_freq[0],openair0_cfg->nr_scs_for_raster,(uint32_t)openair0_cfg->tx_bw);
+    txParams.TxNRTDD.AWS_arfcn = to_nrarfcn((long long int)openair0_cfg->tx_freq[0]);
     txParams.TxNRTDD.maxTxPwr = 430-((int)openair0_cfg->tx_gain[0]*10);
 
     printf("AW2S: Configuring for NR TDD, NRARFCN %u, Power %d, BW %d\n",
@@ -678,7 +672,7 @@ int aw2s_oriinit(openair0_device_t *device)
     rxParams.RxNRFDD.axcW = 1;
     rxParams.RxNRFDD.axcB = 0;
     rxParams.RxNRFDD.chanBW = txParams.TxNRFDD.chanBW;
-    rxParams.RxNRFDD.AWS_arfcn = to_nrarfcn(openair0_cfg->nr_band,(long long int)openair0_cfg->rx_freq[0],openair0_cfg->nr_scs_for_raster,openair0_cfg->rx_bw);
+    rxParams.RxNRFDD.AWS_arfcn = to_nrarfcn((long long int)openair0_cfg->rx_freq[0]);
     result = ORI_ObjectCreation(ori, rxTypeRef, rxParams, rxParamList, num_rxparams, rxParamResult, &rx0, &RE_result);
   }    
   else if (openair0_cfg->duplex_mode == duplex_mode_TDD && openair0_cfg->nr_flag == 0) {

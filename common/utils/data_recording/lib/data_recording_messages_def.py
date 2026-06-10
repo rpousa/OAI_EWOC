@@ -1,34 +1,33 @@
-# /*
-# * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
-# * contributor license agreements.  See the NOTICE file distributed with
-# * this work for additional information regarding copyright ownership.
-# * The OpenAirInterface Software Alliance licenses this file to You under
-# * the OAI Public License, Version 1.1  (the "License"); you may not use this file
-# * except in compliance with the License.
-# * You may obtain a copy of the License at
-# *
-# *      http://www.openairinterface.org/?page_id=698
-# *
-# * Unless required by applicable law or agreed to in writing, software
-# * distributed under the License is distributed on an "AS IS" BASIS,
-# * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# * See the License for the specific language governing permissions and
-# * limitations under the License.
-# *-------------------------------------------------------------------------------
-# * For more information about the OpenAirInterface (OAI) Software Alliance:
-# *      contact@openairinterface.org
-# */
-# ---------------------------------------------------------------------
-# file common/utils/data_recording/lib/data_recording_messages_def.py
-# brief defination of captured data recording messages
-# author Abdo Gaber
-# date 2025
-# version 1.0
-# company Emerson, NI Test and Measurement
-# email:
-# note
-# warning
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
 
+# ---------------------------------------------------------------------
+# brief defination of captured data recording messages
+
+# Get Common Sync Header - number of bytes
+def get_sync_header_msg_list():
+    """
+    shared memory layout written from the app:
+    =================================
+    msg_id                  (uint8)  message type ID
+    frame                   (uint16)
+    slot                    (uint8)
+    unix_capture_ts_sec       (uint32)  Unix epoch seconds
+    unix_capture_ts_nsec      (uint32)  nanoseconds [0, 999999999]
+
+    """
+    # Get Common Sync Header - number of bytes
+    sync_header_msg = {
+        "msg_id": 2,
+        "frame": 2,
+        "slot": 1,
+        "unix_capture_ts_sec": 4,
+        "unix_capture_ts_nsec": 4,
+    }
+    # initial number of bytes to read to get data
+    sync_header_msg_length = 0
+    for key, value in sync_header_msg.items():
+        sync_header_msg_length = sync_header_msg_length + value
+    return sync_header_msg, sync_header_msg_length
 
 # Data Collection Trace Messages - General message structure - number of bytes
 def get_general_msg_header_list():
@@ -38,8 +37,8 @@ def get_general_msg_header_list():
     msg_id                  (uint8)  message type ID
     frame                   (uint16)
     slot                    (uint8)
-    datetime_yyyymmdd       (uint32)
-    datetime_hhmmssmmm      (uint32)
+    unix_capture_ts_sec     (uint32)  Unix epoch seconds
+    unix_capture_ts_nsec    (uint32)  nanoseconds [0, 999999999]
     frame_type              (uint8)
     freq_range              (uint8)
     subcarrier_spacing      (uint8)
@@ -73,8 +72,8 @@ def get_general_msg_header_list():
         "msg_id": 2,
         "frame": 2,
         "slot": 1,
-        "datetime_yyyymmdd": 4,
-        "datetime_hhmmssmmm": 4,
+        "unix_capture_ts_sec": 4,
+        "unix_capture_ts_nsec": 4,
         "frame_type": 1,
         "freq_range": 1,
         "subcarrier_spacing": 1,

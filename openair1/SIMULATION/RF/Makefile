@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 include $(OPENAIR_DIR)/common/utils/Makefile.inc
 OBJS = rf.o ../../PHY/TOOLS/file_output.o ../TOOLS/rangen_double.o
 CFLAGS += -DRF_MAIN -DDEBUG_PHY 

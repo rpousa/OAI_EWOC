@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 CC=gcc
 CFLAGS=-Wall -g -pthread -I/usr/include/X11/Xft -I/usr/include/freetype2
 

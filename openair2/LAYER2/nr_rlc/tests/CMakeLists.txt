@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
 
 foreach(TESTNUM RANGE 1 17)
   add_executable(nr_rlc_test_${TESTNUM} test.c)

@@ -1,33 +1,9 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/* \file NR_IF_Module.c
+/*
  * \brief functions for NR UE FAPI-like interface
- * \author R. Knopp, K.H. HSU
- * \date 2018
- * \version 0.1
- * \company Eurecom / NTUST
- * \email: knopp@eurecom.fr, kai-hsiang.hsu@eurecom.fr
- * \note
- * \warning
  */
 
 #include "PHY/defs_nr_UE.h"
@@ -35,6 +11,7 @@
 #include "NR_MAC_UE/mac_proto.h"
 #include "assertions.h"
 #include "SCHED_NR_UE/fapi_nr_ue_l1.h"
+#include "bits.h"
 #include "openair2/RRC/NR_UE/L2_interface_ue.h"
 
 #define MAX_IF_MODULES 100
@@ -103,9 +80,7 @@ void print_ue_mac_stats(const module_id_t mod, const int frame_rx, const int slo
 
 //  L2 Abstraction Layer
 static int handle_bcch_bch(NR_UE_MAC_INST_t *mac,
-                           int cc_id,
                            unsigned int gNB_index,
-                           void *phy_data,
                            uint8_t *pduP,
                            unsigned int additional_bits,
                            uint32_t ssb_index_mod8,
@@ -128,13 +103,12 @@ static int handle_bcch_bch(NR_UE_MAC_INST_t *mac,
   else
     mac->frequency_range = FR1;
   //  fixed 3 bytes MIB PDU
-  nr_mac_rrc_data_ind_ue(mac->ue_id, cc_id, gNB_index, 0, 0, 0, 0, cell_id, ssb_arfcn, NR_BCCH_BCH, (uint8_t *) pduP, 3);
+  nr_mac_rrc_data_ind_ue(mac->ue_id, gNB_index, 0, 0, 0, cell_id, ssb_arfcn, NR_BCCH_BCH, (uint8_t *) pduP, 3);
   return 0;
 }
 
 //  L2 Abstraction Layer
 static int handle_bcch_dlsch(NR_UE_MAC_INST_t *mac,
-                             int cc_id,
                              unsigned int gNB_index,
                              uint8_t ack_nack,
                              uint8_t *pduP,
@@ -143,22 +117,18 @@ static int handle_bcch_dlsch(NR_UE_MAC_INST_t *mac,
                              int frame,
                              int slot)
 {
-  nr_ue_decode_BCCH_DL_SCH(mac, cc_id, gNB_index, ack_nack, pduP, pdu_len, hfn, frame, slot);
+  nr_ue_decode_BCCH_DL_SCH(mac, gNB_index, ack_nack, pduP, pdu_len, hfn, frame, slot);
   return 0;
 }
 
 //  L2 Abstraction Layer
-static nr_dci_format_t handle_dci(NR_UE_MAC_INST_t *mac,
-                                  unsigned int gNB_index,
-                                  frame_t frame,
-                                  int slot,
-                                  fapi_nr_dci_indication_pdu_t *dci)
+static nr_dci_format_t handle_dci(NR_UE_MAC_INST_t *mac, frame_t frame, int slot, fapi_nr_dci_indication_pdu_t *dci)
 {
   // if notification of a reception of a PDCCH transmission of the SpCell is received from lower layers
   // if the C-RNTI MAC CE was included in Msg3
   // consider this Contention Resolution successful
   if (mac->msg3_C_RNTI && mac->ra.ra_state == nrRA_WAIT_CONTENTION_RESOLUTION)
-    nr_ra_succeeded(mac, gNB_index, frame, slot);
+    nr_ra_succeeded(mac, frame, slot);
 
   // suspend RAR response window timer
   // (in RFsim running multiple slot in parallel it might expire while decoding MSG2)
@@ -175,6 +145,7 @@ static int8_t handle_dlsch(NR_UE_MAC_INST_t *mac, nr_downlink_indication_t *dl_i
   if (mac->ra.ra_state != nrRA_WAIT_RAR) // no HARQ for MSG2
     update_harq_status(mac,
                        dl_info->rx_ind->rx_indication_body[pdu_id].pdsch_pdu.harq_pid,
+                       dl_info->rx_ind->rx_indication_body[pdu_id].pdsch_pdu.cw_idx,
                        dl_info->rx_ind->rx_indication_body[pdu_id].pdsch_pdu.ack_nack);
   if(dl_info->rx_ind->rx_indication_body[pdu_id].pdsch_pdu.ack_nack)
     nr_ue_send_sdu(mac, dl_info, pdu_id);
@@ -197,9 +168,9 @@ static int8_t handle_l1_measurements(NR_UE_MAC_INST_t *mac, frame_t frame, int s
   return 0;
 }
 
-void update_harq_status(NR_UE_MAC_INST_t *mac, uint8_t harq_pid, uint8_t ack_nack)
+void update_harq_status(NR_UE_MAC_INST_t *mac, uint8_t harq_pid, int cw_idx, uint8_t ack_nack)
 {
-  NR_UE_DL_HARQ_STATUS_t *current_harq = &mac->dl_harq_info[harq_pid];
+  NR_UE_DL_HARQ_STATUS_t *current_harq = &mac->dl_harq_info[harq_pid][cw_idx];
 
   if (current_harq->active) {
     LOG_D(PHY,"Updating harq_status for harq_id %d, ack/nak %d\n", harq_pid, current_harq->ack);
@@ -244,11 +215,7 @@ static uint32_t nr_ue_dl_processing(NR_UE_MAC_INST_t *mac, nr_downlink_indicatio
     LOG_T(MAC, "[L2][IF MODULE][DL INDICATION][DCI_IND]\n");
     for (int i = 0; i < dl_info->dci_ind->number_of_dcis; i++) {
       LOG_T(MAC, ">>>NR_IF_Module i=%d, dl_info->dci_ind->number_of_dcis=%d\n", i, dl_info->dci_ind->number_of_dcis);
-      nr_dci_format_t dci_format = handle_dci(mac,
-                                              dl_info->gNB_index,
-                                              dl_info->frame,
-                                              dl_info->slot,
-                                              dl_info->dci_ind->dci_list + i);
+      nr_dci_format_t dci_format = handle_dci(mac, dl_info->frame, dl_info->slot, dl_info->dci_ind->dci_list + i);
 
       /* The check below filters out UL_DCIs which are being processed as DL_DCIs. */
       if (dci_format != NR_DL_DCI_FORMAT_1_0 && dci_format != NR_DL_DCI_FORMAT_1_1) {
@@ -288,9 +255,7 @@ static uint32_t nr_ue_dl_processing(NR_UE_MAC_INST_t *mac, nr_downlink_indicatio
                      mac);
           if(rx_indication_body.ssb_pdu.decoded_pdu) {
             ret_mask |= (handle_bcch_bch(mac,
-                                         dl_info->cc_id,
                                          dl_info->gNB_index,
-                                         dl_info->phy_data,
                                          rx_indication_body.ssb_pdu.pdu,
                                          rx_indication_body.ssb_pdu.additional_bits,
                                          rx_indication_body.ssb_pdu.ssb_index,
@@ -302,7 +267,6 @@ static uint32_t nr_ue_dl_processing(NR_UE_MAC_INST_t *mac, nr_downlink_indicatio
           break;
         case FAPI_NR_RX_PDU_TYPE_SIB:
           ret_mask |= (handle_bcch_dlsch(mac,
-                                         dl_info->cc_id,
                                          dl_info->gNB_index,
                                          rx_indication_body.pdsch_pdu.ack_nack,
                                          rx_indication_body.pdsch_pdu.pdu,
@@ -429,7 +393,7 @@ static void handle_sl_bch(int ue_id,
   sl_mac->decoded_DFN = frame;
   sl_mac->decoded_slot = slot;
 
-  nr_mac_rrc_data_ind_ue(ue_id, 0, 0, hfn_rx, frame_rx, slot_rx, 0, rx_slss_id, 0, NR_SBCCH_SL_BCH, (uint8_t *)sl_mib, len);
+  nr_mac_rrc_data_ind_ue(ue_id, 0, hfn_rx, frame_rx, slot_rx, rx_slss_id, 0, NR_SBCCH_SL_BCH, (uint8_t *)sl_mib, len);
 
   return;
 }

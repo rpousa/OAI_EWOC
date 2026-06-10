@@ -1,22 +1,5 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
 #include <sched.h>
@@ -33,13 +16,12 @@
 #include "PHY/phy_extern.h"
 #include "PHY/TOOLS/phy_scope_interface.h"
 #include "common/utils/LOG/log.h"
-#include "common/utils/LOG/vcd_signal_dumper.h"
-// #include "PHY/INIT/phy_init.h"
 #include "openair2/ENB_APP/enb_paramdef.h"
 #include "system.h"
 #include "nfapi/oai_integration/vendor_ext.h"
 #include <executables/softmodem-common.h>
 #include <executables/thread-common.h>
+#include "executables/nr-softmodem.h"
 
 pthread_cond_t sync_cond;
 pthread_mutex_t sync_mutex;
@@ -51,13 +33,7 @@ int sf_ahead = 4;
 int emulate_rf = 0;
 
 RAN_CONTEXT_t RC;
-
-extern void kill_NR_RU_proc(int inst);
-extern void set_function_spec_param(RU_t *ru);
-extern void start_NR_RU();
-extern void init_NR_RU(configmodule_interface_t *cfg, char *);
-
-int32_t uplink_frequency_offset[MAX_NUM_CCs][4];
+int64_t uplink_frequency_offset[MAX_NUM_CCs][4];
 
 void nfapi_setmode(nfapi_mode_t nfapi_mode)
 {
@@ -148,6 +124,10 @@ int beam_index_allocation(bool das,
 {
   return 0;
 }
+uint16_t get_first_ant_idx(bool das, uint16_t num_ports_beams, uint16_t beam_id, uint16_t fapi_start_port)
+{
+  return 0;
+};
 void nr_fill_du(uint16_t N_ZC, const uint16_t *prach_root_sequence_map, uint16_t nr_du[NR_PRACH_SEQ_LEN_L - 1])
 {
   return;

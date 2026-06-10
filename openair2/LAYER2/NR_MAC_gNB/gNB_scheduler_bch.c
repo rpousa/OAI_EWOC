@@ -1,40 +1,15 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file gNB_scheduler_bch.c
+/*!
  * \brief procedures related to gNB for the BCH transport channel
- * \author  Navid Nikaein and Raymond Knopp, WEI-TAI CHEN
- * \date 2010 - 2014, 2018
- * \email: navid.nikaein@eurecom.fr, kroempa@gmail.com
- * \version 1.0
- * \company Eurecom, NTUST
- * @ingroup _mac
-
  */
 
 #include "assertions.h"
 #include "NR_MAC_gNB/nr_mac_gNB.h"
 #include "NR_MAC_gNB/mac_proto.h"
 #include "common/utils/LOG/log.h"
-#include "common/utils/LOG/vcd_signal_dumper.h"
 #include "UTIL/OPT/opt.h"
 #include "common/utils/nr/nr_common.h"
 
@@ -52,7 +27,8 @@ static void schedule_ssb(frame_t frame,
                          int beam_index,
                          uint8_t scoffset,
                          uint16_t offset_pointa,
-                         uint32_t payload)
+                         uint32_t payload,
+                         uint16_t stream_idx)
 {
   nfapi_nr_dl_tti_request_pdu_t *dl_config_pdu = &dl_req->dl_tti_pdu_list[dl_req->nPDUs];
   memset((void *) dl_config_pdu, 0, sizeof(nfapi_nr_dl_tti_request_pdu_t));
@@ -83,6 +59,8 @@ static void schedule_ssb(frame_t frame,
   dl_config_pdu->ssb_pdu.ssb_pdu_rel15.precoding_and_beamforming.dig_bf_interfaces = 1;
   dl_config_pdu->ssb_pdu.ssb_pdu_rel15.precoding_and_beamforming.prgs_list[0].pm_idx = 0;
   dl_config_pdu->ssb_pdu.ssb_pdu_rel15.precoding_and_beamforming.prgs_list[0].dig_bf_interface_list[0].beam_idx = beam_index;
+  dl_config_pdu->ssb_pdu.ssb_pdu_rel15.param_v4.spatialStreamIndexPresent = 1;
+  dl_config_pdu->ssb_pdu.ssb_pdu_rel15.param_v4.spatialStreamIndex = stream_idx;
   dl_req->nPDUs++;
 
   LOG_D(NR_MAC,"Scheduling ssb %d at frame %d and slot %d\n", i_ssb, frame, slot);
@@ -102,7 +80,7 @@ static void fill_ssb_vrb_map(NR_COMMON_channels_t *cc,
   uint16_t *vrb_map = cc[CC_id].vrb_map[beam];
   const int extra_prb = ssb_subcarrier_offset > 0;
   for (int rb = 0; rb < 20 + extra_prb; rb++)
-    vrb_map[rbStart + rb] = SL_to_bitmap(symStart % NR_NUMBER_OF_SYMBOLS_PER_SLOT, 4);
+    vrb_map[rbStart + rb] = SL_to_bitmap(symStart % NR_SYMBOLS_PER_SLOT, 4);
 }
 
 static int encode_mib(NR_BCCH_BCH_Message_t *mib, frame_t frame, uint8_t *buffer, int buf_size)
@@ -222,7 +200,16 @@ void schedule_nr_mib(module_id_t module_idP, frame_t frameP, slot_t slotP, nfapi
             AssertFatal(beam.idx >= 0, "Cannot allocate SSB %d in any available beam\n", i_ssb);
             const uint16_t alloc_beam_idx = get_allocated_beam(&gNB->beam_info, frameP, slotP, slots_per_frame, beam.idx);
             const uint16_t fapi_beam = convert_to_fapi_beam(alloc_beam_idx, gNB->beam_info.beam_mode);
-            schedule_ssb(frameP, slotP, scc, dl_req, i_ssb, fapi_beam, ssbSubcarrierOffset, offset_pointa, mib_pdu);
+            schedule_ssb(frameP,
+                         slotP,
+                         scc,
+                         dl_req,
+                         i_ssb,
+                         fapi_beam,
+                         ssbSubcarrierOffset,
+                         offset_pointa,
+                         mib_pdu,
+                         gNB->radio_config.spatial_stream_index[beam.idx]);
             fill_ssb_vrb_map(cc, prb_offset, ssbSubcarrierOffset, ssb_start_symbol, CC_id, beam.idx);
             if (IS_SA_MODE(get_softmodem_params())) {
               get_type0_PDCCH_CSS_config_parameters(&gNB->type0_PDCCH_CSS_config[i_ssb],
@@ -258,37 +245,31 @@ static bool update_rb_mcs_tbs(NR_sched_pdsch_t *pdsch, uint32_t num_total_bytes,
   const uint16_t slbitmap = SL_to_bitmap(tda_info->startSymbolIndex, tda_info->nrOfSymbols);
   int bwpSize = pdsch->bwp_info.bwpSize;
   int bwpStart = pdsch->bwp_info.bwpStart;
-  int rbStop = bwpSize - 1;
-  while (pdsch->rbStart < rbStop) {
-    if (vrb_map[pdsch->rbStart + bwpStart] & slbitmap)
-      pdsch->rbStart++;
-    else {
-      int max_rbSize = 0;
-      while (pdsch->rbStart + max_rbSize <= rbStop && !(vrb_map[pdsch->rbStart + max_rbSize + bwpStart] & slbitmap))
-        max_rbSize++;
 
-      bool res = false;
-      while (res == false && pdsch->mcs < 10) {
-        pdsch->Qm = nr_get_Qm_dl(pdsch->mcs, mcsTableIdx);
-        pdsch->R = nr_get_code_rate_dl(pdsch->mcs, mcsTableIdx);
-        res = nr_find_nb_rb(pdsch->Qm,
-                            pdsch->R,
-                            1, // no transform precoding for DL
-                            1, // single layer
-                            tda_info->nrOfSymbols,
-                            pdsch->dmrs_parms.N_PRB_DMRS * pdsch->dmrs_parms.N_DMRS_SLOT,
-                            num_total_bytes,
-                            1, // min_rbSize
-                            max_rbSize,
-                            &pdsch->tb_size,
-                            &pdsch->rbSize);
-        if (!res)
-          pdsch->mcs++;
-      }
+  for (pdsch->mcs = 0; pdsch->mcs < 10; pdsch->mcs++) {
+    pdsch->Qm = nr_get_Qm_dl(pdsch->mcs, mcsTableIdx);
+    pdsch->R = nr_get_code_rate_dl(pdsch->mcs, mcsTableIdx);
+    if (!nr_find_nb_rb(pdsch->Qm,
+                       pdsch->R,
+                       1, // no transform precoding for DL
+                       1, // single layer
+                       tda_info->nrOfSymbols,
+                       pdsch->dmrs_parms.N_PRB_DMRS * pdsch->dmrs_parms.N_DMRS_SLOT,
+                       num_total_bytes,
+                       1, // min_rbSize
+                       bwpSize, // max_rbSize,
+                       &pdsch->tb_size,
+                       &pdsch->rbSize))
+      continue;
+    int rbStart, rbSize;
+    if (get_rb_alloc(pdsch->rbSize, pdsch->rbSize, bwpStart, bwpSize, vrb_map, slbitmap, &rbStart, &rbSize)) {
+      pdsch->rbStart = rbStart;
+      pdsch->rbSize = rbSize;
       break;
     }
   }
-  if (pdsch->tb_size < num_total_bytes) {
+
+  if (pdsch->mcs >= 10 || pdsch->tb_size < num_total_bytes) {
     LOG_D(NR_MAC,
           "Couldn't allocate enough resources for %d bytes in SIB PDSCH (rbStart %d, rbSize %d, bwpSize %d)\n",
           num_total_bytes,
@@ -325,6 +306,7 @@ static NR_sched_pdsch_t allocate_sib1(gNB_MAC_INST *gNB_mac,
   NR_COMMON_channels_t *cc = &gNB_mac->common_channels[CC_id];
   NR_ServingCellConfigCommon_t *scc = cc->ServingCellConfigCommon;
   NR_pdsch_dmrs_t dmrs_parms = get_dl_dmrs_params(scc, NULL, tda_info, 1);
+  const uint16_t *sidx = gNB_mac->radio_config.spatial_stream_index;
   NR_sched_pdsch_t pdsch = {
       .bwp_info = get_pdsch_bwp_start_size(gNB_mac, NULL),
       .time_domain_allocation = time_domain_allocation,
@@ -333,6 +315,8 @@ static NR_sched_pdsch_t allocate_sib1(gNB_MAC_INST *gNB_mac,
       .nrOfLayers = 1,
       .pm_index = 0,
       .mcs = 0, // starting from mcs 0
+      // no of layers 1 and pmi 0 gives only one log antenna port
+      .ant_port_idx = {.numSpatialStreamIndices = 1, .spatialStreamIndices[0] = sidx[beam]},
   };
 
   uint16_t *vrb_map = cc->vrb_map[beam];
@@ -359,7 +343,6 @@ static void nr_fill_nfapi_dl_SIB_pdu(gNB_MAC_INST *gNB_mac,
                                      int cce_index,
                                      nfapi_nr_dl_tti_request_body_t *dl_req,
                                      int pdu_index,
-                                     NR_Type0_PDCCH_CSS_config_t *type0_PDCCH_CSS_config,
                                      bool is_sib1,
                                      int beam_index)
 {
@@ -392,8 +375,15 @@ static void nr_fill_nfapi_dl_SIB_pdu(gNB_MAC_INST *gNB_mac,
         pdsch_pdu_rel15->dlDmrsSymbPos);
 
   /* Fill PDCCH DL DCI PDU */
-  nfapi_nr_dl_dci_pdu_t *dci_pdu =
-      prepare_dci_pdu(pdcch_pdu_rel15, scc, search_space, coreset, aggregation_level, cce_index, fapi_beam, SI_RNTI);
+  nfapi_nr_dl_dci_pdu_t *dci_pdu = prepare_dci_pdu(pdcch_pdu_rel15,
+                                                   scc,
+                                                   search_space,
+                                                   coreset,
+                                                   pdsch->ant_port_idx.spatialStreamIndices,
+                                                   aggregation_level,
+                                                   cce_index,
+                                                   fapi_beam,
+                                                   SI_RNTI);
   pdcch_pdu_rel15->numDlDci++;
 
   /* DCI payload */
@@ -406,6 +396,7 @@ static void nr_fill_nfapi_dl_SIB_pdu(gNB_MAC_INST *gNB_mac,
                                                        pdsch_pdu_rel15,
                                                        pdsch,
                                                        NULL,
+                                                       1,
                                                        0,
                                                        0,
                                                        is_sib1);
@@ -417,6 +408,7 @@ static void nr_fill_nfapi_dl_SIB_pdu(gNB_MAC_INST *gNB_mac,
                      &dci_payload,
                      dci_format,
                      rnti_type,
+                     0,
                      search_space,
                      coreset,
                      0,
@@ -604,7 +596,6 @@ void schedule_nr_sib1(module_id_t module_idP,
                                cce_index,
                                dl_req,
                                pdu_index,
-                               type0_PDCCH_CSS_config,
                                true,
                                beam_index);
 
@@ -672,7 +663,8 @@ static void other_sib_sched_control(module_id_t module_idP,
   LOG_D(NR_MAC, "(%d.%d) otherSIB payload %d transmission for ssb number %d\n", frame, slot, payload_idx, beam_index);
 
   NR_COMMON_channels_t *cc = &gNB_mac->common_channels[0];
-  NR_Type0_PDCCH_CSS_config_t *type0_PDCCH_CSS_config = &gNB_mac->type0_PDCCH_CSS_config[cc->ssb_index[beam_index]];
+  int ssb_index = get_ssbidx_from_beam(gNB_mac, beam_index);
+  NR_Type0_PDCCH_CSS_config_t *type0_PDCCH_CSS_config = &gNB_mac->type0_PDCCH_CSS_config[ssb_index];
   NR_PDSCH_ConfigCommon_t *pdsch_ConfigCommon = scc->downlinkConfigCommon->initialDownlinkBWP->pdsch_ConfigCommon->choice.setup;
   int time_domain_allocation = 1;
   NR_tda_info_t tda_info = set_tda_info_from_list(pdsch_ConfigCommon->pdsch_TimeDomainAllocationList, time_domain_allocation);
@@ -709,14 +701,16 @@ static void other_sib_sched_control(module_id_t module_idP,
   // Mark the corresponding RBs as used
   fill_pdcch_vrb_map(gNB_mac, 0, gNB_mac->sched_pdcch_otherSI, cce_index, aggregation_level, beam.idx);
 
-  NR_sched_pdsch_t sched_pdsch_otherSI = {0};
-  sched_pdsch_otherSI.time_domain_allocation = time_domain_allocation;
-  sched_pdsch_otherSI.bwp_info = get_pdsch_bwp_start_size(gNB_mac, NULL);
-  sched_pdsch_otherSI.dmrs_parms = dmrs_parms;
-  sched_pdsch_otherSI.tda_info = tda_info;
-  sched_pdsch_otherSI.nrOfLayers = 1;
-  sched_pdsch_otherSI.pm_index = 0;
-  sched_pdsch_otherSI.mcs = 0; // starting from mcs 0
+  const uint16_t *sidx = gNB_mac->radio_config.spatial_stream_index;
+  NR_sched_pdsch_t sched_pdsch_otherSI = {
+      .time_domain_allocation = time_domain_allocation,
+      .bwp_info = get_pdsch_bwp_start_size(gNB_mac, NULL),
+      .dmrs_parms = dmrs_parms,
+      .tda_info = tda_info,
+      .nrOfLayers = 1,
+      .pm_index = 0,
+      .mcs = 0, // starting from mcs 0
+      .ant_port_idx = {.numSpatialStreamIndices = 1, .spatialStreamIndices[0] = sidx[beam.idx]}};
 
   uint16_t *vrb_map = cc->vrb_map[beam.idx];
   uint8_t *sib_bcch_pdu = cc->other_sib_bcch_pdu[payload_idx];
@@ -739,7 +733,6 @@ static void other_sib_sched_control(module_id_t module_idP,
                            cce_index,
                            dl_req,
                            pdu_index,
-                           type0_PDCCH_CSS_config,
                            false,
                            beam_index);
 

@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 # OAI console logging facility
 
 oai includes a console logging facility that any component should use when writting informational or debugging messages to the softmodem or uesoftmodem stdout stream.
@@ -16,5 +18,3 @@ By default, this facility is included at build-time and activated at run-time. T
 * [developer usage](devusage.md)
 * [module architecture](arch.md)
 * [lttng usage](lttng_logs.md)
-
-[oai Wikis home](https://gitlab.eurecom.fr/oai/openairinterface5g/wikis/home)

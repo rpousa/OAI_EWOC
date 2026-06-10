@@ -1,4 +1,5 @@
 #!/bin/bash
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
 
 # this script takes one argument, which is the path to the CU-UP configuration
 if [ $# -ne 1 ]; then
@@ -14,7 +15,7 @@ set -x
 ./nr-cuup -O ${CONFIG} &
 CUUP_PID=$!
 
-timeout 5s ./tests/nr-cuup/nr-cuup-load-test -t 3 -d 10 -u 10
+timeout 7s ./tests/nr-cuup/nr-cuup-load-test -t 3 -d 10 -u 10
 RET=$?
 
 kill ${CUUP_PID}

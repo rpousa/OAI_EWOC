@@ -1,42 +1,15 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file PHY/LTE_TRANSPORT/prach_common.c
+/*!
  * \brief Common routines for NR UE/gNB PRACH physical channel V15.4 2019-03
- * \author R. Knopp
- * \date 2019
- * \version 0.1
- * \company Eurecom
- * \email: knopp@eurecom.fr
- * \note
- * \warning
  */
 #include "PHY/sse_intrin.h"
-#include "common/utils/LOG/vcd_signal_dumper.h"
 #include "PHY/impl_defs_nr.h"
-#include "PHY/defs_nr_UE.h"
 #include "PHY/NR_TRANSPORT/nr_prach.h"
 #include "PHY/NR_TRANSPORT/nr_transport_common_proto.h"
 #include "common/utils/LOG/log.h"
-#include "common/utils/LOG/vcd_signal_dumper.h"
 #include "T.h"
 
 /* Extended Euclidean Algorithm to compute modulo inverse */
@@ -89,9 +62,6 @@ void compute_nr_prach_seq(uint8_t short_sequence, uint8_t num_sequences, uint8_t
   int N_ZC;
 
   const uint16_t* prach_root_sequence_map;
-
-  VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME(VCD_SIGNAL_DUMPER_FUNCTIONS_PHY_UE_COMPUTE_PRACH, VCD_FUNCTION_IN);
-
   LOG_D(PHY,"compute_prach_seq: prach short sequence %x, num_sequences %d, rootSequenceIndex %d\n", short_sequence, num_sequences, rootSequenceIndex);
 
   N_ZC = (short_sequence) ? NR_PRACH_SEQ_LEN_S : NR_PRACH_SEQ_LEN_L;
@@ -132,6 +102,4 @@ void compute_nr_prach_seq(uint8_t short_sequence, uint8_t num_sequences, uint8_t
       X_u[i][k] = ru;
     }
   }
-
-  VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME(VCD_SIGNAL_DUMPER_FUNCTIONS_PHY_UE_COMPUTE_PRACH, VCD_FUNCTION_OUT);
 }

@@ -1,22 +1,5 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
 #include "fgmm_service_reject.h"
@@ -25,6 +8,7 @@
 #include <stdlib.h> // For malloc and free
 #include "common/utils/ds/byte_array.h"
 #include "common/utils/utils.h"
+#include "common/utils/eq_check.h"
 #include "fgmm_lib.h"
 
 #define SERVICE_REJECT_MIN_LEN 1 // 1 octet
@@ -33,7 +17,7 @@
 int encode_fgs_service_reject(byte_array_t *buffer, const fgs_service_reject_msg_t *msg)
 {
   if (buffer->len < SERVICE_REJECT_MIN_LEN) {
-    PRINT_NAS_ERROR("Failed to encode Service Reject: missing Cause IE!\n");
+    PRINT_ERROR("Failed to encode Service Reject: missing Cause IE!\n");
     return -1;
   }
 
@@ -71,7 +55,7 @@ int encode_fgs_service_reject(byte_array_t *buffer, const fgs_service_reject_msg
 int decode_fgs_service_reject(fgs_service_reject_msg_t *msg, const byte_array_t *buffer)
 {
   if (buffer->len < SERVICE_REJECT_MIN_LEN) {
-    PRINT_NAS_ERROR("Nothing to decode: missing Cause IE!\n");
+    PRINT_ERROR("Nothing to decode: missing Cause IE!\n");
     return -1;
   }
 
@@ -112,11 +96,11 @@ int decode_fgs_service_reject(fgs_service_reject_msg_t *msg, const byte_array_t 
         int cag_len = cag_list_len + 2; // encoded content + 2 octets for the length IE
         decoded += cag_len;
         UPDATE_BYTE_ARRAY(ba, cag_len);
-        PRINT_NAS_ERROR("CAG information list IE in NAS Service Reject is not handled\n");
+        PRINT_ERROR("CAG information list IE in NAS Service Reject is not handled\n");
       } break;
 
       default:
-        PRINT_NAS_ERROR("Uknown or invalid NAS Service Reject IEI %d\n", iei);
+        PRINT_ERROR("Uknown or invalid NAS Service Reject IEI %d\n", iei);
         return -1;
     }
   }
@@ -127,15 +111,15 @@ int decode_fgs_service_reject(fgs_service_reject_msg_t *msg, const byte_array_t 
 /** @brief Equality check for Service Reject (enc/dec) */
 bool eq_service_reject(const fgs_service_reject_msg_t *a, const fgs_service_reject_msg_t *b)
 {
-  _NAS_EQ_CHECK_INT(a->cause, b->cause);
-  _NAS_EQ_CHECK_INT(a->has_psi_status, b->has_psi_status);
+  _EQ_CHECK_INT(a->cause, b->cause);
+  _EQ_CHECK_INT(a->has_psi_status, b->has_psi_status);
   if (a->has_psi_status && b->has_psi_status) {
     for (int i = 0; i < MAX_NUM_PSI; i++)
-      _NAS_EQ_CHECK_INT(a->psi_status[i], b->psi_status[i]);
+      _EQ_CHECK_INT(a->psi_status[i], b->psi_status[i]);
   }
   if (a->t3448 != NULL || b->t3448 != NULL) {
     if (a->t3448 == NULL || b->t3448 == NULL) {
-      PRINT_NAS_ERROR("t3448 equality check failed\n");
+      PRINT_ERROR("t3448 equality check failed\n");
       return false;
     }
     if (!eq_gprs_timer(a->t3448, b->t3448))
@@ -143,7 +127,7 @@ bool eq_service_reject(const fgs_service_reject_msg_t *a, const fgs_service_reje
   }
   if (a->t3446 != NULL || b->t3446 != NULL) {
     if (a->t3446 == NULL || b->t3446 == NULL) {
-      PRINT_NAS_ERROR("t3448 equality check failed\n");
+      PRINT_ERROR("t3448 equality check failed\n");
       return false;
     }
     if (!eq_gprs_timer(a->t3446, b->t3446))

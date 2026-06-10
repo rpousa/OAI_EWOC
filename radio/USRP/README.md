@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 [[_TOC_]]
 
 # USRP device documentation
@@ -12,6 +14,20 @@ Hardware Driver (UHD) (https://github.com/EttusResearch/uhd). The file
 Example files can be found in the `ci-scripts/conf_files/` directory with a
 `usrp` in the name, for instance
 [`gnb.sa.band78.106prb.usrpn310.ddsuu-2x2.conf`](../../ci-scripts/conf_files/gnb.sa.band78.106prb.usrpn310.ddsuu-2x2.conf).
+
+## Build
+
+The OAI USRP driver in leverages the [USRP Hardware
+Driver](https://github.com/EttusResearch/uhd) to interface with a USRP.
+`build_oai` has support for installing UHD from package manager (Ubuntu) or from
+source (other distributions or on request). See [`BUILD.md`](./BUILD.md) for
+more information.
+
+Note that OAI comes with a patch for UHD as found in `cmake_targets/tools/`.
+This patch is automatically applied when building UHD from source with
+`build_oai`, and improves the TX/RX switching times of UHD. If you cannot apply
+this patch, the `--continuous-tx` option can be an alternative as described
+further below.
 
 ## Configuration
 
@@ -93,6 +109,45 @@ RUs = (
 
 Hint: You cannot see TX/RX spread over multiple USRPs, if you use `internal` as a refrence of the clock and time source.
 
-Furthur information about synchronization on the USRP N3xx devices can be found here: https://kb.ettus.com/Using_Ethernet-Based_Synchronization_on_the_USRP%E2%84%A2_N3xx_Devices
+Furthur information about synchronization on the USRP N3xx devices can be found
+[in the knowledge base article "Using Ethernet-Based
+Synchronization"](https://kb.ettus.com/Using_Ethernet-Based_Synchronization_on_the_USRP%E2%84%A2_N3xx_Devices).
 
 When combining this with the multi USRP feature you can create a distributed antenna array with only 1 channel used at each USRP.
+
+## Further considerations
+
+### TX/RX switching times
+
+When using TDD (e.g., in 5G/NR band n78), the USRP has to frequently switch
+between TX and RX directions. Certain USRPs, e.g., B210, might be too slow for
+this, which can result in degraded radio link performance, especially in 5G/NR
+operation. In order to get a good performance, there are two workarounds:
+
+1. At runtime: you can use the `--continuous-tx` options at gNB/nrUE. This will
+   continuously send TX samples, also when the current link direction is to
+   receive, and we found this to improve the radio link.
+2. At compile/build time: apply the UHD patch described further above, which
+   obliveates the need for `--continuous-tx`.
+
+### Three-quarter sampling
+
+Not all sampling rates can be used with (a) given master sampling rate(s) of a
+USRP. Depending on the bandwidth, you might employ (or not) three-quarter
+sampling using option `-E`. As a basic rule of thump, 40MHz on B210 needs `-E`,
+whereas most other bandwidths on USRPs do not (bu there are exceptions).
+
+### Noise on DC carrier
+
+Some USRPs have noise on the DC carrier, which can degrade the radio signal.
+There are two workarounds:
+
+1. Use the `--tune-offset` parameter, which shifts the operating frequency of
+   the USRP to avoid the use of the DC carrier.
+2. `--tune-offset` has a maximum shift frequency. If half the bandwidth is
+   larger than `--tune-offset`, the DC carrier will still lie within the
+   carrier. In this case, you can also mask these RBs by using
+   `gNBs.[0].ul_prbblacklist` in the configuration file.
+
+You can also find more information on this in the [5G/NR gNB with COTS UE
+tutorial](./NR_SA_Tutorial_COTS_UE.md).

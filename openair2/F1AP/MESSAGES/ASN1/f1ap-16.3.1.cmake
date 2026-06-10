@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 set(F1AP_GRAMMAR ASN1/R16.3.1/38473-g31.asn)
 
 set(f1ap_source

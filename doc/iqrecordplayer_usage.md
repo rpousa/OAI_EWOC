@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 # I/Q record-replay
 ## using the iq record-replay
 
@@ -68,5 +70,3 @@ options for replay mode are:
 ..................................
 ..................................
 ```
-
-[OAI Wikis home](https://gitlab.eurecom.fr/oai/openairinterface5g/wikis/home)

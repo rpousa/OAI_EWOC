@@ -1,22 +1,5 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
 /*
@@ -72,7 +55,7 @@ void nr_normal_prefix_mod(c16_t *txdataF,
                           uint8_t nsymb,
                           const NR_DL_FRAME_PARMS *frame_parms,
                           uint32_t slot,
-                          bool was_symbol_used[NR_NUMBER_OF_SYMBOLS_PER_SLOT])
+                          bool was_symbol_used[NR_SYMBOLS_PER_SLOT])
 {
   // This function works only slot wise. For more generic symbol generation refer nr_feptx0()
   if (frame_parms->numerology_index != 0) { // case where numerology != 0
@@ -288,6 +271,7 @@ void do_OFDM_mod(c16_t **txdataF, c16_t **txdata, uint32_t frame,uint16_t next_s
 
 void apply_nr_rotation_TX(const NR_DL_FRAME_PARMS *fp,
                           c16_t *txdataF,
+                          bool is_flat_buff,
                           const c16_t *symbol_rotation,
                           int slot,
                           int nb_rb,
@@ -309,20 +293,39 @@ void apply_nr_rotation_TX(const NR_DL_FRAME_PARMS *fp,
       this_rotation->r,
       this_rotation->i);
 
-    if (nb_rb & 1) {
-      rotate_cpx_vector(this_symbol, this_rotation, this_symbol,
-                        (nb_rb + 1) * 6, 15);
-      rotate_cpx_vector(this_symbol + fp->first_carrier_offset - 6,
-                        this_rotation,
-                        this_symbol + fp->first_carrier_offset - 6,
-                        (nb_rb + 1) * 6, 15);
-    } else {
-      rotate_cpx_vector(this_symbol, this_rotation, this_symbol,
-                        nb_rb * 6, 15);
-      rotate_cpx_vector(this_symbol + fp->first_carrier_offset,
-                        this_rotation,
-                        this_symbol + fp->first_carrier_offset,
-                        nb_rb * 6, 15);
+    if (is_flat_buff)
+      rotate_cpx_vector(this_symbol, this_rotation, this_symbol, nb_rb * NR_NB_SC_PER_RB, 15);
+    else {
+      c16_t *this_symbol_neg = this_symbol + fp->first_carrier_offset;
+      if (nb_rb & 1) {
+        this_symbol_neg -= 6;
+        nb_rb += 1;
+      }
+      rotate_cpx_vector(this_symbol, this_rotation, this_symbol, nb_rb * 6, 15);
+      rotate_cpx_vector(this_symbol_neg, this_rotation, this_symbol_neg, nb_rb * 6, 15);
     }
+  }
+}
+                       
+/* Do FFT-shift for symbols in the provided in buffer and writes to out buffer. */
+void fft_shift(const c16_t *in,
+               uint32_t in_symb_sz,
+               uint16_t num_prb,
+               c16_t *out,
+               uint16_t fft_size_out,
+               uint16_t start_symb,
+               uint16_t num_symb)
+{
+  const int num_samp_half = num_prb * NR_NB_SC_PER_RB / 2;
+  const int first_carrier_offset = fft_size_out - num_samp_half;
+  for (int s = start_symb; s < start_symb + num_symb; s++) {
+    // Copy negative freq component
+    uint32_t out_offset = s * fft_size_out + first_carrier_offset;
+    uint32_t in_offset = s * in_symb_sz;
+    memcpy(out + out_offset, in + in_offset, num_samp_half * sizeof(int32_t));
+    // Copy positive freq component
+    out_offset = s * fft_size_out;
+    in_offset = s * in_symb_sz + num_samp_half;
+    memcpy(out + out_offset, in + in_offset, num_samp_half * sizeof(int32_t));
   }
 }

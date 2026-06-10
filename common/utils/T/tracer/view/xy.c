@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
+ */
+
 #include "view.h"
 #include "../utils.h"
 #include <stdio.h>
@@ -38,6 +42,7 @@ static void *xy_thread(void *_this)
 static void clear(view *this)
 {
   /* TODO */
+  UNUSED(this);
 }
 
 static void append_loop(view *_this, float *x, float *y, int length)

@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 There are fundamental changes to the L2 emulation mechanism; these changes allow the
 user to run multiple UEs in separate Linux processes/machines/VMs/etc. They use a separate
 entity between the UE(s) and eNB/gNB. The UEs use nFAPI to communicate with the eNB/gNB. The

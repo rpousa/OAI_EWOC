@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
+add_compile_options(-Wunused-parameter)
 #find_package(Boost REQUIRED)
 find_package(UHD REQUIRED UHD)
 

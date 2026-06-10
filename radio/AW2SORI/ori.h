@@ -1,5 +1,4 @@
 /**
-* @file ori.h
 * @brief Open Radio Interface (ORI) C library header file.
 * @author AW2S (http://www.aw2s.com)
 * @version 1.8

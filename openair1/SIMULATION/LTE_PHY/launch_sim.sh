@@ -1,4 +1,6 @@
 #!/bin/bash
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 # PBS Options 
 #PBS -m abe 
 #PBS -d /homes/kaltenbe/Devel/openair_lte/openair1/SIMULATION/LTE_PHY

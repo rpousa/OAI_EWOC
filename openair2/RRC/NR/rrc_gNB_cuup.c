@@ -1,22 +1,5 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
 #include <netinet/in.h>
@@ -43,6 +26,7 @@
 #include "tree.h"
 #include "e1ap_interface_management.h"
 #include "rrc_gNB_NGAP.h"
+#include "rrc_cell_management.h"
 
 static int cuup_compare(const nr_rrc_cuup_container_t *a, const nr_rrc_cuup_container_t *b)
 {
@@ -106,13 +90,13 @@ bool is_cuup_associated(gNB_RRC_INST *rrc)
   return false;
 }
 
-bool ue_associated_to_cuup(const gNB_RRC_INST *rrc, const gNB_RRC_UE_t *ue)
+bool ue_associated_to_cuup(const gNB_RRC_UE_t *ue)
 {
   f1_ue_data_t ue_data = cu_get_f1_ue_data(ue->rrc_ue_id);
   return ue_data.e1_assoc_id != 0;
 }
 
-sctp_assoc_t get_existing_cuup_for_ue(const gNB_RRC_INST *rrc, const gNB_RRC_UE_t *ue)
+sctp_assoc_t get_existing_cuup_for_ue(const gNB_RRC_UE_t *ue)
 {
   f1_ue_data_t ue_data = cu_get_f1_ue_data(ue->rrc_ue_id);
   AssertFatal(ue_data.e1_assoc_id != 0, "UE %d should be associated to CU-UP, but is not\n", ue->rrc_ue_id);
@@ -194,7 +178,7 @@ static bool has_assoc_id(const void *vval, const void *vit)
  * that are in the process of connecting or that are on another DU might be
  * affected by that reset procedure as well; we suppose they will connect later
  * again. */
-static void remove_unassociated_e1_connections(gNB_RRC_INST *rrc, sctp_assoc_t e1_assoc_id)
+static void remove_unassociated_e1_connections(gNB_RRC_INST *rrc)
 {
   seq_arr_t affected_du;
   seq_arr_init(&affected_du, sizeof(sctp_assoc_t));
@@ -205,7 +189,7 @@ static void remove_unassociated_e1_connections(gNB_RRC_INST *rrc, sctp_assoc_t e
   RB_FOREACH(ue_context_p, rrc_nr_ue_tree_s, &rrc->rrc_ue_head) {
     gNB_RRC_UE_t *UE = &ue_context_p->ue_context;
     uint32_t ue_id = UE->rrc_ue_id;
-    if (ue_associated_to_cuup(rrc, UE))
+    if (ue_associated_to_cuup(UE))
       continue;
     f1_ue_data_t ue_data = cu_get_f1_ue_data(ue_id);
     elm_arr_t ret = find_if(&affected_du, &ue_data.du_assoc_id, has_assoc_id);
@@ -284,7 +268,7 @@ int rrc_gNB_process_e1_setup_req(sctp_assoc_t assoc_id, const e1ap_setup_req_t *
   RB_INSERT(rrc_cuup_tree, &rrc->cuups, cuup);
   rrc->num_cuups++;
 
-  remove_unassociated_e1_connections(rrc, assoc_id);
+  remove_unassociated_e1_connections(rrc);
 
   MessageDef *msg_p = itti_alloc_new_message(TASK_RRC_GNB, 0, E1AP_SETUP_RESP);
   msg_p->ittiMsgHeader.originInstance = assoc_id;
@@ -316,7 +300,7 @@ static void invalidate_cuup_connections(gNB_RRC_INST *rrc, sctp_assoc_t e1_assoc
 /**
  * @brief RRC Processing of the indication of E1 connection loss on CU-CP
 */
-void rrc_gNB_process_e1_lost_connection(gNB_RRC_INST *rrc, e1ap_lost_connection_t *lc, sctp_assoc_t assoc_id)
+void rrc_gNB_process_e1_lost_connection(gNB_RRC_INST *rrc, sctp_assoc_t assoc_id)
 {
   LOG_I(NR_RRC, "Received E1 connection loss indication on RRC\n");
   AssertFatal(assoc_id != 0, "illegal assoc_id == 0: should be -1 (monolithic) or >0 (split)\n");

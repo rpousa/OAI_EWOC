@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
+add_compile_options(-Wunused-parameter)
 add_library(rfsimulator MODULE
             simulator.cpp
             apply_channelmod.c

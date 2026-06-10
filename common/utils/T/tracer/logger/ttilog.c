@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
+ */
+
 #include "logger.h"
 #include "logger_defs.h"
 #include "event.h"

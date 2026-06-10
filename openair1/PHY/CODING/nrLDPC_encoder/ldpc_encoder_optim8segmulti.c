@@ -1,32 +1,9 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file ldpc_encoder_optim8segmulti.c
+/*! 
  * \brief Defines the optimized LDPC encoder
- * \author Florian Kaltenberger, Raymond Knopp, Kien le Trung (Eurecom)
- * \email openair_tech@eurecom.fr
- * \date 27-03-2018
- * \version 1.0
- * \note
- * \warning
  */
 
 #include <stdlib.h>
@@ -192,23 +169,23 @@ int LDPCencoder(uint8_t **input, uint8_t *output, encoder_implemparams_t *impp)
 
   if(impp->tinput != NULL) stop_meas(impp->tinput);
 
-  if ((BG==1 && Zc>=176) || (BG==2 && Zc>=72)) {
-    // extend matrix
-    if(impp->tprep != NULL) start_meas(impp->tprep);
-    if(impp->tprep != NULL) stop_meas(impp->tprep);
+  if ((BG == 1 && Zc >= 176) || (BG == 2 && Zc >= 72)) {
     //parity check part
     if(impp->tparity != NULL) start_meas(impp->tparity);
-    encode_parity_check_part_optim(cc, dd, BG, Zc, Kb, simd_size, ncols);
+    encode_parity_check_part_optim(cc, dd, BG, Zc, simd_size, ncols, impp->tinput_memcpy);
     if(impp->tparity != NULL) stop_meas(impp->tparity);
-  }
-  else {
+  } else {
     if (encode_parity_check_part_orig(cc, dd, BG, Zc, Kb, block_length)!=0) {
       printf("Problem with encoder\n");
       return(-1);
     }
   }
+  if (impp->toutput != NULL)
+    start_meas(impp->toutput);
   memcpy(output,&cc[2*Zc],(block_length-(2*Zc)));
   memcpy(output+block_length-(2*Zc),dd,((nrows-no_punctured_columns) * Zc-removed_bit));
+  if (impp->toutput != NULL)
+    stop_meas(impp->toutput);
   return 0;
 }
 

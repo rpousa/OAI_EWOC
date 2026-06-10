@@ -1,22 +1,5 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
 #include "f1ap_lib_common.h"
@@ -29,40 +12,40 @@
 
 bool eq_f1ap_plmn(const plmn_id_t *a, const plmn_id_t *b)
 {
-  _F1_EQ_CHECK_INT(a->mcc, b->mcc);
-  _F1_EQ_CHECK_INT(a->mnc, b->mnc);
-  _F1_EQ_CHECK_INT(a->mnc_digit_length, b->mnc_digit_length);
+  _EQ_CHECK_INT(a->mcc, b->mcc);
+  _EQ_CHECK_INT(a->mnc, b->mnc);
+  _EQ_CHECK_INT(a->mnc_digit_length, b->mnc_digit_length);
   return true;
 }
 
 bool eq_f1ap_freq_info(const f1ap_nr_frequency_info_t *a, const f1ap_nr_frequency_info_t *b)
 {
-  _F1_EQ_CHECK_INT(a->arfcn, b->arfcn);
-  _F1_EQ_CHECK_INT(a->band, b->band);
+  _EQ_CHECK_INT(a->arfcn, b->arfcn);
+  _EQ_CHECK_INT(a->band, b->band);
   return true;
 }
 
 bool eq_f1ap_tx_bandwidth(const f1ap_transmission_bandwidth_t *a, const f1ap_transmission_bandwidth_t *b)
 {
-  _F1_EQ_CHECK_INT(a->nrb, b->nrb);
-  _F1_EQ_CHECK_INT(a->scs, b->scs);
+  _EQ_CHECK_INT(a->nrb, b->nrb);
+  _EQ_CHECK_INT(a->scs, b->scs);
   return true;
 }
 
 bool eq_f1ap_cell_info(const f1ap_served_cell_info_t *a, const f1ap_served_cell_info_t *b)
 {
-  _F1_EQ_CHECK_LONG(a->nr_cellid, b->nr_cellid);
-  _F1_EQ_CHECK_INT(a->nr_pci, b->nr_pci);
+  _EQ_CHECK_LONG(a->nr_cellid, b->nr_cellid);
+  _EQ_CHECK_INT(a->nr_pci, b->nr_pci);
   if ((!a->tac) ^ (!b->tac))
     return false;
   if (a->tac)
-    _F1_EQ_CHECK_INT(*a->tac, *b->tac);
-  _F1_EQ_CHECK_INT(a->num_ssi, b->num_ssi);
+    _EQ_CHECK_INT(*a->tac, *b->tac);
+  _EQ_CHECK_INT(a->num_ssi, b->num_ssi);
   for (int i = 0; i < a->num_ssi; ++i) {
-    _F1_EQ_CHECK_INT(a->nssai[i].sst, b->nssai[i].sst);
-    _F1_EQ_CHECK_INT(a->nssai[i].sd, b->nssai[i].sd);
+    _EQ_CHECK_INT(a->nssai[i].sst, b->nssai[i].sst);
+    _EQ_CHECK_INT(a->nssai[i].sd, b->nssai[i].sd);
   }
-  _F1_EQ_CHECK_INT(a->mode, b->mode);
+  _EQ_CHECK_INT(a->mode, b->mode);
   if (a->mode == F1AP_MODE_TDD) {
     /* TDD */
     if (!eq_f1ap_tx_bandwidth(&a->tdd.tbw, &b->tdd.tbw))
@@ -80,8 +63,8 @@ bool eq_f1ap_cell_info(const f1ap_served_cell_info_t *a, const f1ap_served_cell_
     if (!eq_f1ap_freq_info(&a->fdd.ul_freqinfo, &b->fdd.ul_freqinfo))
       return false;
   }
-  _F1_EQ_CHECK_INT(a->measurement_timing_config_len, b->measurement_timing_config_len);
-  _F1_EQ_CHECK_INT(*a->measurement_timing_config, *b->measurement_timing_config);
+  _EQ_CHECK_INT(a->measurement_timing_config_len, b->measurement_timing_config_len);
+  _EQ_CHECK_INT(*a->measurement_timing_config, *b->measurement_timing_config);
   if (!eq_f1ap_plmn(&a->plmn, &b->plmn))
     return false;
   return true;
@@ -97,13 +80,13 @@ bool eq_f1ap_sys_info(const f1ap_gnb_du_system_info_t *a, const f1ap_gnb_du_syst
     return false;
 
   /* MIB */
-  _F1_EQ_CHECK_INT(a->mib_length, b->mib_length);
+  _EQ_CHECK_INT(a->mib_length, b->mib_length);
   for (int i = 0; i < a->mib_length; i++)
-    _F1_EQ_CHECK_INT(a->mib[i], b->mib[i]);
+    _EQ_CHECK_INT(a->mib[i], b->mib[i]);
   /* SIB1 */
-  _F1_EQ_CHECK_INT(a->sib1_length, b->sib1_length);
+  _EQ_CHECK_INT(a->sib1_length, b->sib1_length);
   for (int i = 0; i < a->sib1_length; i++)
-    _F1_EQ_CHECK_INT(a->sib1[i], b->sib1[i]);
+    _EQ_CHECK_INT(a->sib1[i], b->sib1[i]);
   return true;
 }
 

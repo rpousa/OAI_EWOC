@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: CC-BY-4.0
+
 This directory holds the C language implementation of the
 RF impairments simulation.  It contains
 the following files:

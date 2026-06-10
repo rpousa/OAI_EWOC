@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 We use [clang-format](https://clang.llvm.org/docs/ClangFormat.html) to format our code.
 
 ## Integration into editors

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: CC-BY-4.0
+
 PHY/CODING/TESTBENCH
 
 This directory contains a testbench for performance evalulation (antipodal modulation) of the various channel decoding algorithms.

@@ -1,33 +1,5 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
- */
-
-/*! \file f1ap_du_ue_context_management.c
- * \brief F1AP UE Context Management, DU side
- * \author EURECOM/NTUST
- * \date 2018
- * \version 0.1
- * \company Eurecom
- * \email: navid.nikaein@eurecom.fr, bing-kai.hong@eurecom.fr
- * \note
- * \warning
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
 #include "f1ap_common.h"
@@ -40,8 +12,17 @@
 #include "openair2/LAYER2/NR_MAC_gNB/nr_mac_gNB.h"
 #include "openair2/LAYER2/nr_pdcp/nr_pdcp_oai_api.h"
 
+#include "F1AP_F1AP-PDU.h"
+#include "F1AP_InitiatingMessage.h"
+#include "F1AP_SuccessfulOutcome.h"
+#include "F1AP_UnsuccessfulOutcome.h"
+#include "F1AP_ProtocolIE-Field.h"
+
 int DU_handle_UE_CONTEXT_SETUP_REQUEST(instance_t instance, sctp_assoc_t assoc_id, uint32_t stream, F1AP_F1AP_PDU_t *pdu)
 {
+  UNUSED(instance);
+  UNUSED(assoc_id);
+  UNUSED(stream);
   f1ap_ue_context_setup_req_t req = {0};
   if (!decode_ue_context_setup_req(pdu, &req)) {
     LOG_E(F1AP, "cannot decode F1 UE Context Setup Request\n");
@@ -73,6 +54,7 @@ int DU_send_UE_CONTEXT_SETUP_RESPONSE(sctp_assoc_t assoc_id, f1ap_ue_context_set
 
 int DU_send_UE_CONTEXT_SETUP_FAILURE(sctp_assoc_t assoc_id)
 {
+  UNUSED(assoc_id);
   AssertFatal(1==0,"Not implemented yet\n");
 }
 
@@ -94,6 +76,9 @@ int DU_send_UE_CONTEXT_RELEASE_REQUEST(sctp_assoc_t assoc_id, f1ap_ue_context_re
 
 int DU_handle_UE_CONTEXT_RELEASE_COMMAND(instance_t instance, sctp_assoc_t assoc_id, uint32_t stream, F1AP_F1AP_PDU_t *pdu)
 {
+  UNUSED(instance);
+  UNUSED(assoc_id);
+  UNUSED(stream);
   f1ap_ue_context_rel_cmd_t cmd = {0};
   if (!decode_ue_context_rel_cmd(pdu, &cmd)) {
     LOG_E(F1AP, "cannot decode F1 UE Context Release Command\n");
@@ -124,6 +109,9 @@ int DU_send_UE_CONTEXT_RELEASE_COMPLETE(sctp_assoc_t assoc_id, f1ap_ue_context_r
 
 int DU_handle_UE_CONTEXT_MODIFICATION_REQUEST(instance_t instance, sctp_assoc_t assoc_id, uint32_t stream, F1AP_F1AP_PDU_t *pdu)
 {
+  UNUSED(instance);
+  UNUSED(assoc_id);
+  UNUSED(stream);
   f1ap_ue_context_mod_req_t req = {0};
   if (!decode_ue_context_mod_req(pdu, &req)) {
     LOG_E(F1AP, "cannot decode F1 UE Context Modification Request\n");
@@ -152,7 +140,9 @@ int DU_send_UE_CONTEXT_MODIFICATION_RESPONSE(sctp_assoc_t assoc_id, f1ap_ue_cont
   return 0;
 }
 
-int DU_send_UE_CONTEXT_MODIFICATION_FAILURE(sctp_assoc_t assoc_id) {
+int DU_send_UE_CONTEXT_MODIFICATION_FAILURE(sctp_assoc_t assoc_id)
+{
+  UNUSED(assoc_id);
   AssertFatal(1==0,"Not implemented yet\n");
 }
 
@@ -278,6 +268,9 @@ int DU_send_UE_CONTEXT_MODIFICATION_REQUIRED(sctp_assoc_t assoc_id, f1ap_ue_cont
 
 int DU_handle_UE_CONTEXT_MODIFICATION_CONFIRM(instance_t instance, sctp_assoc_t assoc_id, uint32_t stream, F1AP_F1AP_PDU_t *pdu)
 {
+  UNUSED(instance);
+  UNUSED(assoc_id);
+  UNUSED(stream);
   F1AP_UEContextModificationConfirm_t *container = &pdu->choice.successfulOutcome->value.choice.UEContextModificationConfirm;
   f1ap_ue_context_modif_confirm_t confirm = {0};
   F1AP_UEContextModificationConfirmIEs_t *ie = NULL;
@@ -354,6 +347,9 @@ int DU_handle_UE_CONTEXT_MODIFICATION_CONFIRM(instance_t instance, sctp_assoc_t 
 
 int DU_handle_UE_CONTEXT_MODIFICATION_REFUSE(instance_t instance, sctp_assoc_t assoc_id, uint32_t stream, F1AP_F1AP_PDU_t *pdu)
 {
+  UNUSED(instance);
+  UNUSED(assoc_id);
+  UNUSED(stream);
   F1AP_UEContextModificationRefuse_t *container = &pdu->choice.unsuccessfulOutcome->value.choice.UEContextModificationRefuse;
   f1ap_ue_context_modif_refuse_t refuse = {0};
   F1AP_UEContextModificationRefuseIEs_t *ie = NULL;

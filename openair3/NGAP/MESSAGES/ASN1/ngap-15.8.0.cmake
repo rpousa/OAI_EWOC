@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 set(NGAP_GRAMMAR ASN1/ngap-15.8.0.asn1)
 
 set(ngap_source

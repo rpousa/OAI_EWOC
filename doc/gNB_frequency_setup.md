@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 # 5G gNB Frequency Configuration
 
 Configuring the frequency settings for a 5G gNB involves specifying multiple parameters in the gNB configuration file. This guide outlines the necessary parameters and provides step-by-step instructions for configuration.

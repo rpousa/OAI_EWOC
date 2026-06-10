@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 # to_vcd
 
 This tracer is used to dump a VCD trace of the softmodem.

@@ -1,8 +1,5 @@
-
-/** iris_lib.cpp
- *
- * \authors: Rahman Doost-Mohammady : doost@rice.edu
- * 	    Clay Shepard : cws@rice.edu
+/*
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
 #include <string.h>

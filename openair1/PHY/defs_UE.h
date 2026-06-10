@@ -1,34 +1,10 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file defs_UE.h
- \brief Top-level defines and structure definitions
- \author R. Knopp, F. Kaltenberger
- \date 2011
- \version 0.1
- \company Eurecom
- \email: knopp@eurecom.fr,florian.kaltenberger@eurecom.fr
- \note
- \warning
-*/
+/*!
+ * \brief Top-level defines and structure definitions
+ */
 #ifndef __PHY_DEFS_UE_H__
 #define __PHY_DEFS_UE_H__
 
@@ -56,6 +32,7 @@
 #include <math.h>
 #include "common_lib.h"
 
+#include "common/cmake_defs.h"
 #include "defs_common.h"
 #include "impl_defs_top.h"
 
@@ -65,6 +42,7 @@
 #include "common/platform_types.h"
 #include "PHY/LTE_UE_TRANSPORT/transport_ue.h"
 #include "PHY/LTE_TRANSPORT/transport_eNB.h" // for SIC
+#include "PHY/defs_RU.h"
 #include <pthread.h>
 #include "assertions.h"
 
@@ -205,15 +183,15 @@ typedef struct {
   //! estimated noise power (linear)
   unsigned int   n0_power[NB_ANTENNAS_RX];
   //! estimated noise power (dB)
-  unsigned short n0_power_dB[NB_ANTENNAS_RX];
+  short n0_power_dB[NB_ANTENNAS_RX];
   //! total estimated noise power (linear)
   unsigned int   n0_power_tot;
   //! total estimated noise power (dB)
-  unsigned short n0_power_tot_dB;
+  short n0_power_tot_dB;
   //! average estimated noise power (linear)
   unsigned int   n0_power_avg;
   //! average estimated noise power (dB)
-  unsigned short n0_power_avg_dB;
+  short n0_power_avg_dB;
   //! total estimated noise power (dBm)
   short n0_power_tot_dBm;
 
@@ -221,24 +199,24 @@ typedef struct {
   //! estimated received spatial signal power (linear)
   int            rx_spatial_power[NUMBER_OF_CONNECTED_eNB_MAX][2][2];
   //! estimated received spatial signal power (dB)
-  unsigned short rx_spatial_power_dB[NUMBER_OF_CONNECTED_eNB_MAX][2][2];
+  short rx_spatial_power_dB[NUMBER_OF_CONNECTED_eNB_MAX][2][2];
 
   /// estimated received signal power (sum over all TX antennas)
   //int            wideband_cqi[NUMBER_OF_CONNECTED_eNB_MAX][NB_ANTENNAS_RX];
   int            rx_power[NUMBER_OF_CONNECTED_eNB_MAX][NB_ANTENNAS_RX];
   /// estimated received signal power (sum over all TX antennas)
   //int            wideband_cqi_dB[NUMBER_OF_CONNECTED_eNB_MAX][NB_ANTENNAS_RX];
-  unsigned short rx_power_dB[NUMBER_OF_CONNECTED_eNB_MAX][NB_ANTENNAS_RX];
+  short rx_power_dB[NUMBER_OF_CONNECTED_eNB_MAX][NB_ANTENNAS_RX];
 
   /// estimated received signal power (sum over all TX/RX antennas)
   int            rx_power_tot[NUMBER_OF_CONNECTED_eNB_MAX]; //NEW
   /// estimated received signal power (sum over all TX/RX antennas)
-  unsigned short rx_power_tot_dB[NUMBER_OF_CONNECTED_eNB_MAX]; //NEW
+  short rx_power_tot_dB[NUMBER_OF_CONNECTED_eNB_MAX]; //NEW
 
   //! estimated received signal power (sum of all TX/RX antennas, time average)
   int            rx_power_avg[NUMBER_OF_CONNECTED_eNB_MAX];
   //! estimated received signal power (sum of all TX/RX antennas, time average, in dB)
-  unsigned short rx_power_avg_dB[NUMBER_OF_CONNECTED_eNB_MAX];
+  short rx_power_avg_dB[NUMBER_OF_CONNECTED_eNB_MAX];
 
   /// SINR (sum of all TX/RX antennas, in dB)
   int            wideband_cqi_tot[NUMBER_OF_CONNECTED_eNB_MAX];

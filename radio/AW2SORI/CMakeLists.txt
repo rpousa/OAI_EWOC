@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 find_library(ori NAMES "libori.so" REQUIRED)
 if(NOT ori)
   message(FATAL_ERROR "cannot locate libori.so, required to build aw2sori_transpro")

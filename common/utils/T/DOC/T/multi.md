@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 # Multiple tracers
 
 To connect several tracers to the same process, first launch the `multi`

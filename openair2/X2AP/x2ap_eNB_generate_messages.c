@@ -1,29 +1,9 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file x2ap_eNB_generate_messages.c
+/*!
  * \brief x2ap procedures for eNB
- * \author Konstantinos Alexandris <Konstantinos.Alexandris@eurecom.fr>, Cedric Roux <Cedric.Roux@eurecom.fr>, Navid Nikaein <Navid.Nikaein@eurecom.fr>
- * \date 2018
- * \version 1.0
  */
 
 #include "intertask_interface.h"
@@ -647,7 +627,8 @@ int x2ap_eNB_generate_x2_handover_request (x2ap_eNB_instance_t *instance_p, x2ap
   //@TODO: consider to update this value
   ie->value.choice.UE_ContextInformation.mME_UE_S1AP_ID = x2ap_handover_req->mme_ue_s1ap_id;
 
-  KENB_STAR_TO_BIT_STRING(x2ap_handover_req->kenb,&ie->value.choice.UE_ContextInformation.aS_SecurityInformation.key_eNodeB_star);
+  AS_KEY_STAR_TO_BIT_STRING(x2ap_handover_req->kenb,
+                            &ie->value.choice.UE_ContextInformation.aS_SecurityInformation.key_eNodeB_star);
 
   if (x2ap_handover_req->kenb_ncc >=0) { // Check this condition
     ie->value.choice.UE_ContextInformation.aS_SecurityInformation.nextHopChainingCount = x2ap_handover_req->kenb_ncc;
@@ -1628,7 +1609,7 @@ int x2ap_eNB_generate_ENDC_x2_SgNB_addition_request(
 	ie->id = X2AP_ProtocolIE_ID_id_SgNBSecurityKey;
 	ie->criticality = X2AP_Criticality_reject;
 	ie->value.present = X2AP_SgNBAdditionRequest_IEs__value_PR_SgNBSecurityKey;
-	KENB_STAR_TO_BIT_STRING(SgNBSecurityKey, &ie->value.choice.SgNBSecurityKey);
+	AS_KEY_STAR_TO_BIT_STRING(SgNBSecurityKey, &ie->value.choice.SgNBSecurityKey);
 	asn1cSeqAdd(&out->protocolIEs.list, ie);
 
 	ie = (X2AP_SgNBAdditionRequest_IEs_t *)calloc(1, sizeof(X2AP_SgNBAdditionRequest_IEs_t));

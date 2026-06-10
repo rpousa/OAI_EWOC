@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: CC-BY-4.0
+
 #----------------------------------------------------------------------------------------------------------------
 The aim of the test code test_pdcp_rlc.c is primarily to test a PDCP protocol entity integrated with RLC layer.
 This is a first step, in near future, this test may be extended with an other type of RLC (AM), and may be

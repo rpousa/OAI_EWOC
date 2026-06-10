@@ -1,9 +1,12 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 add_library(f1ap_lib OBJECT
             f1ap_lib_common.c
             f1ap_rrc_message_transfer.c
             f1ap_interface_management.c
             f1ap_ue_context.c
 	    f1ap_positioning.c
+            f1ap_paging.c
 )
 target_link_libraries(f1ap_lib PRIVATE asn1_f1ap ds)
 target_include_directories(f1ap_lib PUBLIC

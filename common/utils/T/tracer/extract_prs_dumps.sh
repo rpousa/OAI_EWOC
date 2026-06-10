@@ -1,4 +1,6 @@
 #!/bin/bash
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 : ${1?"Usage: $0 [-g num_gnb] [-n num_rsc] [-f filename] [-c count]"}
 
 # Usage info

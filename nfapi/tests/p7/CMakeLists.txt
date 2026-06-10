@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 set(Test_Labels fapi p7)
 set(_fapi_p7_messages "dci_inversion;dl_tti_request;ul_tti_request;slot_indication;ul_dci_request;tx_data_request;rx_data_indication;crc_indication;uci_indication;srs_indication;rach_indication")
 foreach (fapi_p7_message IN LISTS _fapi_p7_messages)

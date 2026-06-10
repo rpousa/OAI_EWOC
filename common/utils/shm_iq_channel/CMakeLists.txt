@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 add_library(shm_td_iq_channel shm_td_iq_channel.c)
 target_include_directories(shm_td_iq_channel PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 

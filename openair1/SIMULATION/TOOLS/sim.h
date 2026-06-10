@@ -1,22 +1,5 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
 #ifndef __SIMULATION_TOOLS_DEFS_H__
@@ -412,13 +395,39 @@ int random_channel(channel_desc_t *desc, uint8_t abstraction_flag);
 */
 
 void multipath_channel(channel_desc_t *desc,
-                       double *tx_sig_re[NB_ANTENNAS_TX],
-                       double *tx_sig_im[NB_ANTENNAS_TX],
-                       double *rx_sig_re[NB_ANTENNAS_RX],
-                       double *rx_sig_im[NB_ANTENNAS_RX],
+                       double **tx_sig_re,
+                       double **tx_sig_im,
+                       double **rx_sig_re,
+                       double **rx_sig_im,
                        uint32_t length,
                        uint8_t keep_channel,
 		       int log_channel);
+
+void multipath_channel_float(channel_desc_t *desc,
+                             float **tx_sig_interleaved,
+                             float **rx_sig_re,
+                             float **rx_sig_im,
+                             uint32_t length,
+                             uint8_t keep_channel,
+                             int log_channel);
+
+void interleave_channel_output(float **rx_sig_re,
+                               float **rx_sig_im,
+                               float **output_interleaved,
+                               int nb_rx,
+                               int num_samples);
+
+void add_noise_float(c16_t **rxdata,
+                     const float **r_re,
+                     const float **r_im,
+                     const float sigma2,
+                     const int length,
+                     const int slot_offset,
+                     const double ts,
+                     const int delay,
+                     bool apply_phase_noise,
+                     const uint8_t nb_antennas_rx);
+
 /*
 \fn double compute_pbch_sinr(channel_desc_t *desc,
                              channel_desc_t *desc_i1,

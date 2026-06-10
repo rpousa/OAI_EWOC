@@ -1,34 +1,13 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file PHY/sse_intrin.h
+/*!
  * \brief SSE includes and compatibility functions.
  *
  * This header collects all SSE compatibility functions. To use SSE inside a source file, include only sse_intrin.h.
  * The host CPU needs to have support for SSE2 at least. SSE3 and SSE4.1 functions are emulated if the CPU lacks support for them.
  * This will slow down the softmodem, but may be valuable if only offline signal processing is required.
- *
- * 
- * Has been changed in August 2022 to rely on SIMD Everywhere (SIMDE) from MIT
- * by bruno.mongazon-cazavet@nokia-bell-labs.com
  *
  * All AVX2 code is mapped to SIMDE which transparently relies on AVX2 HW (avx2-capable host) or SIMDE emulation
  * (non-avx2-capable host).
@@ -37,12 +16,6 @@
  * If the --noavx512 is set the OAI AVX512 emulation using AVX2 is used.
  * If the --noavx512 is not set, AVX512 HW is used on avx512-capable host while OAI AVX512 emulation using AVX2
  * is used on non-avx512-capable host. 
- *
- * \author S. Held, Laurent THOMAS
- * \email sebastian.held@imst.de, laurent.thomas@open-cells.com	
- * \company IMST GmbH, Open Cells Project
- * \date 2019
- * \version 0.2
 */
 
 #ifndef SSE_INTRIN_H

@@ -1,15 +1,13 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 # Open Air LTE Emulation
 
 > **Note: Unless you know what you are doing, you likely do not need this!**
 Rather, you are probably looking for the
 [RFsimulator](../radio/rfsimulator/README.md)!**
 
-oaisim has been scraped and replaced by the same programs that are used for the
-real-time operation, `lte-softmodem` and `lte-uesoftmodem`. This uses the IF4p5
-fronthaul protocol to achieve the communication.
-
-> Context: oaisim used to be a simulation mode inside OAI to emulate an eNB and
-multiple UEs.
+`lte-softmodem` and `lte-uesoftmodem` can use the IF4p5 fronthaul protocol to
+communicate with each other.
 
 [[_TOC_]]
 
@@ -50,7 +48,7 @@ $ cd ../ran_build/build
 $ sudo ./lte-uesoftmodem -O XXX.conf -r 25 --siml1 --noS1
 ```
 
-That should give you equivalent functionality to what you had with oaisim including noise and RF channel emulation (path loss / fading, etc.). You should also be able to run multiple UEs. 
+That should give you functionality to do noise and RF channel emulation (path loss / fading, etc.). You should also be able to run multiple UEs.
 
 ## How to ping an eNB from a UE and vice versa (with the noS1 option)
 

@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 # OAI 5G NR SA tutorial: setting up OAI CN5G
 
 **Table of Contents**

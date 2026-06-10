@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 <table style="border-collapse: collapse; border: none;">
   <tr style="border-collapse: collapse; border: none;">
     <td style="border-collapse: collapse; border: none;">
@@ -36,11 +38,11 @@ Password:
 Now pull images.
 
 ```bash
-$ docker pull mysql:8.0
-$ docker pull oaisoftwarealliance/oai-amf:v2.1.10
-$ docker pull oaisoftwarealliance/oai-smf:v2.1.10
-$ docker pull oaisoftwarealliance/oai-upf:v2.1.10
-$ docker pull oaisoftwarealliance/trf-gen-cn5g:focal
+$ docker pull mysql:9.6
+$ docker pull oaisoftwarealliance/oai-amf:v2.2.1
+$ docker pull oaisoftwarealliance/oai-smf:v2.2.1
+$ docker pull oaisoftwarealliance/oai-upf:v2.2.1
+$ docker pull oaisoftwarealliance/trf-gen-cn5g:latest
 
 $ docker pull oaisoftwarealliance/oai-gnb:develop
 $ docker pull oaisoftwarealliance/oai-nr-ue:develop
@@ -568,7 +570,7 @@ runs the gnb service with modified gNB executable.
 ```bash
 docker compose -f docker-compose.yaml -f local-override.yaml up -d oai-gnb
 ```
-This command rebuilds both the gNB & nrUE and runs the oai-nr-ue container with 
+This command rebuilds both the gNB & nrUE and runs the oai-nr-ue container with
 modified nrUE executable.
 ```bash
 docker compose -f docker-compose.yaml -f local-override.yaml up -d oai-nr-ue

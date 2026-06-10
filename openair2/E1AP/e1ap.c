@@ -1,24 +1,5 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Author and copyright: Laurent Thomas, open-cells.com
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
 #include "e1ap.h"
@@ -29,6 +10,7 @@
 #include "openair2/RRC/NR/MESSAGES/asn1_msg.h"
 #include "common/openairinterface5g_limits.h"
 #include "common/utils/LOG/log.h"
+#include "common/utils/utils.h"
 #include "openair2/F1AP/f1ap_common.h"
 #include "e1ap_default_values.h"
 #include "gtp_itf.h"
@@ -122,46 +104,6 @@ static void e1_task_handle_sctp_data_ind(instance_t instance, sctp_data_ind_t *s
   AssertFatal(result == EXIT_SUCCESS, "Failed to free memory (%d)!\n", result);
 }
 
-int e1ap_send_RESET(bool isCu, sctp_assoc_t assoc_id, E1AP_Reset_t *Reset)
-{
-  AssertFatal(false, "Not implemented yet\n");
-  E1AP_E1AP_PDU_t *pdu = calloc_or_fail(1, sizeof(*pdu));
-  return e1ap_encode_send(isCu, assoc_id, pdu, 0, __func__);
-}
-
-int e1ap_send_RESET_ACKNOWLEDGE(instance_t instance, E1AP_Reset_t *Reset)
-{
-  AssertFatal(false, "Not implemented yet\n");
-  return -1;
-}
-
-int e1ap_handle_RESET(instance_t instance, sctp_assoc_t assoc_id, uint32_t stream, E1AP_E1AP_PDU_t *pdu)
-{
-  AssertFatal(false, "Not implemented yet\n");
-  return -1;
-}
-
-int e1ap_handle_RESET_ACKNOWLEDGE(instance_t instance, sctp_assoc_t assoc_id, uint32_t stream, E1AP_E1AP_PDU_t *pdu)
-{
-  AssertFatal(false, "Not implemented yet\n");
-  return -1;
-}
-
-/*
-    Error Indication
-*/
-int e1ap_handle_ERROR_INDICATION(instance_t instance, sctp_assoc_t assoc_id, uint32_t stream, E1AP_E1AP_PDU_t *pdu)
-{
-  AssertFatal(false, "Not implemented yet\n");
-  return -1;
-}
-
-int e1ap_send_ERROR_INDICATION(instance_t instance, E1AP_ErrorIndication_t *ErrorIndication)
-{
-  AssertFatal(false, "Not implemented yet\n");
-  return -1;
-}
-
 void e1ap_send_SETUP_RESPONSE(sctp_assoc_t assoc_id, const e1ap_setup_resp_t *e1ap_setup_resp)
 {
   E1AP_E1AP_PDU_t *pdu = encode_e1ap_cuup_setup_response(e1ap_setup_resp);
@@ -181,6 +123,7 @@ static void e1apCUCP_send_SETUP_FAILURE(sctp_assoc_t assoc_id, const e1ap_setup_
 int e1apCUCP_handle_SETUP_REQUEST(sctp_assoc_t assoc_id, e1ap_upcp_inst_t *inst, const E1AP_E1AP_PDU_t *pdu)
 {
   DevAssert(pdu != NULL);
+  UNUSED(inst);
   /* Create ITTI message and send to queue */
   MessageDef *msg_p = itti_alloc_new_message(TASK_CUCP_E1, 0 /*unused by callee*/, E1AP_SETUP_REQ);
   // Decode E1 CU-UP Setup Request
@@ -206,6 +149,7 @@ int e1apCUCP_handle_SETUP_REQUEST(sctp_assoc_t assoc_id, e1ap_upcp_inst_t *inst,
 
 int e1apCUUP_handle_SETUP_RESPONSE(sctp_assoc_t assoc_id, e1ap_upcp_inst_t *inst, const E1AP_E1AP_PDU_t *pdu)
 {
+  UNUSED(assoc_id);
   // Decode E1 CU-UP Setup Response
   e1ap_setup_resp_t out = {0};
   if (!decode_e1ap_cuup_setup_response(pdu, &out)) {
@@ -229,6 +173,7 @@ int e1apCUUP_handle_SETUP_RESPONSE(sctp_assoc_t assoc_id, e1ap_upcp_inst_t *inst
  */
 int e1apCUUP_handle_SETUP_FAILURE(sctp_assoc_t assoc_id, e1ap_upcp_inst_t *inst, const E1AP_E1AP_PDU_t *pdu)
 {
+  UNUSED(assoc_id);
   LOG_D(E1AP, "CU-UP: Decoding E1AP Setup Failure...\n");
   E1AP_GNB_CU_UP_E1SetupFailureIEs_t *ie;
   DevAssert(pdu != NULL);
@@ -321,58 +266,6 @@ int e1apCUCP_send_gNB_DU_CONFIGURATION_UPDATE_ACKNOWLEDGE(void)
   return -1;
 }
 
-int e1apCUCP_handle_CONFIGURATION_UPDATE(E1AP_E1AP_PDU_t *pdu)
-{
-  /*
-  E1AP_GNB_CU_UP_E1SetupRequestIEs_t *ie;
-  DevAssert(pdu != NULL);
-  E1AP_GNB_CU_UP_E1SetupRequest_t *in = &pdu->choice.initiatingMessage->value.choice.GNB_CU_UP_E1SetupRequest;
-  */
-
-  AssertFatal(false, "Not implemented yet\n");
-  return -1;
-}
-
-int e1apCUUP_handle_gNB_DU_CONFIGURATION_UPDATE_ACKNOWLEDGE(sctp_assoc_t assoc_id, uint32_t stream, E1AP_E1AP_PDU_t *pdu)
-{
-  AssertFatal(false, "Not implemented yet\n");
-  return -1;
-}
-
-int e1apCUUP_handle_gNB_DU_CONFIGURATION_FAILURE(sctp_assoc_t assoc_id, uint32_t stream, E1AP_E1AP_PDU_t *pdu)
-{
-  AssertFatal(false, "Not implemented yet\n");
-  return -1;
-}
-
-/*
-  E1 release
-*/
-
-int e1ap_send_RELEASE_REQUEST(instance_t instance)
-{
-  AssertFatal(false, "Not implemented yet\n");
-  return -1;
-}
-
-int e1ap_send_RELEASE_ACKNOWLEDGE(instance_t instance)
-{
-  AssertFatal(false, "Not implemented yet\n");
-  return -1;
-}
-
-int e1ap_handle_RELEASE_REQUEST(instance_t instance, sctp_assoc_t assoc_id, uint32_t stream, E1AP_E1AP_PDU_t *pdu)
-{
-  AssertFatal(false, "Not implemented yet\n");
-  return -1;
-}
-
-int e1ap_handle_RELEASE_ACKNOWLEDGE(instance_t instance, sctp_assoc_t assoc_id, uint32_t stream, E1AP_E1AP_PDU_t *pdu)
-{
-  AssertFatal(false, "Not implemented yet\n");
-  return -1;
-}
-
 void e1apCUCP_send_BEARER_CONTEXT_SETUP_REQUEST(sctp_assoc_t assoc_id, e1ap_bearer_setup_req_t *const bearerCxt)
 {
   E1AP_E1AP_PDU_t *pdu = encode_E1_bearer_context_setup_request(bearerCxt);
@@ -394,6 +287,8 @@ static void e1apCUUP_send_BEARER_CONTEXT_SETUP_FAILURE(sctp_assoc_t assoc_id, co
 
 int e1apCUUP_handle_BEARER_CONTEXT_SETUP_REQUEST(sctp_assoc_t assoc_id, e1ap_upcp_inst_t *e1_inst, const E1AP_E1AP_PDU_t *pdu)
 {
+  UNUSED(assoc_id);
+  UNUSED(e1_inst);
   // Decode E1AP message
   e1ap_bearer_setup_req_t bearerCxt = {0};
   if (!decode_E1_bearer_context_setup_request(pdu, &bearerCxt)) {
@@ -401,11 +296,13 @@ int e1apCUUP_handle_BEARER_CONTEXT_SETUP_REQUEST(sctp_assoc_t assoc_id, e1ap_upc
     return -1;
   }
   e1_bearer_context_setup(&bearerCxt);
+  free_e1ap_context_setup_request(&bearerCxt);
   return 0;
 }
 
 int e1apCUCP_handle_BEARER_CONTEXT_SETUP_RESPONSE(sctp_assoc_t assoc_id, e1ap_upcp_inst_t *inst, const E1AP_E1AP_PDU_t *pdu)
 {
+  UNUSED(inst);
   MessageDef *msg = itti_alloc_new_message(TASK_CUCP_E1, 0, E1AP_BEARER_CONTEXT_SETUP_RESP);
   // Decode
   e1ap_bearer_setup_resp_t *bearerCxt = &E1AP_BEARER_CONTEXT_SETUP_RESP(msg);
@@ -423,6 +320,7 @@ int e1apCUCP_handle_BEARER_CONTEXT_SETUP_RESPONSE(sctp_assoc_t assoc_id, e1ap_up
 
 int e1apCUCP_handle_BEARER_CONTEXT_SETUP_FAILURE(sctp_assoc_t assoc_id, e1ap_upcp_inst_t *inst, const E1AP_E1AP_PDU_t *pdu)
 {
+  UNUSED(inst);
   e1ap_bearer_context_setup_failure_t fail = {0};
   if (!decode_E1_bearer_context_setup_failure(&fail, pdu)) {
     LOG_E(E1AP, "Failed to decode Bearer Context Setup Failure\n");
@@ -466,6 +364,8 @@ int e1apCUUP_handle_BEARER_CONTEXT_MODIFICATION_REQUEST(sctp_assoc_t assoc_id,
                                                         e1ap_upcp_inst_t *e1_inst,
                                                         const E1AP_E1AP_PDU_t *pdu)
 {
+  UNUSED(assoc_id);
+  UNUSED(e1_inst);
   e1ap_bearer_mod_req_t bearerCxt = {0};
   if (!decode_E1_bearer_context_mod_request(pdu, &bearerCxt)) {
     LOG_E(E1AP, "Failed to handle Bearer Context Modification Request\n");
@@ -481,6 +381,8 @@ int e1apCUCP_handle_BEARER_CONTEXT_MODIFICATION_RESPONSE(sctp_assoc_t assoc_id,
                                                          e1ap_upcp_inst_t *e1_inst,
                                                          const E1AP_E1AP_PDU_t *pdu)
 {
+  UNUSED(assoc_id);
+  UNUSED(e1_inst);
   MessageDef *msg = itti_alloc_new_message(TASK_CUUP_E1, 0, E1AP_BEARER_CONTEXT_MODIFICATION_RESP);
   e1ap_bearer_modif_resp_t *modif = &E1AP_BEARER_CONTEXT_MODIFICATION_RESP(msg);
   if(!decode_E1_bearer_context_mod_response(modif, pdu)) {
@@ -493,6 +395,8 @@ int e1apCUCP_handle_BEARER_CONTEXT_MODIFICATION_RESPONSE(sctp_assoc_t assoc_id,
 
 int e1apCUCP_handle_BEARER_CONTEXT_MODIFICATION_FAILURE(sctp_assoc_t assoc_id, e1ap_upcp_inst_t *inst, const E1AP_E1AP_PDU_t *pdu)
 {
+  UNUSED(assoc_id);
+  UNUSED(inst);
   e1ap_bearer_context_mod_failure_t failure = {0};
   if (!decode_E1_bearer_context_mod_failure(&failure, pdu)) {
     free_E1_bearer_context_mod_failure(&failure);
@@ -508,35 +412,6 @@ int e1apCUCP_handle_BEARER_CONTEXT_MODIFICATION_FAILURE(sctp_assoc_t assoc_id, e
   return 0;
 }
 
-int e1apCUUP_send_BEARER_CONTEXT_MODIFICATION_REQUIRED(instance_t instance)
-{
-  AssertFatal(false, "Not implemented yet\n");
-  return -1;
-}
-
-int e1apCUCP_send_BEARER_CONTEXT_MODIFICATION_CONFIRM(instance_t instance)
-{
-  AssertFatal(false, "Not implemented yet\n");
-  return -1;
-}
-
-int e1apCUCP_handle_BEARER_CONTEXT_MODIFICATION_REQUIRED(instance_t instance,
-                                                         sctp_assoc_t assoc_id,
-                                                         uint32_t stream,
-                                                         E1AP_E1AP_PDU_t *pdu)
-{
-  AssertFatal(false, "Not implemented yet\n");
-  return -1;
-}
-
-int e1apCUUP_handle_BEARER_CONTEXT_MODIFICATION_CONFIRM(instance_t instance,
-                                                        sctp_assoc_t assoc_id,
-                                                        uint32_t stream,
-                                                        E1AP_E1AP_PDU_t *pdu)
-{
-  AssertFatal(false, "Not implemented yet\n");
-  return -1;
-}
 /*
   BEARER CONTEXT RELEASE
 */
@@ -553,14 +428,10 @@ int e1apCUUP_send_BEARER_CONTEXT_RELEASE_COMPLETE(sctp_assoc_t assoc_id, const e
   return e1ap_encode_send(CPtype, assoc_id, pdu, 0, __func__);
 }
 
-int e1apCUUP_send_BEARER_CONTEXT_RELEASE_REQUEST(instance_t instance)
-{
-  AssertFatal(false, "Not implemented yet\n");
-  return -1;
-}
-
 int e1apCUUP_handle_BEARER_CONTEXT_RELEASE_COMMAND(sctp_assoc_t assoc_id, e1ap_upcp_inst_t *inst, const E1AP_E1AP_PDU_t *pdu)
 {
+  UNUSED(assoc_id);
+  UNUSED(inst);
   e1ap_bearer_release_cmd_t release = {0};
   if(!decode_e1_bearer_context_release_command(&release, pdu)) {
     free_e1_bearer_context_release_command(&release);
@@ -572,6 +443,8 @@ int e1apCUUP_handle_BEARER_CONTEXT_RELEASE_COMMAND(sctp_assoc_t assoc_id, e1ap_u
 
 int e1apCUCP_handle_BEARER_CONTEXT_RELEASE_COMPLETE(sctp_assoc_t assoc_id, e1ap_upcp_inst_t *e1_inst, const E1AP_E1AP_PDU_t *pdu)
 {
+  UNUSED(assoc_id);
+  UNUSED(e1_inst);
   e1ap_bearer_release_cplt_t bearerCxt = {0};
   if(!decode_e1_bearer_context_release_complete(&bearerCxt, pdu)) {
     free_e1_bearer_context_release_complete(&bearerCxt);
@@ -582,61 +455,6 @@ int e1apCUCP_handle_BEARER_CONTEXT_RELEASE_COMPLETE(sctp_assoc_t assoc_id, e1ap_
   *cplt = cp_bearer_context_release_complete(&bearerCxt);
   itti_send_msg_to_task(TASK_RRC_GNB, 0, msg);
   return 0;
-}
-
-int e1apCUCP_handle_BEARER_CONTEXT_RELEASE_REQUEST(instance_t instance,
-                                                   sctp_assoc_t assoc_id,
-                                                   uint32_t stream,
-                                                   E1AP_E1AP_PDU_t *pdu)
-{
-  AssertFatal(false, "Not implemented yet\n");
-  return -1;
-}
-
-/*
-BEARER CONTEXT INACTIVITY NOTIFICATION
- */
-
-int e1apCUUP_send_BEARER_CONTEXT_INACTIVITY_NOTIFICATION(instance_t instance)
-{
-  AssertFatal(false, "Not implemented yet\n");
-  return -1;
-}
-
-int e1apCUCP_handle_BEARER_CONTEXT_INACTIVITY_NOTIFICATION(instance_t instance,
-                                                           sctp_assoc_t assoc_id,
-                                                           uint32_t stream,
-                                                           E1AP_E1AP_PDU_t *pdu)
-{
-  AssertFatal(false, "Not implemented yet\n");
-  return -1;
-}
-/*
-  DL DATA
-*/
-
-int e1apCUUP_send_DL_DATA_NOTIFICATION(instance_t instance)
-{
-  AssertFatal(false, "Not implemented yet\n");
-  return -1;
-}
-
-int e1apCUUP_send_DATA_USAGE_REPORT(instance_t instance)
-{
-  AssertFatal(false, "Not implemented yet\n");
-  return -1;
-}
-
-int e1apCUCP_handle_DL_DATA_NOTIFICATION(instance_t instance, sctp_assoc_t assoc_id, uint32_t stream, E1AP_E1AP_PDU_t *pdu)
-{
-  AssertFatal(false, "Not implemented yet\n");
-  return -1;
-}
-
-int e1apCUCP_handle_send_DATA_USAGE_REPORT(instance_t instance, sctp_assoc_t assoc_id, uint32_t stream, E1AP_E1AP_PDU_t *pdu)
-{
-  AssertFatal(false, "Not implemented yet\n");
-  return -1;
 }
 
 static instance_t cuup_task_create_gtpu_instance_to_du(eth_params_t *IPaddrs)
@@ -722,8 +540,6 @@ static void e1_task_handle_sctp_association_resp(E1_t type,
       getCxtE1(instance)->gtpInstF1U = cuup_task_create_gtpu_instance_to_du(&IPaddr);
     if (getCxtE1(instance)->gtpInstF1U < 0)
       LOG_E(E1AP, "Failed to create CUUP F1-U UDP listener\n");
-    extern instance_t CUuniqInstance;
-    CUuniqInstance = getCxtE1(instance)->gtpInstF1U;
     cuup_init_n3(instance);
     e1apCUUP_send_SETUP_REQUEST(inst->cuup.assoc_id, &inst->cuup.setupReq);
   }
@@ -794,6 +610,7 @@ static void e1apHandleTimer(instance_t myInstance)
  */
 void *E1AP_CUCP_task(void *arg)
 {
+  UNUSED(arg);
   LOG_I(E1AP, "Starting E1AP at CU CP\n");
   MessageDef *msg = NULL;
   e1ap_common_init();
@@ -878,6 +695,7 @@ void *E1AP_CUCP_task(void *arg)
  */
 void *E1AP_CUUP_task(void *arg)
 {
+  UNUSED(arg);
   LOG_I(E1AP, "Starting E1AP at CU UP\n");
   e1ap_common_init();
   int result;

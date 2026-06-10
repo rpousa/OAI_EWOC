@@ -1,22 +1,5 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
 #include <string.h>
@@ -28,7 +11,6 @@
 #include "common/ran_context.h"
 #include "common/config/config_userapi.h"
 #include "common/utils/LOG/log.h"
-#include "common/utils/LOG/vcd_signal_dumper.h"
 #include "common/utils/load_module_shlib.h"
 #include "T.h"
 #include "PHY/defs_gNB.h"
@@ -39,7 +21,6 @@
 #include "PHY/INIT/nr_phy_init.h"
 #include "PHY/MODULATION/modulation_eNB.h"
 #include "PHY/MODULATION/modulation_UE.h"
-#include "PHY/NR_REFSIG/refsig_defs_ue.h"
 #include "PHY/NR_TRANSPORT/nr_dlsch.h"
 #include "PHY/NR_TRANSPORT/nr_transport_proto.h"
 #include "PHY/NR_UE_TRANSPORT/nr_transport_proto_ue.h"
@@ -50,22 +31,22 @@
 #include "openair2/LAYER2/NR_MAC_COMMON/nr_mac_common.h"
 #include "executables/nr-uesoftmodem.h"
 #include "nfapi/oai_integration/vendor_ext.h"
+#include "openair1/PHY/phy_extern_nr_ue.h"
 
 //#define DEBUG_NR_DLSCHSIM
 
 THREAD_STRUCT thread_struct;
 PHY_VARS_gNB *gNB;
-PHY_VARS_NR_UE *UE;
 RAN_CONTEXT_t RC;
 UE_nr_rxtx_proc_t proc;
-int32_t uplink_frequency_offset[MAX_NUM_CCs][4];
+int64_t uplink_frequency_offset[MAX_NUM_CCs][4];
 uint64_t downlink_frequency[MAX_NUM_CCs][4];
 
 double cpuf;
 
 uint8_t const nr_rv_round_map[4] = {0, 2, 3, 1};
 // needed for some functions
-PHY_VARS_NR_UE *PHY_vars_UE_g[1][1] = { { NULL } };
+PHY_VARS_NR_UE ***nrPHY_vars_UE_g;
 uint16_t n_rnti = 0x1234;
 static softmodem_params_t softmodem_params;
 softmodem_params_t *get_softmodem_params(void) {
@@ -143,7 +124,7 @@ int main(int argc, char **argv)
   randominit();
 
   int c;
-  while ((c = getopt(argc, argv, "--:O:df:hpVg:i:j:n:l:m:r:s:S:y:z:M:N:F:R:P:L:X:")) != -1) {
+  while ((c = getopt(argc, argv, "--:O:df:hpg:i:j:n:l:m:r:s:S:y:z:M:N:F:R:P:L:X:")) != -1) {
 
     /* ignore long options starting with '--' and their arguments that are handled by configmodule */
     /* with this opstring getopt returns 1 for non-option arguments, refer to 'man 3 getopt' */
@@ -214,10 +195,6 @@ int main(int argc, char **argv)
 			printf("Setting SNR0 to %f\n", snr0);
 #endif
 			break;
-
-		case 'V':
-		  ouput_vcd = 1;
-		  break;
 
 		case 'S':
 			snr1 = atof(optarg);
@@ -319,7 +296,6 @@ int main(int argc, char **argv)
 			printf("%s -h(elp) -p(extended_prefix) -N cell_id -f output_filename -F input_filename -g channel_model -n n_frames -t Delayspread -s snr0 -S snr1  -y TXant -z RXant -i Intefrence0 -j Interference1 -A interpolation_file -C(alibration offset dB) -N CellId\n", argv[0]);
 			printf("-h This message\n");
 			printf("-p Use extended prefix mode\n");
-			printf("-V Enable VCD dumb functions\n");
 			//printf("-d Use TDD\n");
 			printf("-n Number of frames to simulate\n");
 			printf("-s Starting SNR, runs from SNR0 to SNR0 + 5 dB.  If n_frames is 1 then just SNR is simulated\n");
@@ -351,9 +327,6 @@ int main(int argc, char **argv)
 	if (snr1set == 0)
 		snr1 = snr0 + 10;
 
-	if (ouput_vcd)
-        vcd_signal_dumper_init("/tmp/openair_dump_nr_dlschsim.vcd");
-
   gNB2UE = new_channel_desc_scm(n_tx,
                                 n_rx,
                                 channel_model,
@@ -383,7 +356,7 @@ int main(int argc, char **argv)
 	frame_parms->nb_antennas_tx = n_tx;
 	frame_parms->nb_antennas_rx = n_rx;
 	frame_parms->N_RB_DL = N_RB_DL;
-	frame_parms->Ncp = extended_prefix_flag ? EXTENDED : NORMAL;
+	frame_parms->Ncp = extended_prefix_flag ? NR_EXTENDED : NR_NORMAL;
 	crcTableInit();
 	nr_phy_config_request_sim(gNB, N_RB_DL, N_RB_DL, mu, Nid_cell,SSB_positions);
     // TDD configuration
@@ -417,10 +390,13 @@ int main(int argc, char **argv)
 	}
 
 	//configure UE
-	UE = calloc(1, sizeof(*UE));
-	memcpy(&UE->frame_parms, frame_parms, sizeof(NR_DL_FRAME_PARMS));
+  PHY_VARS_NR_UE *UE = calloc(1, sizeof(*UE));
+  PHY_VARS_NR_UE **uedata_ptrr = &UE;
+  nrPHY_vars_UE_g = &uedata_ptrr;
 
-	//phy_init_nr_top(frame_parms);
+  memcpy(&UE->frame_parms, frame_parms, sizeof(NR_DL_FRAME_PARMS));
+
+  //phy_init_nr_top(frame_parms);
 	if (init_nr_ue_signal(UE, 1) != 0) {
 		printf("Error at UE NR initialisation\n");
 		exit(-1);
@@ -430,15 +406,16 @@ int main(int argc, char **argv)
 	//init_nr_ue_transport(UE, 0);
   UE->nrLDPC_coding_interface = gNB->nrLDPC_coding_interface;
 
-  NR_UE_DLSCH_t dlsch_ue[NR_MAX_NB_LAYERS > 4? 2:1] = {0};
-  int num_codeword = NR_MAX_NB_LAYERS > 4? 2:1;
+  NR_UE_DLSCH_t dlsch_ue[NR_MAX_NB_LAYERS > 4 ? 2 : 1] = {0};
+  int num_codeword = NR_MAX_NB_LAYERS > 4 ? 2 : 1;
   nr_ue_dlsch_init(dlsch_ue, num_codeword, 5);
   for (int i=0; i < num_codeword; i++)
     dlsch_ue[0].rnti = n_rnti;
   nr_init_dl_harq_processes(UE->dl_harq_processes, 8, nb_rb);
 
-	unsigned char harq_pid = 0; //dlsch->harq_ids[subframe];
+  unsigned char harq_pid = 0; //dlsch->harq_ids[subframe];
   NR_gNB_DLSCH_t *dlsch = &gNB->dlsch[0];
+  dlsch->freq_alloc = set_bitmap_from_start_size(0, nb_rb);
 	//time_stats_t *rm_stats, *te_stats, *i_stats;
 	unsigned int TBS = 8424;
 	uint8_t nb_re_dmrs = 6;  // No data in dmrs symbol
@@ -483,20 +460,22 @@ int main(int argc, char **argv)
 	NR_UE_DLSCH_t *dlsch0_ue = &dlsch_ue[0];
   NR_DL_UE_HARQ_t *harq_process = &UE->dl_harq_processes[0][harq_pid];
   harq_process->first_rx = 1;
-	dlsch0_ue->dlsch_config.mcs = Imcs;
-	dlsch0_ue->dlsch_config.mcs_table = mcs_table;
-	dlsch0_ue->Nl = Nl;
-	dlsch0_ue->dlsch_config.number_rbs = nb_rb;
-	dlsch0_ue->dlsch_config.qamModOrder = mod_order;
-	dlsch0_ue->dlsch_config.rv = rvidx;
-	dlsch0_ue->dlsch_config.targetCodeRate = rate;
-  dlsch0_ue->dlsch_config.TBS = TBS;
-  dlsch0_ue->dlsch_config.ldpcBaseGraph = get_BG(TBS, rate);
-	dlsch0_ue->dlsch_config.dmrsConfigType = NFAPI_NR_DMRS_TYPE1;
-	dlsch0_ue->dlsch_config.dlDmrsSymbPos = 4;
-	dlsch0_ue->dlsch_config.n_dmrs_cdm_groups = 1;
-  dlsch0_ue->dlsch_config.tbslbrm = Tbslbrm;
-	printf("harq process ue mcs = %d Qm = %d, symb %d\n", dlsch0_ue->dlsch_config.mcs, dlsch0_ue->dlsch_config.qamModOrder, nb_symb_sch);
+  fapi_nr_dl_config_dlsch_pdu_rel15_t dlsch_config;
+  dlsch_config.cw_info[0].mcs = Imcs;
+  dlsch_config.mcs_table = mcs_table;
+  dlsch_config.number_rbs = nb_rb;
+  dlsch_config.cw_info[0].Nl = Nl;
+  dlsch_config.cw_info[0].qamModOrder = mod_order;
+  dlsch_config.cw_info[0].rv = rvidx;
+  dlsch_config.cw_info[0].targetCodeRate = rate;
+  dlsch_config.cw_info[0].TBS = TBS;
+  dlsch_config.cw_info[0].ldpcBaseGraph = get_BG(TBS, rate);
+  dlsch_config.dmrsConfigType = NFAPI_NR_DMRS_TYPE1;
+  dlsch_config.dlDmrsSymbPos = 4;
+  dlsch_config.n_dmrs_cdm_groups = 1;
+  dlsch_config.tbslbrm = Tbslbrm;
+  dlsch0_ue->cw_info = dlsch_config.cw_info[0];
+  printf("harq process ue mcs = %d Qm = %d, symb %d\n", dlsch_config.cw_info[0].mcs, dlsch_config.cw_info[0].qamModOrder, nb_symb_sch);
 
   uint8_t test_input[TBS / 8 + 4]; // + 3 for CRC + 1 additional byte, see nr_dlsch_encoding()
   dlsch->pdu = test_input;
@@ -513,10 +492,10 @@ int main(int argc, char **argv)
 
 	//printf("crc32: [0]->0x%08x\n",crc24c(test_input, 32));
 	// generate signal
-        unsigned char output[nb_rb * NR_SYMBOLS_PER_SLOT * NR_NB_SC_PER_RB * NR_MAX_NB_LAYERS] __attribute__((aligned(64)));
-        bzero(output, sizeof(output));
-	if (input_fd == NULL) {
-	  nr_dlsch_encoding(gNB, 1, dlsch, frame, slot, frame_parms, output, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+  unsigned char output[nb_rb * NR_SYMBOLS_PER_SLOT * NR_NB_SC_PER_RB * NR_MAX_NB_LAYERS] __attribute__((aligned(64)));
+  bzero(output, sizeof(output));
+        if (input_fd == NULL) {
+          nr_dlsch_encoding(gNB, 1, dlsch, frame, slot, output, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 	}
 
 	for (SNR = snr0; SNR < snr1 && !stop; SNR += snr_step) {
@@ -562,30 +541,23 @@ int main(int argc, char **argv)
 			exit(-1);
 #endif
 
-			vcd_signal_dumper_dump_function_by_name(VCD_SIGNAL_DUMPER_FUNCTIONS_DLSCH_DECODING0, VCD_FUNCTION_IN);
-
-      int a_segments = MAX_NUM_NR_DLSCH_SEGMENTS_PER_LAYER*NR_MAX_NB_LAYERS;  //number of segments to be allocated
-      int num_rb = dlsch0_ue->dlsch_config.number_rbs;
+      int a_segments = MAX_NUM_NR_DLSCH_SEGMENTS; // number of segments to be allocated
+      int num_rb = dlsch_config.number_rbs;
       if (num_rb != 273) {
         a_segments = a_segments*num_rb;
         a_segments = (a_segments/273)+1;
       }
       uint32_t dlsch_bytes = a_segments*1056;  // allocated bytes per segment
       __attribute__ ((aligned(32))) uint8_t b[dlsch_bytes];
-      uint8_t DLSCH_ids[1] = {0};
-      short *p_channel_output_fixed = channel_output_fixed;
-      uint8_t *p_b = b;
-      int available_bits_array[1] = { available_bits };
       nr_dlsch_decoding(UE,
                         &proc,
                         dlsch0_ue,
-                        &p_channel_output_fixed,
-                        &p_b,
-                        available_bits_array,
-                        1,
-                        DLSCH_ids);
-
-      vcd_signal_dumper_dump_function_by_name(VCD_SIGNAL_DUMPER_FUNCTIONS_DLSCH_DECODING0, VCD_FUNCTION_OUT);
+                        0,
+                        &dlsch_config,
+                        channel_output_fixed,
+                        b,
+                        num_rb,
+                        available_bits);
 
       if (dlsch0_ue->last_iteration_cnt > dlsch0_ue->max_ldpc_iterations)
 				n_errors++;
@@ -634,7 +606,7 @@ int main(int argc, char **argv)
   free(RC.gNB);
 
   free_nr_ue_dl_harq(UE->dl_harq_processes, 8, nb_rb);
-  term_nr_ue_signal(UE, 1);
+  term_nr_ue_signal(UE);
   free(UE);
 
 	for (i = 0; i < 2; i++) {
@@ -657,8 +629,6 @@ int main(int argc, char **argv)
 	if (input_fd)
 		fclose(input_fd);
 
-	if (ouput_vcd)
-        vcd_signal_dumper_close();
   end_configmodule(uniqCfg);
   loader_reset();
   logTerm();

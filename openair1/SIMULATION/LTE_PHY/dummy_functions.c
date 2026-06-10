@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
+ */
+
 
 PRACH_RESOURCES_t *ue_get_rach(module_id_t module_idP, int CC_id,
 			       frame_t frameP, uint8_t new_Msg3,

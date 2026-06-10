@@ -1,4 +1,4 @@
-  - Build_Proxy
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
   - Build_Cluster_Image
   - Pull_Cluster_Image
   - Build_eNB
@@ -22,10 +22,8 @@
   - Deploy_Object
   - Stop_Object
   - Undeploy_Object
-  - Cppcheck_Analysis
   - Deploy_Run_OC_PhySim
-  - Build_Deploy_Docker_PhySim
-  - Build_Deploy_Source_PhySim
+  - Build_Deploy_PhySim
   - LicenceAndFormattingCheck
   - Push_Local_Registry
   - Pull_Local_Registry
@@ -33,3 +31,7 @@
   - Custom_Command
   - Custom_Script
   - Create_Workspace
+  - AnalyzeRTStats
+  - AnalyzeRTStats_Object
+  - DeployWithScript
+  - UndeployWithScript

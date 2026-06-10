@@ -1,17 +1,7 @@
 /*
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Copyright 2017 Cisco Systems, Inc.
- * 
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- * 
- * http://www.apache.org/licenses/LICENSE-2.0
- * 
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
  */
 
 
@@ -20,19 +10,16 @@
 
 #include "nfapi_vnf_interface.h"
 
-struct vnf_t
-{
+typedef struct vnf_s {
+  nfapi_vnf_config_t _public;
 
-	nfapi_vnf_config_t _public;
-
-	uint8_t terminate;
+  uint8_t terminate;
 	uint8_t sctp;
 
 	uint8_t tx_message_buffer[NFAPI_MAX_PACKED_MESSAGE_SIZE];
-	uint16_t next_phy_id;
-	
-};
+  uint16_t next_phy_id;
 
+} vnf_t;
 
 int vnf_pack_and_send_p5_message(vnf_t* vnf, uint16_t p5_idx, nfapi_p4_p5_message_header_t* msg, uint16_t msg_len);
 

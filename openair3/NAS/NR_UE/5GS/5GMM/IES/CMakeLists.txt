@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 add_library(fgs_5gmm_ies_lib OBJECT
   FGSMobileIdentity.c
   FGSRegistrationType.c

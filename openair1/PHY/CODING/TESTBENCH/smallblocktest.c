@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
+ */
+
 #include <getopt.h>
 #include "common/config/config_userapi.h"
 #include "SIMULATION/TOOLS/sim.h"

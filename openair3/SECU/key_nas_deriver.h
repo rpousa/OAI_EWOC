@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
+ */
+
 #ifndef KEY_NAS_DERIVER_H
 #define KEY_NAS_DERIVER_H
 

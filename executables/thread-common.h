@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
+ */
+
 #ifndef THREAD_COMMON_H
 #define THREAD_COMMON_H
 

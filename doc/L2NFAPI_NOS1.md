@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 # L2 nFAPI Simulator (no S1 Mode / 2-host deployment)
 
 > **2022/03/08: CAUTION, THIS TUTORIAL IS NO LONGER VALID on the `develop` branch after the `2022.w01` tag.**
@@ -33,14 +35,14 @@ Please try to use the same commit ID on both eNB/UE hosts.
 
 ```bash
 $ ssh sudousername@machineB
-git clone https://gitlab.eurecom.fr/oai/openairinterface5g.git enb_folder
+git clone https://github.com/duranta-project/openairinterface5g.git enb_folder
 cd enb_folder
 git checkout develop
 ```
 
 ```bash
 $ ssh sudousername@machineC
-git clone https://gitlab.eurecom.fr/oai/openairinterface5g.git ue_folder
+git clone https://github.com/duranta-project/openairinterface5g.git ue_folder
 cd ue_folder
 git checkout develop
 ```
@@ -312,8 +314,6 @@ iperf -c 10.0.1.1 -u -t 30 -b 2M -i 1 -fm -B 10.0.1.2 -p 5002
 
 
 ----
-
-[oai wiki home](https://gitlab.eurecom.fr/oai/openairinterface5g/wikis/home)
 
 [oai softmodem features](FEATURE_SET.md)
 

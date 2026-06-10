@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
+ */
+
 #ifndef _EVENT_SELECTOR_H_
 #define _EVENT_SELECTOR_H_
 

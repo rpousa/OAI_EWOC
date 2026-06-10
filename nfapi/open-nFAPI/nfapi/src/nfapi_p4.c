@@ -1,19 +1,10 @@
 /*
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Copyright 2017 Cisco Systems, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
  */
 
+#include "common/platform_types.h"
 
 #include <arpa/inet.h> // need for uintptr_t?
 
@@ -1475,6 +1466,7 @@ static int check_unpack_length(nfapi_message_id_e msgId, uint32_t unpackedBufLen
 }
 
 int nfapi_p4_message_pack(void *pMessageBuf, uint32_t messageBufLen, void *pPackedBuf, uint32_t packedBufLen, nfapi_p4_p5_codec_config_t *config) {
+  UNUSED(messageBufLen);
   nfapi_p4_p5_message_header_t *pMessageHeader = pMessageBuf;
   uint32_t packedMsgLen;
   uint16_t packedMsgLen16;
@@ -1622,6 +1614,7 @@ int nfapi_p4_message_header_unpack(void *pMessageBuf,
                                    uint32_t unpackedBufLen,
                                    nfapi_p4_p5_codec_config_t *config)
 {
+  UNUSED(config);
   nfapi_p4_p5_message_header_t *pMessageHeader = pUnpackedBuf;
   uint8_t *pReadPackedMessage = pMessageBuf;
 

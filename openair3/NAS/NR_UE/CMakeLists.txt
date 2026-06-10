@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 add_subdirectory(5GS)
 
 add_library(nr_nas STATIC nr_nas_msg.c)

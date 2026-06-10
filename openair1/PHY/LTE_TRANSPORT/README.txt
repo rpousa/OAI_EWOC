@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: CC-BY-4.0
+
 This directory contains functions related to physical/transport channel processing:
 
 defs.h               : function prototypes and data structures for DLSCH/ULSCH/DCI/UCI  processing

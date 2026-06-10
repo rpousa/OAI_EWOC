@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 include $(OPENAIR_DIR)/common/utils/Makefile.inc
 
 TOP_DIR      = $(OPENAIR1_DIR)

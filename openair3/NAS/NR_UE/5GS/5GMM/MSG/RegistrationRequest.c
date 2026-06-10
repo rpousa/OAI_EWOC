@@ -1,30 +1,9 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file RegistrationRequest.c
+/*!
  * \brief registration request procedures for gNB
- * \author Yoshio INOUE, Masayuki HARADA
- * \email yoshio.inoue@fujitsu.com,masayuki.harada@fujitsu.com
- * \date 2020
- * \version 0.1
  */
 
 #include "RegistrationRequest.h"
@@ -44,7 +23,7 @@ int decode_registration_request(registration_request_msg *registration_request, 
 
   /* Decoding mandatory fields */
   if ((decoded_result =
-           decode_5gs_registration_type(&registration_request->fgsregistrationtype, 0, *(buffer + decoded) & 0x0f, len - decoded))
+           decode_5gs_registration_type(&registration_request->fgsregistrationtype, 0, *(buffer + decoded) & 0x0f))
       < 0) {
     LOG_FUNC_RETURN(decoded_result);
   }
@@ -97,8 +76,7 @@ int encode_registration_request(const registration_request_msg *registration_req
       == REGISTRATION_REQUEST_UE_SECURITY_CAPABILITY_PRESENT) {
     if ((encode_result = encode_nrue_security_capability(&registration_request->nruesecuritycapability,
                                                          REGISTRATION_REQUEST_UE_SECURITY_CAPABILITY_IEI,
-                                                         buffer + encoded,
-                                                         len - encoded))
+                                                         buffer + encoded))
         < 0)
       // Return in case of error
       return encode_result;

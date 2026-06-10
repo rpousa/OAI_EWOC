@@ -1,31 +1,9 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file rrc_gNB_nsa.c
+/*!
  * \brief rrc NSA procedures for gNB
- * \author Raymond Knopp
- * \date 2019
- * \version 1.0
- * \company Eurecom
- * \email: raymond.knopp@eurecom.fr
  */
 
 #include <assert.h>
@@ -62,6 +40,7 @@
 #include "openair3/SECU/key_nas_deriver.h"
 #include "openair2/SDAP/nr_sdap/nr_sdap_entity.h"
 #include "rrc_gNB_du.h"
+#include "rrc_cell_management.h"
 #include "rlc.h"
 #include "s1ap_messages_types.h"
 #include "tree.h"
@@ -351,37 +330,57 @@ void rrc_add_nsa_user(gNB_RRC_INST *rrc, x2ap_ENDC_sgnb_addition_req_t *m, sctp_
   if (f1inst >= 0) {
       gtpv1u_gnb_create_tunnel_req_t req = {
         .ue_id = UE->rrc_ue_id,
-        .incoming_rb_id[0] = drb_id,
-        .pdusession_id[0] = drb_id,
-        .outgoing_teid[0] = 0xffff, // will be updated later
-        .dst_addr[0].length = 32,
-        .num_tunnels = 1,
+        .incoming_rb_id = drb_id,
+        .pdusession_id = drb_id,
+        .outgoing_teid = 0xffff, // will be updated later
+        .dst_addr.length = 32,
       };
       gtpv1u_gnb_create_tunnel_resp_t resp = {0};
       int ret = gtpv1u_create_ngu_tunnel(f1inst, &req, &resp, NULL, NULL);
       AssertFatal(ret == 0, "gtpv1u_create_ngu_tunnel failed: ret %d\n", ret);
-      memcpy(&drb->up_ul_tnl[0].tl_address, &resp.gnb_addr.buffer, 4);
-      drb->up_ul_tnl[0].teid = resp.gnb_NGu_teid[0];
+      AssertFatal(resp.gnb_addr.length == sizeof(in_addr_t),
+                  "GTP tunnel response address length %d does not match IPv4 size %zu\n",
+                  resp.gnb_addr.length,
+                  sizeof(in_addr_t));
+      memcpy(&drb->up_ul_tnl[0].tl_address, &resp.gnb_addr.buffer, resp.gnb_addr.length);
+      drb->up_ul_tnl[0].teid = resp.gnb_NGu_teid;
       drb->up_ul_tnl_len = 1;
   }
   uint64_t *ue_agg_mbr_ul = malloc_or_fail(sizeof(*ue_agg_mbr_ul));
   *ue_agg_mbr_ul = 1000000000;
   byte_array_t *cg_configinfo = malloc_or_fail(sizeof(*cg_configinfo));
   *cg_configinfo = cgci;
+
+  f1_ue_data_t ue_data = cu_get_f1_ue_data(UE->rrc_ue_id);
+  RETURN_IF_INVALID_ASSOC_ID(ue_data.du_assoc_id);
+  nr_rrc_du_container_t *du = get_du_by_assoc_id(rrc, ue_data.du_assoc_id);
+  if (!du) {
+    LOG_E(NR_RRC, "UE %d: no valid cell for UE context setup (DU assoc_id %d not found)\n", UE->rrc_ue_id, ue_data.du_assoc_id);
+    return;
+  }
+  // Get the first cell from the DU (NSA assumption: 1 cell per DU)
+  if (seq_arr_size(&du->cells) == 0) {
+    LOG_E(NR_RRC, "UE %d: no cells available in DU (assoc_id %d)\n", UE->rrc_ue_id, ue_data.du_assoc_id);
+    return;
+  }
+  nr_rrc_cell_container_t *ue_cell = *(nr_rrc_cell_container_t **)seq_arr_at(&du->cells, 0);
+  // Add the cell as PCell
+  if (rrc_add_ue_serving_cell(UE, ue_cell, RRC_PCELL_INDEX) == NULL) {
+    LOG_E(NR_RRC, "UE %d: failed to add PCell (cell %ld) for UE context setup\n", UE->rrc_ue_id, ue_cell->info.cell_id);
+    return;
+  }
   f1ap_ue_context_setup_req_t req = {
       .gNB_CU_ue_id = UE->rrc_ue_id,
       .plmn.mcc = rrc->configuration.plmn[0].mcc,
       .plmn.mnc = rrc->configuration.plmn[0].mnc,
       .plmn.mnc_digit_length = rrc->configuration.plmn[0].mnc_digit_length,
-      .nr_cellid = rrc->nr_cellid,
-      .servCellIndex = 0,
+      .nr_cellid = ue_cell->info.cell_id,
+      .servCellIndex = RRC_PCELL_INDEX,
       .drbs_len = 1,
       .drbs = drb,
       .cu_to_du_rrc_info.cg_configinfo = cg_configinfo,
       .gnb_du_ue_agg_mbr_ul = ue_agg_mbr_ul,
   };
-  f1_ue_data_t ue_data = cu_get_f1_ue_data(UE->rrc_ue_id);
-  RETURN_IF_INVALID_ASSOC_ID(ue_data.du_assoc_id);
   rrc->mac_rrc.ue_context_setup_request(ue_data.du_assoc_id, &req);
   free_ue_context_setup_req(&req);
 }
@@ -439,7 +438,7 @@ static NR_CG_Config_t *generate_CG_Config(const NR_RRCReconfiguration_t *reconfi
   return cg_Config;
 }
 
-void rrc_add_nsa_user_resp(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE, const f1ap_ue_context_setup_resp_t *resp)
+void rrc_add_nsa_user_resp(gNB_RRC_UE_t *UE, const f1ap_ue_context_setup_resp_t *resp)
 {
   DevAssert(resp->crnti != NULL);
   /* we did not fill any DU-related ID info in rrc_add_nsa_user() */

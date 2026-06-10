@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 # Overview
 
 This is a simple actor implementation (see https://en.wikipedia.org/wiki/Actor_model).

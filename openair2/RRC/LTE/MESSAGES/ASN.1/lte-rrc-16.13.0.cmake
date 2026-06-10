@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 set(LTE_RRC_GRAMMAR ASN.1/lte-rrc-16.13.0.asn1)
 
 set(lte_rrc_source

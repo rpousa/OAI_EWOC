@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 add_executable(test_shm_td_iq_channel test_shm_td_iq_channel.c)
 target_link_libraries(test_shm_td_iq_channel shm_td_iq_channel minimal_lib pthread)
 add_dependencies(tests test_shm_td_iq_channel)

@@ -1,24 +1,5 @@
 /*
-* Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
-* contributor license agreements.  See the NOTICE file distributed with
-* this work for additional information regarding copyright ownership.
-* The OpenAirInterface Software Alliance licenses this file to You under
-* the OAI Public License, Version 1.1  (the "License"); you may not use this file
-* except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*      http://www.openairinterface.org/?page_id=698
-*
-* Author and copyright: Laurent Thomas, open-cells.com
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*-------------------------------------------------------------------------------
-* For more information about the OpenAirInterface (OAI) Software Alliance:
-*      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
 */
 
 #ifndef INTERTASK_INTERFACE_H_
@@ -72,9 +53,7 @@ typedef struct IttiMsgText_s {
   char      text[];
 } IttiMsgText;
 
-#include <openair2/COMMON/phy_messages_types.h>
 #include <openair2/COMMON/mac_messages_types.h>
-#include <openair2/COMMON/rlc_messages_types.h>
 #include <openair2/COMMON/pdcp_messages_types.h>
 #include <openair2/COMMON/networkDef.h>
 #include <openair2/COMMON/as_message.h>
@@ -227,9 +206,9 @@ typedef struct IttiMsgText_s {
 #include <openair2/COMMON/m2ap_messages_types.h>
 #include <openair2/COMMON/m3ap_messages_types.h>
 #include <openair2/COMMON/sctp_messages_types.h>
-#include <openair2/COMMON/udp_messages_types.h>
 #include <openair2/COMMON/gtpv1_u_messages_types.h>
 #include <openair2/COMMON/ngap_messages_types.h>
+#include <openair2/COMMON/nrppa_messages_types.h>
 #include <openair3/SCTP/sctp_eNB_task.h>
 #include <openair3/NAS/UE/nas_proc_defs.h>
 #include <openair3/NAS/UE/ESM/esmData.h>
@@ -280,20 +259,17 @@ typedef struct {
   TASK_DEF(TASK_UNKNOWN, 50)          \
   TASK_DEF(TASK_TIMER, 10)            \
   TASK_DEF(TASK_L2L1, 200)            \
-  TASK_DEF(TASK_BM, 200)              \
-  TASK_DEF(TASK_PHY_ENB, 200)         \
   TASK_DEF(TASK_MAC_GNB, 200)         \
   TASK_DEF(TASK_RLC_ENB, 200)         \
-  TASK_DEF(TASK_RRC_ENB_NB_IoT, 200)  \
   TASK_DEF(TASK_PDCP_ENB, 200)        \
   TASK_DEF(TASK_PDCP_GNB, 200)        \
   TASK_DEF(TASK_DATA_FORWARDING, 200) \
   TASK_DEF(TASK_END_MARKER, 200)      \
   TASK_DEF(TASK_RRC_ENB, 200)         \
   TASK_DEF(TASK_RRC_GNB, 200)         \
-  TASK_DEF(TASK_RAL_ENB, 200)         \
   TASK_DEF(TASK_S1AP, 200)            \
   TASK_DEF(TASK_NGAP, 200)            \
+  TASK_DEF(TASK_NRPPA, 200)           \
   TASK_DEF(TASK_X2AP, 200)            \
   TASK_DEF(TASK_M2AP_ENB, 200)        \
   TASK_DEF(TASK_M2AP_MCE, 200)        \
@@ -305,14 +281,12 @@ typedef struct {
   TASK_DEF(TASK_GNB_APP, 200)         \
   TASK_DEF(TASK_MCE_APP, 200)         \
   TASK_DEF(TASK_MME_APP, 200)         \
-  TASK_DEF(TASK_PHY_UE, 200)          \
   TASK_DEF(TASK_MAC_UE, 200)          \
   TASK_DEF(TASK_RLC_UE, 200)          \
   TASK_DEF(TASK_PDCP_UE, 200)         \
   TASK_DEF(TASK_RRC_UE, 200)          \
   TASK_DEF(TASK_RRC_NRUE, 200)        \
   TASK_DEF(TASK_NAS_UE, 200)          \
-  TASK_DEF(TASK_RAL_UE, 200)          \
   TASK_DEF(TASK_GTPV1_U, 1000)        \
   TASK_DEF(TASK_CU_F1, 200)           \
   TASK_DEF(TASK_DU_F1, 200)           \

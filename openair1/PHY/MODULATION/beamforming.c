@@ -1,47 +1,7 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file PHY/MODULATION/beamforming.c
- * \brief 
- * \author X. JIANG, F. Kaltenberger, R. KNOPP
- * \date 2016
- * \version 0.1
- * \company Eurecom
- * \email: xiwen.jiang@eurecom.fr,florian.kaltenberger@eurecom.fr,raymond.knopp@eurecom.fr
- * \note
- * \warning
- */
- 
- /*! \function beam_precoding_one_eNB
- * \brief Create and Implementation of beamforming in one eNB
- * \author TY Hsu, SY Yeh(fdragon), TH Wang(Judy)
- * \date 2018
- * \version 0.1
- * \company ISIP@NCTU and Eurecom
- * \email: tyhsu@cs.nctu.edu.tw,fdragon.cs96g@g2.nctu.edu.tw,Tsu-Han.Wang@eurecom.fr
- * \note
- * \warning
- */
-
- 
 #include "PHY/defs_common.h"
 #include "PHY/defs_eNB.h"
 #include "PHY/CODING/coding_defs.h"
@@ -49,7 +9,6 @@
 #include "PHY/CODING/lte_interleaver_inline.h"
 #include "PHY/LTE_TRANSPORT/transport_eNB.h"
 #include "modulation_eNB.h"
-#include "nr_modulation.h"
 #include "common/utils/LOG/vcd_signal_dumper.h"
 
 int beam_precoding(int32_t **txdataF,
@@ -119,27 +78,4 @@ int beam_precoding_one_eNB(int32_t **txdataF,
     }
   }
   return 0;
-}
-
-
-void nr_beam_precoding(c16_t **txdataF,
-	               c16_t **txdataF_BF,
-                       NR_DL_FRAME_PARMS *frame_parms,
-	               int32_t ***beam_weights,
-                       int slot,
-                       int symbol,
-                       int aa,
-                       int nb_antenna_ports,
-                       int offset)
-{
-  // clear txdata_BF[aa][re] for each call of ue_spec_beamforming
-  memset(&txdataF_BF[aa][symbol*frame_parms->ofdm_symbol_size], 0, sizeof(c16_t) *(frame_parms->ofdm_symbol_size));
-
-  for (int p = 0; p < nb_antenna_ports; p++) {
-    multadd_cpx_vector((c16_t *)&txdataF[p][(symbol * frame_parms->ofdm_symbol_size) + offset],
-                       (c16_t *)beam_weights[p][aa],
-                       (c16_t *)&txdataF_BF[aa][symbol * frame_parms->ofdm_symbol_size],
-                       frame_parms->ofdm_symbol_size,
-                       15);
-  }
 }

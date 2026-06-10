@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
+ */
+
 #ifndef _T_T_T_
 #define _T_T_T_
 
@@ -111,7 +115,7 @@ extern int T_stdout;
 
 /* type used to send arbitrary buffer data */
 typedef struct {
-  void *addr;
+  const void *addr;
   int length;
 } T_buffer;
 

@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
+ */
+
 #ifndef EMM_TIMERS_H
 #define EMM_TIMERS_H
 

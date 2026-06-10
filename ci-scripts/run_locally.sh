@@ -1,6 +1,6 @@
 #!/bin/bash
+# SPDX-License-Identifier: MIT
 
-set -e
 SHORT_COMMIT_SHA=$(git rev-parse --short=8 HEAD)
 COMMIT_SHA=$(git rev-parse HEAD)
 CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
@@ -12,6 +12,8 @@ if [ $# -eq 0 ]
     echo "Provide a testcase as an argument"
     exit 1
 fi
+
+set -x
 
 # The script assumes you've build the following images:
 #
@@ -28,18 +30,16 @@ docker tag oai-nr-ue oai-ci/oai-nr-ue:develop-${SHORT_COMMIT_SHA}
 docker tag oai-gnb oai-ci/oai-gnb:develop-${SHORT_COMMIT_SHA}
 docker tag oai-nr-cuup oai-ci/oai-nr-cuup:develop-${SHORT_COMMIT_SHA}
 
-python3 main.py --mode=InitiateHtml --ranRepository=NONE --ranBranch=${CURRENT_BRANCH} \
-    --ranCommitID=${COMMIT_SHA} --ranAllowMerge=false \
-    --ranTargetBranch=NONE \
-    --XMLTestFile=xml_files/${TESTCASE} --local
+python3 main.py --mode=InitiateHtml --repository=NONE --branch=${CURRENT_BRANCH} \
+    --XMLTestFile=xml_files/${TESTCASE} --local --datefmt="%H:%M:%S"
 
-python3 main.py --mode=TesteNB --ranRepository=NONE --ranBranch=${CURRENT_BRANCH} \
-    --ranCommitID=${COMMIT_SHA} --ranAllowMerge=false \
-    --ranTargetBranch=NONE \
-    --eNBSourceCodePath=${REPO_PATH} \
-    --XMLTestFile=${TESTCASE} --local
+python3 main.py --mode=TesteNB --repository=NONE --branch=${CURRENT_BRANCH} \
+    --ranAllowMerge=false \
+    --targetBranch=NONE \
+    --workspace=${REPO_PATH} \
+    --XMLTestFile=${TESTCASE} --local --datefmt="%H:%M:%S"
 RET=$?
 
-python3 main.py --mode=FinalizeHtml --local
+python3 main.py --mode=FinalizeHtml --local --datefmt="%H:%M:%S"
 
 exit ${RET}

@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
+ */
+
 #include <stdio.h>
 #include <NRPPA_MeasurementRequest.h>
 #include <NRPPA_ProtocolIE-Field.h>

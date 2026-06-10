@@ -1,33 +1,9 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file PHY/NR_TRANSPORT/nr_ulsch_llr_computation.c
+/*!
  * \brief Top-level routines for LLR computation of the PDSCH physical channel
- * \author Ahmed Hussein
- * \date 2019
- * \version 0.1
- * \company Fraunhofer IIS
- * \email: ahmed.hussein@iis.fraunhofer.de
- * \note
- * \warning
  */
 
 #include "PHY/defs_gNB.h"
@@ -38,7 +14,7 @@
 #define USE_128BIT
 #endif
 
-void nr_ulsch_compute_llr(int32_t *rxdataF_comp,
+void nr_ulsch_compute_llr(c16_t *rxdataF_comp,
                           c16_t *ul_ch_mag,
                           c16_t *ul_ch_magb,
                           c16_t *ul_ch_magc,
@@ -1765,12 +1741,7 @@ void nr_ulsch_qam64_qam64(c16_t *stream0_in,
 #endif
 }
 
-static void nr_ulsch_shift_llr(int16_t *llr_layer0,
-                               int16_t *llr_layer1,
-                               uint32_t nb_re,
-                               uint32_t rxdataF_ext_offset,
-                               uint8_t mod_order,
-                               int shift)
+static void nr_ulsch_shift_llr(int16_t *llr_layer0, int16_t *llr_layer1, uint32_t nb_re, int shift)
 {
   simde__m128i *llr_layers0 = (simde__m128i *)llr_layer0;
   simde__m128i *llr_layers1 = (simde__m128i *)llr_layer1;
@@ -1794,9 +1765,7 @@ static void nr_ulsch_shift_llr(int16_t *llr_layer0,
   }
 }
 
-void nr_ulsch_compute_ML_llr(NR_gNB_PUSCH *pusch_vars,
-                             uint32_t symbol,
-                             c16_t *rxdataF_comp0,
+void nr_ulsch_compute_ML_llr(c16_t *rxdataF_comp0,
                              c16_t *rxdataF_comp1,
                              c16_t *ul_ch_mag0,
                              c16_t *ul_ch_mag1,
@@ -1811,7 +1780,7 @@ void nr_ulsch_compute_ML_llr(NR_gNB_PUSCH *pusch_vars,
     case 2:
       nr_ulsch_qpsk_qpsk(rxdataF_comp0, rxdataF_comp1, llr_layers0, rho0, nb_re);
       nr_ulsch_qpsk_qpsk(rxdataF_comp1, rxdataF_comp0, llr_layers1, rho1, nb_re);
-      nr_ulsch_shift_llr((int16_t *)llr_layers0, (int16_t *)llr_layers1, nb_re, pusch_vars->llr_offset[symbol] >> 1, 2, 4);
+      nr_ulsch_shift_llr((int16_t *)llr_layers0, (int16_t *)llr_layers1, nb_re, 4);
       break;
     case 4:
       nr_ulsch_qam16_qam16(rxdataF_comp0, rxdataF_comp1, ul_ch_mag0, ul_ch_mag1, llr_layers0, rho0, nb_re);

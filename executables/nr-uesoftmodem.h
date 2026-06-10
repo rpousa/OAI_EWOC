@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
+ */
+
 #ifndef NR_UESOFTMODEM_H
 #define NR_UESOFTMODEM_H
 #include <executables/nr-softmodem-common.h>

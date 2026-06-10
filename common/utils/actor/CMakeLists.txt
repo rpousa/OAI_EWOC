@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 add_library(actor actor.c)
 # Only include header files due to issues with ODR in threadPool binaries
 target_include_directories(actor PUBLIC ./ ../threadPool/)

@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
+ */
+
 #include "T.h"
 #include <string.h>
 #include <stdlib.h>
@@ -85,6 +89,7 @@ static int get_message(int s)
 
 static void *T_receive_thread(void *_)
 {
+  UNUSED(_);
   int err = 0;
   while (!err) err = get_message(T_socket);
 

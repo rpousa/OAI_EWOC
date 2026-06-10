@@ -1,22 +1,5 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
 #include "shm_td_iq_channel.h"
@@ -33,7 +16,7 @@
 #include "utils.h"
 #include "common/utils/threadPool/pthread_utils.h"
 
-#define CIRCULAR_BUFFER_SIZE (30720 * 14 * 20)
+#define CIRCULAR_BUFFER_SIZE (30720 * 20)
 
 typedef struct {
   int magic;
@@ -50,6 +33,8 @@ typedef struct ShmTDIQChannel_s {
   char name[256];
   sample_t *tx_iq_data;
   sample_t *rx_iq_data;
+  int nb_tx_ant;
+  int nb_rx_ant;
   bool abort;
 } ShmTDIQChannel;
 
@@ -78,6 +63,8 @@ ShmTDIQChannel *shm_td_iq_channel_create(const char *name, int num_tx_ant, int n
   strncpy(channel->name, name, sizeof(channel->name) - 1);
   channel->tx_iq_data = (sample_t *)(shm_ptr + 1);
   channel->rx_iq_data = channel->tx_iq_data + tx_buffer_size / sizeof(sample_t);
+  channel->nb_tx_ant = num_tx_ant;
+  channel->nb_rx_ant = num_rx_ant;
   channel->data = shm_ptr;
   channel->type = IQ_CHANNEL_TYPE_SERVER;
   pthread_mutexattr_t mutex_attr;
@@ -110,10 +97,17 @@ ShmTDIQChannel *shm_td_iq_channel_connect(const char *name, int timeout_in_secon
   // Create shared memory segment
   int fd = -1;
   while (timeout_in_seconds > 0 && fd == -1) {
-    fd = shm_open(name, O_RDWR, S_IRUSR | S_IWUSR);
+    for (int i = 0; i < 1000; i++) {
+      fd = shm_open(name, O_RDWR, S_IRUSR | S_IWUSR);
+      if (fd != -1) {
+        break;
+      }
+      usleep(1000);
+    }
     timeout_in_seconds--;
-    printf("Waiting for server to create shared memory segment\n");
-    sleep(1);
+    if (fd == -1) {
+      printf("Waiting for server to create shared memory segment\n");
+    }
   }
   AssertFatal(fd != -1, "shm_open() failed: errno %d, %s", errno, strerror(errno));
 
@@ -130,9 +124,15 @@ ShmTDIQChannel *shm_td_iq_channel_connect(const char *name, int timeout_in_secon
 
   ShmTDIQChannel *channel = calloc_or_fail(1, sizeof(ShmTDIQChannel));
   channel->data = shm_ptr;
-  channel->tx_iq_data = (sample_t *)(shm_ptr + 1);
+  sample_t *tx_buffer = (sample_t *)(shm_ptr + 1);
   size_t tx_buffer_size = CIRCULAR_BUFFER_SIZE * sizeof(sample_t) * channel->data->num_antennas_tx;
-  channel->rx_iq_data = channel->tx_iq_data + tx_buffer_size / sizeof(sample_t);
+  sample_t *rx_buffer = tx_buffer + tx_buffer_size / sizeof(sample_t);
+  // Flip the order between TX and RX to simplify tx/rx functions
+  channel->tx_iq_data = rx_buffer;
+  channel->rx_iq_data = tx_buffer;
+  channel->nb_tx_ant = channel->data->num_antennas_rx;
+  channel->nb_rx_ant = channel->data->num_antennas_tx;
+  printf("\033[38;5;208mnb_tx_ant, nb_rx_ant: %d, %d\n\033[0m", channel->nb_tx_ant, channel->nb_rx_ant);
   channel->type = IQ_CHANNEL_TYPE_CLIENT;
   while (shm_ptr->magic != SHM_MAGIC_NUMBER) {
     printf("Waiting for server to initialize shared memory\n");
@@ -148,6 +148,7 @@ IQChannelErrorType shm_td_iq_channel_tx(ShmTDIQChannel *channel,
                                         int antenna,
                                         const sample_t *tx_iq_data)
 {
+  AssertFatal(antenna < channel->nb_tx_ant, "Invalid antenna index %d num_antennas %d\n", antenna, channel->nb_tx_ant);
   ShmTDIQChannelData *data = channel->data;
   // timestamp in the past
   uint64_t current_time = data->timestamp;
@@ -159,12 +160,7 @@ IQChannelErrorType shm_td_iq_channel_tx(ShmTDIQChannel *channel,
     return CHANNEL_ERROR_TOO_EARLY;
   }
 
-  sample_t *base_ptr;
-  if (channel->type == IQ_CHANNEL_TYPE_CLIENT) {
-    base_ptr = channel->rx_iq_data + antenna * CIRCULAR_BUFFER_SIZE;
-  } else {
-    base_ptr = channel->tx_iq_data + antenna * CIRCULAR_BUFFER_SIZE;
-  }
+  sample_t *base_ptr = channel->tx_iq_data + antenna * CIRCULAR_BUFFER_SIZE;
 
   uint64_t first_sample = timestamp % CIRCULAR_BUFFER_SIZE;
   uint64_t last_sample = first_sample + num_samples - 1;
@@ -184,6 +180,7 @@ IQChannelErrorType shm_td_iq_channel_rx(ShmTDIQChannel *channel,
                                         int antenna,
                                         sample_t *tx_iq_data)
 {
+  AssertFatal(antenna < channel->nb_rx_ant, "Invalid antenna index %d num_antennas %d\n", antenna, channel->nb_rx_ant);
   ShmTDIQChannelData *data = channel->data;
   // timestamp in the future
   uint64_t current_time = data->timestamp;
@@ -195,12 +192,7 @@ IQChannelErrorType shm_td_iq_channel_rx(ShmTDIQChannel *channel,
     return CHANNEL_ERROR_TOO_LATE;
   }
 
-  sample_t *base_ptr;
-  if (channel->type == IQ_CHANNEL_TYPE_CLIENT) {
-    base_ptr = channel->tx_iq_data + antenna * CIRCULAR_BUFFER_SIZE;
-  } else {
-    base_ptr = channel->rx_iq_data + antenna * CIRCULAR_BUFFER_SIZE;
-  }
+  sample_t *base_ptr = channel->rx_iq_data + antenna * CIRCULAR_BUFFER_SIZE;
 
   uint64_t first_sample = timestamp % CIRCULAR_BUFFER_SIZE;
   uint64_t last_sample = first_sample + num_samples - 1;

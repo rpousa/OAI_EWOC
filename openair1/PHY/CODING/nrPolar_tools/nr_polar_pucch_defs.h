@@ -1,4 +1,8 @@
 /*
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
+ */
+
+/*
  * Defines the constant variables for polar coding of the PUCCH.
  */
 

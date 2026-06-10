@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 set(F1AP_VERSION 16 21 0)
 make_version(F1AP_cc ${F1AP_VERSION})
 string(REPLACE ";" "." F1AP_RELEASE "${F1AP_VERSION}")

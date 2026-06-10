@@ -1,31 +1,9 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file rrc_gNB_NGAP.h
+/*!
  * \brief rrc NGAP procedures for gNB
- * \author Yoshio INOUE, Masayuki HARADA
- * \date 2020
- * \version 0.1
- * \email: yoshio.inoue@fujitsu.com,masayuki.harada@fujitsu.com
- *         (yoshio.inoue%40fujitsu.com%2cmasayuki.harada%40fujitsu.com) 
  */
 
 #include "rrc_gNB_NGAP.h"
@@ -33,6 +11,7 @@
 #include <netinet/sctp.h>
 #include <openair3/ocp-gtpu/gtp_itf.h>
 #include <stdbool.h>
+#include "common/utils/utils.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -77,6 +56,7 @@
 #include "constr_TYPE.h"
 #include "conversions.h"
 #include "e1ap_messages_types.h"
+#include "E1AP/lib/e1ap_bearer_context_management.h"
 #include "f1ap_messages_types.h"
 #include "gtpv1_u_messages_types.h"
 #include "intertask_interface.h"
@@ -84,13 +64,17 @@
 #include "nr_pdcp/nr_pdcp_oai_api.h"
 #include "oai_asn1.h"
 #include "openair2/F1AP/f1ap_ids.h"
+#include "openair2/F1AP/lib/f1ap_paging.h"
 #include "openair3/SECU/key_nas_deriver.h"
 #include "rrc_messages_types.h"
 #include "s1ap_messages_types.h"
 #include "uper_encoder.h"
 #include "rrc_gNB_mobility.h"
 #include "rrc_gNB_du.h"
+#include "rrc_cell_management.h"
 #include "common/utils/alg/find.h"
+#include "common/utils/nr/nr_common.h"
+#include "openair2/E1AP/lib/e1ap_bearer_context_management.h"
 
 #ifdef E2_AGENT
 #include "openair2/E2AP/RAN_FUNCTION/O-RAN/ran_func_rc_extern.h"
@@ -190,7 +174,7 @@ static nr_guami_t get_guami(const uint32_t amf_Id, const plmn_id_t plmn)
 }
 
 /** @brief Copy NGAP PDU Session Transfer item to RRC pdusession_t struct */
-static void cp_pdusession_transfer_to_pdusession(pdusession_t *dst, const pdusession_transfer_t *src)
+static void cp_pdusession_transfer_to_pdusession(pdusession_t *dst, const pdusession_transfer_t *src, int ue_id)
 {
   dst->pdu_session_type = src->pdu_session_type;
   dst->n3_incoming = src->n3_incoming;
@@ -205,18 +189,23 @@ static void cp_pdusession_transfer_to_pdusession(pdusession_t *dst, const pduses
       LOG_E(NR_RRC, "Failed to add QoS flow %d for PDU session %d\n", src->qos[i].qfi, dst->pdusession_id);
       continue;
     }
+    LOG_I(NR_RRC,
+          "UE %d: added QoS flow with QFI=%d, total number of QoS flows = %ld\n",
+          ue_id,
+          src->qos[i].qfi,
+          seq_arr_size(&dst->qos));
   }
 }
 
 /** @brief Copy NGAP PDU Session Resource item to RRC pdusession_t struct to setup */
-static void cp_pdusession_resource_item_to_pdusession(pdusession_t *dst, const pdusession_resource_item_t *src)
+static void cp_pdusession_resource_item_to_pdusession(pdusession_t *dst, const pdusession_resource_item_t *src, int ue_id)
 {
   dst->pdusession_id = src->pdusession_id;
   dst->nas_pdu = src->nas_pdu;
   dst->nssai = src->nssai;
 
   // Use the PDU session transfer function to handle QoS and other PDU session transfer-specific fields
-  cp_pdusession_transfer_to_pdusession(dst, &src->pdusessionTransfer);
+  cp_pdusession_transfer_to_pdusession(dst, &src->pdusessionTransfer, ue_id);
 }
 
 /**
@@ -254,8 +243,9 @@ void rrc_gNB_send_NGAP_NAS_FIRST_REQ(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE, NR_RRC
   /* UE is connected to only one PLMN at a time: store this as the serving PLMN */
   UE->serving_plmn = req->plmn;
 
-  // Cell ID (NR CGI)
-  req->nr_cell_id = UE->nr_cellid;
+  nr_rrc_cell_container_t *cell = rrc_get_pcell_for_ue(rrc, UE);
+  DevAssert(cell);
+  req->nr_cell_id = cell->info.cell_id;
   // PLMN (NR CGI and TAI)
   plmn_id_t *p = &req->plmn;
   LOG_I(NGAP, "Selected PLMN in the NG Initial UE Message: MCC=%03d MNC=%0*d\n", p->mcc, p->mnc_digit_length, p->mnc);
@@ -289,6 +279,63 @@ void rrc_gNB_send_NGAP_NAS_FIRST_REQ(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE, NR_RRC
   itti_send_msg_to_task(TASK_NGAP, rrc->module_id, message_p);
 }
 
+/// @brief set QoS Flows to Setup in E1 DRB To Setup List
+static qos_flow_to_setup_t fill_e1_qos_flow_to_setup(const pdusession_level_qos_parameter_t *qos)
+{
+  qos_flow_to_setup_t qos_flow = { .qfi = qos->qfi };
+  // ARP
+  ngran_allocation_retention_priority_t *arp_out = &qos_flow.qos_params.alloc_reten_priority;
+  const qos_arp_t *arp_in = &qos->arp;
+  arp_out->priority_level = arp_in->priority_level;
+  arp_out->preemption_capability = arp_in->pre_emp_capability;
+  arp_out->preemption_vulnerability = arp_in->pre_emp_vulnerability;
+  // QoS Characteristics
+  qos_characteristics_t *qos_characteristics = &qos_flow.qos_params.qos_characteristics;
+  if (qos->fiveQI_type == NON_DYNAMIC) {
+    const non_dynamic_5qi_t *non_dynamic = &qos->qos_characteristics.non_dynamic;
+    typeof(qos_characteristics->non_dynamic) *out_non_dynamic = &qos_characteristics->non_dynamic;
+    out_non_dynamic->fiveqi = non_dynamic->fiveQI;
+    if (non_dynamic->qos_priority) {
+      out_non_dynamic->qos_priority_level = *non_dynamic->qos_priority;
+    }
+  } else {
+    const dynamic_5qi_t *dynamic = &qos->qos_characteristics.dynamic;
+    typeof(qos_characteristics->dynamic) *out_dynamic = &qos_characteristics->dynamic;
+    if (dynamic->fiveQI != NULL) {
+      out_dynamic->fiveqi = *dynamic->fiveQI;
+    }
+    out_dynamic->qos_priority_level = dynamic->qos_priority;
+    out_dynamic->packet_delay_budget = dynamic->packet_delay_budget;
+    out_dynamic->packet_error_rate.per_scalar = dynamic->per.scalar;
+    out_dynamic->packet_error_rate.per_exponent = dynamic->per.exponent;
+  }
+  qos_characteristics->qos_type = qos->fiveQI_type;
+
+  return qos_flow;
+}
+
+/** @brief Fills E1 PDU Session to Setup item IE */
+static pdu_session_to_setup_t fill_e1_pdusession_to_setup(const pdusession_t *session, const nr_security_configuration_t *security)
+{
+  pdu_session_to_setup_t pdu = {0};
+  // Session ID
+  pdu.sessionId = session->pdusession_id;
+  // NSSAI
+  pdu.nssai = session->nssai;
+  // Security indication
+  security_indication_t *sec = &pdu.securityIndication;
+  sec->integrityProtectionIndication = security->do_drb_integrity ? SECURITY_REQUIRED : SECURITY_NOT_NEEDED;
+  sec->confidentialityProtectionIndication = security->do_drb_ciphering ? SECURITY_REQUIRED : SECURITY_NOT_NEEDED;
+  // UP TL information
+  const gtpu_tunnel_t *n3_incoming = &session->n3_incoming;
+  pdu.UP_TL_information.teId = n3_incoming->teid;
+  memcpy(&pdu.UP_TL_information.tlAddress, n3_incoming->addr.buffer, sizeof(in_addr_t));
+  char ip_str[INET_ADDRSTRLEN] = {0};
+  inet_ntop(AF_INET, n3_incoming->addr.buffer, ip_str, sizeof(ip_str));
+  LOG_I(NR_RRC, "PDU Session to Setup: PDU Session ID=%d, incoming TEID=0x%08x, Addr=%s\n", session->pdusession_id, n3_incoming->teid, ip_str);
+  return pdu;
+}
+
 /** @brief Returns an instance of E1AP DRB To Setup List */
 static DRB_nGRAN_to_setup_t fill_e1_drb_to_setup(const drb_t *rrc_drb,
                                                  const pdusession_t *session,
@@ -298,9 +345,9 @@ static DRB_nGRAN_to_setup_t fill_e1_drb_to_setup(const drb_t *rrc_drb,
   DRB_nGRAN_to_setup_t drb_ngran = {0};
   drb_ngran.id = rrc_drb->drb_id;
 
-  drb_ngran.sdap_config.defaultDRB = true;
-  drb_ngran.sdap_config.sDAP_Header_UL = session->sdap_config.header_ul_absent ? 1 : 0;
-  drb_ngran.sdap_config.sDAP_Header_DL = session->sdap_config.header_dl_absent ? 1 : 0;
+  drb_ngran.sdap_config.defaultDRB = (session->sdap_config.default_drb == drb_ngran.id);
+  drb_ngran.sdap_config.sDAP_Header_UL = session->sdap_config.header_ul_absent ? false : true;
+  drb_ngran.sdap_config.sDAP_Header_DL = session->sdap_config.header_dl_absent ? false : true;
 
   drb_ngran.pdcp_config = set_bearer_context_pdcp_config(rrc_drb->pdcp_config, um_on_default_drb, redcap_cap);
 
@@ -310,109 +357,91 @@ static DRB_nGRAN_to_setup_t fill_e1_drb_to_setup(const drb_t *rrc_drb,
   }
 
   FOR_EACH_SEQ_ARR(nr_rrc_qos_t *, qos, &session->qos) {
-    pdusession_level_qos_parameter_t *qos_session = &qos->qos;
+    if (qos->drb_id != drb_ngran.id)
+      continue;
+    const pdusession_level_qos_parameter_t *qos_session = &qos->qos;
     DevAssert(drb_ngran.numQosFlow2Setup < MAX_QOS_FLOWS);
-    qos_flow_to_setup_t *qos_flow = &drb_ngran.qosFlows[drb_ngran.numQosFlow2Setup++];
-    qos_characteristics_t *qos_char = &qos_flow->qos_params.qos_characteristics;
-    qos_flow->qfi = qos_session->qfi;
-    qos_char->qos_type = qos_session->fiveQI_type;
-    if (qos_char->qos_type == DYNAMIC) {
-      qos_char->dynamic.fiveqi = qos_session->fiveQI;
-      qos_char->dynamic.qos_priority_level = qos_session->qos_priority;
-    } else {
-      qos_char->non_dynamic.fiveqi = qos_session->fiveQI;
-      qos_char->non_dynamic.qos_priority_level = qos_session->qos_priority;
-    }
-
-    ngran_allocation_retention_priority_t *arp_out = &qos_flow->qos_params.alloc_reten_priority;
-    qos_arp_t *arp_in = &qos_session->arp;
-    arp_out->priority_level = arp_in->priority_level;
-    arp_out->preemption_capability = arp_in->pre_emp_capability;
-    arp_out->preemption_vulnerability = arp_in->pre_emp_vulnerability;
+    drb_ngran.qosFlows[drb_ngran.numQosFlow2Setup++] = fill_e1_qos_flow_to_setup(qos_session);
   }
+  DevAssert(drb_ngran.numQosFlow2Setup > 0);
 
   return drb_ngran;
 }
 
-static nr_sdap_configuration_t get_sdap_config(const bool enable_sdap)
+/** @brief Triggers E1 Bearer Context Setup
+ * Initiates the setup of bearer contexts for a given UE by preparing and
+ * sending an E1AP Bearer Context Setup Request message to the CU-UP.
+ * Precondition: CU-UP association is checked by callers before invocation. */
+void trigger_bearer_setup(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE, uint64_t ueAggMaxBitRateDownlink)
 {
-  nr_sdap_configuration_t sdap = {.header_dl_absent = !enable_sdap, .header_ul_absent = !enable_sdap};
-  return sdap;
-}
-
-/**
- * @brief Triggers bearer setup for the specified UE.
- *
- * This function initiates the setup of bearer contexts for a given UE
- * by preparing and sending an E1AP Bearer Setup Request message to the CU-UP.
- *
- * @return True if bearer setup was successfully initiated, false otherwise
- * @retval true Bearer setup was initiated successfully
- * @retval false No CU-UP is associated, so bearer setup could not be initiated
- *
- * @note the return value is expected to be used (as per declaration)
- *
- */
-bool trigger_bearer_setup(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE, int n, pdusession_t *sessions, uint64_t ueAggMaxBitRateDownlink)
-{
+  if (ueAggMaxBitRateDownlink == UINT64_MAX) {
+    LOG_E(NR_RRC, "UE %d: UE aggregate maximum bitrate must be known by the NG-RAN node\n", UE->rrc_ue_id);
+    return;
+  }
   AssertFatal(UE->as_security_active, "logic bug: security should be active when activating DRBs\n");
-  e1ap_bearer_setup_req_t bearer_req = {0};
 
-  // Reject bearers setup if there's no CU-UP associated
-  if (!is_cuup_associated(rrc)) {
-    return false;
+  // E1 Bearer Context Setup Request
+  e1ap_bearer_setup_req_t bearer_req = {
+      .gNB_cu_cp_ue_id = UE->rrc_ue_id,
+      .secInfo.cipheringAlgorithm = rrc->security.do_drb_ciphering ? UE->ciphering_algorithm : 0,
+      .secInfo.integrityProtectionAlgorithm = rrc->security.do_drb_integrity ? UE->integrity_algorithm : 0,
+      .ueDlAggMaxBitRate = ueAggMaxBitRateDownlink,
+      .anl = activity_notification_level_pdu_session,
+  };
+
+  // Collect PDU sessions with NEW status first - store pdusession_t directly to avoid stack overflow
+  pdusession_t to_setup[MAX_PDUS_PER_UE];
+  uint16_t n_to_setup = 0;
+  FOR_EACH_SEQ_ARR (rrc_pdu_session_param_t *, pduSession, &UE->pduSessions) {
+    if (pduSession->status == PDU_SESSION_STATUS_NEW) {
+      if (n_to_setup >= MAX_PDUS_PER_UE) {
+        LOG_E(NR_RRC, "UE %d: Maximum number of PDU sessions (%d) exceeded\n", UE->rrc_ue_id, MAX_PDUS_PER_UE);
+        break;
+      }
+      memcpy(&to_setup[n_to_setup++], &pduSession->param, sizeof(pdusession_t));
+    }
+  }
+  // Allocate only the exact size needed
+  if (n_to_setup > 0) {
+    bearer_req.pduSession = calloc_or_fail(n_to_setup, sizeof(*bearer_req.pduSession));
   }
 
+  security_information_t *secInfo = &bearer_req.secInfo;
+  nr_derive_key(UP_ENC_ALG, secInfo->cipheringAlgorithm, UE->kgnb, (uint8_t *)secInfo->encryptionKey);
+  nr_derive_key(UP_INT_ALG, secInfo->integrityProtectionAlgorithm, UE->kgnb, (uint8_t *)secInfo->integrityProtectionKey);
+
   e1ap_nssai_t cuup_nssai = {0};
-  for (int i = 0; i < n; i++) {
-    // Retrieve SDAP configuration and PDU Session to the list
-    sessions[i].sdap_config = get_sdap_config(rrc->configuration.enable_sdap);
-    rrc_pdu_session_param_t *pduSession = add_pduSession(&UE->pduSessions, &sessions[i]);
-    if (!pduSession) {
-      LOG_E(NR_RRC, "Could not add PDU Session %d for UE %d\n", sessions[i].pdusession_id, UE->rrc_ue_id);
-      continue;
-    }
-    pdusession_t *session = &pduSession->param;
-    // Fill E1 Bearer Context Modification Request
-    bearer_req.gNB_cu_cp_ue_id = UE->rrc_ue_id;
-    security_information_t *secInfo = &bearer_req.secInfo;
-    secInfo->cipheringAlgorithm = rrc->security.do_drb_ciphering ? UE->ciphering_algorithm : 0;
-    secInfo->integrityProtectionAlgorithm = rrc->security.do_drb_integrity ? UE->integrity_algorithm : 0;
-    nr_derive_key(UP_ENC_ALG, secInfo->cipheringAlgorithm, UE->kgnb, (uint8_t *)secInfo->encryptionKey);
-    nr_derive_key(UP_INT_ALG, secInfo->integrityProtectionAlgorithm, UE->kgnb, (uint8_t *)secInfo->integrityProtectionKey);
-    bearer_req.ueDlAggMaxBitRate = ueAggMaxBitRateDownlink;
-    pdu_session_to_setup_t *pdu = bearer_req.pduSession + bearer_req.numPDUSessions;
-    bearer_req.numPDUSessions++;
-    pdu->sessionId = session->pdusession_id;
-    pdu->nssai = sessions[i].nssai;
+  // Fill allocated array with collected PDU sessions
+  for (size_t i = 0; i < n_to_setup; i++) {
+    pdusession_t *session = &to_setup[i];
+    // Fill E1 PDU Session to setup item
+    pdu_session_to_setup_t *pdu = &bearer_req.pduSession[bearer_req.numPDUSessions++];
+    *pdu = fill_e1_pdusession_to_setup(session, &rrc->security);
     if (cuup_nssai.sst == 0)
       cuup_nssai = pdu->nssai; /* for CU-UP selection below */
-
-    security_indication_t *sec = &pdu->securityIndication;
-    sec->integrityProtectionIndication = rrc->security.do_drb_integrity ? SECURITY_REQUIRED
-                                                                        : SECURITY_NOT_NEEDED;
-    sec->confidentialityProtectionIndication = rrc->security.do_drb_ciphering ? SECURITY_REQUIRED
-                                                                              : SECURITY_NOT_NEEDED;
-    gtpu_tunnel_t *n3_incoming = &session->n3_incoming;
-    pdu->UP_TL_information.teId = n3_incoming->teid;
-    memcpy(&pdu->UP_TL_information.tlAddress, n3_incoming->addr.buffer, sizeof(in_addr_t));
-    char ip_str[INET_ADDRSTRLEN] = {0};
-    inet_ntop(AF_INET, n3_incoming->addr.buffer, ip_str, sizeof(ip_str));
-    LOG_I(NR_RRC, "Bearer Context Setup: PDU Session ID=%d, incoming TEID=0x%08x, Addr=%s\n", session->pdusession_id, n3_incoming->teid, ip_str);
-
-    pdu->numDRB2Setup = 1; // One DRB per PDU Session. TODO: Remove hardcoding
-    for (int j = 0; j < pdu->numDRB2Setup; j++) {
-      drb_t *rrc_drb = nr_rrc_add_drb(&UE->drbs, session->pdusession_id, &rrc->pdcp_config);
-      if (!rrc_drb) {
-        LOG_E(NR_RRC, "UE %d: failed to add DRB for PDU session ID %d\n", UE->rrc_ue_id, session->pdusession_id);
-        return false;
+    // Fill E1 DRB to setup item
+    FOR_EACH_SEQ_ARR(drb_t *, drb, &UE->drbs) {
+      if (drb->pdusession_id != session->pdusession_id) {
+        continue;
       }
-      DevAssert(seq_arr_size(&pduSession->param.qos) == 1);
-      nr_rrc_qos_t *qos = (nr_rrc_qos_t *)seq_arr_at(&pduSession->param.qos, 0);
-      qos->drb_id = rrc_drb->drb_id; // map DRB to QFI
-      LOG_I(NR_RRC, "UE %d: added DRB %d for PDU session ID %d\n", UE->rrc_ue_id, rrc_drb->drb_id, rrc_drb->pdusession_id);
-      pdu->DRBnGRanList[0] = fill_e1_drb_to_setup(rrc_drb, session, rrc->configuration.um_on_default_drb, UE->redcap_cap);
+      // Bounds check for DRB array
+      if (pdu->numDRB2Setup >= E1AP_MAX_NUM_DRBS) {
+        LOG_E(NR_RRC,
+              "UE %d: Maximum number of DRBs (%d) exceeded for PDU session %d\n",
+              UE->rrc_ue_id,
+              E1AP_MAX_NUM_DRBS,
+              session->pdusession_id);
+        break;
+      }
+      pdu->DRBnGRanList[pdu->numDRB2Setup++] = fill_e1_drb_to_setup(drb, session, rrc->configuration.um_on_default_drb, UE->redcap_cap);
     }
+    DevAssert(pdu->numDRB2Setup > 0);
+  }
+  // Check if we have any PDU sessions to setup
+  if (bearer_req.numPDUSessions == 0) {
+    LOG_W(NR_RRC, "UE %d: No PDU sessions to setup, skipping bearer context setup\n", UE->rrc_ue_id);
+    free_e1ap_context_setup_request(&bearer_req);
+    return;
   }
   /* Limitation: we assume one fixed CU-UP per UE. We base the selection on
    * NSSAI, but the UE might have multiple PDU sessions with differing slices,
@@ -421,7 +450,7 @@ bool trigger_bearer_setup(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE, int n, pdusession
    * CU-UPs, and send them to the different CU-UPs. */
   sctp_assoc_t assoc_id = get_new_cuup_for_ue(rrc, UE, cuup_nssai.sst, cuup_nssai.sd);
   rrc->cucp_cuup.bearer_context_setup(assoc_id, &bearer_req);
-  return true;
+  free_e1ap_context_setup_request(&bearer_req);
 }
 
 /**
@@ -468,9 +497,7 @@ int rrc_gNB_process_NGAP_INITIAL_CONTEXT_SETUP_REQ(MessageDef *msg_p, instance_t
     /* Can not associate this message to an UE index, send a failure to NGAP and discard it! */
     LOG_W(NR_RRC, "[gNB %ld] In NGAP_INITIAL_CONTEXT_SETUP_REQ: unknown UE from NGAP ids (%u)\n", instance, req->gNB_ue_ngap_id);
     ngap_cause_t cause = { .type = NGAP_CAUSE_RADIO_NETWORK, .value = NGAP_CAUSE_RADIO_NETWORK_UNKNOWN_LOCAL_UE_NGAP_ID};
-    rrc_gNB_send_NGAP_INITIAL_CONTEXT_SETUP_FAIL(req->gNB_ue_ngap_id,
-                                                 NULL,
-                                                 cause);
+    rrc_gNB_send_NGAP_INITIAL_CONTEXT_SETUP_FAIL(req->gNB_ue_ngap_id, cause);
     return (-1);
   }
   gNB_RRC_UE_t *UE = &ue_context_p->ue_context;
@@ -485,12 +512,39 @@ int rrc_gNB_process_NGAP_INITIAL_CONTEXT_SETUP_REQ(MessageDef *msg_p, instance_t
   UE->nas_pdu = req->nas_pdu;
 
   if (req->nb_of_pdusessions > 0) {
-    /* if there are PDU sessions to setup, store them to be created once
-     * security (and UE capabilities) are received */
-    UE->n_initial_pdu = req->nb_of_pdusessions;
-    UE->initial_pdus = calloc_or_fail(UE->n_initial_pdu, sizeof(*UE->initial_pdus));
-    for (int i = 0; i < UE->n_initial_pdu; ++i)
-      cp_pdusession_resource_item_to_pdusession(&UE->initial_pdus[i], &req->pdusession[i]);
+    AssertFatal(req->has_ue_ambr, "UE aggregate maximum bitrate is required when there are PDU sessions to setup");
+
+    /* Build the list of PDU sessions to actually set up, filtering out those
+     * whose PDU Session ID already identifies an active PDU session for this UE.
+     * According to TS 38.413, establishment of such a PDU session shall be
+     * reported as failed in the response. */
+    int ps_count = 0;
+    pdusession_t psessions[NR_MAX_NB_PDU_SESSIONS] = {0};
+
+    for (int i = 0; i < req->nb_of_pdusessions; ++i) {
+      const pdusession_resource_item_t *src = &req->pdusession[i];
+
+      rrc_pdu_session_param_t *existing = find_pduSession(&UE->pduSessions, src->pdusession_id);
+      if (existing != NULL && existing->status == PDU_SESSION_STATUS_ESTABLISHED) {
+        LOG_W(NR_RRC, "UE %d: InitialContextSetup contains already active PDU session ID %d\n", UE->rrc_ue_id, src->pdusession_id);
+        continue;
+      }
+
+      /* This is a PDU session that is not yet active for this UE: add it to the list */
+      DevAssert(ps_count < req->nb_of_pdusessions);
+      cp_pdusession_resource_item_to_pdusession(&psessions[ps_count++], src, UE->rrc_ue_id);
+    }
+
+    UE->n_initial_pdu = 0;
+    if (ps_count > 0) {
+      UE->initial_pdus = calloc_or_fail(ps_count, sizeof(*UE->initial_pdus));
+      memcpy(UE->initial_pdus, psessions, ps_count * sizeof(*UE->initial_pdus));
+      UE->n_initial_pdu = ps_count;
+
+      /* If we have at least one session to set up, store AMBR */
+      UE->ambr.dl_br = req->ue_ambr.br_dl;
+      UE->ambr.ul_br = req->ue_ambr.br_ul;
+    }
   }
 
   /* security */
@@ -513,13 +567,16 @@ int rrc_gNB_process_NGAP_INITIAL_CONTEXT_SETUP_REQ(MessageDef *msg_p, instance_t
       // do not remove the above allocation which is reused here: this is used
       // in handle_rrcReconfigurationComplete() to know that we need to send a
       // Initial context setup response message
-      if (!trigger_bearer_setup(rrc, UE, UE->n_initial_pdu, UE->initial_pdus, 0)) {
+      // Reject bearers setup if there's no CU-UP associated
+      if (!is_cuup_associated(rrc)) {
         LOG_W(NR_RRC, "UE %d: reject PDU Session Setup in Initial Context Setup Response\n", UE->rrc_ue_id);
         ngap_cause_t cause = {.type = NGAP_CAUSE_RADIO_NETWORK, .value = NGAP_CAUSE_RADIO_NETWORK_RESOURCES_NOT_AVAILABLE_FOR_THE_SLICE};
         send_ngap_initial_context_setup_resp_fail(rrc->module_id, req, cause);
         rrc_forward_ue_nas_message(rrc, UE);
         return -1;
       }
+      nr_rrc_add_bearers(rrc, UE, UE->n_initial_pdu, UE->initial_pdus);
+      trigger_bearer_setup(rrc, UE, UE->ambr.dl_br);
     } else {
       /* no PDU sesion to setup: acknowledge this message, and forward NAS
        * message, if required */
@@ -576,8 +633,9 @@ void rrc_gNB_send_NGAP_INITIAL_CONTEXT_SETUP_RESP(gNB_RRC_INST *rrc, gNB_RRC_UE_
 
   // Optional: PDU Sessions to Setup
   FOR_EACH_SEQ_ARR(rrc_pdu_session_param_t *, session, &UE->pduSessions) {
-    if (session->status == PDU_SESSION_STATUS_DONE) {
+    if (session->status == PDU_SESSION_STATUS_NEW) {
       resp->pdusessions[pdu_sessions_done++] = fill_ngap_pdusession_setup(&session->param);
+      session->status = PDU_SESSION_STATUS_ESTABLISHED;
     } else if (session->status != PDU_SESSION_STATUS_ESTABLISHED) {
       session->status = PDU_SESSION_STATUS_FAILED;
       ngap_cause_t cause = {.type = NGAP_CAUSE_RADIO_NETWORK, .value = NGAP_CAUSE_RADIO_NETWORK_UNKNOWN_PDU_SESSION_ID};
@@ -593,9 +651,7 @@ void rrc_gNB_send_NGAP_INITIAL_CONTEXT_SETUP_RESP(gNB_RRC_INST *rrc, gNB_RRC_UE_
   itti_send_msg_to_task (TASK_NGAP, rrc->module_id, msg_p);
 }
 
-void rrc_gNB_send_NGAP_INITIAL_CONTEXT_SETUP_FAIL(uint32_t gnb,
-                                                  const rrc_gNB_ue_context_t *const ue_context_pP,
-                                                  const ngap_cause_t causeP)
+void rrc_gNB_send_NGAP_INITIAL_CONTEXT_SETUP_FAIL(uint32_t gnb, const ngap_cause_t causeP)
 {
   MessageDef *msg_p = itti_alloc_new_message(TASK_RRC_GNB, 0, NGAP_INITIAL_CONTEXT_SETUP_FAIL);
   ngap_initial_context_setup_fail_t *fail = &NGAP_INITIAL_CONTEXT_SETUP_FAIL(msg_p);
@@ -696,7 +752,7 @@ static void set_UE_security_algos(const gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE, con
 }
 
 //------------------------------------------------------------------------------
-int rrc_gNB_process_NGAP_DOWNLINK_NAS(MessageDef *msg_p, instance_t instance, mui_t *rrc_gNB_mui)
+int rrc_gNB_process_NGAP_DOWNLINK_NAS(MessageDef *msg_p, instance_t instance)
 //------------------------------------------------------------------------------
 {
   ngap_downlink_nas_t *req = &NGAP_DOWNLINK_NAS(msg_p);
@@ -747,12 +803,14 @@ void rrc_gNB_send_NGAP_UPLINK_NAS(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE, const NR_
   NGAP_UPLINK_NAS(msg_p).nas_pdu.buf = buf;
   /* Fill PLMN and location info: use serving PLMN of the UE */
   NGAP_UPLINK_NAS(msg_p).plmn = UE->serving_plmn;
-  NGAP_UPLINK_NAS(msg_p).nr_cell_id = rrc->nr_cellid;
-  NGAP_UPLINK_NAS(msg_p).tac = rrc->configuration.tac;
+  nr_rrc_cell_container_t *cell = rrc_get_pcell_for_ue(rrc, UE);
+  DevAssert(cell);
+  NGAP_UPLINK_NAS(msg_p).nr_cell_id = cell->info.cell_id;
+  NGAP_UPLINK_NAS(msg_p).tac = cell->info.tac != 0 ? cell->info.tac : rrc->configuration.tac;
   itti_send_msg_to_task(TASK_NGAP, rrc->module_id, msg_p);
 }
 
-void rrc_gNB_send_NGAP_PDUSESSION_SETUP_RESP(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE, uint8_t xid)
+void rrc_gNB_send_NGAP_PDUSESSION_SETUP_RESP(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE)
 {
   MessageDef *msg_p;
   int pdu_sessions_done = 0;
@@ -763,7 +821,7 @@ void rrc_gNB_send_NGAP_PDUSESSION_SETUP_RESP(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE
   resp->gNB_ue_ngap_id = UE->rrc_ue_id;
 
   FOR_EACH_SEQ_ARR(rrc_pdu_session_param_t *, session, &UE->pduSessions) {
-    if (session->status == PDU_SESSION_STATUS_DONE) {
+    if (session->status == PDU_SESSION_STATUS_NEW) {
       resp->pdusessions[pdu_sessions_done++] = fill_ngap_pdusession_setup(&session->param);
       session->status = PDU_SESSION_STATUS_ESTABLISHED;
     } else if (session->status != PDU_SESSION_STATUS_ESTABLISHED) {
@@ -861,142 +919,443 @@ void rrc_gNB_process_NGAP_PDUSESSION_SETUP_REQ(MessageDef *msg_p, instance_t ins
 
   UE->amf_ue_ngap_id = msg->amf_ue_ngap_id;
 
-
-  pdusession_t to_setup[NGAP_MAX_PDU_SESSION] = {0};
+  pdusession_t to_setup[NR_MAX_NB_PDU_SESSIONS] = {0};
   for (int i = 0; i < msg->nb_pdusessions_tosetup; ++i)
-    cp_pdusession_resource_item_to_pdusession(&to_setup[i], &msg->pdusession[i]);
+    cp_pdusession_resource_item_to_pdusession(&to_setup[i], &msg->pdusession[i], UE->rrc_ue_id);
 
-  uint64_t dl_ambr = msg->has_ue_ambr ? msg->ueAggMaxBitRate.br_dl : 0;
+  /** Set AMBR if provided (optional) */
+  if (msg->has_ue_ambr) {
+    UE->ambr.dl_br = msg->ueAggMaxBitRate.br_dl;
+    UE->ambr.ul_br = msg->ueAggMaxBitRate.br_ul;
+  }
 
-  if (!trigger_bearer_setup(rrc, UE, msg->nb_pdusessions_tosetup, to_setup, dl_ambr)) {
+  if (!is_cuup_associated(rrc)) {
     // Reject PDU Session Resource setup if there's no CU-UP associated
     LOG_W(NR_RRC, "UE %d: reject PDU Session Setup in PDU Session Resource Setup Response\n", UE->rrc_ue_id);
     ngap_cause_t cause = {.type = NGAP_CAUSE_RADIO_NETWORK, .value = NGAP_CAUSE_RADIO_NETWORK_RESOURCES_NOT_AVAILABLE_FOR_THE_SLICE};
     send_ngap_pdu_session_setup_resp_fail(instance, msg, cause);
     rrc_forward_ue_nas_message(rrc, UE);
-  } else {
-    // Set ongoing_transaction flag to true
-    init_delayed_action(&UE->delayed_action);
+    return;
+  }
+  // Add to UE context lists
+  nr_rrc_add_bearers(rrc, UE, msg->nb_pdusessions_tosetup, to_setup);
+  // Trigger bearer setup
+  trigger_bearer_setup(rrc, UE, UE->ambr.dl_br);
+  // Set ongoing_transaction flag to true
+  init_delayed_action(&UE->delayed_action);
+}
+
+/* Find or create pdu_session_to_mod_t entry in e1_req */
+static pdu_session_to_mod_t *find_or_add_pdu_session_mod(e1ap_bearer_mod_req_t *e1_req, int pdusession_id)
+{
+  // Check if PDU session already exists in modify list
+  for (uint8_t i = 0; i < e1_req->numPDUSessionsMod; ++i) {
+    if (e1_req->pduSessionMod[i].sessionId == pdusession_id)
+      return &e1_req->pduSessionMod[i];
+  }
+  // Create new entry
+  DevAssert(e1_req->numPDUSessionsMod < NR_MAX_NB_PDU_SESSIONS);
+  pdu_session_to_mod_t *pdu_mod = &e1_req->pduSessionMod[e1_req->numPDUSessionsMod++];
+  memset(pdu_mod, 0, sizeof(*pdu_mod));
+  pdu_mod->sessionId = pdusession_id;
+  return pdu_mod;
+}
+
+/** @brief Find or create E1 DRB_nGRAN_to_mod_t entry inside a PDU session modification
+ * If creating a new entry, populates all QoS flows that map to this DRB */
+static DRB_nGRAN_to_mod_t *find_or_add_e1_drb_mod(pdu_session_to_mod_t *pdu_mod, long drb_id, const pdusession_t *session)
+{
+  // Check if DRB already exists in modify list
+  for (int i = 0; i < pdu_mod->numDRB2Modify; ++i) {
+    if (pdu_mod->DRBnGRanModList[i].id == drb_id)
+      return &pdu_mod->DRBnGRanModList[i];
+  }
+  // Create new entry and populate all QoS flows that map to this DRB
+  DevAssert(pdu_mod->numDRB2Modify < E1AP_MAX_NUM_DRBS);
+  DRB_nGRAN_to_mod_t *mod = &pdu_mod->DRBnGRanModList[pdu_mod->numDRB2Modify++];
+  memset(mod, 0, sizeof(*mod));
+  mod->id = drb_id;
+  // Populate all QoS flows that map to this DRB
+  FOR_EACH_SEQ_ARR (nr_rrc_qos_t *, q, &session->qos) {
+    if (q->drb_id != drb_id)
+      continue;
+    DevAssert(mod->numQosFlowsMod < E1AP_MAX_NUM_QOS_FLOWS);
+    qos_flow_to_setup_t *dst = &mod->qosFlows[mod->numQosFlowsMod++];
+    *dst = fill_e1_qos_flow_to_setup(&q->qos);
+  }
+  return mod;
+}
+
+/** @brief Override E1 Flow Mapping Information for a given DRB */
+static void nr_rrc_override_flow_mapping_info(DRB_nGRAN_to_mod_t *mod, long drb_id, const pdusession_t *session)
+{
+  mod->numQosFlowsMod = 0;
+  FOR_EACH_SEQ_ARR (nr_rrc_qos_t *, q, &session->qos) {
+    if (q->drb_id != drb_id)
+      continue;
+    DevAssert(mod->numQosFlowsMod < E1AP_MAX_NUM_QOS_FLOWS);
+    qos_flow_to_setup_t *dst = &mod->qosFlows[mod->numQosFlowsMod++];
+    *dst = fill_e1_qos_flow_to_setup(&q->qos);
   }
 }
 
-/** @brief Update existing QoS Flow mapped in the UE context */
-static void nr_rrc_update_qos(seq_arr_t *list, const int nb_qos, const pdusession_level_qos_parameter_t *in_qos)
+/** @brief Finalize E1 DRB actions after QoS update/release processing:
+ *         - remove DRBs no longer referenced by any QoS flow
+ *         - refresh DRB-To-Modify QoS list for changed DRBs that are still used
+ * @param UE UE context
+ * @param pduSession PDU session to check
+ * @param e1_req E1AP bearer modification request
+ * @param drb_needs_e1_refresh true for DRBs touched by QoS add/modify/release in current request */
+static void nr_rrc_send_e1_after_qos_update(gNB_RRC_UE_t *UE,
+                                            rrc_pdu_session_param_t *pduSession,
+                                            e1ap_bearer_mod_req_t *e1_req,
+                                            const bool drb_needs_e1_refresh[MAX_DRBS_PER_UE + 1])
 {
-  DevAssert(nb_qos == 1);
-  DevAssert(nb_qos < MAX_QOS_FLOWS);
-  for (uint8_t i = 0; i < nb_qos; ++i) {
-    nr_rrc_qos_t *qos = find_qos(list, in_qos[i].qfi);
-    if (qos) {
-      AssertFatal(qos->qos.qfi == in_qos[i].qfi, "QoS Flow to modify must match existing one");
-      LOG_I(NR_RRC, "Updating QoS for QFI=%d\n", in_qos[i].qfi);
-      qos->qos = in_qos[i];
-    } else {
-      LOG_E(NR_RRC, "Failed to update QoS for QFI=%d: QoS flow not found\n", in_qos[i].qfi);
+  pdusession_t *dst = &pduSession->param;
+  // Find or create PDU session entry in e1_req
+  pdu_session_to_mod_t *pdu_mod = find_or_add_pdu_session_mod(e1_req, dst->pdusession_id);
+
+  // Check if any remaining QoS for this PDU session still references the same DRB
+  FOR_EACH_SEQ_ARR (drb_t *, drb, &UE->drbs) {
+    if (drb->pdusession_id != dst->pdusession_id)
+      continue;
+    bool drb_still_used = false;
+    FOR_EACH_SEQ_ARR (nr_rrc_qos_t *, qos, &dst->qos) {
+      if (qos->drb_id == drb->drb_id) {
+        drb_still_used = true;
+        break;
+      }
+    }
+    if (!drb_still_used) {
+      if (nr_rrc_remove_drb_by_id(&UE->drbs, drb->drb_id)) {
+        LOG_I(NR_RRC,
+              "UE %d: removed DRB ID %d for PDU session %d (no remaining QoS flows mapped)\n",
+              UE->rrc_ue_id,
+              drb->drb_id,
+              dst->pdusession_id);
+      }
+      // Add DRB to remove directly to e1_req
+      DevAssert(pdu_mod->n_drb_to_remove < E1AP_MAX_NUM_DRBS);
+      drb_to_remove_t *rem = &pdu_mod->drbs_to_remove[pdu_mod->n_drb_to_remove++];
+      rem->id = drb->drb_id;
+      continue;
+    }
+
+    /** For changed DRBs that are still used, refresh Flow Mapping Information in DRB-To-Modify
+     * 3GPP TS 38.463 9.3.3.11: overrides previous mapping information. */
+    if (drb_needs_e1_refresh[drb->drb_id]) {
+      bool found = false;
+      for (int j = 0; j < pdu_mod->numDRB2Modify; ++j) {
+        if (pdu_mod->DRBnGRanModList[j].id != drb->drb_id)
+          continue;
+        nr_rrc_override_flow_mapping_info(&pdu_mod->DRBnGRanModList[j], drb->drb_id, dst);
+        found = true;
+        break;
+      }
+      if (!found)
+        find_or_add_e1_drb_mod(pdu_mod, drb->drb_id, dst);
     }
   }
 }
 
-/** @brief Update stored pdusession_t in list from NGAP PDU Session Resource item */
-static void nr_rrc_update_pdusession(pdusession_t *dst, const pdusession_resource_item_t *src)
+static void nr_rrc_apply_qos_add_modify(gNB_RRC_INST *rrc,
+                                        gNB_RRC_UE_t *UE,
+                                        pdusession_t *dst,
+                                        const pdusession_mod_req_transfer_t *transfer,
+                                        e1ap_bearer_mod_req_t *e1_req,
+                                        bool drb_needs_e1_refresh[MAX_DRBS_PER_UE + 1])
 {
-  dst->pdusession_id = src->pdusession_id;
-  dst->nas_pdu = src->nas_pdu;
-  dst->pdu_session_type = src->pdusessionTransfer.pdu_session_type;
-  dst->n3_incoming = src->pdusessionTransfer.n3_incoming;
-  dst->nssai = src->nssai;
-  DevAssert(dst->qos.data); // QoS list has to be initialized at this stage
-  // Update QoS flow
-  nr_rrc_update_qos(&dst->qos, src->pdusessionTransfer.nb_qos, src->pdusessionTransfer.qos);
+  DevAssert(transfer->nb_qos_to_add_modify < MAX_QOS_FLOWS);
+  DevAssert(e1_req->numPDUSessionsMod < NR_MAX_NB_PDU_SESSIONS);
+  pdu_session_to_mod_t *pdu_mod = &e1_req->pduSessionMod[e1_req->numPDUSessionsMod++];
+  pdu_mod->sessionId = dst->pdusession_id;
+
+  for (uint8_t i = 0; i < transfer->nb_qos_to_add_modify; ++i) {
+    const pdusession_level_qos_parameter_t *q_in = &transfer->qos_to_add_modify[i];
+    if (q_in->qfi < 0 || q_in->qfi > 63) {
+      LOG_E(NR_RRC, "QoS flow QFI=%d: Invalid QFI (must be 0-63). Skipping QoS flow.\n", q_in->qfi);
+      continue;
+    }
+
+    const non_dynamic_5qi_t *in_non_dynamic = &q_in->qos_characteristics.non_dynamic;
+    const dynamic_5qi_t *in_dynamic = &q_in->qos_characteristics.dynamic;
+    if (q_in->fiveQI_type == NON_DYNAMIC && !is_5qi_standardized(in_non_dynamic->fiveQI)) {
+      LOG_W(NR_RRC,
+            "QoS flow QFI=%d: 5QI %u is not a standardized value (1-9, 65-90). Skipping QoS flow.\n",
+            q_in->qfi,
+            in_non_dynamic->fiveQI);
+      continue;
+    }
+
+    nr_rrc_qos_t *qos = find_qos(&dst->qos, q_in->qfi);
+    if (qos) {
+      // Existing QoS flow: update it and mark DRB for modification
+      const int drb_id = qos->drb_id;
+      pdusession_level_qos_parameter_t *dst_qos = &qos->qos;
+      AssertFatal(qos->qos.qfi == q_in->qfi, "QoS Flow to modify must match existing one");
+      LOG_I(NR_RRC, "Updating QoS for QFI=%d\n", q_in->qfi);
+      DevAssert(dst_qos->fiveQI_type == q_in->fiveQI_type);
+
+      dst_qos->qfi = q_in->qfi;
+      dst_qos->arp = q_in->arp;
+      if (q_in->fiveQI_type == DYNAMIC) {
+        dynamic_5qi_t *out_dyn = &dst_qos->qos_characteristics.dynamic;
+        out_dyn->qos_priority = in_dynamic->qos_priority;
+        out_dyn->packet_delay_budget = in_dynamic->packet_delay_budget;
+        out_dyn->per = in_dynamic->per;
+        if (in_dynamic->fiveQI == NULL) {
+          free_and_zero(out_dyn->fiveQI);
+        } else {
+          if (out_dyn->fiveQI == NULL)
+            out_dyn->fiveQI = calloc_or_fail(1, sizeof(*out_dyn->fiveQI));
+          *out_dyn->fiveQI = *in_dynamic->fiveQI;
+        }
+      } else { /* NON_DYNAMIC */
+        non_dynamic_5qi_t *out_non_dyn = &dst_qos->qos_characteristics.non_dynamic;
+        out_non_dyn->fiveQI = in_non_dynamic->fiveQI;
+        if (in_non_dynamic->qos_priority == NULL) {
+          free_and_zero(out_non_dyn->qos_priority);
+        } else {
+          if (out_non_dyn->qos_priority == NULL)
+            out_non_dyn->qos_priority = calloc_or_fail(1, sizeof(*out_non_dyn->qos_priority));
+          *out_non_dyn->qos_priority = *in_non_dynamic->qos_priority;
+        }
+      }
+      LOG_I(NR_RRC, "UE %d: updating QoS for QFI=%d (DRB=%d)\n", UE->rrc_ue_id, q_in->qfi, drb_id);
+      find_or_add_e1_drb_mod(pdu_mod, drb_id, dst);
+      drb_needs_e1_refresh[drb_id] = true;
+    } else {
+      // New QoS flow: add it and either setup new DRB or modify existing DRB
+      qos = add_qos(&dst->qos, q_in);
+      if (!qos) {
+        LOG_E(NR_RRC, "Failed to add QoS flow for QFI=%d\n", q_in->qfi);
+        continue;
+      }
+      LOG_I(NR_RRC,
+            "UE %d: added QoS flow with QFI=%d, total number of QoS flows = %ld\n",
+            UE->rrc_ue_id,
+            q_in->qfi,
+            seq_arr_size(&dst->qos));
+      bool is_new_drb = nr_rrc_assign_drb_to_qos_flow(rrc, UE, dst, qos);
+      if (is_new_drb) {
+        // New DRB: add to setup list (DRBnGRanList) and populates QoS flows internally
+        drb_t *rrc_drb = get_drb(&UE->drbs, qos->drb_id);
+        DevAssert(rrc_drb);
+        DevAssert(pdu_mod->numDRB2Setup < E1AP_MAX_NUM_DRBS);
+        pdu_mod->DRBnGRanList[pdu_mod->numDRB2Setup++] =
+            fill_e1_drb_to_setup(rrc_drb, dst, rrc->configuration.um_on_default_drb, UE->redcap_cap);
+      } else {
+        // Existing DRB found: mark it for modification (adds to DRBnGRanModList and populates QoS flows)
+        DevAssert(qos->drb_id > 0 && qos->drb_id <= MAX_DRBS_PER_UE);
+        find_or_add_e1_drb_mod(pdu_mod, qos->drb_id, dst);
+        drb_needs_e1_refresh[qos->drb_id] = true;
+      }
+    }
+    qos->ngap_pending = true;
+  }
+}
+
+static void nr_rrc_apply_qos_release(gNB_RRC_UE_t *UE,
+                                     pdusession_t *dst,
+                                     const pdusession_mod_req_transfer_t *transfer,
+                                     bool drb_needs_e1_refresh[MAX_DRBS_PER_UE + 1])
+{
+  for (uint8_t i = 0; i < transfer->nb_qos_to_release; ++i) {
+    const int qfi = transfer->qos_to_release[i].qfi;
+    nr_rrc_qos_t *qos = find_qos(&dst->qos, qfi);
+    if (!qos) {
+      LOG_W(NR_RRC,
+            "UE %d: QoS Flow To Release with QFI=%d not found in PDU session %d, skipping release\n",
+            UE->rrc_ue_id,
+            qfi,
+            dst->pdusession_id);
+      continue;
+    }
+    const int drb_id = qos->drb_id;
+    if (!rm_qos(&dst->qos, qfi)) {
+      LOG_E(NR_RRC, "UE %d: Failed to remove QoS flow with QFI=%d\n", UE->rrc_ue_id, qfi);
+      continue;
+    }
+    LOG_I(NR_RRC, "UE %d: removed QoS flow with QFI=%d\n", UE->rrc_ue_id, qfi);
+    drb_needs_e1_refresh[drb_id] = true;
+  }
+}
+
+/** @brief Apply one NGAP PDU session modification item (add/modify, release, then E1 Bearer Context Modification). */
+static void nr_rrc_update_pdusession(gNB_RRC_INST *rrc,
+                                     gNB_RRC_UE_t *UE,
+                                     rrc_pdu_session_param_t *session,
+                                     const pdusession_resource_mod_item_t *sessMod,
+                                     e1ap_bearer_mod_req_t *e1_req)
+{
+  DevAssert(rrc);
+  DevAssert(UE);
+  DevAssert(e1_req);
+  const pdusession_mod_req_transfer_t *transfer = &sessMod->pdusessionTransfer;
+  DevAssert(transfer->nb_qos_to_add_modify < MAX_QOS_FLOWS);
+  bool drb_needs_e1_refresh[MAX_DRBS_PER_UE + 1] = {false};
+  pdusession_t *dst = &session->param;
+  dst->pdusession_id = sessMod->pdusession_id;
+  dst->nas_pdu = sessMod->nas_pdu;
+  dst->nssai = sessMod->nssai;
+  DevAssert(dst->qos.data);
+
+  nr_rrc_apply_qos_add_modify(rrc, UE, dst, transfer, e1_req, drb_needs_e1_refresh);
+  nr_rrc_apply_qos_release(UE, dst, transfer, drb_needs_e1_refresh);
+
+  // Update default DRB in SDAP configuration
+  if (!dst->sdap_config.default_drb) {
+    bool default_set = false;
+    // TS 23.501 §5.7.2.7: the QoS Flow associated with the default QoS rule
+    // should be a Non-GBR QoS Flow and the subscribed default 5QI is a
+    // Non-GBR 5QI from the standardized value range.
+    FOR_EACH_SEQ_ARR (nr_rrc_qos_t *, qos, &dst->qos) {
+      if (qos->qos.fiveQI_type == NON_DYNAMIC
+          && nr_rrc_is_non_gbr_fiveqi(qos->qos.qos_characteristics.non_dynamic.fiveQI)
+          && !default_set) {
+        dst->sdap_config.default_drb = qos->drb_id;
+        default_set = true;
+        break;
+      }
+    }
+    if (!default_set) {
+      LOG_E(NR_RRC,
+            "No standardized Non-GBR default 5QI QoS flow found in PDU session %d; cannot set SDAP default DRB\n",
+            dst->pdusession_id);
+    }
+  }
+
+  nr_rrc_send_e1_after_qos_update(UE, session, e1_req, drb_needs_e1_refresh);
 }
 
 //------------------------------------------------------------------------------
-int rrc_gNB_process_NGAP_PDUSESSION_MODIFY_REQ(MessageDef *msg_p, instance_t instance)
-//------------------------------------------------------------------------------
+/** @brief Handle abnormal conditions in PDU Session Modify procedure.
+ * Send a response with failed of PDU sessions only, for all PDU Sessions in the request */
+static int rrc_gNB_ngap_pdusession_mod_failure(int module_id, const ngap_pdusession_modify_req_t *req, const ngap_cause_t cause)
 {
-  rrc_gNB_ue_context_t *ue_context_p = NULL;
+  MessageDef *msg_p = itti_alloc_new_message (TASK_RRC_GNB, module_id, NGAP_PDUSESSION_MODIFY_RESP);
+  if (msg_p == NULL) {
+    LOG_E(NR_RRC, "itti_alloc_new_message failed, msg_p is NULL \n");
+    return -1;
+  }
+  ngap_pdusession_modify_resp_t *resp = &NGAP_PDUSESSION_MODIFY_RESP(msg_p);
+  resp->amf_ue_ngap_id = req->amf_ue_ngap_id;
+  resp->gNB_ue_ngap_id = req->gNB_ue_ngap_id;
+  resp->nb_of_pdusessions_failed = req->nb_pdusessions_tomodify;
+  resp->pdusessions_failed->cause = cause;
+  for (int i = 0; i < req->nb_pdusessions_tomodify; i++)
+    resp->pdusessions_failed[i].pdusession_id = req->pdusession[i].pdusession_id;
+  itti_send_msg_to_task(TASK_NGAP, module_id, msg_p);
+  return 0;
+}
 
-  ngap_pdusession_modify_req_t *req = &NGAP_PDUSESSION_MODIFY_REQ(msg_p);
+/** Clear ngap_pending on all QoS flows before applying a new NGAP PDU Session Modify */
+static void clear_ue_ngap_modify_qos_pending(gNB_RRC_UE_t *UE)
+{
+  DevAssert(UE != NULL);
+  FOR_EACH_SEQ_ARR(rrc_pdu_session_param_t *, s, &UE->pduSessions) {
+    FOR_EACH_SEQ_ARR(nr_rrc_qos_t *, q, &s->param.qos)
+      q->ngap_pending = false;
+  }
+}
 
+int rrc_gNB_process_NGAP_PDUSESSION_MODIFY_REQ(const ngap_pdusession_modify_req_t *req, instance_t instance)
+{
   gNB_RRC_INST *rrc = RC.nrrrc[instance];
-  ue_context_p = rrc_gNB_get_ue_context(rrc, req->gNB_ue_ngap_id);
+
+  rrc_gNB_ue_context_t *ue_context_p = rrc_gNB_get_ue_context(rrc, req->gNB_ue_ngap_id);
   if (ue_context_p == NULL) {
     LOG_W(NR_RRC, "[gNB %ld] In NGAP_PDUSESSION_MODIFY_REQ: unknown UE from NGAP ids (%u)\n", instance, req->gNB_ue_ngap_id);
-    // TO implement return setup failed
+    ngap_cause_t cause = {.type = NGAP_CAUSE_RADIO_NETWORK, .value = NGAP_CAUSE_RADIO_NETWORK_INCONSISTENT_REMOTE_UE_NGAP_ID};
+    rrc_gNB_ngap_pdusession_mod_failure(rrc->module_id, req, cause);
     return (-1);
   }
   gNB_RRC_UE_t *UE = &ue_context_p->ue_context;
+  if (UE->amf_ue_ngap_id != req->amf_ue_ngap_id) {
+    LOG_W(NR_RRC,
+          "Stored amf_ue_ngap_id %ld for UE %x does not match the requested one %ld\n",
+          UE->amf_ue_ngap_id,
+          UE->rrc_ue_id,
+          req->amf_ue_ngap_id);
+    ngap_cause_t cause = {.type = NGAP_CAUSE_RADIO_NETWORK, .value = NGAP_CAUSE_RADIO_NETWORK_INCONSISTENT_REMOTE_UE_NGAP_ID};
+    rrc_gNB_ngap_pdusession_mod_failure(rrc->module_id, req, cause);
+    return -1;
+  }
+
+  clear_ue_ngap_modify_qos_pending(UE);
+
+  uint8_t xid = rrc_gNB_get_next_transaction_identifier(rrc->module_id);
   bool all_failed = true;
+  DevAssert(req->nb_pdusessions_tomodify <= NR_MAX_NB_PDU_SESSIONS);
+  e1ap_bearer_mod_req_t e1_req = {0};
+  if (req->nb_pdusessions_tomodify > 0) {
+    e1_req.pduSessionMod = calloc_or_fail(req->nb_pdusessions_tomodify, sizeof(*e1_req.pduSessionMod));
+  }
   for (int i = 0; i < req->nb_pdusessions_tomodify; i++) {
-    const pdusession_resource_item_t *sessMod = &req->pdusession[i];
+    const pdusession_resource_mod_item_t *sessMod = &req->pdusession[i];
     rrc_pdu_session_param_t *session = find_pduSession(&UE->pduSessions, sessMod->pdusession_id);
     if (!session) {
+      /* 8.2.3.4 3GPP TS 38.413: If the NG-RAN node receives unrecognized PDU Session ID IEs,
+        the NG-RAN node shall report the corresponding invalid PDU sessions as failed. So we add it to the list. */
       LOG_W(NR_RRC, "Requested modification of non-existing PDU session, refusing modification\n");
-      rrc_pdu_session_param_t to_add = {0};
-      to_add.status = PDU_SESSION_STATUS_FAILED;
-      to_add.param.pdusession_id = sessMod->pdusession_id;
-      to_add.cause.type = NGAP_CAUSE_RADIO_NETWORK;
-      to_add.cause.value = NGAP_CAUSE_RADIO_NETWORK_UNKNOWN_PDU_SESSION_ID;
-      seq_arr_push_back(&UE->pduSessions, &to_add, sizeof(to_add));
+      ngap_cause_t cause = {.type = NGAP_CAUSE_RADIO_NETWORK, .value = NGAP_CAUSE_RADIO_NETWORK_UNKNOWN_PDU_SESSION_ID};
+      pdusession_t session = {.pdusession_id = sessMod->pdusession_id};
+      rrc_pdu_session_param_t *added = add_pduSession(&UE->pduSessions, &session);
+      added->status = PDU_SESSION_STATUS_FAILED;
+      added->cause = cause;
     } else {
       all_failed = false;
-      session->status = PDU_SESSION_STATUS_NEW;
+      session->status = PDU_SESSION_STATUS_TOMODIFY;
+      session->xid = xid;
       session->cause.type = NGAP_CAUSE_NOTHING;
-      nr_rrc_update_pdusession(&session->param, sessMod);
+      nr_rrc_update_pdusession(rrc, UE, session, sessMod, &e1_req);
     }
   }
 
   if (!all_failed) {
-    rrc_gNB_modify_dedicatedRRCReconfiguration(rrc, UE);
+    // If needed, send E1 Bearer Context Modification for this PDU Session Modify
+    if (e1_req.numPDUSessionsMod > 0 && ue_associated_to_cuup(UE)) {
+      e1_req.gNB_cu_cp_ue_id = UE->rrc_ue_id;
+      e1_req.gNB_cu_up_ue_id = UE->rrc_ue_id;
+      sctp_assoc_t assoc_id = get_existing_cuup_for_ue(UE);
+      rrc->cucp_cuup.bearer_context_mod(assoc_id, &e1_req);
+    }
+    // Init delayed PDU Session Modify transaction
+    init_delayed_action(&UE->delayed_action);
   } else {
-    LOG_I(NR_RRC,
-          "pdu session modify failed, fill NGAP_PDUSESSION_MODIFY_RESP with the pdu session information that failed to modify \n");
     MessageDef *msg_fail_p = itti_alloc_new_message(TASK_RRC_GNB, 0, NGAP_PDUSESSION_MODIFY_RESP);
     if (msg_fail_p == NULL) {
       LOG_E(NR_RRC, "itti_alloc_new_message failed, msg_fail_p is NULL \n");
-      return (-1);
+      return -1;
     }
-    ngap_pdusession_modify_resp_t *msg = &NGAP_PDUSESSION_MODIFY_RESP(msg_fail_p);
-    msg->gNB_ue_ngap_id = req->gNB_ue_ngap_id;
-    msg->nb_of_pdusessions = 0;
-
-    FOR_EACH_SEQ_ARR(rrc_pdu_session_param_t *, session, &UE->pduSessions) {
-      if (session->status == PDU_SESSION_STATUS_FAILED) {
-        msg->pdusessions_failed[msg->nb_of_pdusessions_failed].pdusession_id = session->param.pdusession_id;
-        msg->pdusessions_failed[msg->nb_of_pdusessions_failed].cause.type = session->cause.type;
-        msg->pdusessions_failed[msg->nb_of_pdusessions_failed].cause.value = session->cause.value;
-        msg->nb_of_pdusessions_failed++;
-      }
-    }
-    itti_send_msg_to_task(TASK_NGAP, instance, msg_fail_p);
+    rrc_gNB_send_NGAP_PDUSESSION_MODIFY_RESP(rrc, UE, xid);
   }
+  free_e1ap_context_mod_request(&e1_req);
   return (0);
 }
 
+/** @brief Send PDU Session Resource Setup Response (9.2.1.6 3GPP TS 38.413)
+ *  Direction: Direction: NG-RAN node → AMF */
 int rrc_gNB_send_NGAP_PDUSESSION_MODIFY_RESP(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE, uint8_t xid)
 {
-  MessageDef *msg_p = NULL;
-  uint16_t pdu_sessions_failed = 0;
-  uint16_t pdu_sessions_done = 0;
-
   if (!seq_arr_size(&UE->pduSessions)) {
     LOG_W(NR_RRC, "UE %d: No PDU sessions in the list, don't send NG PDU Session Modify Response\n", UE->rrc_ue_id);
     return -1;
   }
 
-  msg_p = itti_alloc_new_message (TASK_RRC_GNB, rrc->module_id, NGAP_PDUSESSION_MODIFY_RESP);
+  MessageDef *msg_p = itti_alloc_new_message(TASK_RRC_GNB, rrc->module_id, NGAP_PDUSESSION_MODIFY_RESP);
   if (msg_p == NULL) {
     LOG_E(NR_RRC, "itti_alloc_new_message failed, msg_p is NULL \n");
     return (-1);
   }
-  ngap_pdusession_modify_resp_t *resp = &NGAP_PDUSESSION_MODIFY_RESP(msg_p);
-  LOG_I(NR_RRC, "send message NGAP_PDUSESSION_MODIFY_RESP \n");
 
+  ngap_pdusession_modify_resp_t *resp = &NGAP_PDUSESSION_MODIFY_RESP(msg_p);
   resp->gNB_ue_ngap_id = UE->rrc_ue_id;
+  resp->amf_ue_ngap_id = UE->amf_ue_ngap_id;
 
   FOR_EACH_SEQ_ARR(rrc_pdu_session_param_t *, session, &UE->pduSessions) {
     if (xid != session->xid) {
-      LOG_W(NR_RRC,
+      LOG_D(NR_RRC,
             "xid does not correspond (PDU Session %d, status %d, xid %d/%d) \n ",
             session->param.pdusession_id,
             session->status,
@@ -1004,48 +1363,43 @@ int rrc_gNB_send_NGAP_PDUSESSION_MODIFY_RESP(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE
             session->xid);
       continue;
     }
-    if (session->status == PDU_SESSION_STATUS_DONE) {
-      LOG_I(NR_RRC, "Successfully modified PDU Session %d \n", session->param.pdusession_id);
+    if (session->status == PDU_SESSION_STATUS_TOMODIFY) {
+      LOG_I(NR_RRC, "PDU Session Modify successful (pdusession_id=%d) \n", session->param.pdusession_id);
       // Update status
       session->status = PDU_SESSION_STATUS_ESTABLISHED;
       session->cause.type = NGAP_CAUSE_NOTHING;
       // Fill response
-      DevAssert(pdu_sessions_done < NGAP_MAX_PDU_SESSION);
-      pdusession_modify_t *p = &resp->pdusessions[pdu_sessions_done++];
+      DevAssert(resp->nb_of_pdusessions <= NR_MAX_NB_PDU_SESSIONS);
+      pdusession_modify_t *p = &resp->pdusessions[resp->nb_of_pdusessions++];
       p->pdusession_id = session->param.pdusession_id;
-      FOR_EACH_SEQ_ARR(nr_rrc_qos_t *, qos_session, &session->param.qos) {
+      /* QoSFlowAddOrModifyResponseList: flows marked in during QoS flow modification. */
+      p->nb_of_qos_flow = 0;
+      FOR_EACH_SEQ_ARR(nr_rrc_qos_t *, q, &session->param.qos) {
+        if (!q->ngap_pending)
+          continue;
         DevAssert(p->nb_of_qos_flow < MAX_QOS_FLOWS);
-        qos_flow_tobe_modified_t *q = &p->qos[p->nb_of_qos_flow++];
-        q->qfi = qos_session->qos.qfi;
+        p->qos[p->nb_of_qos_flow++].qfi = q->qos.qfi;
+        q->ngap_pending = false;
       }
-      LOG_I(NR_RRC,
-            "Modify Resp (msg index %d, status %d, xid %d): nb_of_pduSessions %ld, pdusession_id %d \n ",
-            pdu_sessions_done,
-            session->status,
-            xid,
-            seq_arr_size(&UE->pduSessions),
-            p->pdusession_id);
-    } else if ((session->status == PDU_SESSION_STATUS_NEW) || (session->status == PDU_SESSION_STATUS_ESTABLISHED)) {
-      LOG_D(NR_RRC, "PDU SESSION is NEW or already ESTABLISHED\n");
+      if (p->nb_of_qos_flow == 0) {
+        LOG_D(NR_RRC,
+              "UE %d: empty QoSFlowAddOrModifyResponseList (no pending QoS flows for pdu_session_id=%d)\n",
+              UE->rrc_ue_id,
+              session->param.pdusession_id);
+      }
     } else if (session->status == PDU_SESSION_STATUS_FAILED) {
-      DevAssert(pdu_sessions_failed < NGAP_MAX_PDU_SESSION);
-      resp->pdusessions_failed[pdu_sessions_failed].pdusession_id = session->param.pdusession_id;
-      resp->pdusessions_failed[pdu_sessions_failed].cause.type = session->cause.type;
-      resp->pdusessions_failed[pdu_sessions_failed].cause.value = session->cause.value;
-      pdu_sessions_failed++;
+      DevAssert(resp->nb_of_pdusessions_failed <= NR_MAX_NB_PDU_SESSIONS);
+      pdusession_failed_t *failed = &resp->pdusessions_failed[resp->nb_of_pdusessions_failed++];
+      failed->pdusession_id = session->param.pdusession_id;
+      failed->cause = session->cause;
+      rm_pduSession(&UE->pduSessions, &UE->drbs, session->param.pdusession_id);
     } else
-      LOG_W(NR_RRC, "Modify pdu session %d, unknown state %d \n ", session->param.pdusession_id, session->status);
+      LOG_W(NR_RRC, "PDU Session Modify: unexpected PDU Session status %d for PDU Session %d \n ", session->status, session->param.pdusession_id);
   }
 
-  resp->nb_of_pdusessions = pdu_sessions_done;
-  resp->nb_of_pdusessions_failed = pdu_sessions_failed;
-
-  if (pdu_sessions_done > 0 || pdu_sessions_failed > 0) {
-    LOG_D(NR_RRC, "NGAP_PDUSESSION_MODIFY_RESP: sending the message (total pdu session %ld)\n", seq_arr_size(&UE->pduSessions));
-    itti_send_msg_to_task (TASK_NGAP, rrc->module_id, msg_p);
-  } else {
-    itti_free (ITTI_MSG_ORIGIN_ID(msg_p), msg_p);
-  }
+  // Send message to NGAP (always send: if no PDU sessions, only mandatory IEs)
+  LOG_D(NR_RRC, "Send NG PDU Session Modify Response (nb_of_pdusessions %d, xid %d)\n", resp->nb_of_pdusessions, xid);
+  itti_send_msg_to_task(TASK_NGAP, rrc->module_id, msg_p);
 
   return 0;
 }
@@ -1069,7 +1423,7 @@ void rrc_gNB_send_NGAP_UE_CONTEXT_RELEASE_REQ(const module_id_t gnb_mod_idP,
     req->cause.value = causeP.value;
     // PDU Session Resource List (optional)
     FOR_EACH_SEQ_ARR(rrc_pdu_session_param_t *, session, &UE->pduSessions) {
-      DevAssert(req->nb_of_pdusessions < NGAP_MAX_PDU_SESSION);
+      DevAssert(req->nb_of_pdusessions < NR_MAX_NB_PDU_SESSIONS);
       req->pdusession_ids[req->nb_of_pdusessions] = session->param.pdusession_id;
       req->nb_of_pdusessions++;
     }
@@ -1087,7 +1441,7 @@ void rrc_gNB_send_NGAP_HANDOVER_FAILURE(gNB_RRC_INST *rrc, ngap_handover_failure
 }
 
 /** @brief Process NG Handover Request message (8.4.2.2 3GPP TS 38.413) */
-int rrc_gNB_process_Handover_Request(gNB_RRC_INST *rrc, instance_t instance, ngap_handover_request_t *msg)
+int rrc_gNB_process_Handover_Request(gNB_RRC_INST *rrc, ngap_handover_request_t *msg)
 {
   // Check if UE context already exists for this AMF UE NGAP ID
   rrc_gNB_ue_context_t *existing_ue_context = rrc_gNB_get_ue_context_by_amf_ue_ngap_id(rrc, msg->amf_ue_ngap_id);
@@ -1102,14 +1456,27 @@ int rrc_gNB_process_Handover_Request(gNB_RRC_INST *rrc, instance_t instance, nga
     return -1;
   }
 
-  struct nr_rrc_du_container_t *du = get_du_by_cell_id(rrc, msg->nr_cell_id);
-  if (du == NULL) {
+  // Get cell by cell_id
+  nr_rrc_cell_container_t *cell = get_cell_by_cell_id(&rrc->cells, msg->nr_cell_id);
+  if (cell == NULL) {
     /* Cell Not Found! Return HO Request Failure*/
-    LOG_E(RRC, "Failed to process Handover Request: no DU found with NR Cell ID=%lu \n", msg->nr_cell_id);
+    LOG_E(RRC, "Failed to process Handover Request: no cell found with NR Cell ID=%lu \n", msg->nr_cell_id);
     ngap_handover_failure_t fail = {
         .amf_ue_ngap_id = msg->amf_ue_ngap_id,
         .cause.type = NGAP_CAUSE_RADIO_NETWORK,
         .cause.value = NGAP_CAUSE_RADIO_NETWORK_RADIO_RESOURCES_NOT_AVAILABLE,
+    };
+    rrc_gNB_send_NGAP_HANDOVER_FAILURE(rrc, &fail);
+    return -1;
+  }
+
+  struct nr_rrc_du_container_t *du = get_du_by_assoc_id(rrc, cell->assoc_id);
+  if(du == NULL) {
+    LOG_E(NR_RRC, "Failed to process Handover Request: no DU found with assoc_id=%d\n", cell->assoc_id);
+    ngap_handover_failure_t fail = {
+        .amf_ue_ngap_id = msg->amf_ue_ngap_id,
+        .cause.type = NGAP_CAUSE_RADIO_NETWORK,
+        .cause.value = NGAP_CAUSE_RADIO_NETWORK_HO_FAILURE_IN_TARGET_5GC_NGRAN_NODE_OR_TARGET_SYSTEM,
     };
     rrc_gNB_send_NGAP_HANDOVER_FAILURE(rrc, &fail);
     return -1;
@@ -1128,16 +1495,16 @@ int rrc_gNB_process_Handover_Request(gNB_RRC_INST *rrc, instance_t instance, nga
     return -1;
   }
 
-  uint16_t pci = du->setup_req->cell[0].info.nr_pci;
+  uint16_t pci = cell->info.pci;
   LOG_I(NR_RRC, "Received Handover Request (on NR Cell ID=%lu, PCI=%u) \n", msg->nr_cell_id, pci);
 
   // Create UE context
-  sctp_assoc_t curr_assoc_id = du->assoc_id;
-  rrc_gNB_ue_context_t *ue_context_p = rrc_gNB_create_ue_context(curr_assoc_id, UINT16_MAX, rrc, UINT64_MAX, UINT32_MAX);
+  rrc_gNB_ue_context_t *ue_context_p = rrc_gNB_create_ue_context(du->assoc_id, UINT16_MAX, rrc, UINT64_MAX, UINT32_MAX);
   gNB_RRC_UE_t *UE = &ue_context_p->ue_context;
 
   // allocate context for target
   UE->ho_context = alloc_ho_ctx(HO_CTX_TARGET);
+  UE->ho_context->target->cell = cell;
   UE->ho_context->target->ho_trigger = nr_rrc_trigger_n2_ho_target;
 
   // Store IDs in UE context
@@ -1159,9 +1526,9 @@ int rrc_gNB_process_Handover_Request(gNB_RRC_INST *rrc, instance_t instance, nga
   // Reset KgNB
   memset(UE->kgnb, 0, SECURITY_KEY_LENGTH);
   // Derive KgNB*
-  const f1ap_served_cell_info_t *cell_info = &du->setup_req->cell[0].info;
-  uint32_t ssb_arfcn = get_ssb_arfcn(du);
-  nr_derive_key_ng_ran_star(cell_info->nr_pci, ssb_arfcn, UE->nh, UE->kgnb);
+  const nr_rrc_cell_info_t *cell_info = &cell->info;
+  uint32_t ssb_arfcn = get_ssb_arfcn(cell);
+  nr_derive_key_ng_ran_star(cell_info->pci, ssb_arfcn, UE->nh, UE->kgnb);
   UE->as_security_active = true;
   // Activate SRBs
   activate_srb(UE, SRB1);
@@ -1173,20 +1540,23 @@ int rrc_gNB_process_Handover_Request(gNB_RRC_INST *rrc, instance_t instance, nga
   nr_rrc_pdcp_config_security(UE, true);
 
   // Process all PDU Session Resource Setup items from handover request
-  DevAssert(msg->nb_of_pdusessions <= NGAP_MAX_PDU_SESSION);
-  pdusession_t to_setup[NGAP_MAX_PDU_SESSION];
+  DevAssert(msg->nb_of_pdusessions <= NR_MAX_NB_PDU_SESSIONS);
+  pdusession_t to_setup[NR_MAX_NB_PDU_SESSIONS];
   for (int i = 0; i < msg->nb_of_pdusessions; i++) {
     ho_request_pdusession_t *ho_pdu = &msg->pduSessionResourceSetupList[i];
     pdusession_t *pdu = &to_setup[i];
     pdu->nssai = ho_pdu->nssai;
     pdu->pdu_session_type = ho_pdu->pdu_session_type;
     pdu->pdusession_id = ho_pdu->pdusession_id;
-    cp_pdusession_transfer_to_pdusession(pdu, &ho_pdu->pdusessionTransfer);
+    cp_pdusession_transfer_to_pdusession(pdu, &ho_pdu->pdusessionTransfer, UE->rrc_ue_id);
   }
 
-  if (!trigger_bearer_setup(rrc, UE, msg->nb_of_pdusessions, to_setup, msg->ue_ambr.br_dl)) {
-    LOG_E(NR_RRC, "Failed to establish PDU session: handover failed\n");
+  // Store UE aggregate maximum bitrate
+  UE->ambr.dl_br = msg->ue_ambr.br_dl;
+  UE->ambr.ul_br = msg->ue_ambr.br_ul;
 
+  if (!is_cuup_associated(rrc)) {
+    LOG_E(NR_RRC, "Failed to establish PDU session: handover failed\n");
     ngap_handover_failure_t fail = {
         .amf_ue_ngap_id = msg->amf_ue_ngap_id,
         .cause.type = NGAP_CAUSE_RADIO_NETWORK,
@@ -1196,7 +1566,10 @@ int rrc_gNB_process_Handover_Request(gNB_RRC_INST *rrc, instance_t instance, nga
     rrc_remove_ue(rrc, ue_context_p);
     return -1;
   }
-
+  // Add to UE context lists
+  nr_rrc_add_bearers(rrc, UE, msg->nb_of_pdusessions, to_setup);
+  // Trigger bearer setup
+  trigger_bearer_setup(rrc, UE, UE->ambr.dl_br);
   return 0;
 }
 
@@ -1324,8 +1697,8 @@ int rrc_gNB_process_NGAP_UE_CONTEXT_RELEASE_COMMAND(MessageDef *msg_p, instance_
 
   /* a UE might not be associated to a CU-UP if it never requested a PDU
    * session (intentionally, or because of erros) */
-  if (ue_associated_to_cuup(rrc, UE)) {
-    sctp_assoc_t assoc_id = get_existing_cuup_for_ue(rrc, UE);
+  if (ue_associated_to_cuup(UE)) {
+    sctp_assoc_t assoc_id = get_existing_cuup_for_ue(UE);
     e1ap_cause_t cause = {.type = E1AP_CAUSE_RADIO_NETWORK, .value = E1AP_RADIO_CAUSE_NORMAL_RELEASE};
     e1ap_bearer_release_cmd_t cmd = {
       .gNB_cu_cp_ue_id = UE->rrc_ue_id,
@@ -1420,7 +1793,7 @@ void rrc_gNB_send_NGAP_HANDOVER_REQUEST_ACKNOWLEDGE(gNB_RRC_INST *rrc, gNB_RRC_U
   FOR_EACH_SEQ_ARR(rrc_pdu_session_param_t*, session, &UE->pduSessions) {
     session->status = PDU_SESSION_STATUS_ESTABLISHED;
     // PDU Session ID
-    DevAssert(msg->nb_of_pdusessions < NGAP_MAX_PDU_SESSION);
+    DevAssert(msg->nb_of_pdusessions < NR_MAX_NB_PDU_SESSIONS);
     pdu_session_resource_admitted_t *pdu = &msg->pdusessions[msg->nb_of_pdusessions++];
     pdu->pdu_session_id = session->param.pdusession_id;
     // Handover Request Acknowledge Transfer
@@ -1445,24 +1818,28 @@ void rrc_gNB_send_NGAP_HANDOVER_REQUEST_ACKNOWLEDGE(gNB_RRC_INST *rrc, gNB_RRC_U
 void rrc_gNB_send_NGAP_HANDOVER_NOTIFY(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE)
 {
   LOG_I(NR_RRC, "Triggering NGAP Handover Notify\n");
-  nr_rrc_du_container_t *du = get_du_by_cell_id(rrc, rrc->nr_cellid);
-  if (du == NULL) {
-    LOG_E(NR_RRC, "Failed to send Handover Notify: no DU found with NR Cell ID=%lu\n", rrc->nr_cellid);
+  nr_rrc_cell_container_t *cell = rrc_get_pcell_for_ue(rrc, UE);
+  if (cell == NULL) {
+    LOG_E(NR_RRC, "Failed to send Handover Notify: no PCell found for UE %d\n", UE->rrc_ue_id);
     return;
   }
-
+  nr_rrc_du_container_t *du = get_du_for_ue(rrc, UE->rrc_ue_id);
+  if (du == NULL) {
+    LOG_E(NR_RRC, "Failed to send Handover Notify: no DU found for UE %d\n", UE->rrc_ue_id);
+    return;
+  }
   MessageDef *msg_p = itti_alloc_new_message(TASK_RRC_GNB, 0, NGAP_HANDOVER_NOTIFY);
   ngap_handover_notify_t *ho_notify = &NGAP_HANDOVER_NOTIFY(msg_p);
   memset(ho_notify, 0, sizeof(*ho_notify));
 
   ho_notify->gNB_ue_ngap_id = UE->rrc_ue_id;
   ho_notify->amf_ue_ngap_id = UE->amf_ue_ngap_id;
-  ho_notify->user_info.nrCellIdentity = rrc->nr_cellid;
+  ho_notify->user_info.nrCellIdentity = cell->info.cell_id;
 
   target_ran_node_id_t *target_ng_ran = &ho_notify->user_info.target_ng_ran;
-  target_ng_ran->tac = *du->setup_req->cell->info.tac;
+  target_ng_ran->tac = cell->info.tac;
   target_ng_ran->targetgNBId = rrc->node_id;
-  target_ng_ran->plmn_identity = du->setup_req->cell->info.plmn;
+  target_ng_ran->plmn_identity = cell->info.plmn;
 
   itti_send_msg_to_task(TASK_NGAP, rrc->module_id, msg_p);
 }
@@ -1503,7 +1880,7 @@ void rrc_gNB_send_NGAP_PDUSESSION_RELEASE_RESPONSE(gNB_RRC_INST *rrc, gNB_RRC_UE
     if (xid == session->xid) {
       const pdusession_t *pdusession = &session->param;
       if (session->status == PDU_SESSION_STATUS_TORELEASE) {
-        DevAssert(resp->nb_of_pdusessions_released < NGAP_MAX_PDU_SESSION);
+        DevAssert(resp->nb_of_pdusessions_released < NR_MAX_NB_PDU_SESSIONS);
         resp->pdusession_release[resp->nb_of_pdusessions_released++].pdusession_id = pdusession->pdusession_id;
       }
     }
@@ -1537,6 +1914,9 @@ int rrc_gNB_process_NGAP_PDUSESSION_RELEASE_COMMAND(ngap_pdusession_release_comm
         gNB_ue_ngap_id,
         cmd->nb_pdusessions_torelease);
   e1ap_bearer_mod_req_t req = {0};
+  if (cmd->nb_pdusessions_torelease > 0) {
+    req.pduSessionRem = calloc_or_fail(cmd->nb_pdusessions_torelease, sizeof(*req.pduSessionRem));
+  }
   for (int pdusession = 0; pdusession < cmd->nb_pdusessions_torelease; pdusession++) {
     rrc_pdu_session_param_t *pduSession = find_pduSession(&UE->pduSessions, cmd->pdusession_ids[pdusession]);
     if (!pduSession) {
@@ -1558,11 +1938,11 @@ int rrc_gNB_process_NGAP_PDUSESSION_RELEASE_COMMAND(ngap_pdusession_release_comm
 
   if (req.numPDUSessionsRem == 0) {
     LOG_E(NR_RRC, "Received NG PDU Session Release Command but no PDU Sessions to release\n");
+    free_e1ap_context_mod_request(&req);
     return -1;
-  } else if (!ue_associated_to_cuup(rrc, UE)) {
+  } else if (!ue_associated_to_cuup(UE)) {
     LOG_E(NR_RRC, "UE %d is not associated to CU-UP\n", UE->rrc_ue_id);
     // TODO handle, e.g., only trigger F1 release
-    return 0;
   } else {
     /* If present, store NAS-PDU in the UE context for later inclusion in RRCReconfiguration */
     if (cmd->nas_pdu.len > 0) {
@@ -1571,47 +1951,75 @@ int rrc_gNB_process_NGAP_PDUSESSION_RELEASE_COMMAND(ngap_pdusession_release_comm
     LOG_I(NR_RRC, "Send F1 Bearer Context Modification Request with PDU Session release \n");
     req.gNB_cu_cp_ue_id = UE->rrc_ue_id;
     req.gNB_cu_up_ue_id = UE->rrc_ue_id;
-    sctp_assoc_t assoc_id = get_existing_cuup_for_ue(rrc, UE);
+    sctp_assoc_t assoc_id = get_existing_cuup_for_ue(UE);
     rrc->cucp_cuup.bearer_context_mod(assoc_id, &req);
   }
+  free_e1ap_context_mod_request(&req);
   init_delayed_action(&UE->delayed_action);
   return 0;
 }
 
-int rrc_gNB_process_PAGING_IND(MessageDef *msg_p, instance_t instance)
+/** @brief Handle NGAP Paging Indication from the AMF.
+ *  For each TAI in the message, matches (PLMN + TAC) against the gNB configuration; on match,
+ *  builds an F1AP Paging message and distributes it to all DUs that serve cells in that PLMN. */
+int rrc_gNB_process_PAGING_IND(gNB_RRC_INST *rrc, const instance_t instance, const ngap_paging_ind_t *msg)
 {
-  ngap_paging_ind_t *msg = &NGAP_PAGING_IND(msg_p);
-  for (uint16_t tai_size = 0; tai_size < msg->tai_size; tai_size++) {
-    plmn_id_t *p = &msg->plmn_identity[tai_size];
-    LOG_I(NR_RRC,
-          "[gNB %ld] TAI List for Paging: MCC=%03d, MNC=%0*d, TAC=%d\n",
+  DevAssert(rrc);
+  DevAssert(msg);
+
+  // Construct 5G-S-TMSI from paging identity components
+  const fiveg_s_tmsi_t *s_tmsi = &msg->ue_paging_identity.s_tmsi;
+  const uint64_t fiveg_s_tmsi = nr_construct_5g_s_tmsi(s_tmsi->amf_set_id, s_tmsi->amf_pointer, s_tmsi->m_tmsi);
+  const nr_rrc_config_t *req = &rrc->configuration;
+  DevAssert(req->num_plmn > 0);
+
+  LOG_D(NR_RRC, "[gNB %ld] Processing NGAP Paging Indication for %d TAIs\n", instance, msg->n_tai);
+
+  // Paging Attempt Information (TS 38.413 §9.3.1.72, TS 38.300 §9.2.5)
+  // AMF provides attempt count and intended attempts for paging optimization (area expansion, retransmission logic).
+  if (msg->paging_attempt_info != NULL) {
+    LOG_D(NR_RRC,
+          "[gNB %ld] Paging Attempt Count: %u, Intended Number of Attempts: %u\n",
           instance,
-          p->mcc,
-          p->mnc_digit_length,
-          p->mnc,
-          msg->tac[tai_size]);
-    gNB_RrcConfigurationReq *req = &RC.nrrrc[instance]->configuration;
-    for (uint8_t j = 0; j < req->num_plmn; j++) {
-      plmn_id_t *req_plmn = &req->plmn[j];
-      if (req_plmn->mcc == p->mcc && req_plmn->mnc == p->mnc && req->tac == msg->tac[tai_size]) {
-        for (uint8_t CC_id = 0; CC_id < MAX_NUM_CCs; CC_id++) {
-          AssertFatal(false, "to be implemented properly\n");
-          if (NODE_IS_CU(RC.nrrrc[instance]->node_type)) {
-            MessageDef *m = itti_alloc_new_message(TASK_RRC_GNB, 0, F1AP_PAGING_IND);
-            F1AP_PAGING_IND(m).plmn = *req_plmn;
-            F1AP_PAGING_IND (m).nr_cellid        = RC.nrrrc[j]->nr_cellid;
-            F1AP_PAGING_IND(m).ueidentityindexvalue = (uint16_t)(msg->ue_paging_identity.s_tmsi.m_tmsi % 1024);
-            F1AP_PAGING_IND(m).fiveg_s_tmsi = msg->ue_paging_identity.s_tmsi.m_tmsi;
-            F1AP_PAGING_IND(m).paging_drx = msg->paging_drx;
-            LOG_E(F1AP, "ueidentityindexvalue %u fiveg_s_tmsi %ld paging_drx %u\n", F1AP_PAGING_IND (m).ueidentityindexvalue, F1AP_PAGING_IND (m).fiveg_s_tmsi, F1AP_PAGING_IND (m).paging_drx);
-            itti_send_msg_to_task(TASK_CU_F1, instance, m);
-          } else {
-            //rrc_gNB_generate_pcch_msg(NGAP_PAGING_IND(msg_p).ue_paging_identity.s_tmsi.m_tmsi,(uint8_t)NGAP_PAGING_IND(msg_p).paging_drx, instance, CC_id);
-          } // end of nodetype check
-        } // end of cc loop
-      } // end of mcc mnc check
-    } // end of num_plmn
-  } // end of tai size
+          msg->paging_attempt_info->paging_attempt_count,
+          msg->paging_attempt_info->intended_paging_attempts);
+  }
+
+  if (msg->n_tai > NGAP_MAX_NO_TAI_PAGING) {
+    LOG_E(NR_RRC,
+          "[gNB %ld] Paging message error: n_tai (%d) exceeds NGAP_MAX_NO_TAI_PAGING (%d)\n",
+          instance,
+          msg->n_tai,
+          NGAP_MAX_NO_TAI_PAGING);
+    return -1;
+  }
+
+  // Build F1AP paging message once for all TAIs
+  f1ap_paging_t f1ap_msg = {0};
+  f1ap_msg.ue_identity_index_value = s_tmsi->m_tmsi % 1024;
+  f1ap_msg.identity_type = F1AP_PAGING_IDENTITY_CN_UE;
+  f1ap_msg.identity.cn_ue_paging_identity = fiveg_s_tmsi;
+  if (msg->paging_drx != NULL) {
+    /* Mapping 1:1 between NGAP and F1AP Paging DRX */
+    f1ap_msg.drx = malloc_or_fail(sizeof(*f1ap_msg.drx));
+    *f1ap_msg.drx = (f1ap_paging_drx_t)*msg->paging_drx;
+  }
+  if (msg->paging_priority != NULL) {
+    /* Mapping 1:1 between NGAP and F1AP Paging Priority */
+    f1ap_msg.priority = malloc_or_fail(sizeof(*f1ap_msg.priority));
+    *f1ap_msg.priority = (f1ap_paging_priority_t)*msg->paging_priority;
+  }
+  if (msg->origin != NULL) {
+    /* Mapping 1:1 between NGAP and F1AP Paging Origin */
+    f1ap_msg.origin = malloc_or_fail(sizeof(*f1ap_msg.origin));
+    *f1ap_msg.origin = (f1ap_paging_origin_t)*msg->origin;
+  }
+
+  // For each DU, collect cells matching any AMF TAI (PLMN+TAC) and send
+  // one Paging with that cell list.
+  rrc_send_paging_to_dus(rrc, msg->tai_list, msg->n_tai, &f1ap_msg);
+
+  free_f1ap_paging(&f1ap_msg);
 
   return 0;
 }
@@ -1664,15 +2072,15 @@ void rrc_gNB_send_NGAP_HANDOVER_REQUIRED(gNB_RRC_INST *rrc,
      and PDU Session Resource Information List IE (O) in the Source NG-RAN
      Node to Target NG-RAN Node Transparent Container */
   FOR_EACH_SEQ_ARR(rrc_pdu_session_param_t*, pduSession, &UE->pduSessions) {
-    if (pduSession->status != PDU_SESSION_STATUS_DONE && pduSession->status != PDU_SESSION_STATUS_ESTABLISHED)
+    if (pduSession->status != PDU_SESSION_STATUS_ESTABLISHED)
       continue;
     pdusession_t *session = &pduSession->param;
-    DevAssert(msg.nb_of_pdusessions < NGAP_MAX_PDU_SESSION);
+    DevAssert(msg.nb_of_pdusessions < NR_MAX_NB_PDU_SESSIONS);
     pdusession_resource_t *pdu = &msg.pdusessions[msg.nb_of_pdusessions++];
     // PDU Session ID
     pdu->pdusession_id = session->pdusession_id;
     // PDU Session Resource Information List (O)
-    DevAssert(msg.source2target->nb_pdu_session_resource < NGAP_MAX_PDU_SESSION);
+    DevAssert(msg.source2target->nb_pdu_session_resource < NR_MAX_NB_PDU_SESSIONS);
     pdusession_resource_info_t *pdu_info = &msg.source2target->pdu_session_resource[msg.source2target->nb_pdu_session_resource++];
     pdu_info->pdusession_id = session->pdusession_id;
     FOR_EACH_SEQ_ARR(nr_rrc_qos_t *, qos, &session->qos) {

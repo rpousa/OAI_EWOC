@@ -1,17 +1,7 @@
 /*
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Copyright 2017 Cisco Systems, Inc.
- * 
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- * 
- * http://www.apache.org/licenses/LICENSE-2.0
- * 
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
  */
 
 
@@ -107,11 +97,10 @@ typedef struct nfapi_vnf_p7_connection_info {
 
 } nfapi_vnf_p7_connection_info_t;
 
-struct vnf_p7_t{
+typedef struct vnf_p7_s {
+  nfapi_vnf_p7_config_t _public;
 
-	nfapi_vnf_p7_config_t _public;
-	
-	// private data
+  // private data
 	uint8_t terminate;
 	nfapi_vnf_p7_connection_info_t* p7_connections;
 	int socket;
@@ -119,8 +108,8 @@ struct vnf_p7_t{
 	uint32_t slot_start_time_hr;
 	uint8_t* rx_message_buffer; // would this be better put in the p7 conenction info?
 	uint16_t rx_message_buffer_size;
-	
-};
+
+} vnf_p7_t;
 
 uint32_t vnf_get_current_time_hr(void);
 

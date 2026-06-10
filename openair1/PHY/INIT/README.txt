@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: CC-BY-4.0
+
 This directory contains files related to initialization of variables/structures
 
 init_top.c : initialize top-level variables and signal buffers, FFT twiddle factors, etc.

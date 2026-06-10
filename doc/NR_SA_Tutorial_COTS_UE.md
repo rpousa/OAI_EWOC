@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 # OAI 5G NR SA tutorial with COTS UE
 
 **Table of Contents**
@@ -75,7 +77,7 @@ sudo uhd_images_downloader
 
 ```bash
 # Get openairinterface5g source code
-git clone https://gitlab.eurecom.fr/oai/openairinterface5g.git ~/openairinterface5g
+git clone https://github.com/duranta-project/openairinterface5g.git ~/openairinterface5g
 cd ~/openairinterface5g
 git checkout develop
 
@@ -191,6 +193,7 @@ sudo ethtool -G enp1s0f0 tx 4096 rx 4096
 - Enable Performance Mode `sudo cpupower idle-set -D 0`
 - If you get real-time problems on heavy UL traffic, reduce the maximum UL MCS using an additional command-line switch: `--MACRLCs.[0].ul_max_mcs 14`.
 - You can also reduce the number of LDPC decoder iterations, which will make the LDPC decoder take less time: `--L1s.[0].max_ldpc_iterations 4`.
+- Read more on system tuning in the [dedicated document on performance tuning](./tuning_and_security.md#performance-tuning).
 
 ### 6.3 Uplink issues related with noise on the DC carriers
 
@@ -199,7 +202,7 @@ With devices like the USRP N300 and especially the X300, there is noise in the D
 There are two possible solution that can be enabled in OAI:
 
 * `--tune-offset`: it consists in shifting away the operational bandwidth to avoid the center frequency
-* `ul_prbblacklist`: can be used to define specific PRBs that should not be used for uplink scheduling
+* `gNBs.[0].ul_prbblacklist`: can be used to define specific PRBs that should not be used for uplink scheduling
 
 A spectrum clean from the noisy PRBs will eventually result in an enhanced UL throughput.
 

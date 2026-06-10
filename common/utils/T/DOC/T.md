@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 # T tracer
 
 The T tracer is sort of a *framework* to debug and monitor the softmodem.
@@ -12,6 +14,7 @@ It is made of two main parts:
 
 * [Basic usage](./T/basic.md)
 * [Record](./T/record.md)
+* [Record to ClickHouse](./T/record_db.md)
 * [Replay](./T/replay.md)
 * [Multiple tracers](./T/multi.md)
 * [MAC PDUs and wireshark](./T/wireshark.md)

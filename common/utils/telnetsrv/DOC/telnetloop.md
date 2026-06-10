@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 The telnet server includes a **_loop_** command that can be used to iterate a given command. The number of iterations and the delay, in ms between two iterations can be modified, as shown in the following example:
 
 ```bash

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 include(FindPkgConfig)
 pkg_check_modules(xft REQUIRED xft)
 find_library(X11 X11 REQUIRED)

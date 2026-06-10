@@ -1,32 +1,9 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*!\file ldpc_encode_parity_check.c
+/*!
  * \brief Parity check function used by ldpc encoders
- * \author Florian Kaltenberger, Raymond Knopp, Kien le Trung (Eurecom)
- * \email openair_tech@eurecom.fr
- * \date 27-03-2018
- * \version 1.0
- * \note
- * \warning
  */
 
 #include <stdlib.h>
@@ -103,9 +80,11 @@
 #include "ldpc_BG2_Zc80_byte.c"
 #include "ldpc_BG2_Zc72_byte.c"
 
-static void encode_parity_check_part_optim(uint8_t *cc, uint8_t *d, short BG,short Zc,short Kb, int simd_size, int ncols)
+static void encode_parity_check_part_optim(uint8_t *cc, uint8_t *d, short BG, short Zc, int simd_size, int ncols, time_stats_t *tinput_memcpy)
 {
   unsigned char c[2 * 22 * Zc * simd_size] __attribute__((aligned(64))); //double size matrix of c
+  if (tinput_memcpy)
+    start_meas(tinput_memcpy);
   for (int i1 = 0; i1 < ncols; i1++)   {
     memcpy(&c[2 * i1 * Zc], &cc[i1 * Zc], Zc * sizeof(unsigned char));
     memcpy(&c[(2 * i1 + 1) * Zc], &cc[i1 * Zc], Zc * sizeof(unsigned char));
@@ -118,6 +97,8 @@ static void encode_parity_check_part_optim(uint8_t *cc, uint8_t *d, short BG,sho
       memcpy(&c[(2 * ncols * Zc * i1)], &c[i1], (2 * ncols * Zc * sizeof(unsigned char)) - i1);
     }
   }
+  if (tinput_memcpy)
+    stop_meas(tinput_memcpy);
   if (BG == 1) {
     switch (Zc) {
       case 176:
@@ -221,6 +202,3 @@ static void encode_parity_check_part_optim(uint8_t *cc, uint8_t *d, short BG,sho
   } else
     AssertFatal(false, "BG %d is not supported\n", BG);
 }
-
-
-

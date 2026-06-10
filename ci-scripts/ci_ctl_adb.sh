@@ -1,4 +1,5 @@
 #!/bin/bash
+# SPDX-License-Identifier: MIT
 
 usage() {
   echo "usage: $0 <command> <id>"

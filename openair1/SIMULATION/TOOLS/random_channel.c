@@ -1,22 +1,5 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
 #include <math.h>
@@ -1849,27 +1832,6 @@ int random_channel(channel_desc_t *desc, uint8_t abstraction_flag) {
       }
     }
 
-    /*
-    FIXME: Function cblas_zgemv has an undefined output (for the same input) after a second call in RHEL8 (acorr = nan)
-    alpha.r = 1.0;
-    alpha.i = 0.0;
-    beta.r = 0.0;
-    beta.i = 0.0;
-    cblas_zgemv(CblasRowMajor, CblasNoTrans, desc->nb_tx*desc->nb_rx, desc->nb_tx*desc->nb_rx,
-                (void *) &alpha, (void *) desc->R_sqrt[i/3], desc->nb_rx*desc->nb_tx,
-                (void *) anew, 1, (void *) &beta, (void *) acorr, 1);
-    */
-
-    /*
-    for (aarx=0;aarx<desc->nb_rx;aarx++) {
-      for (aatx=0;aatx<desc->nb_tx;aatx++) {
-        desc->a[i][aarx+(aatx*desc->nb_rx)].x = acorr[aarx+(aatx*desc->nb_rx)].x;
-        desc->a[i][aarx+(aatx*desc->nb_rx)].y = acorr[aarx+(aatx*desc->nb_rx)].y;
-        printf("tap %d, acorr1(%d,%d) = %f+1j*%f\n",i,aatx,aarx,acorr[aarx+(aatx*desc->nb_rx)].x, acorr[aarx+(aatx*desc->nb_rx)].y);
-      }
-    }
-    */
-
     if (desc->first_run==1) {
       memcpy(desc->a[i], acorr, desc->nb_tx * desc->nb_rx * sizeof(*acorr));
     } else {
@@ -2303,8 +2265,10 @@ void init_channelmod(void) {
   int numparams = sizeofArray(channelmod_params);
   int ret = config_get(config_get_if(), channelmod_params, numparams, CHANNELMOD_SECTION);
   AssertFatal(ret >= 0, "configuration couldn't be performed");
-  defined_channels=calloc(max_chan,sizeof( channel_desc_t *));
-  AssertFatal(defined_channels!=NULL, "couldn't allocate %u channel descriptors\n",max_chan);
+  if (defined_channels == NULL) {
+    defined_channels = calloc(max_chan, sizeof(channel_desc_t *));
+    AssertFatal(defined_channels != NULL, "couldn't allocate %u channel descriptors\n", max_chan);
+  }
   /* look for telnet server, if it is loaded, add the channel modeling commands to it */
   add_telnetcmd_func_t addcmd = (add_telnetcmd_func_t)get_shlibmodule_fptr("telnetsrv", TELNET_ADDCMD_FNAME);
 

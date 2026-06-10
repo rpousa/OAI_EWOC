@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 # Running NR PRS with OAI gNB and nrUE
 
 This page is valid on tags starting from **`2022.w37`**.

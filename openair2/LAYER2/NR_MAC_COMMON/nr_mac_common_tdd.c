@@ -1,28 +1,11 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
-
 
 #include "nr_mac_common.h"
 #include "common/utils/nr/nr_common.h"
-#include "nfapi/open-nFAPI/nfapi/public_inc/nfapi_nr_interface_scf.h"
+
+#define MAX_NUM_PERIODS 8
 
 uint16_t get_ul_bitmap(const frame_structure_t *fs, int slot)
 {
@@ -75,7 +58,7 @@ int get_tdd_period_idx(NR_TDD_UL_DL_ConfigCommon_t *tdd)
   float pattern2_ms = tdd->pattern2 ? get_tdd_periodicity(tdd->pattern2) : 0.0;
   bool found_match = false;
   // Find matching TDD period in the predefined list of periodicities
-  for (int i = 0; i < NFAPI_MAX_NUM_PERIODS; i++) {
+  for (int i = 0; i < MAX_NUM_PERIODS; i++) {
     if ((pattern1_ms + pattern2_ms) == tdd_ms_period_pattern[i]) {
       tdd_period_idx = i;
       LOG_I(NR_MAC,

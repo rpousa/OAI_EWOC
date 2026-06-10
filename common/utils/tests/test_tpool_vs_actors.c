@@ -1,28 +1,12 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
 #include "actor.h"
 #include "thread-pool.h"
 #include "task.h"
 #include "log.h"
+#include <stdio.h>
 #include <time.h>
 
 #define NUM_THREADS 10
@@ -32,6 +16,8 @@ typedef struct {
   struct timespec ts;
   int actor_index;
 } actor_task_t;
+
+struct timespec ts_arr[NUM_JOBS];
 
 long long delay_table[NUM_THREADS] = {0};
 
@@ -49,7 +35,6 @@ void tpool_function(void* args)
 {
   int worker_id = get_tpool_worker_index();
   calculate_delay((struct timespec*)args, worker_id);
-  free(args);
 }
 
 void actor_function(void* args)
@@ -79,7 +64,7 @@ int main()
 
   // Push tasks to the thread pool
   for (int i = 0; i < NUM_JOBS; i++) {
-    struct timespec* ts = malloc(sizeof(struct timespec));
+    struct timespec* ts = &ts_arr[i];
     clock_gettime(CLOCK_MONOTONIC, ts);
     task.args = ts;
     pushTpool(&pool, task);
@@ -94,7 +79,6 @@ int main()
   }
   float average_delay = sum_delay / (NUM_JOBS * 1.0f);
   printf("Average task delay on tpool: %.2f ns\n", average_delay);
-
 
   memset(delay_table, 0, sizeof(delay_table));
 

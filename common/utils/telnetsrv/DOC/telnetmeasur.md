@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 measur command can be used to get cpu usage or signal processing statistics from a running eNB instance.
 
 

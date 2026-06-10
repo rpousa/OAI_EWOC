@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
+ */
+
 #ifndef __SIMPLE_EXE_H__
 #define __SIMPLE_EXE_H__
 #ifndef __USE_GNU

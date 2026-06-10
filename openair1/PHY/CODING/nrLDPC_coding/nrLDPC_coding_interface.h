@@ -1,64 +1,18 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
 /*! \file openair1/PHY/CODING/nrLDPC_coding/nrLDPC_coding_interface.h
  * \brief interface for libraries implementing coding/decoding algorithms
  */
 
-#include "PHY/defs_gNB.h"
+#include "common/utils/time_meas.h"
+#include "openair1/PHY/CODING/coding_defs.h"
+#include "openair1/PHY/CODING/nrLDPC_decoder/nrLDPCdecoder_defs.h"
+#include "common/utils/threadPool/thread-pool.h"
 
 #ifndef __NRLDPC_CODING_INTERFACE__H__
 #define __NRLDPC_CODING_INTERFACE__H__
-
-/**
- * \typedef nrLDPC_segment_decoding_parameters_t
- * \struct nrLDPC_segment_decoding_parameters_s
- * \brief decoding parameter of segments
- * \var E input llr segment size
- * \var R code rate indication
- * \var llr segment input llr array
- * \var d Pointers to code blocks before LDPC decoding (38.212 V15.4.0 section 5.3.2)
- * \var d_to_be_cleared
- * pointer to the flag used to clear d properly
- * when true, clear d after rate dematching
- * \var c Pointers to code blocks after LDPC decoding (38.212 V15.4.0 section 5.2.2)
- * \var decodeSuccess
- * flag indicating that the decoding of the segment was successful
- * IT MUST BE FILLED BY THE IMPLEMENTATION
- * \var ts_deinterleave deinterleaving time stats
- * \var ts_rate_unmatch rate unmatching time stats
- * \var ts_ldpc_decode decoding time stats
- */
-typedef struct nrLDPC_segment_decoding_parameters_s{
-  int E;
-  uint8_t R;
-  short *llr;
-  int16_t *d;
-  bool *d_to_be_cleared;
-  uint8_t *c;
-  bool decodeSuccess;
-  time_stats_t ts_deinterleave;
-  time_stats_t ts_rate_unmatch;
-  time_stats_t ts_ldpc_decode;
-} nrLDPC_segment_decoding_parameters_t;
 
 /**
  * \typedef nrLDPC_TB_decoding_parameters_t
@@ -111,7 +65,20 @@ typedef struct nrLDPC_TB_decoding_parameters_s{
   uint32_t F;
 
   uint32_t C;
-  nrLDPC_segment_decoding_parameters_t *segments;
+  int E;
+  uint8_t R;
+  int E2;
+  uint8_t R2;
+  int first_rE2;
+  short *llr;
+  uint8_t *c;
+  int16_t *d;
+  bool d_to_be_cleared;
+  bool decodeSuccess[NR_LDPC_MAX_NUM_CB];
+  time_stats_t ts_deinterleave;
+  time_stats_t ts_rate_unmatch;
+  time_stats_t ts_seg_prep;
+  time_stats_t ts_ldpc_decode;
 } nrLDPC_TB_decoding_parameters_t;
 
 /**
@@ -152,6 +119,7 @@ typedef struct nrLDPC_segment_encoding_parameters_s{
   time_stats_t ts_interleave;
   time_stats_t ts_rate_match;
   time_stats_t ts_ldpc_encode;
+  time_stats_t ts_output;
 } nrLDPC_segment_encoding_parameters_t;
 
 /**
@@ -226,13 +194,15 @@ typedef struct nrLDPC_slot_encoding_parameters_s{
   int nb_TBs;
   tpool_t *threadPool;
   time_stats_t *tinput;
+  time_stats_t *tinput_memcpy;
   time_stats_t *tprep;
   time_stats_t *tparity;
   time_stats_t *toutput;
+  time_stats_t *tconcat;
   nrLDPC_TB_encoding_parameters_t *TBs;
 } nrLDPC_slot_encoding_parameters_t;
 
-typedef int32_t(nrLDPC_coding_init_t)(void);
+typedef int32_t(nrLDPC_coding_init_t)(int);
 typedef int32_t(nrLDPC_coding_shutdown_t)(void);
 
 /**
@@ -254,7 +224,7 @@ typedef struct nrLDPC_coding_interface_s {
   nrLDPC_coding_encoder_t *nrLDPC_coding_encoder;
 } nrLDPC_coding_interface_t;
 
-int load_nrLDPC_coding_interface(char *version, nrLDPC_coding_interface_t *interface);
+int load_nrLDPC_coding_interface(char *version, nrLDPC_coding_interface_t *interface, int);
 int free_nrLDPC_coding_interface(nrLDPC_coding_interface_t *interface);
 
 #endif

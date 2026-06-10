@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 # OAI shared library loader
 
 Shared libraries usage is modularization mechanism which provides the following advantages:
@@ -13,5 +15,3 @@ The main drawback is a performance cost at init time, when loading libraries.
 * [runtime usage](loader/rtusage.md)
 * [developer usage](loader/devusage.md)
 * [module architecture](loader/arch.md)
-
-[oai Wikis home](https://gitlab.eurecom.fr/oai/openairinterface5g/wikis/home)

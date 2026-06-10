@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
+ */
+
 #include "openair1/PHY/defs_eNB.h"
 #include "openair2/PHY_INTERFACE/IF_Module.h"
 #include "openair1/PHY/phy_extern.h"

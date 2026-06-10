@@ -1,25 +1,4 @@
-#/*
-# * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
-# * contributor license agreements.  See the NOTICE file distributed with
-# * this work for additional information regarding copyright ownership.
-# * The OpenAirInterface Software Alliance licenses this file to You under
-# * the OAI Public License, Version 1.1  (the "License"); you may not use this file
-# * except in compliance with the License.
-# * You may obtain a copy of the License at
-# *
-# *      http://www.openairinterface.org/?page_id=698
-# *
-# * Unless required by applicable law or agreed to in writing, software
-# * distributed under the License is distributed on an "AS IS" BASIS,
-# * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# * See the License for the specific language governing permissions and
-# * limitations under the License.
-# *-------------------------------------------------------------------------------
-# * For more information about the OpenAirInterface (OAI) Software Alliance:
-# *      contact@openairinterface.org
-# */
-
-# Author: Lionel GAUTHIER
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
 
 cmake_minimum_required(VERSION 2.8)
 set(CMAKE_VERBOSE_MAKEFILE ON)
@@ -50,16 +29,6 @@ set(OPENAIR_NAS_DIR       ${OPENAIR_DIR}/openair3/NAS)
 
 
 set(CMAKE_MODULE_PATH "${OPENAIR_DIR}/cmake_targets/tools/MODULES" "${CMAKE_MODULE_PATH}")
-
-macro(add_option name val helpstr)
-  if(DEFINED ${name})
-    set(value ${${name}})
-  else(DEFINED ${name})
-    set(value ${val})
-  endif()
-  set(${name} ${value} CACHE STRING "${helpstr}")
-  add_definitions("-D${name}=${value}")
-endmacro(add_option)
 
 macro(add_boolean_option name val helpstr)
   if(DEFINED ${name})
@@ -111,6 +80,8 @@ add_boolean_option(NAS_BUILT_IN_UE         False  "UE NAS layer present in this 
 # SECU LIB
 ################################################################################
 set(secu_cn_SRC
+  ${OPENAIR3_DIR}/SECU/curve_25519.c
+  ${OPENAIR3_DIR}/SECU/x963_kdf.c
   ${OPENAIR3_DIR}/SECU/aes_128_ctr.c
   ${OPENAIR3_DIR}/SECU/aes_128_cbc_cmac.c
   ${OPENAIR3_DIR}/SECU/sha_256_hmac.c 

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 set(NGAP_VERSION 15 8 0)
 make_version(NGAP_cc ${NGAP_VERSION})
 #add_definitions(-DNGAP_VERSION=${NGAP_cc})

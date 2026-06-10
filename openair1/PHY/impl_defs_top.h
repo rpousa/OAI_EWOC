@@ -1,34 +1,10 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file PHY/impl_defs_top.h
-* \brief More defines and structure definitions
-* \author R. Knopp, F. Kaltenberger
-* \date 2011
-* \version 0.1
-* \company Eurecom
-* \email: knopp@eurecom.fr,florian.kaltenberger@eurecom.fr
-* \note
-* \warning
-*/
+/*!
+ * \brief More defines and structure definitions
+ */
 
 #ifndef __PHY_IMPLEMENTATION_DEFS_H__
 #define __PHY_IMPLEMENTATION_DEFS_H__
@@ -110,7 +86,6 @@
 
 #include <common/utils/nr/nr_common.h>
 #include <common/utils/utils.h>
-#include "defs_eNB.h"
 #include "types.h"
 
 /** @addtogroup _PHY_STRUCTURES_
@@ -228,31 +203,6 @@
 
 #define AMP_OVER_SQRT2 ((AMP*ONE_OVER_SQRT2_Q15)>>15)
 #define AMP_OVER_2 (AMP>>1)
-
-#define NB_NUMEROLOGIES_NR                       (5)
-#define NR_MAX_SLOTS_PER_FRAME                   (160)                    /* number of slots per frame */
-
-/* FFS_NR_TODO it defines ue capability which is the number of slots        */
-/* - between reception of pdsch and transmission of its acknowlegment  (k1) */
-/* - between reception of un uplink grant and its related transmission (k2) */
-#define NR_UE_CAPABILITY_SLOT_RX_TO_TX (3)
-
-#define NR_MAX_ULSCH_HARQ_PROCESSES              (NR_MAX_HARQ_PROCESSES)  /* cf 38.214 6.1 UE procedure for receiving the physical uplink shared channel */
-#define NR_MAX_DLSCH_HARQ_PROCESSES              (NR_MAX_HARQ_PROCESSES)  /* cf 38.214 5.1 UE procedure for receiving the physical downlink shared channel */
-
-/// Data structure for transmission.
-typedef struct {
-  /// RAW TX sample buffer
-  char *TX_DMA_BUFFER[2];
-} TX_VARS ;
-
-/// Data structure for reception.
-typedef struct {
-  /// RAW TX sample buffer
-  char *TX_DMA_BUFFER[2];
-  /// RAW RX sample buffer
-  int *RX_DMA_BUFFER[2];
-} TX_RX_VARS;
 
 /// Measurement Variables
 

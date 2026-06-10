@@ -1,63 +1,15 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file PHY/NR_TRANSPORT/nr_ulsch.c
-* \brief Top-level routines for the reception of the PUSCH TS 38.211 v 15.4.0
-* \author Ahmed Hussein
-* \date 2019
-* \version 0.1
-* \company Fraunhofer IIS
-* \email: ahmed.hussein@iis.fraunhofer.de
-* \note
-* \warning
-*/
+/*!
+ * \brief Top-level routines for the reception of the PUSCH TS 38.211 v 15.4.0
+ */
 
 #include <stdint.h>
 #include "PHY/NR_TRANSPORT/nr_transport_common_proto.h"
 #include "PHY/NR_TRANSPORT/nr_ulsch.h"
 #include "SCHED_NR/sched_nr.h"
-
-static NR_gNB_ULSCH_t *find_nr_ulsch(PHY_VARS_gNB *gNB, uint16_t rnti, int pid)
-{
-  int16_t first_free_index = -1;
-  AssertFatal(gNB != NULL, "gNB is null\n");
-  NR_gNB_ULSCH_t *ulsch = NULL;
-
-  for (int i = 0; i < gNB->max_nb_pusch; i++) {
-    ulsch = &gNB->ulsch[i];
-    AssertFatal(ulsch, "gNB->ulsch[%d] is null\n", i);
-    if (!ulsch->active) {
-      if (first_free_index == -1)
-        first_free_index = i;
-    } else {
-      // if there is already an active ULSCH for this RNTI and HARQ_PID
-      if ((ulsch->harq_pid == pid) && (ulsch->rnti == rnti))
-        return ulsch;
-    }
-  }
-  if (first_free_index != -1)
-    ulsch = &gNB->ulsch[first_free_index];
-
-  return ulsch;
-}
 
 static void dump_pusch_pdu(int instance, int frame, int slot, nfapi_nr_pusch_pdu_t *pusch_pdu)
 {
@@ -141,49 +93,33 @@ static void dump_pusch_pdu(int instance, int frame, int slot, nfapi_nr_pusch_pdu
 void nr_fill_ulsch(PHY_VARS_gNB *gNB, int frame, int slot, nfapi_nr_pusch_pdu_t *ulsch_pdu)
 {
   dump_pusch_pdu(gNB->Mod_id, frame, slot, ulsch_pdu);
-  int harq_pid = ulsch_pdu->pusch_data.harq_process_id;
-  NR_gNB_ULSCH_t *ulsch = find_nr_ulsch(gNB, ulsch_pdu->rnti, harq_pid);
-  if (ulsch == NULL) {
-    LOG_E(NR_PHY, "No ulsch_id found for rnti %04x\n", ulsch_pdu->rnti);
-    return;
-  }
-
-  ulsch->rnti = ulsch_pdu->rnti;
-  ulsch->harq_pid = harq_pid;
-  ulsch->handled = 0;
-  ulsch->active = true;
-  ulsch->beam_nb = 0;
-  if (gNB->common_vars.beam_id) {
-    int fapi_beam_idx = ulsch_pdu->beamforming.prgs_list[0].dig_bf_interface_list[0].beam_idx;
-    int bitmap = SL_to_bitmap(ulsch_pdu->start_symbol_index, ulsch_pdu->nr_of_symbols);
-    ulsch->beam_nb = beam_index_allocation(gNB->enable_analog_das,
-                                           fapi_beam_idx,
-                                           &gNB->common_vars,
-                                           slot,
-                                           NR_NUMBER_OF_SYMBOLS_PER_SLOT,
-                                           bitmap);
-  }
-  ulsch->frame = frame;
-  ulsch->slot = slot;
-
-  NR_UL_gNB_HARQ_t *harq = ulsch->harq_process;
-  if (ulsch_pdu->pusch_data.new_data_indicator)
-    harq->harq_to_be_cleared = true;
   LOG_D(NR_PHY,
-        "NEW ULSCH %d.%d RNTI %x HARQ PID %d new data indicator %d\n",
+        "%4d.%2d Programming ULSCH RNTI %04x HARQ PID %d new data indicator %d\n",
         frame,
         slot,
         ulsch_pdu->rnti,
-        harq_pid,
+        ulsch_pdu->pusch_data.harq_process_id,
         ulsch_pdu->pusch_data.new_data_indicator);
 
-  if (ulsch_pdu->pusch_data.new_data_indicator)
-    harq->round = 0;
-  else
-    harq->round++;
-
-  memcpy(&ulsch->harq_process->ulsch_pdu, ulsch_pdu, sizeof(ulsch->harq_process->ulsch_pdu));
-  LOG_D(PHY, "Initializing nFAPI for ULSCH, harq_pid %d, layers %d\n", harq_pid, ulsch_pdu->nrOfLayers);
+  NR_gNB_PUSCH_job_t pusch = {.frame = frame, .slot = slot, .pusch_pdu = *ulsch_pdu};
+  if (gNB->common_vars.beam_id) {
+    int fapi_beam_idx = ulsch_pdu->beamforming.prgs_list[0].dig_bf_interface_list[0].beam_idx;
+    int bitmap = SL_to_bitmap(ulsch_pdu->start_symbol_index, ulsch_pdu->nr_of_symbols);
+    const nfapi_nr_spatial_stream_index_t *p = &ulsch_pdu->param_v4;
+    // We assume the ports are ordered continuously. Hence only the start port idx is enough.
+    uint16_t ant_port_start = p->numSpatialStreamIndices > 0 ? p->spatialStreamIndices[0] : 0;
+    beam_index_allocation(fapi_beam_idx,
+                          ant_port_start,
+                          p->numSpatialStreamIndices,
+                          NR_SYMBOLS_PER_SLOT,
+                          slot,
+                          bitmap,
+                          gNB->frame_parms.nb_antennas_rx,
+                          gNB->common_vars.beam_id);
+  }
+  bool done = spsc_q_put(&gNB->pusch_queue, &pusch, sizeof(pusch));
+  if (!done)
+    LOG_W(NR_PHY, "PUSCH queue is full: dropping PUSCH UE %04x\n", ulsch_pdu->rnti);
 }
 
 void reset_active_ulsch(PHY_VARS_gNB *gNB, int frame)

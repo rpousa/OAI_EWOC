@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 [[_TOC_]]
 
 ## 1. Introduction

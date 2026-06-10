@@ -1,34 +1,11 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file common/utils/telnetsrv/telnetsrv_proccmd.c
+/*!
  * \brief: implementation of telnet commands related to this linux process
- * \author Francois TABURET
- * \date 2017
- * \version 0.1
- * \company NOKIA BellLabs France
- * \email: francois.taburet@nokia-bell-labs.com
- * \note
- * \warning
  */
+
 #define _GNU_SOURCE
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -59,6 +36,7 @@
 
 void decode_procstat(char *record, int debug, telnet_printfunc_t prnt, webdatadef_t *tdata)
 {
+UNUSED(debug);
 char prntline[160];
 char *procfile_fields;
 char *strtokptr;
@@ -192,10 +170,11 @@ char arecord[1024];
 
 int nullprnt(char *fmt, ...)
 {
+  UNUSED(fmt);
   return 0;
 }
 
-void proccmd_get_threaddata(char *buf, int debug, telnet_printfunc_t fprnt, webdatadef_t *tdata)
+void proccmd_get_threaddata(int debug, telnet_printfunc_t fprnt, webdatadef_t *tdata)
 {
 char aname[256];
 
@@ -245,9 +224,9 @@ char aname[256];
   closedir(proc_dir);
 } /* proccmd_get_threaddata */
 
-void print_threads(char *buf, int debug, telnet_printfunc_t prnt)
+void print_threads(int debug, telnet_printfunc_t prnt)
 {
-  proccmd_get_threaddata(buf, debug, prnt, NULL);
+  proccmd_get_threaddata(debug, prnt, NULL);
 }
 
 #define FLAG_PRINT_DEBUG_DUMP(flag)                                              \
@@ -372,7 +351,7 @@ int proccmd_websrv_getdata(char *cmdbuff, int debug, void *data, telnet_printfun
       }
     }
     if (strcasestr(cmdbuff, "threadsched") != NULL) {
-      proccmd_get_threaddata(cmdbuff, debug, prnt, (webdatadef_t *)data);
+      proccmd_get_threaddata(debug, prnt, (webdatadef_t *)data);
     }
   } // show
 
@@ -396,7 +375,7 @@ int proccmd_show(char *buf, int debug, telnet_printfunc_t prnt)
    if (debug > 0)
        prnt(" proccmd_show received %s\n",buf);
    if (strcasestr(buf,"thread") != NULL) {
-       print_threads(buf,debug,prnt);
+       print_threads(debug, prnt);
    }
    if (strcasestr(buf,"loglvl") != NULL) {
        prnt("\n               component level  enabled   output\n");
@@ -489,7 +468,7 @@ if (buf == NULL) {
        prnt(" proccmd_thread: %i params = %i,%s,%i\n",res,bv1,sv1,bv2);   
    if(res != 3)
      {
-     print_threads(buf, debug, prnt);
+     print_threads(debug, prnt);
      return 0;
      }
 

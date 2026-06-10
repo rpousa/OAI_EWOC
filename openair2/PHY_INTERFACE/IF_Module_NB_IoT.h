@@ -1,3 +1,6 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
+ */
 
 /*This is the interface module between PHY
 *Provided the FAPI style interface structures for P7.

@@ -1,31 +1,9 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file ue_procedures.c
+/*!
  * \brief primitives to build the asn1 messages / primitives to build FeMBMS asn1  messages
- * \author Raymond Knopp, Navid Nikaein and Javier Morgade
- * \date 2011 / 2019
- * \version 1.0
- * \company Eurecom
- * \email: raymond.knopp@eurecom.fr, navid.nikaein@eurecom.fr javier.morgade@ieee.org
  */
 
 #include "mac_extern.h"
@@ -54,6 +32,7 @@
 #include "assertions.h"
 
 #include "SIMULATION/TOOLS/sim.h" // for taus
+#include "openair1/PHY/phy_extern_ue.h"
 
 #define DEBUG_HEADER_PARSING 1
 #define ENABLE_MAC_PAYLOAD_DEBUG 1
@@ -379,6 +358,7 @@ ue_send_sdu(module_id_t module_idP,
   (VCD_SIGNAL_DUMPER_FUNCTIONS_UE_SEND_SDU, VCD_FUNCTION_IN);
   //LOG_D(MAC,"sdu: %x.%x.%x\n",sdu[0],sdu[1],sdu[2]);
   ws_trace_t tmp = {.direction = DIRECTION_DOWNLINK,
+                    .type = UE_mac_inst[module_idP].tdd_Config == NULL ? FDD_RADIO : TDD_RADIO,
                     .pdu_buffer = sdu,
                     .pdu_buffer_size = sdu_len,
                     .ueid = module_idP,
@@ -584,6 +564,7 @@ void ue_decode_si_mbms(module_id_t module_idP, int CC_id, frame_t frameP,
   stop_UE_TIMING(UE_mac_inst[module_idP].rx_si);
 
   ws_trace_t tmp = {.direction = DIRECTION_UPLINK,
+                    .type = UE_mac_inst[module_idP].tdd_Config == NULL ? FDD_RADIO : TDD_RADIO,
                     .pdu_buffer = pdu,
                     .pdu_buffer_size = len,
                     .ueid = module_idP,
@@ -611,6 +592,7 @@ ue_decode_si(module_id_t module_idP, int CC_id, frame_t frameP,
   (VCD_SIGNAL_DUMPER_FUNCTIONS_UE_DECODE_SI, VCD_FUNCTION_OUT);
   stop_UE_TIMING(UE_mac_inst[module_idP].rx_si);
   ws_trace_t tmp = {.direction = DIRECTION_UPLINK,
+                    .type = UE_mac_inst[module_idP].tdd_Config == NULL ? FDD_RADIO : TDD_RADIO,
                     .pdu_buffer = pdu,
                     .pdu_buffer_size = len,
                     .ueid = module_idP,
@@ -638,6 +620,7 @@ ue_decode_p(module_id_t module_idP, int CC_id, frame_t frameP,
   (VCD_SIGNAL_DUMPER_FUNCTIONS_UE_DECODE_PCCH, VCD_FUNCTION_OUT);
   stop_UE_TIMING(UE_mac_inst[module_idP].rx_p);
   ws_trace_t tmp = {.direction = DIRECTION_UPLINK,
+                    .type = UE_mac_inst[module_idP].tdd_Config == NULL ? FDD_RADIO : TDD_RADIO,
                     .pdu_buffer = pdu,
                     .pdu_buffer_size = len,
                     .ueid = module_idP,
@@ -2872,6 +2855,7 @@ ue_get_sdu(module_id_t module_idP, int CC_id, frame_t frameP,
   (VCD_SIGNAL_DUMPER_FUNCTIONS_UE_GET_SDU, VCD_FUNCTION_OUT);
   stop_UE_TIMING(UE_mac_inst[module_idP].tx_ulsch_sdu);
   ws_trace_t tmp = {.direction = DIRECTION_UPLINK,
+                    .type = UE_mac_inst[module_idP].tdd_Config == NULL ? FDD_RADIO : TDD_RADIO,
                     .pdu_buffer = ulsch_buffer,
                     .pdu_buffer_size = buflen,
                     .ueid = module_idP,

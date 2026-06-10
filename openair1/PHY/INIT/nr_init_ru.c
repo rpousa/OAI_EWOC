@@ -1,31 +1,13 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-#include "phy_init.h"
 #include "PHY/phy_extern.h"
-#include "SCHED/sched_common.h"
-#include "common/utils/LOG/vcd_signal_dumper.h"
 #include "assertions.h"
 #include <math.h>
 #include "openair1/PHY/defs_RU.h"
+#include "openair1/PHY/defs_nr_common.h"
+#include "openair1/PHY/defs_gNB.h"
 
 void nr_phy_init_RU(RU_t *ru)
 {
@@ -33,31 +15,20 @@ void nr_phy_init_RU(RU_t *ru)
 
   LOG_D(PHY, "Initializing RU signal buffers (if_south %s) nb_tx %d, nb_rx %d\n", ru_if_types[ru->if_south], ru->nb_tx, ru->nb_rx);
 
-  ru->num_beams_period = 1;
-  if (ru->num_gNB > 0) {
-    nfapi_nr_config_request_scf_t *cfg = &ru->config;
-    ru->nb_log_antennas = 0;
-    for (int n = 0; n < ru->num_gNB; n++) {
-      if (cfg->carrier_config.num_tx_ant.value > ru->nb_log_antennas)
-        ru->nb_log_antennas = cfg->carrier_config.num_tx_ant.value;
-    }
-    nfapi_nr_analog_beamforming_ve_t *analog_config = &cfg->analog_beamforming_ve;
-    ru->num_beams_period = analog_config->analog_bf_vendor_ext.value ? analog_config->num_beams_period_vendor_ext.value : 1;
-  }
-  else ru->nb_log_antennas = ru->nb_tx;
-
   // copy configuration from gNB[0] in to RU, assume that all gNB instances sharing RU use the same configuration
   // (at least the parts that are needed by the RU, numerology and PRACH)
 
-  AssertFatal(ru->nb_log_antennas > 0 && ru->nb_log_antennas < 13, "ru->nb_log_antennas %d ! \n",ru->nb_log_antennas);
-  int nb_tx_streams = ru->nb_tx * ru->num_beams_period;
-  int nb_rx_streams = ru->nb_rx * ru->num_beams_period;
-  LOG_I(NR_PHY, "nb_tx_streams %d, nb_rx_streams %d, num_Beams_period %d\n", nb_tx_streams, nb_rx_streams, ru->num_beams_period);
-  ru->common.beam_id = malloc16_clear(ru->num_beams_period * sizeof(int*));
-  for(int i = 0; i < ru->num_beams_period; i++) {
-    ru->common.beam_id[i] = malloc16(fp->symbols_per_slot * fp->slots_per_frame * sizeof(int));
-    memset(ru->common.beam_id[i], -1, fp->symbols_per_slot * fp->slots_per_frame * sizeof(int));
+  int nb_tx_streams = ru->nb_tx;
+  int nb_rx_streams = ru->nb_rx;
+  LOG_I(NR_PHY, "nb_tx_streams %d, nb_rx_streams %d\n", nb_tx_streams, nb_rx_streams);
+  const unsigned int num_symbols = fp->symbols_per_slot * fp->slots_per_frame;
+  ru->common.beam_id = malloc16_clear(num_symbols * sizeof(*ru->common.beam_id));
+  for (int i = 0; i < num_symbols; i++) {
+    ru->common.beam_id[i] = malloc16_clear(nb_tx_streams * sizeof(**ru->common.beam_id));
   }
+
+  if ((nb_tx_streams > fp->nb_antennas_tx) || (nb_rx_streams > fp->nb_antennas_rx))
+    LOG_W(NR_PHY, "There could be unused baseband ports because of fewer logical ports.\n");
 
   if (ru->if_south <= REMOTE_IF5) { // this means REMOTE_IF5 or LOCAL_RF, so allocate memory for time-domain signals 
     // Time-domain signals
@@ -97,13 +68,14 @@ void nr_phy_init_RU(RU_t *ru)
     ru->common.txdataF = (int32_t **)malloc16(ru->nb_tx*sizeof(int32_t*));
     // [hna] samples_per_frame without CP
     for(int i = 0; i < ru->nb_tx; ++i)
-      ru->common.txdataF[i] = (int32_t*)malloc16_clear(fp->samples_per_frame_wCP * sizeof(int32_t));
+      ru->common.txdataF[i] = (int32_t *)malloc16_clear(fp->samples_per_slot_wCP * sizeof(int32_t));
 
     // allocate IFFT input buffers (TX)
     ru->common.txdataF_BF = (int32_t **)malloc16(nb_tx_streams * sizeof(int32_t*));
     LOG_D(PHY, "[INIT] common.txdata_BF= %p (%lu bytes)\n", ru->common.txdataF_BF, nb_tx_streams * sizeof(int32_t *));
     for (int i = 0; i < nb_tx_streams; i++) {
-      ru->common.txdataF_BF[i] = (int32_t*)malloc16_clear(fp->samples_per_subframe_wCP * sizeof(int32_t));
+      ru->common.txdataF_BF[i] =
+          (int32_t *)malloc16_clear(fp->samples_per_slot_wCP * sizeof(int32_t));
       LOG_D(PHY, "txdataF_BF[%d] %p for RU %d\n", i, ru->common.txdataF_BF[i], ru->idx);
     }
     // allocate FFT output buffers (RX)
@@ -124,8 +96,8 @@ void nr_phy_init_RU(RU_t *ru)
 void nr_phy_free_RU(RU_t *ru)
 {
   LOG_D(PHY, "Freeing RU signal buffers (if_south %s) nb_tx %d\n", ru_if_types[ru->if_south], ru->nb_tx);
-  int nb_tx_streams = ru->nb_tx * ru->num_beams_period;
-  int nb_rx_streams = ru->nb_rx * ru->num_beams_period;
+  int nb_tx_streams = ru->nb_tx;
+  int nb_rx_streams = ru->nb_rx;
 
   if (ru->if_south <= REMOTE_IF5) { // this means REMOTE_IF5 or LOCAL_RF, so free memory for time-domain signals
     // Hack: undo what is done at allocation
@@ -160,7 +132,8 @@ void nr_phy_free_RU(RU_t *ru)
       free_and_zero(ru->common.rxdataF[i]);
     free_and_zero(ru->common.rxdataF);
 
-    for(int i = 0; i < ru->num_beams_period; ++i)
+    NR_DL_FRAME_PARMS *fp = ru->nr_frame_parms;
+    for (int i = 0; i < fp->symbols_per_slot * fp->slots_per_frame; ++i)
       free_and_zero(ru->common.beam_id[i]);
     free_and_zero(ru->common.beam_id);
   }

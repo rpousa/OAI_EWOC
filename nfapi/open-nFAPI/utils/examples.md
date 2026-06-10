@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 # Example runs of nfapi_hex_parser
 ## 1 - An invalid DL_TTI.request
 ```

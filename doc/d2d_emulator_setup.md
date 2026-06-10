@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 # How to use device-to-device communication (D2D, 4G)
 
 ---

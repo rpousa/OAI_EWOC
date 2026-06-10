@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 # telnet server principles
 
 The oai telnet server is implemented in shared libraries to be loaded by the [oai shared library loader](loader). `libtelnetsrv.so ` contains the code common to all oai softmodem executables, where `libtelnetsrv_<app>.so` contains the code specific to the executable identified by `app`. 
@@ -19,7 +21,7 @@ The telnet server provides an API which can be used by any oai component to add 
 
 # telnet server source files
 
-telnet server source files are located in [common/utils/telnetsrv](https://gitlab.eurecom.fr/oai/openairinterface5g/tree/develop/common/utils/telnetsrv)
+telnet server source files are located in `common/utils/telnetsrv/`
 
 1. [telnetsrv.c](../telnetsrv.c) contains the telnet server implementation, including the implementation of the `telnet` CLI command. This implementation is compatible with all softmodem executables and is in charge of loading any additional `libtelnetsrv_<app> .so` containing code specific to the running executables.
 1.  [telnetsrv.h](../telnetsrv.h) is the telnet server include file containing both private and public data type definitions. It also contains API prototypes for functions that are used to register a new command in the server.

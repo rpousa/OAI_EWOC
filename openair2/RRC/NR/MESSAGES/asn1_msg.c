@@ -1,32 +1,10 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file asn1_msg.c
-* \brief primitives to build the asn1 messages
-* \author Raymond Knopp and Navid Nikaein, WEI-TAI CHEN
-* \date 2011, 2018
-* \version 1.0
-* \company Eurecom, NTUST
-* \email: {raymond.knopp, navid.nikaein}@eurecom.fr and kroempa@gmail.com
-*/
+/*!
+ * \brief primitives to build the asn1 messages
+ */
 
 #include <stdio.h>
 #include <sys/types.h>
@@ -245,39 +223,67 @@ NR_UE_NR_Capability_t *decode_nr_ue_capability(int rnti, const NR_UE_CapabilityR
   return NULL;
 }
 
-//------------------------------------------------------------------------------
-
-int do_SIB2_NR(uint8_t **msg_SIB2, NR_SSB_MTC_t *ssbmtc)
+byte_array_t do_SIB2_NR(const NR_SIB2_t *sib2)
 {
-  NR_SIB2_t *sib2 = calloc(1, sizeof(*sib2));
-  sib2->cellReselectionInfoCommon.q_Hyst = NR_SIB2__cellReselectionInfoCommon__q_Hyst_dB0;
-  struct NR_SIB2__cellReselectionInfoCommon__speedStateReselectionPars *speed = calloc(1, sizeof(*speed));
-  NR_MobilityStateParameters_t mobilityStateParameters = {0};
-  mobilityStateParameters.t_Evaluation = NR_MobilityStateParameters__t_Evaluation_s30;
-  mobilityStateParameters.t_HystNormal = NR_MobilityStateParameters__t_HystNormal_s30;
-  mobilityStateParameters.n_CellChangeMedium = 1;
-  mobilityStateParameters.n_CellChangeHigh = 2;
-  speed->mobilityStateParameters = mobilityStateParameters;
-  struct NR_SIB2__cellReselectionInfoCommon__speedStateReselectionPars__q_HystSF qhyst = {0};
-  qhyst.sf_Medium = NR_SIB2__cellReselectionInfoCommon__speedStateReselectionPars__q_HystSF__sf_Medium_dB_4;
-  qhyst.sf_High = NR_SIB2__cellReselectionInfoCommon__speedStateReselectionPars__q_HystSF__sf_High_dB_6;
-  speed->q_HystSF = qhyst;
-  sib2->cellReselectionInfoCommon.speedStateReselectionPars = speed;
-  sib2->cellReselectionServingFreqInfo.cellReselectionPriority = 0; // INTEGER (0..7)
-  sib2->cellReselectionServingFreqInfo.threshServingLowP = 0;
-  NR_ReselectionThresholdQ_t *threshServingLowQ = calloc(1, sizeof(*threshServingLowQ));
-  *threshServingLowQ = 0;
-  sib2->cellReselectionServingFreqInfo.threshServingLowQ = threshServingLowQ;
-  sib2->intraFreqCellReselectionInfo.q_RxLevMin = -56; // INTEGER (-70..-22)
-  sib2->intraFreqCellReselectionInfo.s_IntraSearchP = 22; // INTEGER (0..31)
-  sib2->intraFreqCellReselectionInfo.t_ReselectionNR = 1; // INTEGER (0..7)
-  sib2->intraFreqCellReselectionInfo.deriveSSB_IndexFromCell = true;
-  sib2->intraFreqCellReselectionInfo.smtc = ssbmtc;
+  byte_array_t msg = {.buf = NULL, .len = 0};
+  char errbuf[256] = {0};
+  size_t errlen = sizeof(errbuf);
+  int ret = asn_check_constraints(&asn_DEF_NR_SIB2, sib2, errbuf, &errlen);
+  if (ret != 0) {
+    LOG_E(NR_RRC, "SIB2 constraint check failed: %s\n", errbuf);
+    return msg;
+  }
 
-  ssize_t size = uper_encode_to_new_buffer(&asn_DEF_NR_SIB2, NULL, (void *)sib2, (void **)msg_SIB2);
-  AssertFatal (size > 0, "ASN1 message encoding failed (encoded %lu bytes)!\n", size);
-  ASN_STRUCT_FREE(asn_DEF_NR_SIB2, sib2);
-  return size;
+  int val = uper_encode_to_new_buffer(&asn_DEF_NR_SIB2, NULL, (void *)sib2, (void **)&msg.buf);
+  if (val <= 0) {
+    LOG_E(NR_RRC, "Failed to encode SIB2\n");
+    return msg;
+  }
+
+  msg.len = val;
+  return msg;
+}
+
+byte_array_t do_SIB3_NR(const NR_SIB3_t *sib3)
+{
+  byte_array_t msg = {.buf = NULL, .len = 0};
+  char errbuf[256] = {0};
+  size_t errlen = sizeof(errbuf);
+  int ret = asn_check_constraints(&asn_DEF_NR_SIB3, sib3, errbuf, &errlen);
+  if (ret != 0) {
+    LOG_E(NR_RRC, "SIB3 constraint check failed: %s\n", errbuf);
+    return msg;
+  }
+
+  int val = uper_encode_to_new_buffer(&asn_DEF_NR_SIB3, NULL, (void *)sib3, (void **)&msg.buf);
+  if (val <= 0) {
+    LOG_E(NR_RRC, "Failed to encode SIB3\n");
+    return msg;
+  }
+
+  msg.len = val;
+  return msg;
+}
+
+byte_array_t do_SIB4_NR(NR_SIB4_t *sib4)
+{
+  byte_array_t msg = {.buf = NULL, .len = 0};
+  char errbuf[256] = {0};
+  size_t errlen = sizeof(errbuf);
+  int ret = asn_check_constraints(&asn_DEF_NR_SIB4, sib4, errbuf, &errlen);
+  if (ret != 0) {
+    LOG_E(NR_RRC, "SIB4 constraint check failed: %s\n", errbuf);
+    return msg;
+  }
+
+  int val = uper_encode_to_new_buffer(&asn_DEF_NR_SIB4, NULL, (void *)sib4, (void **)&msg.buf);
+  if (val <= 0) {
+    LOG_E(NR_RRC, "Failed to encode SIB4\n");
+    return msg;
+  }
+
+  msg.len = val;
+  return msg;
 }
 
 int do_RRCReject(uint8_t *const buffer)
@@ -325,7 +331,6 @@ int do_RRCSetup(uint8_t *const buffer,
                 const uint8_t transaction_id,
                 const uint8_t *masterCellGroup,
                 int masterCellGroup_len,
-                const gNB_RrcConfigurationReq *configuration,
                 NR_SRB_ToAddModList_t *SRBs)
 //------------------------------------------------------------------------------
 {
@@ -717,7 +722,7 @@ int do_RRCSetupRequest(uint8_t *buffer, size_t buffer_size, uint8_t *rv, uint64_
     str->buf[3] = rv[3];
     str->buf[4] = rv[4] & 0xfe;
   } else {
-    uint64_t fiveG_S_TMSI_part1 = fiveG_S_TMSI & ((1ULL << 39) - 1);
+    uint64_t fiveG_S_TMSI_part1 = nr_extract_5g_s_tmsi_part1(fiveG_S_TMSI);
     /** set the ue-Identity to ng-5G-S-TMSI-Part1
      * ng-5G-S-TMSI-Part1: the rightmost 39 bits of 5G-S-TMSI
      * BIT STRING (SIZE (39)) - 3GPP TS 38.331 */
@@ -841,7 +846,7 @@ int do_RRCSetupComplete(uint8_t *buffer,
       str->size = 2;
       str->bits_unused = 7;
       str->buf = calloc_or_fail(str->size, sizeof(str->buf[0]));
-      uint16_t fiveG_s_tmsi_part2 = (fiveG_s_tmsi >> 39) & ((1ULL << 9) - 1);
+      uint16_t fiveG_s_tmsi_part2 = nr_extract_5g_s_tmsi_part2(fiveG_s_tmsi);
       str->buf[0] = (fiveG_s_tmsi_part2 >> (8 - str->bits_unused)) & 0xFF;
       str->buf[1] = (fiveG_s_tmsi_part2 << str->bits_unused) & 0xFF;
       LOG_D(NR_RRC, "5G-S-TMSI part 2 %d in RRCSetupComplete (5G-S-TMSI %ld)\n", fiveG_s_tmsi_part2, fiveG_s_tmsi);
@@ -1164,7 +1169,6 @@ static NR_MeasIdToAddMod_t *get_MeasId(NR_MeasId_t measId, NR_ReportConfigId_t r
 
 NR_MeasConfig_t *get_MeasConfig(const NR_MeasTiming_t *mt,
                                 int band,
-                                int scs,
                                 int nr_pci,
                                 NR_ReportConfigToAddMod_t *rc_PER,
                                 NR_ReportConfigToAddMod_t *rc_A2,
@@ -1258,8 +1262,10 @@ NR_MeasConfig_t *get_MeasConfig(const NR_MeasTiming_t *mt,
     FOR_EACH_SEQ_ARR(nr_neighbour_cell_t *, neigh_cell, neigh_seq) {
       NR_ReportConfigId_t reportConfigId = neigh_a3_id[i];
       /* check that there is a A3 configured for this neighbour */
-      if (reportConfigId == -1)
+      if (reportConfigId == -1) {
+        i++;
         continue;
+      }
       NR_MeasIdToAddMod_t *measid_A3 = get_MeasId(meas_idx + 1, reportConfigId, i + 2);
       meas_idx++;
       asn1cSeqAdd(&mc->measIdToAddModList->list, measid_A3);
@@ -1467,7 +1473,7 @@ byte_array_t get_HandoverCommandMessage(nr_rrc_reconfig_param_t *params)
  *         2) encodes UE Capabilities from UE Context
  *         3) encodes AS context
  *         4) generates HO Preparation Info */
-byte_array_t get_HandoverPreparationInformation(nr_rrc_reconfig_param_t *params, int scell_pci)
+byte_array_t get_HandoverPreparationInformation(nr_rrc_reconfig_param_t *params)
 {
   // Buffer to return
   byte_array_t buffer = {.buf = NULL, .len = 0};

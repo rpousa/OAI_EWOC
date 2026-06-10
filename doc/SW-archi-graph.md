@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 This document is a high-level overview over the L1 threading mechanism.
 
 ```mermaid

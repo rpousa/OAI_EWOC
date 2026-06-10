@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 # Overview
 
 Dockerized tool to list clang-format errors introduced in a branch.

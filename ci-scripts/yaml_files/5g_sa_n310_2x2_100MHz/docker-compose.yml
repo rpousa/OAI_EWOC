@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+
 services:
     oai-gnb:
         image: ${REGISTRY-oaisoftwarealliance/}${GNB_IMG:-oai-gnb}:${TAG:-develop}

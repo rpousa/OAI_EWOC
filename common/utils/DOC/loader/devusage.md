@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 The loader objectives are
 1. provides a common mechanism to prevent an executable to include code that is only used under specific configurations, without rebuilding the code
 1. Provide a common mechanism to allow to choose between different implementations of a given set of functions, without rebuilding the code

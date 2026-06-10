@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
+ */
+
 #include "filter.h"
 #include "event.h"
 #include "database.h"
@@ -37,6 +41,7 @@ int eval_eq(struct filter *f, event e)
 
 int eval_int(struct filter *f, event e)
 {
+  UNUSED(e);
   return f->v.v;
 }
 
@@ -148,9 +153,9 @@ filter *filter_evarg(void *database, char *event_name, char *varname)
   return ret;
 }
 
-filter *filter_evfun(void *database, int (*fun)(void *priv, int v),
-    void *priv, filter *x)
+filter *filter_evfun(void *database, int (*fun)(void *priv, int v), void *priv, filter *x)
 {
+  UNUSED(database);
   struct filter *ret = calloc(1, sizeof(struct filter));
   if (ret == NULL) abort();
   ret->eval = eval_evfun;

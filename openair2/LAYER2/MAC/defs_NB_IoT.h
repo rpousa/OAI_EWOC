@@ -1,11 +1,9 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
+ */
 
-/*! \file defs_NB_IoT.h
+/*!
  * \brief MAC layer structures
- * \author  NTUST BMW Lab./
- * \date 2017
- * \email:
- * \version 1.0
- *
  */
 #ifndef __LAYER2_MAC_DEFS_NB_IOT_H__
 #define __LAYER2_MAC_DEFS_NB_IOT_H__

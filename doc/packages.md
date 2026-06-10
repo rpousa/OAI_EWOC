@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 # OpenAirInterface Packages
 
 This document describes how to build Deb/RPM packages with OAI's build system, cmake.

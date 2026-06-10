@@ -1,6 +1,12 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <signal.h>
+#include <unistd.h>
 #include <fcntl.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -387,6 +393,7 @@ void sr(void *_d, event e)
 #define MAC_NR_HARQID         0x06
 #define MAC_NR_FRAME_SLOT_TAG 0x07
 
+#define NR_FDD_RADIO 1
 #define NR_TDD_RADIO 2
 
 #define NR_DIRECTION_UPLINK   0
@@ -399,7 +406,7 @@ void sr(void *_d, event e)
 
 void trace_nr(struct timespec sending_time, ev_data *d, int direction,
         int rnti_type, int rnti, int frame, int slot, int harq_pid, void *buf,
-        int bufsize, int preamble)
+        int bufsize)
 {
   ssize_t ret;
   int i;
@@ -468,7 +475,7 @@ void nr_ul(void *_d, event e)
            NR_C_RNTI, e.e[d->nr_ul_rnti].i,
            e.e[d->nr_ul_frame].i, e.e[d->nr_ul_slot].i,
            e.e[d->nr_ul_harq_pid].i, e.e[d->nr_ul_data].b,
-           e.e[d->nr_ul_data].bsize, NO_PREAMBLE);
+           e.e[d->nr_ul_data].bsize);
 }
 
 void nr_dl(void *_d, event e)
@@ -487,7 +494,7 @@ void nr_dl(void *_d, event e)
            e.e[d->nr_dl_rnti].i != 0xffff ? NR_C_RNTI : NR_SI_RNTI,
            e.e[d->nr_dl_rnti].i, e.e[d->nr_dl_frame].i, e.e[d->nr_dl_slot].i,
            e.e[d->nr_dl_harq_pid].i, e.e[d->nr_dl_data].b,
-           e.e[d->nr_dl_data].bsize, NO_PREAMBLE);
+           e.e[d->nr_dl_data].bsize);
 }
 
 void nr_dl_retx(void *_d, event e)
@@ -498,7 +505,7 @@ void nr_dl_retx(void *_d, event e)
            NR_C_RNTI, e.e[d->nr_dl_retx_rnti].i,
            e.e[d->nr_dl_retx_frame].i, e.e[d->nr_dl_retx_slot].i,
            e.e[d->nr_dl_retx_harq_pid].i, e.e[d->nr_dl_retx_data].b,
-           e.e[d->nr_dl_retx_data].bsize, NO_PREAMBLE);
+           e.e[d->nr_dl_retx_data].bsize);
 }
 
 void nr_mib(void *_d, event e)
@@ -513,7 +520,7 @@ void nr_mib(void *_d, event e)
 
   trace_nr(e.sending_time, d, NR_DIRECTION_DOWNLINK, NR_NO_RNTI, 0,
            e.e[d->nr_mib_frame].i, e.e[d->nr_mib_slot].i, 0 /* harq pid */,
-           e.e[d->nr_mib_data].b, e.e[d->nr_mib_data].bsize, NO_PREAMBLE);
+           e.e[d->nr_mib_data].b, e.e[d->nr_mib_data].bsize);
 }
 
 void nr_ue_mib(void *_d, event e)
@@ -528,7 +535,7 @@ void nr_ue_mib(void *_d, event e)
 
   trace_nr(e.sending_time, d, NR_DIRECTION_DOWNLINK, NR_NO_RNTI, 0,
            e.e[d->nr_ue_mib_frame].i, e.e[d->nr_ue_mib_slot].i, 0 /* harq pid */,
-           e.e[d->nr_ue_mib_data].b, e.e[d->nr_ue_mib_data].bsize, NO_PREAMBLE);
+           e.e[d->nr_ue_mib_data].b, e.e[d->nr_ue_mib_data].bsize);
 }
 
 void nr_rar(void *_d, event e)
@@ -538,7 +545,7 @@ void nr_rar(void *_d, event e)
   trace_nr(e.sending_time, d, NR_DIRECTION_DOWNLINK,
            NR_RA_RNTI, e.e[d->nr_rar_rnti].i,
            e.e[d->nr_rar_frame].i, e.e[d->nr_rar_slot].i, 0 /* harq pid */,
-           e.e[d->nr_rar_data].b, e.e[d->nr_rar_data].bsize, NO_PREAMBLE);
+           e.e[d->nr_rar_data].b, e.e[d->nr_rar_data].bsize);
 }
 
 void nr_ue_ul(void *_d, event e)
@@ -549,7 +556,7 @@ void nr_ue_ul(void *_d, event e)
            NR_C_RNTI, e.e[d->nr_ue_ul_rnti].i,
            e.e[d->nr_ue_ul_frame].i, e.e[d->nr_ue_ul_slot].i,
            e.e[d->nr_ue_ul_harq_pid].i, e.e[d->nr_ue_ul_data].b,
-           e.e[d->nr_ue_ul_data].bsize, NO_PREAMBLE);
+           e.e[d->nr_ue_ul_data].bsize);
 }
 
 void nr_ue_dl(void *_d, event e)
@@ -568,7 +575,7 @@ void nr_ue_dl(void *_d, event e)
            e.e[d->nr_ue_dl_rnti].i != 0xffff ? NR_C_RNTI : NR_SI_RNTI,
            e.e[d->nr_ue_dl_rnti].i, e.e[d->nr_ue_dl_frame].i,
            e.e[d->nr_ue_dl_slot].i, e.e[d->nr_ue_dl_harq_pid].i,
-           e.e[d->nr_ue_dl_data].b, e.e[d->nr_ue_dl_data].bsize, NO_PREAMBLE);
+           e.e[d->nr_ue_dl_data].b, e.e[d->nr_ue_dl_data].bsize);
 }
 
 void nr_ue_rar(void *_d, event e)
@@ -577,8 +584,7 @@ void nr_ue_rar(void *_d, event e)
   trace_nr(e.sending_time, d, DIRECTION_DOWNLINK,
            RA_RNTI, e.e[d->nr_ue_rar_rnti].i,
            e.e[d->nr_ue_rar_frame].i, e.e[d->nr_ue_rar_slot].i, 0,
-           e.e[d->nr_ue_rar_data].b, e.e[d->nr_ue_rar_data].bsize,
-           NO_PREAMBLE);
+           e.e[d->nr_ue_rar_data].b, e.e[d->nr_ue_rar_data].bsize);
 }
 
 /****************************************************************************/
@@ -948,6 +954,18 @@ void usage(void)
   exit(1);
 }
 
+volatile int run = 1;
+
+static int sock = -1;
+
+void force_stop(int x)
+{
+  printf("\ngently quit(%d)...\n", x);
+  close(sock);
+  sock = -1;
+  run = 0;
+}
+
 int main(int n, char **v)
 {
   char *database_filename = NULL;
@@ -967,6 +985,9 @@ int main(int n, char **v)
   int live_port = DEFAULT_LIVE_PORT;
   int live = 0;
   memset(&d, 0, sizeof(ev_data));
+
+  /* write on a socket fails if the other end is closed and we get SIGPIPE */
+  if (signal(SIGPIPE, SIG_IGN) == SIG_ERR) abort();
 
   for (i = 0; i < 65536; i++) {
     d.lte_rnti_to_ueid[i] = -1;
@@ -1014,8 +1035,10 @@ int main(int n, char **v)
       perror(input_filename);
       return 1;
     }
-  } else
+  } else {
     in = connect_to(live_ip, live_port);
+    sock = in;
+  }
 
   database = parse_database(database_filename);
   load_config_file(database_filename);
@@ -1121,10 +1144,15 @@ int main(int n, char **v)
     new_thread(receiver, &d);
   }
 
+  /* exit on ctrl+c and ctrl+z */
+  if (signal(SIGQUIT, force_stop) == SIG_ERR) abort();
+  if (signal(SIGINT, force_stop) == SIG_ERR) abort();
+  if (signal(SIGTSTP, force_stop) == SIG_ERR) abort();
+
   OBUF ebuf = {.osize = 0, .omaxsize = 0, .obuf = NULL};
 
   /* read messages */
-  while (1) {
+  while (run) {
     event e;
     e = get_event(in, &ebuf, database);
 

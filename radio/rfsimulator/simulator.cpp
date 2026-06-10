@@ -1,24 +1,5 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Author and copyright: Laurent Thomas, open-cells.com
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
 /*
@@ -49,6 +30,7 @@
 #include <common/utils/telnetsrv/telnetsrv.h>
 #include <common/config/config_userapi.h>
 #include "common_lib.h"
+#include "common/utils/threadPool/pthread_utils.h"
 extern "C" {
 #include <common/utils/load_module_shlib.h>
 #include <openair1/SIMULATION/TOOLS/sim.h>
@@ -624,6 +606,7 @@ static void rfsimulator_readconfig(rfsimulator_state_t *rfsimulator)
 
 static int rfsimu_set_beam(char *buff, int debug, telnet_printfunc_t prnt, void *arg)
 {
+  UNUSED(debug);
   rfsimulator_state_t *t = (rfsimulator_state_t *)arg;
   rfsim_beam_ctrl_t *beam_ctrl = t->beam_ctrl;
   AssertFatal(beam_ctrl->enable_beams, "Beam simualtion is disabled, cannot set beams\n");
@@ -638,6 +621,7 @@ static int rfsimu_set_beam(char *buff, int debug, telnet_printfunc_t prnt, void 
 
 static int rfsimu_set_beamids(char *buff, int debug, telnet_printfunc_t prnt, void *arg)
 {
+  UNUSED(debug);
   rfsimulator_state_t *t = (rfsimulator_state_t *)arg;
   rfsim_beam_ctrl_t *beam_ctrl = t->beam_ctrl;
   AssertFatal(beam_ctrl->enable_beams, "Beam simualtion is disabled, cannot set beams\n");
@@ -806,6 +790,8 @@ static int rfsimu_getdistance_cmd(char *buff, int debug, telnet_printfunc_t prnt
 
 static int rfsimu_vtime_cmd(char *buff, int debug, telnet_printfunc_t prnt, void *arg)
 {
+  UNUSED(debug);
+  UNUSED(buff);
   rfsimulator_state_t *t = (rfsimulator_state_t *)arg;
   const openair0_timestamp_t ts = t->nextRxTstamp;
   const double sample_rate = t->sample_rate;
@@ -1019,7 +1005,7 @@ static int rfsimulator_write_internal(rfsimulator_state_t *t,
         signal_energy(static_cast<int32_t *>(samplesVoid[0][0]), nsamps));
 
   /* trace only first antenna */
-  T(T_USRP_TX_ANT0, T_INT(timestamp), T_BUFFER(samplesVoid[0], (int)sampleToByte(nsamps, 1)));
+  T(T_USRP_TX_ANT0, T_INT(timestamp), T_BUFFER(samplesVoid[0][0], (int)sampleToByte(nsamps, 1)));
 
   return nsamps;
 }
@@ -1335,10 +1321,10 @@ static void rfsimulator_read_internal(rfsimulator_state_t *t,
                                input);
 
         for (int aarx = 0; aarx < nbAnt; aarx++) {
-          rxAddInput(input, temp_array[aarx], aarx, ptr->channel_model, nsamps, timestamp);
+          rxAddInput(input, temp_array[aarx], aarx, ptr->channel_model, nsamps);
         }
       } else {
-        if (is_first_beam && is_first_peer && (ptr->nbAnt == 1 || nbAnt == 1)) {
+        if (is_first_beam && is_first_peer && (ptr->nbAnt == 1 && nbAnt == 1)) {
           // optimization: The buffer is uninitialized so samples can be written directly in the buffer
           combine_received_beams(t, ptr->received_packets, timestamp - t->chan_offset, 1, nsamps, rx_beam_id, samples);
         } else {
@@ -1377,7 +1363,7 @@ static void rfsimulator_read_internal(rfsimulator_state_t *t,
     int16_t noise_power = (int16_t)(32767.0 / powf(10.0, .05 * -get_noise_power_dBFS()));
     for (int a = 0; a < nbAnt; a++) {
       for (int i = 0; i < nsamps; i++) {
-        temp_array[a][i].r += noise_power + gaussZiggurat(0.0, 1.0);
+        temp_array[a][i].r += noise_power * gaussZiggurat(0.0, 1.0);
         temp_array[a][i].i += noise_power * gaussZiggurat(0.0, 1.0);
       }
     }
@@ -1547,10 +1533,12 @@ static int rfsimulator_read(openair0_device_t *device, openair0_timestamp_t *pti
 
 static int rfsimulator_get_stats(openair0_device_t *device)
 {
+  UNUSED(device);
   return 0;
 }
 static int rfsimulator_reset_stats(openair0_device_t *device)
 {
+  UNUSED(device);
   return 0;
 }
 static void rfsimulator_end(openair0_device_t *device)
@@ -1578,6 +1566,7 @@ static void stopServer(openair0_device_t *device)
 
 static int rfsimulator_stop(openair0_device_t *device)
 {
+  UNUSED(device);
   return 0;
 }
 static int rfsimulator_set_freq(openair0_device_t *device, openair0_config_t *openair0_cfg)
@@ -1588,10 +1577,13 @@ static int rfsimulator_set_freq(openair0_device_t *device, openair0_config_t *op
 }
 static int rfsimulator_set_gains(openair0_device_t *device, openair0_config_t *openair0_cfg)
 {
+  UNUSED(device);
+  UNUSED(openair0_cfg);
   return 0;
 }
 static int rfsimulator_write_init(openair0_device_t *device)
 {
+  UNUSED(device);
   return 0;
 }
 

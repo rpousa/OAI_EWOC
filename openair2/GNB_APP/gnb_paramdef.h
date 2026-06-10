@@ -1,39 +1,16 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file gnb_paramdef.h
+/*!
  * \brief definition of configuration parameters for all gNodeB modules
- * \author Francois TABURET, WEI-TAI CHEN
- * \date 2018
- * \version 0.1
- * \company NOKIA BellLabs France, NTUST
- * \email: francois.taburet@nokia-bell-labs.com, kroempa@gmail.com
- * \note
- * \warning
  */
 
 #ifndef __GNB_APP_GNB_PARAMDEF__H__
 #define __GNB_APP_GNB_PARAMDEF__H__
 
 #include "common/config/config_paramdesc.h"
+#include "common/config/config_userapi.h"
 #include "common/ngran_types.h"
 #include "RRC_nr_paramsvalues.h"
 
@@ -110,7 +87,6 @@ typedef enum {
 #define GNB_CONFIG_STRING_MAXMIMOLAYERS                 "maxMIMO_layers"
 #define GNB_CONFIG_STRING_DISABLE_HARQ                  "disable_harq"
 #define GNB_CONFIG_STRING_ENABLE_SDAP                   "enable_sdap"
-#define GNB_CONFIG_STRING_DRBS                          "drbs"
 #define GNB_CONFIG_STRING_USE_DELTA_MCS                 "use_deltaMCS"
 #define GNB_CONFIG_HLP_USE_DELTA_MCS                    "Use deltaMCS-based power headroom reporting in PUSCH-Config"
 #define GNB_CONFIG_HLP_FORCEUL256QAMOFF                 "suppress activation of UL 256 QAM despite UE support"
@@ -130,7 +106,6 @@ typedef enum {
 #define GNB_CONFIG_HLP_FORCE256QAMOFF                   "suppress activation of 256 QAM despite UE support"
 #define GNB_CONFIG_HLP_MAXMIMOLAYERS                    "limit on maxMIMO-layers for DL"
 #define GNB_CONFIG_HLP_DISABLE_HARQ                     "disable feedback for all HARQ processes (REL17 feature)"
-#define GNB_CONFIG_HLP_STRING_DRBS                      "Number of total DRBs to establish, including the mandatory for PDU SEssion (default=1)\n"
 #define GNB_CONFIG_HLP_GNB_DU_ID                        "defines the gNB-DU ID (only applicable for DU)"
 #define GNB_CONFIG_HLP_GNB_CU_UP_ID                     "defines the gNB-CU-UP ID (only applicable for CU-UP)"
 #define GNB_CONFIG_HLP_NUM_DL_HARQ                      "Set Num DL harq processes. Valid values 2,4,6,8,10,12,16,32. Default 16"
@@ -139,7 +114,7 @@ typedef enum {
 #define GNB_CONFIG_HLP_CU_SIBS                          "List of CU generated SIBs to be transmitted"
 #define GNB_CONFIG_HLP_DU_SIBS                          "List of DU generated SIBs to be transmitted"
 #define GNB_CONFIG_HLP_CONFIG_REP                       "Define quantity for CSI report (options: ssb_rsrp, ssb_sinr and cri_rsrp)"
-
+#define GNB_CONFIG_HLP_DOSRS                            "defines the type of SRS to be scheduled (none, periodic, or aperiodic)"
 
 /*-----------------------------------------------------------------------------------------------------------------------------------------*/
 /*                                            cell configuration parameters                                                                */
@@ -166,14 +141,13 @@ typedef enum {
 {GNB_CONFIG_STRING_PUSCHANTENNAPORTS,            NULL,   0,            .iptr=NULL,  .defintval=1,                 TYPE_INT,       0},  \
 {GNB_CONFIG_STRING_DOTCI,                        NULL,   0,            .iptr=NULL,  .defintval=0,                 TYPE_INT,       0},  \
 {GNB_CONFIG_STRING_DOCSIRS,                      NULL,   0,            .iptr=NULL,  .defintval=0,                 TYPE_INT,       0},  \
-{GNB_CONFIG_STRING_DOSRS,                        NULL,   0,            .iptr=NULL,  .defintval=0,                 TYPE_INT,       0},  \
+{GNB_CONFIG_STRING_DOSRS,        GNB_CONFIG_HLP_DOSRS,   0,           .strptr=NULL, .defstrval="none",            TYPE_STRING,    0},  \
 {GNB_CONFIG_STRING_NRCELLID,                     NULL,   0,            .u64ptr=NULL,.defint64val=1,               TYPE_UINT64,    0},  \
 {GNB_CONFIG_STRING_MINRXTXTIME,                  NULL,   0,            .iptr=NULL,  .defintval=2,                 TYPE_INT,       0},  \
 {GNB_CONFIG_STRING_ULPRBBLACKLIST,               NULL,   0,            .strptr=NULL,.defstrval="",                TYPE_STRING,    0},  \
 {GNB_CONFIG_STRING_UMONDEFAULTDRB,               NULL, PARAMFLAG_BOOL, .uptr=NULL,  .defuintval=0,                TYPE_UINT,      0},  \
 {GNB_CONFIG_STRING_FORCE256QAMOFF, GNB_CONFIG_HLP_FORCE256QAMOFF, PARAMFLAG_BOOL, .iptr=NULL, .defintval=0,       TYPE_INT,       0},  \
-{GNB_CONFIG_STRING_ENABLE_SDAP, GNB_CONFIG_HLP_STRING_ENABLE_SDAP, PARAMFLAG_BOOL,.iptr=NULL, .defintval=0,       TYPE_INT,       0},  \
-{GNB_CONFIG_STRING_DRBS, GNB_CONFIG_HLP_STRING_DRBS,     0,           .iptr=NULL,   .defintval=1,                 TYPE_INT,       0},  \
+{GNB_CONFIG_STRING_ENABLE_SDAP, GNB_CONFIG_HLP_STRING_ENABLE_SDAP, PARAMFLAG_BOOL,.iptr=NULL, .defintval=1,       TYPE_INT,       0},  \
 {GNB_CONFIG_STRING_GNB_DU_ID, GNB_CONFIG_HLP_GNB_DU_ID,  0,           .u64ptr=NULL, .defint64val=1,               TYPE_UINT64,    0},  \
 {GNB_CONFIG_STRING_GNB_CU_UP_ID, GNB_CONFIG_HLP_GNB_CU_UP_ID, 0,      .u64ptr=NULL, .defint64val=1,               TYPE_UINT64,    0},  \
 {GNB_CONFIG_STRING_USE_DELTA_MCS, GNB_CONFIG_HLP_USE_DELTA_MCS, 0,    .iptr=NULL,   .defintval=0,                 TYPE_INT,       0},  \
@@ -219,21 +193,20 @@ typedef enum {
 #define GNB_UMONDEFAULTDRB_IDX          23
 #define GNB_FORCE256QAMOFF_IDX          24
 #define GNB_ENABLE_SDAP_IDX             25
-#define GNB_DRBS                        26
-#define GNB_GNB_DU_ID_IDX               27
-#define GNB_GNB_CU_UP_ID_IDX            28
-#define GNB_USE_DELTA_MCS_IDX           29
-#define GNB_FORCEUL256QAMOFF_IDX        30
-#define GNB_MAXMIMOLAYERS_IDX           31
-#define GNB_DISABLE_HARQ_IDX            32
-#define GNB_NUM_DL_HARQ_IDX             33
-#define GNB_NUM_UL_HARQ_IDX             34
-#define GNB_UESS_AGG_LEVEL_LIST_IDX     35
-#define GNB_CU_SIBS_IDX                 36
-#define GNB_DU_SIBS_IDX                 37
-#define GNB_CONFIG_REP_IDX              38
-#define GNB_1ST_ACTIVE_BWP_IDX          39
-#define GNB_LIMIT_RSRP_REPORT_IDX       40
+#define GNB_GNB_DU_ID_IDX               26
+#define GNB_GNB_CU_UP_ID_IDX            27
+#define GNB_USE_DELTA_MCS_IDX           28
+#define GNB_FORCEUL256QAMOFF_IDX        29
+#define GNB_MAXMIMOLAYERS_IDX           30
+#define GNB_DISABLE_HARQ_IDX            31
+#define GNB_NUM_DL_HARQ_IDX             32
+#define GNB_NUM_UL_HARQ_IDX             33
+#define GNB_UESS_AGG_LEVEL_LIST_IDX     34
+#define GNB_CU_SIBS_IDX                 35
+#define GNB_DU_SIBS_IDX                 36
+#define GNB_CONFIG_REP_IDX              37
+#define GNB_1ST_ACTIVE_BWP_IDX          38
+#define GNB_LIMIT_RSRP_REPORT_IDX       39
 
 #define TRACKING_AREA_CODE_OKRANGE {0x0001,0xFFFD}
 #define NUM_DL_HARQ_OKVALUES {2,4,6,8,10,12,16,32}
@@ -259,8 +232,10 @@ typedef enum {
   { .s5 = { NULL } },                                             \
   { .s5 = { NULL } },                                             \
   { .s5 = { NULL } },                                             \
-  { .s5 = { NULL } },                                             \
-  { .s5 = { NULL } },                                             \
+  { .s3a = { config_checkstr_assign_integer, \
+             {"none", "periodic", "aperiodic"}, \
+             {NO_SRS, PERIODIC_SRS, APERIODIC_SRS}, \
+             3 } }, \
   { .s5 = { NULL } },                                             \
   { .s5 = { NULL } },                                             \
   { .s5 = { NULL } },                                             \
@@ -318,7 +293,6 @@ typedef enum {
 #define GNB_NEIGHBOUR_LIST_PARAM_LIST {                                                                  \
 /*   optname                                                  helpstr                                 paramflags                    XXXptr     def val          type    numelt */ \
   {GNB_CONFIG_STRING_NRCELLID,                              "cell nrCell Id which has neighbours",              PARAMFLAG_MANDATORY,           .u64ptr=NULL, .defint64val=0,               TYPE_UINT64,    0},    \
-  {GNB_CONFIG_STRING_NEIGHBOUR_CELL_PHYSICAL_ID,            "neighbour cell physical id",            PARAMFLAG_MANDATORY,           .uptr=NULL,   .defuintval=0,                TYPE_UINT,      0},    \
 }
 // clang-format on
 #define GNB_CONFIG_STRING_NEIGHBOUR_CELL_LIST "neighbour_cell_configuration"
@@ -329,26 +303,110 @@ typedef enum {
 #define GNB_CONFIG_STRING_NEIGHBOUR_CELL_BAND "band"
 #define GNB_CONFIG_STRING_NEIGHBOUR_TRACKING_ARE_CODE "tracking_area_code"
 #define GNB_CONFIG_STRING_NEIGHBOUR_PLMN "plmn"
+/* SIB3 fields (intra-frequency) - per-neighbor */
+#define GNB_CONFIG_STRING_NEIGHBOUR_CELL_Q_OFFSET_CELL "q_OffsetCell"
+#define GNB_CONFIG_STRING_NEIGHBOUR_CELL_Q_RXLEVMIN_OFFSET_CELL "q_RxLevMinOffsetCell"
+#define GNB_CONFIG_STRING_NEIGHBOUR_CELL_Q_QUALMIN_OFFSET_CELL "q_QualMinOffsetCell"
+/* SIB4 per-frequency fields are configured in frequency_list.frequency_config */
 
-#define GNB_CONFIG_N_CELL_GNB_ID_IDX 0
-#define GNB_CONFIG_N_CELL_NR_CELLID_IDX 1
-#define GNB_CONFIG_N_CELL_PHYSICAL_ID_IDX 2
-#define GNB_CONFIG_N_CELL_ABS_FREQ_SSB_IDX 3
-#define GNB_CONFIG_N_CELL_SCS_IDX 4
-#define GNB_CONFIG_N_CELL_BAND_IDX 5
-#define GNB_CONFIG_N_CELL_TAC_IDX 6
 // clang-format off
-#define GNBNEIGHBOURCELLPARAMS_DESC {                                                                  \
-/*   optname                                                  helpstr                                 paramflags                    XXXptr     def val          type    numelt */ \
-  {GNB_CONFIG_STRING_GNB_ID,                                "neighbour cell's gNB ID",               PARAMFLAG_MANDATORY,           .uptr=NULL,   .defintval=0,                 TYPE_UINT,      0},    \
-  {GNB_CONFIG_STRING_NRCELLID,                              "neighbour cell nrCell Id",              PARAMFLAG_MANDATORY,           .u64ptr=NULL, .defint64val=0,               TYPE_UINT64,    0},    \
-  {GNB_CONFIG_STRING_NEIGHBOUR_CELL_PHYSICAL_ID,            "neighbour cell physical id",            PARAMFLAG_MANDATORY,           .uptr=NULL,   .defuintval=0,                TYPE_UINT,      0},    \
-  {GNB_CONFIG_STRING_NEIGHBOUR_CELL_ABS_FREQ_SSB,           "neighbour cell abs freq ssb",           PARAMFLAG_MANDATORY,           .i64ptr=NULL, .defint64val=0,               TYPE_INT64,     0},    \
-  {GNB_CONFIG_STRING_NEIGHBOUR_CELL_SCS,                    "neighbour cell scs",                    PARAMFLAG_MANDATORY,           .uptr=NULL,   .defuintval=0,                TYPE_UINT,      0},    \
-  {GNB_CONFIG_STRING_NEIGHBOUR_CELL_BAND,                   "neighbour cell band",                   PARAMFLAG_MANDATORY,           .uptr=NULL,   .defuintval=78,               TYPE_UINT,      0},    \
-  {GNB_CONFIG_STRING_NEIGHBOUR_TRACKING_ARE_CODE,           "neighbour cell tracking area",          PARAMFLAG_MANDATORY,           .uptr=NULL,   .defuintval=0,                TYPE_UINT,      0},    \
+#define GNBNEIGHBOURCELLPARAMS_DESC { /*   optname     helpstr     paramflags     XXXptr     def     val     type     numelt   */        \
+  {GNB_CONFIG_STRING_GNB_ID,                                                                                                             \
+    "neighbour cell's gNB ID", PARAMFLAG_MANDATORY, .uptr=NULL, .defintval=0, TYPE_UINT, 0,                                              \
+    .chkPptr=NULL},                                                                                                                      \
+  {GNB_CONFIG_STRING_NRCELLID,                                                                                                           \
+    "neighbour cell nrCell Id", PARAMFLAG_MANDATORY, .u64ptr=NULL, .defint64val=0, TYPE_UINT64, 0,                                       \
+    .chkPptr=NULL},                                                                                                                      \
+  {GNB_CONFIG_STRING_NEIGHBOUR_CELL_PHYSICAL_ID,                                                                                         \
+    "neighbour cell physical id", PARAMFLAG_MANDATORY, .uptr=NULL, .defuintval=0, TYPE_UINT, 0,                                          \
+    .chkPptr = &(checkedparam_t){.s2 = {config_check_uintrange, {0, 1007}}}},                                                            \
+  {GNB_CONFIG_STRING_NEIGHBOUR_CELL_ABS_FREQ_SSB,                                                                                        \
+    "neighbour cell absolute frequency SSB (0..3279165)", PARAMFLAG_MANDATORY, .i64ptr=NULL, .defint64val=0, TYPE_INT64, 0,              \
+    .chkPptr = &(checkedparam_t){.s2 = {config_check_intrange, {0, 3279165}}}},                                                          \
+  {GNB_CONFIG_STRING_NEIGHBOUR_CELL_SCS,                                                                                                 \
+    "neighbour cell scs (15/30/60/120 kHz)", PARAMFLAG_MANDATORY, .uptr=NULL, .defuintval=0, TYPE_UINT, 0,                               \
+    .chkPptr = &(checkedparam_t){.s1 = {config_check_intval, {0, 1, 2, 3}, 4}}},                                                         \
+  {GNB_CONFIG_STRING_NEIGHBOUR_CELL_BAND,                                                                                                \
+    "neighbour cell band (1..1024)", PARAMFLAG_MANDATORY, .uptr=NULL, .defuintval=78, TYPE_UINT, 0,                                      \
+    .chkPptr = &(checkedparam_t){.s2 = {config_check_uintrange, {1, 1024}}}},                                                            \
+  {GNB_CONFIG_STRING_NEIGHBOUR_TRACKING_ARE_CODE,                                                                                        \
+    "neighbour cell tracking area (0..16777215)", PARAMFLAG_MANDATORY, .uptr=NULL, .defuintval=0, TYPE_UINT, 0,                          \
+    .chkPptr = &(checkedparam_t){.s2 = {config_check_uintrange, {0, 16777215}}}},                                                        \
+  {GNB_CONFIG_STRING_NEIGHBOUR_CELL_Q_OFFSET_CELL,                                                                                       \
+    "Q-OffsetCell for SIB3/SIB4 (Q-OffsetRange, default 0)", 0, .iptr=NULL, .defintval=0, TYPE_INT, 0,                                   \
+    .chkPptr = &(checkedparam_t){.s1 = {config_check_intval,                                                                             \
+    {-24, -22, -20, -18, -16, -14, -12, -10, -8, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24}, 31}}}, \
+  {GNB_CONFIG_STRING_NEIGHBOUR_CELL_Q_RXLEVMIN_OFFSET_CELL,                                                                              \
+    "Q-RxLevMinOffsetCell for SIB3/SIB4 (1..8 or -1=disabled)", 0, .iptr=NULL, .defintval=-1, TYPE_INT, 0,                               \
+    .chkPptr = &(checkedparam_t){.s1 = {config_check_intval, {-1, 1, 2, 3, 4, 5, 6, 7, 8}, 9}}},                                         \
+  {GNB_CONFIG_STRING_NEIGHBOUR_CELL_Q_QUALMIN_OFFSET_CELL,                                                                               \
+    "Q-QualMinOffsetCell for SIB3/SIB4 (1..8 or -1=disabled)", 0, .iptr=NULL, .defintval=-1, TYPE_INT, 0,                                \
+    .chkPptr = &(checkedparam_t){.s1 = {config_check_intval, {-1, 1, 2, 3, 4, 5, 6, 7, 8}, 9}}},                                         \
 }
 // clang-format on
+
+/* Per-frequency neighbour configuration (frequency_list) */
+#define GNB_CONFIG_STRING_FREQUENCY_LIST "frequency_list"
+#define GNB_CONFIG_STRING_FREQUENCY_ABS_FREQ_SSB "absoluteFrequencySSB"
+#define GNB_CONFIG_STRING_FREQUENCY_SCS "subcarrierSpacing"
+#define GNB_CONFIG_STRING_FREQUENCY_BAND "band"
+#define GNB_CONFIG_STRING_FREQUENCY_CONFIG "frequency_config"
+
+#define GNB_CONFIG_STRING_FREQUENCY_CELL_RESEL_PRIO "cellReselectionPriority"
+#define GNB_CONFIG_STRING_FREQUENCY_THRESH_X_HIGH_P "threshX_HighP"
+#define GNB_CONFIG_STRING_FREQUENCY_THRESH_X_LOW_P "threshX_LowP"
+#define GNB_CONFIG_STRING_FREQUENCY_THRESH_X_HIGH_Q "threshX_HighQ"
+#define GNB_CONFIG_STRING_FREQUENCY_THRESH_X_LOW_Q "threshX_LowQ"
+#define GNB_CONFIG_STRING_FREQUENCY_Q_OFFSET_FREQ "q_OffsetFreq"
+#define GNB_CONFIG_STRING_FREQUENCY_Q_RXLEVMIN "q_RxLevMin"
+#define GNB_CONFIG_STRING_FREQUENCY_T_RESEL_NR "t_ReselectionNR"
+
+// clang-format off
+#define GNBFREQUENCYPARAMS_DESC {                                                                  \
+/*   optname                                     helpstr                          paramflags      XXXptr     def val    type      numelt */ \
+  {GNB_CONFIG_STRING_FREQUENCY_ABS_FREQ_SSB, "inter-frequency abs freq ssb",     PARAMFLAG_MANDATORY, .i64ptr=NULL, .defint64val=0, TYPE_INT64, 0}, \
+  {GNB_CONFIG_STRING_FREQUENCY_SCS,          "inter-frequency scs",              PARAMFLAG_MANDATORY, .uptr=NULL,   .defuintval=0,  TYPE_UINT,  0}, \
+  {GNB_CONFIG_STRING_FREQUENCY_BAND,         "inter-frequency band",             PARAMFLAG_MANDATORY, .uptr=NULL,   .defuintval=78, TYPE_UINT,  0}, \
+}
+
+#define GNBFREQUENCYCONFIGPARAMS_DESC {                                                                 \
+  {GNB_CONFIG_STRING_FREQUENCY_CELL_RESEL_PRIO,                                                         \
+    "SIB4 cellReselectionPriority (0..7, -1=disabled)", 0, .iptr=NULL, .defintval=-1, TYPE_INT, 0,      \
+    .chkPptr = &(checkedparam_t){.s2 = {config_check_intrange, {-1, 7}}}},                              \
+  {GNB_CONFIG_STRING_FREQUENCY_THRESH_X_HIGH_P,                                                         \
+    "SIB4 threshX-HighP (0..31)", 0, .iptr=NULL, .defintval=0, TYPE_INT, 0,                             \
+    .chkPptr = &(checkedparam_t){.s2 = {config_check_intrange, {0, 31}}}},                              \
+  {GNB_CONFIG_STRING_FREQUENCY_THRESH_X_LOW_P,                                                          \
+    "SIB4 threshX-LowP (0..31)", 0, .iptr=NULL, .defintval=0, TYPE_INT, 0,                              \
+    .chkPptr = &(checkedparam_t){.s2 = {config_check_intrange, {0, 31}}}},                              \
+  {GNB_CONFIG_STRING_FREQUENCY_THRESH_X_HIGH_Q,                                                         \
+    "SIB4 threshX-HighQ (0..31, -1=disabled)", 0, .iptr=NULL, .defintval=-1, TYPE_INT, 0,               \
+    .chkPptr = &(checkedparam_t){.s2 = {config_check_intrange, {-1, 31}}}},                             \
+  {GNB_CONFIG_STRING_FREQUENCY_THRESH_X_LOW_Q,                                                          \
+    "SIB4 threshX-LowQ (0..31, -1=disabled)", 0, .iptr=NULL, .defintval=-1, TYPE_INT, 0,                \
+    .chkPptr = &(checkedparam_t){.s2 = {config_check_intrange, {-1, 31}}}},                             \
+  {GNB_CONFIG_STRING_FREQUENCY_Q_OFFSET_FREQ,                                                           \
+    "SIB4 q-OffsetFreq (Q-OffsetRange values, default 0)", 0, .iptr=NULL, .defintval=0, TYPE_INT, 0,    \
+    .chkPptr = &(checkedparam_t){.s1 = {config_check_intval, {-24, -22, -20, -18, -16, -14, -12, -10,   \
+    -8, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24}, 31}}},         \
+  {GNB_CONFIG_STRING_FREQUENCY_Q_RXLEVMIN,                                                              \
+    "SIB4 per-carrier Q-RxLevMin (-70..-22, default -22)", 0, .iptr=NULL, .defintval=-22, TYPE_INT, 0,  \
+    .chkPptr = &(checkedparam_t){.s2 = {config_check_intrange, {-70, -22}}}},                           \
+  {GNB_CONFIG_STRING_FREQUENCY_T_RESEL_NR,                                                              \
+    "SIB4 per-carrier t-ReselectionNR (0..7, default 0)", 0, .uptr=NULL, .defuintval=0, TYPE_UINT, 0,   \
+    .chkPptr = &(checkedparam_t){.s2 = {config_check_uintrange, {0, 7}}}},                              \
+}
+// clang-format on
+
+/* Indexes into GNBFREQUENCYCONFIGPARAMS_DESC */
+#define GNB_CONFIG_FREQUENCY_CELL_RESEL_PRIO_IDX 0
+#define GNB_CONFIG_FREQUENCY_THRESH_X_HIGH_P_IDX 1
+#define GNB_CONFIG_FREQUENCY_THRESH_X_LOW_P_IDX 2
+#define GNB_CONFIG_FREQUENCY_THRESH_X_HIGH_Q_IDX 3
+#define GNB_CONFIG_FREQUENCY_THRESH_X_LOW_Q_IDX 4
+#define GNB_CONFIG_FREQUENCY_Q_OFFSET_FREQ_IDX 5
+#define GNB_CONFIG_FREQUENCY_Q_RXLEVMIN_IDX 6
+#define GNB_CONFIG_FREQUENCY_T_RESEL_NR_IDX 7
 
 /* New Measurement Configurations*/
 
@@ -397,6 +455,95 @@ typedef enum {
 #define MEASUREMENT_EVENTS_HYSTERESIS_IDX 3
 #define MEASUREMENT_EVENTS_INCLUDE_BEAM_MEAS_IDX 1
 #define MEASUREMENT_EVENTS_MAX_RS_INDEX_TO_REPORT 2
+
+/*-------------------------------------------------------------------------------------------------------------------------------------*/
+/*                                            SIB2 cell reselection configuration parameters                                           */
+/*-------------------------------------------------------------------------------------------------------------------------------------*/
+
+#define GNB_CONFIG_STRING_SIB2_CONFIG "sib2_config"
+
+/* clang-format off */
+
+/* SIB2 top-level parameters (per cell) */
+#define GNB_CONFIG_STRING_SIB2_Q_HYST               "q_Hyst"
+#define GNB_CONFIG_STRING_SIB2_CELLRESEL_PRIORITY   "cellReselectionPriority"
+#define GNB_CONFIG_STRING_SIB2_THRESH_SERVING_LOW_P "threshServingLowP"
+#define GNB_CONFIG_STRING_SIB2_THRESH_SERVING_LOW_Q "threshServingLowQ"
+#define GNB_CONFIG_STRING_SIB2_S_NONINTRASEARCH_P   "s_NonIntraSearchP"
+#define GNB_CONFIG_STRING_SIB2_S_NONINTRASEARCH_Q   "s_NonIntraSearchQ"
+#define GNB_CONFIG_STRING_SIB2_Q_RXLEVMIN           "q_RxLevMin"
+#define GNB_CONFIG_STRING_SIB2_Q_QUALMIN            "q_QualMin"
+#define GNB_CONFIG_STRING_SIB2_S_INTRASEARCH_P      "s_IntraSearchP"
+#define GNB_CONFIG_STRING_SIB2_S_INTRASEARCH_Q      "s_IntraSearchQ"
+#define GNB_CONFIG_STRING_SIB2_T_RESEL_NR           "t_ReselectionNR"
+#define GNB_CONFIG_STRING_SIB2_DERIVE_SSB_IDX       "deriveSSB_IndexFromCell"
+
+/* SIB2 speedStateReselectionPars parameters */
+#define GNB_CONFIG_STRING_SIB2_SPEED_T_EVAL          "speed_t_Evaluation"
+#define GNB_CONFIG_STRING_SIB2_SPEED_T_HYST_NORMAL   "speed_t_HystNormal"
+#define GNB_CONFIG_STRING_SIB2_SPEED_N_CELL_CHG_MED  "speed_n_CellChangeMedium"
+#define GNB_CONFIG_STRING_SIB2_SPEED_N_CELL_CHG_HIGH "speed_n_CellChangeHigh"
+#define GNB_CONFIG_STRING_SIB2_SPEED_SF_MEDIUM       "speed_sf_Medium"
+#define GNB_CONFIG_STRING_SIB2_SPEED_SF_HIGH         "speed_sf_High"
+
+#define GNBSIB2PARAMS_DESC { /*   optname       helpstr       paramflags XXXptr     def val    type     numelt */               \
+  {GNB_CONFIG_STRING_SIB2_Q_HYST,                                                                                               \
+    "SIB2 q-Hyst (0,1,2,3,4,5,6,8,10..24 dB)", 0, .iptr=NULL, .defintval=0, TYPE_INT, 0,                                        \
+    .chkPptr = &(checkedparam_t){.s1 = {config_check_intval, {0, 1, 2, 3, 4, 5, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24}, 16}}},   \
+  {GNB_CONFIG_STRING_SIB2_CELLRESEL_PRIORITY,                                                                                   \
+    "SIB2 cellReselectionPriority (0..7)", 0, .iptr=NULL, .defintval=0, TYPE_INT, 0,                                            \
+    .chkPptr = &(checkedparam_t){.s2 = {config_check_intrange, {0, 7}}}},                                                       \
+  {GNB_CONFIG_STRING_SIB2_THRESH_SERVING_LOW_P,                                                                                 \
+    "SIB2 threshServingLowP (0..31)", 0, .iptr=NULL, .defintval=0, TYPE_INT, 0,                                                 \
+    .chkPptr = &(checkedparam_t){.s2 = {config_check_intrange, {0, 31}}}},                                                      \
+  {GNB_CONFIG_STRING_SIB2_THRESH_SERVING_LOW_Q,                                                                                 \
+    "SIB2 threshServingLowQ (0..31, -1=disabled)", 0, .iptr=NULL, .defintval=0, TYPE_INT, 0,                                    \
+    .chkPptr = &(checkedparam_t){.s2 = {config_check_intrange, {-1, 31}}}},                                                     \
+  {GNB_CONFIG_STRING_SIB2_S_NONINTRASEARCH_P,                                                                                   \
+    "SIB2 s-NonIntraSearchP (0..31, -1=disabled)", 0, .iptr=NULL, .defintval=-1, TYPE_INT, 0,                                   \
+    .chkPptr = &(checkedparam_t){.s2 = {config_check_intrange, {-1, 31}}}},                                                     \
+  {GNB_CONFIG_STRING_SIB2_S_NONINTRASEARCH_Q,                                                                                   \
+    "SIB2 s-NonIntraSearchQ (0..31, -1=disabled)", 0, .iptr=NULL, .defintval=-1, TYPE_INT, 0,                                   \
+    .chkPptr = &(checkedparam_t){.s2 = {config_check_intrange, {-1, 31}}}},                                                     \
+  {GNB_CONFIG_STRING_SIB2_Q_RXLEVMIN,                                                                                           \
+    "SIB2 q-RxLevMin (-70..-22)", 0, .iptr=NULL, .defintval=-56, TYPE_INT, 0,                                                   \
+    .chkPptr = &(checkedparam_t){.s2 = {config_check_intrange, {-70, -22}}}},                                                   \
+  {GNB_CONFIG_STRING_SIB2_Q_QUALMIN,                                                                                            \
+    "SIB2 q-QualMin (-43..-12 or -1=disabled)", 0, .iptr=NULL, .defintval=-1, TYPE_INT, 0,                                      \
+    .chkPptr = &(checkedparam_t){.s1 = {config_check_intval,                                                                    \
+    {-1,  -43, -42, -41, -40, -39, -38, -37, -36, -35, -34, -33, -32, -31, -30, -29, -28,                                       \
+    -27, -26, -25, -24, -23, -22, -21, -20, -19, -18, -17, -16, -15, -14, -13, -12}, 33}}},                                     \
+  {GNB_CONFIG_STRING_SIB2_S_INTRASEARCH_P,                                                                                      \
+    "SIB2 s-IntraSearchP (0..31)", 0, .iptr=NULL, .defintval=22, TYPE_INT, 0,                                                   \
+    .chkPptr = &(checkedparam_t){.s2 = {config_check_intrange, {0, 31}}}},                                                      \
+  {GNB_CONFIG_STRING_SIB2_S_INTRASEARCH_Q,                                                                                      \
+    "SIB2 s-IntraSearchQ (0..31, -1=disabled)", 0, .iptr=NULL, .defintval=-1, TYPE_INT, 0,                                      \
+    .chkPptr = &(checkedparam_t){.s2 = {config_check_intrange, {-1, 31}}}},                                                     \
+  {GNB_CONFIG_STRING_SIB2_T_RESEL_NR,                                                                                           \
+    "SIB2 t-ReselectionNR (0..7)", 0, .iptr=NULL, .defintval=1, TYPE_INT, 0,                                                    \
+    .chkPptr = &(checkedparam_t){.s2 = {config_check_intrange, {0, 7}}}},                                                       \
+  {GNB_CONFIG_STRING_SIB2_DERIVE_SSB_IDX,                                                                                       \
+    "SIB2 deriveSSB-IndexFromCell (0/1)", PARAMFLAG_BOOL, .iptr=NULL, .defintval=1, TYPE_INT, 0},                               \
+  {GNB_CONFIG_STRING_SIB2_SPEED_T_EVAL,                                                                                         \
+    "SIB2 speed t-Evaluation (0=s30,1=s60,2=s120,3=s180,4=s240)", 0, .iptr=NULL, .defintval=0, TYPE_INT, 0,                     \
+    .chkPptr = &(checkedparam_t){.s2 = {config_check_intrange, {0, 4}}}},                                                       \
+  {GNB_CONFIG_STRING_SIB2_SPEED_T_HYST_NORMAL,                                                                                  \
+    "SIB2 speed t-HystNormal (0=s30,1=s60,2=s120,3=s180,4=s240)", 0, .iptr=NULL, .defintval=0, TYPE_INT, 0,                     \
+    .chkPptr = &(checkedparam_t){.s2 = {config_check_intrange, {0, 4}}}},                                                       \
+  {GNB_CONFIG_STRING_SIB2_SPEED_N_CELL_CHG_MED,                                                                                 \
+    "SIB2 speed n-CellChangeMedium (1..16)", 0, .iptr=NULL, .defintval=1, TYPE_INT, 0,                                          \
+    .chkPptr = &(checkedparam_t){.s2 = {config_check_intrange, {1, 16}}}},                                                      \
+  {GNB_CONFIG_STRING_SIB2_SPEED_N_CELL_CHG_HIGH,                                                                                \
+    "SIB2 speed n-CellChangeHigh (1..16)", 0, .iptr=NULL, .defintval=2, TYPE_INT, 0,                                            \
+    .chkPptr = &(checkedparam_t){.s2 = {config_check_intrange, {1, 16}}}},                                                      \
+  {GNB_CONFIG_STRING_SIB2_SPEED_SF_MEDIUM,                                                                                      \
+    "SIB2 speed sf-Medium (0=dB-6,1=dB-4,2=dB-2,3=dB0)", 0, .iptr=NULL, .defintval=1, TYPE_INT, 0,                              \
+    .chkPptr = &(checkedparam_t){.s2 = {config_check_intrange, {0, 3}}}},                                                       \
+  {GNB_CONFIG_STRING_SIB2_SPEED_SF_HIGH,                                                                                        \
+    "SIB2 speed sf-High (0=dB-6,1=dB-4,2=dB-2,3=dB0)", 0, .iptr=NULL, .defintval=0, TYPE_INT, 0,                                \
+    .chkPptr = &(checkedparam_t){.s2 = {config_check_intrange, {0, 3}}}},                                                       \
+}
+/* clang-format on */
 
 /* PLMN ID configuration */
 
@@ -673,49 +820,6 @@ typedef enum {
 /* L1 configuration section names   */
 #define CONFIG_STRING_L1_LIST                              "L1s"
 
-
-/*----------------------------------------------------------------------------------------------------------------------------------------------------*/
-/*----------------------------------------------------------------------------------------------------------------------------------------------------*/
-/* MACRLC configuration section names   */
-#define CONFIG_STRING_MACRLC_LIST                          "MACRLCs"
-
-
-/* MACRLC configuration parameters names   */
-#define CONFIG_STRING_MACRLC_CC                            "num_cc"
-#define CONFIG_STRING_MACRLC_TRANSPORT_N_PREFERENCE        "tr_n_preference"
-#define CONFIG_STRING_MACRLC_LOCAL_N_ADDRESS               "local_n_address"
-#define CONFIG_STRING_MACRLC_REMOTE_N_ADDRESS              "remote_n_address"
-#define CONFIG_STRING_MACRLC_LOCAL_N_PORTC                 "local_n_portc"
-#define CONFIG_STRING_MACRLC_REMOTE_N_PORTC                "remote_n_portc"
-#define CONFIG_STRING_MACRLC_LOCAL_N_PORTD                 "local_n_portd"
-#define CONFIG_STRING_MACRLC_REMOTE_N_PORTD                "remote_n_portd"
-#define CONFIG_STRING_MACRLC_TRANSPORT_S_PREFERENCE        "tr_s_preference"
-#define CONFIG_STRING_MACRLC_TRANSPORT_S_SHM_PREFIX        "tr_s_shm_prefix"
-#define CONFIG_STRING_MACRLC_TRANSPORT_S_POLL_CORE         "tr_s_poll_core"
-#define CONFIG_STRING_MACRLC_LOCAL_S_ADDRESS               "local_s_address"
-#define CONFIG_STRING_MACRLC_REMOTE_S_ADDRESS              "remote_s_address"
-#define CONFIG_STRING_MACRLC_LOCAL_S_PORTC                 "local_s_portc"
-#define CONFIG_STRING_MACRLC_REMOTE_S_PORTC                "remote_s_portc"
-#define CONFIG_STRING_MACRLC_LOCAL_S_PORTD                 "local_s_portd"
-#define CONFIG_STRING_MACRLC_REMOTE_S_PORTD                "remote_s_portd"
-
-
-#define MACRLC_CC_IDX                                          0
-#define MACRLC_TRANSPORT_N_PREFERENCE_IDX                      1
-#define MACRLC_LOCAL_N_ADDRESS_IDX                             2
-#define MACRLC_REMOTE_N_ADDRESS_IDX                            3
-#define MACRLC_LOCAL_N_PORTC_IDX                               4
-#define MACRLC_REMOTE_N_PORTC_IDX                              5
-#define MACRLC_LOCAL_N_PORTD_IDX                               6
-#define MACRLC_REMOTE_N_PORTD_IDX                              7
-#define MACRLC_TRANSPORT_S_PREFERENCE_IDX                      8
-#define MACRLC_LOCAL_S_ADDRESS_IDX                             9
-#define MACRLC_REMOTE_S_ADDRESS_IDX                            10
-#define MACRLC_LOCAL_S_PORTC_IDX                               11
-#define MACRLC_REMOTE_S_PORTC_IDX                              12
-#define MACRLC_LOCAL_S_PORTD_IDX                               13
-#define MACRLC_REMOTE_S_PORTD_IDX                              14
-#define MACRLC_SCHED_MODE_IDX                                  15
 
 /*----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 /* security configuration                                                                                                                                                           */

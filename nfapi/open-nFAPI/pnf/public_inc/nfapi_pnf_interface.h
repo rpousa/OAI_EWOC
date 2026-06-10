@@ -1,17 +1,7 @@
 /*
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Copyright 2017 Cisco Systems, Inc.
- * 
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- * 
- * http://www.apache.org/licenses/LICENSE-2.0
- * 
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
  */
 
 
@@ -31,8 +21,8 @@ extern "C" {
 #include <sys/types.h>
 #include "openair1/PHY/defs_gNB.h"
 
-typedef struct pnf_t pnf_t;
-typedef struct pnf_p7_t pnf_p7_t;
+typedef struct pnf_s pnf_t;
+typedef struct pnf_p7_s pnf_p7_t;
 
 /*! This enum is used to describe the states of the pnf 
  */
@@ -716,7 +706,7 @@ typedef struct nfapi_pnf_p7_config
 	 * \return not currently used
 	 */
 	int (*dl_tti_req_fn)(gNB_L1_rxtx_proc_t *proc,nfapi_pnf_p7_config_t* config, nfapi_nr_dl_tti_request_t* req);
-	int (*dl_config_req)(L1_rxtx_proc_t *proc,nfapi_pnf_p7_config_t* config, nfapi_dl_config_request_t* req);
+	int (*dl_config_req)(nfapi_pnf_p7_config_t* config, nfapi_dl_config_request_t* req);
 	
 	/*! A callback for the UL_CONFIG.request
 	 * \param config A poiner to the PNF P7 config
@@ -724,7 +714,7 @@ typedef struct nfapi_pnf_p7_config
 	 * \return not currently used	
 	 */
 	int (*ul_tti_req_fn)(gNB_L1_rxtx_proc_t *proc,nfapi_pnf_p7_config_t* config, nfapi_nr_ul_tti_request_t* req);
-	int (*ul_config_req)(L1_rxtx_proc_t *proc,nfapi_pnf_p7_config_t* config, nfapi_ul_config_request_t* req);
+	int (*ul_config_req)(nfapi_pnf_p7_config_t* config, nfapi_ul_config_request_t* req);
 	
 	/*! A callback for the HI_DCI0.request
 	 * \param config A poiner to the PNF P7 config
@@ -732,7 +722,7 @@ typedef struct nfapi_pnf_p7_config
 	 * \return not currently used
 	 */
 	int (*ul_dci_req_fn)(gNB_L1_rxtx_proc_t *proc,nfapi_pnf_p7_config_t* config, nfapi_nr_ul_dci_request_t* req);
-	int (*hi_dci0_req)(L1_rxtx_proc_t *proc,nfapi_pnf_p7_config_t* config, nfapi_hi_dci0_request_t* req);
+	int (*hi_dci0_req)(nfapi_pnf_p7_config_t* config, nfapi_hi_dci0_request_t* req);
 
 	/*! A callback for the TX_REQ.request
 	 * \param config A poiner to the PNF P7 config

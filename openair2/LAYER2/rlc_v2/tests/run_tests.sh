@@ -1,4 +1,5 @@
 #!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
 
 test_count=49
 

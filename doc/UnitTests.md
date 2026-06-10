@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 # Unit Testing in OAI
 
 OpenAirInterface uses

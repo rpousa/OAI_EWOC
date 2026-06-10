@@ -1,38 +1,18 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file common/config/config_load_configmodule.h
+/*!
  * \brief: configuration module, include file to be used by the source code calling the
  *  configuration module initialization
- * \author Francois TABURET
- * \date 2017
- * \version 0.1
- * \company NOKIA BellLabs France
- * \email: francois.taburet@nokia-bell-labs.com
- * \note
- * \warning
  */
+
 #ifndef INCLUDE_CONFIG_LOADCONFIGMODULE_H
 #define INCLUDE_CONFIG_LOADCONFIGMODULE_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <string.h>
 #include <stdlib.h>
@@ -68,8 +48,6 @@ typedef void (*configmodule_endfunc_t)(struct configmodule_interface *cfg);
 typedef int (*configmodule_initfunc_t)(struct configmodule_interface *cfg);
 
 typedef struct configmodule_status {
-  int num_paramgroups;
-  char **paramgroups_names;
   int num_err_nullvalue;
   int emptyla;
   int num_err_read;
@@ -140,5 +118,8 @@ void write_parsedcfg(configmodule_interface_t *cfg);
 extern void free_configmodule(void);
 #define CONFIG_PRINTF_ERROR(f, x... ) if (isLogInitDone ()) { LOG_E(ENB_APP,f,x);} else {printf(f,x);}; if ( !CONFIG_ISFLAGSET(CONFIG_NOABORTONCHKF) ) exit_fun("exit because configuration failed\n");
 
+#ifdef __cplusplus
+}
+#endif
 
 #endif  /* INCLUDE_CONFIG_LOADCONFIGMODULE_H */

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 #set(LPP_VERSION 16 78 0)
 #make_version(LPP_cc ${LPP_VERSION})
 #add_definitions(-DLPP_VERSION=${LPP_cc})

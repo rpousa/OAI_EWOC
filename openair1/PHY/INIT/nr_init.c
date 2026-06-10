@@ -1,22 +1,5 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
 #include "executables/softmodem-common.h"
@@ -67,6 +50,8 @@ int l1_north_init_gNB()
 
 NR_gNB_PHY_STATS_t *get_phy_stats(PHY_VARS_gNB *gNB, uint16_t rnti)
 {
+  // TODO reimplement with hashtable? also called from both UL/DL => not
+  // thread-safe
   NR_gNB_PHY_STATS_t *stats;
   int first_free = -1;
   for (int i = 0; i < MAX_MOBILES_PER_GNB; i++) {
@@ -117,7 +102,7 @@ void phy_init_nr_gNB(PHY_VARS_gNB *gNB)
 
   int Ptx = cfg->carrier_config.num_tx_ant.value;
   int Prx = cfg->carrier_config.num_rx_ant.value;
-  int max_ul_mimo_layers = 4;
+  int max_ul_mimo_layers = NR_MAX_NB_LAYERS;
 
   AssertFatal(Ptx > 0 && Ptx < 9,"Ptx %d is not supported\n", Ptx);
   AssertFatal(Prx > 0 && Prx < 9,"Prx %d is not supported\n", Prx);
@@ -134,8 +119,6 @@ void phy_init_nr_gNB(PHY_VARS_gNB *gNB)
 
   nr_init_fde(); // Init array for frequency equalization of transform precoding of PUSCH
 
-  int ret_loader = load_nrLDPC_coding_interface(NULL, &gNB->nrLDPC_coding_interface);
-  AssertFatal(ret_loader == 0, "error loading LDPC library\n");
 
   gNB->max_nb_pdsch = MAX_MOBILES_PER_GNB;
   init_delay_table(fp->ofdm_symbol_size, MAX_DELAY_COMP, NR_MAX_OFDM_SYMBOL_SIZE, fp->delay_table);
@@ -156,42 +139,31 @@ void phy_init_nr_gNB(PHY_VARS_gNB *gNB)
   /// Transport init necessary for NR synchro
   init_nr_transport(gNB);
 
-  init_DLSCH_struct(gNB);
+  int ret_loader = load_nrLDPC_coding_interface(NULL, &gNB->nrLDPC_coding_interface, 16 * gNB->max_nb_pusch);
+  AssertFatal(ret_loader == 0, "error loading LDPC library\n");
 
-  gNB->nr_srs_info = (nr_srs_info_t **)malloc16_clear(gNB->max_nb_srs * sizeof(nr_srs_info_t*));
-  for (int id = 0; id < gNB->max_nb_srs; id++) {
-    gNB->nr_srs_info[id] = (nr_srs_info_t *)malloc16_clear(sizeof(nr_srs_info_t));
-    gNB->nr_srs_info[id]->srs_generated_signal = malloc16_clear(MAX_NUM_NR_SRS_AP * sizeof(c16_t *));
-    for(int ap=0; ap<MAX_NUM_NR_SRS_AP; ap++) {
-      gNB->nr_srs_info[id]->srs_generated_signal[ap] =
-          malloc16_clear(fp->ofdm_symbol_size * MAX_NUM_NR_SRS_SYMBOLS * sizeof(c16_t));
-    }
-  }
+  init_DLSCH_struct(gNB);
 
   /* Do NOT allocate per-antenna rxdataF: the gNB gets a pointer to the
    * RU to copy/recover freq-domain memory from there */
-  common_vars->rxdataF = (c16_t ***)malloc16(common_vars->num_beams_period * sizeof(c16_t**));
-  for (int i = 0; i < common_vars->num_beams_period; i++)
-    common_vars->rxdataF[i] = (c16_t **)malloc16(Prx * sizeof(c16_t*));
+  common_vars->rxdataF = malloc16_clear(Prx * sizeof(*common_vars->rxdataF));
 
+  /* beam_id array is common for tx and rx so the max number of both is taken */
+  const unsigned int num_antenna_ports = max(Ptx, Prx);
   if (cfg->analog_beamforming_ve.analog_bf_vendor_ext.value) {
-    common_vars->beam_id = (int **)malloc16(common_vars->num_beams_period * sizeof(int*));
-    for (int i = 0; i < common_vars->num_beams_period; i++) {
-      common_vars->beam_id[i] = (int*)malloc16(fp->symbols_per_slot * fp->slots_per_frame * sizeof(int));
-      memset(common_vars->beam_id[i], -1, fp->symbols_per_slot * fp->slots_per_frame * sizeof(int));
-    }
+    common_vars->beam_id = (uint16_t **)malloc16(fp->slots_per_frame * fp->symbols_per_slot * sizeof(*common_vars->beam_id));
+    for (int i = 0; i < fp->slots_per_frame * fp->symbols_per_slot; i++)
+      common_vars->beam_id[i] = (uint16_t *)malloc16_clear(num_antenna_ports * sizeof(**common_vars->beam_id));
   }
-  common_vars->txdataF = (c16_t ***)malloc16(common_vars->num_beams_period * sizeof(c16_t**));
-  for (int i = 0; i < common_vars->num_beams_period; i++) {
-    common_vars->txdataF[i] = (c16_t**)malloc16_clear(Ptx * sizeof(c16_t*));
-    for (int j = 0; j < Ptx; j++)
-      common_vars->txdataF[i][j] = (c16_t*)malloc16_clear(fp->samples_per_frame_wCP * sizeof(c16_t));
-  }
+
+  common_vars->txdataF = (c16_t **)malloc16_clear(Ptx * sizeof(*common_vars->txdataF));
+  for (int j = 0; j < Ptx; j++)
+    common_vars->txdataF[j] = (c16_t *)malloc16_clear(fp->samples_per_slot_wCP * sizeof(**common_vars->txdataF));
   common_vars->debugBuff = (int32_t*)malloc16_clear(fp->samples_per_frame*sizeof(int32_t)*100);	
   common_vars->debugBuff_sample_offset = 0; 
 
   // PRACH
-  init_prach_list(&gNB->prach_list);
+  init_nr_prach(gNB);
 
   int N_RB_UL = cfg->carrier_config.ul_grid_size[cfg->ssb_config.scs_common.value].value;
   int n_buf = Prx*max_ul_mimo_layers;
@@ -204,11 +176,11 @@ void phy_init_nr_gNB(PHY_VARS_gNB *gNB)
     NR_gNB_PUSCH *pusch = &gNB->pusch_vars[ULSCH_id];
     pusch->ul_ch_estimates = (int32_t **)malloc16(n_buf * sizeof(int32_t *));
     pusch->ptrs_phase_per_slot = (int32_t **)malloc16(n_buf * sizeof(int32_t *));
-    pusch->rxdataF_comp = (int32_t **)malloc16(n_buf * sizeof(int32_t *));
+    pusch->rxdataF_comp = (c16_t **)malloc16(n_buf * sizeof(*pusch->rxdataF_comp));
     for (int i = 0; i < n_buf; i++) {
       pusch->ul_ch_estimates[i] = (int32_t *)malloc16_clear(sizeof(int32_t) * fp->ofdm_symbol_size * fp->symbols_per_slot);
       pusch->ptrs_phase_per_slot[i] = (int32_t *)malloc16_clear(sizeof(int32_t) * fp->symbols_per_slot); // symbols per slot
-      pusch->rxdataF_comp[i] = (int32_t *)malloc16_clear(sizeof(int32_t) * nb_re_pusch2 * fp->symbols_per_slot);
+      pusch->rxdataF_comp[i] = (c16_t *)malloc16_clear(sizeof(**pusch->rxdataF_comp) * nb_re_pusch2 * fp->symbols_per_slot);
     }
 
     for (int i = 0; i < max_ul_mimo_layers; i++) {
@@ -221,47 +193,37 @@ void phy_init_nr_gNB(PHY_VARS_gNB *gNB)
 
 void phy_free_nr_gNB(PHY_VARS_gNB *gNB)
 {
-  const int Ptx = gNB->gNB_config.carrier_config.num_tx_ant.value;
   const int Prx = gNB->gNB_config.carrier_config.num_rx_ant.value;
-  const int max_ul_mimo_layers = 4; // taken from phy_init_nr_gNB()
+  const int max_ul_mimo_layers = NR_MAX_NB_LAYERS;
   const int n_buf = Prx * max_ul_mimo_layers;
 
   PHY_MEASUREMENTS_gNB *meas = &gNB->measurements;
   free_and_zero(meas->n0_subband_power);
 
-  for (int id = 0; id < gNB->max_nb_srs; id++) {
-    for(int i=0; i<MAX_NUM_NR_SRS_AP; i++) {
-      free_and_zero(gNB->nr_srs_info[id]->srs_generated_signal[i]);
-    }
-    free_and_zero(gNB->nr_srs_info[id]->srs_generated_signal);
-    free_and_zero(gNB->nr_srs_info[id]);
-  }
-  free_and_zero(gNB->nr_srs_info);
-
   free_ul_reference_signal_sequences();
   free_gnb_lowpapr_sequences();
 
   reset_nr_transport(gNB);
+  reset_nr_prach(gNB);
 
   destroy_DLSCH_struct(gNB);
 
   NR_gNB_COMMON * common_vars = &gNB->common_vars;
-  for (int j = 0; j < common_vars->num_beams_period; j++) {
-    if (common_vars->beam_id)
+  if (common_vars->beam_id) {
+    for (int j = 0; j < gNB->frame_parms.slots_per_frame * gNB->frame_parms.symbols_per_slot; j++) {
       free_and_zero(common_vars->beam_id[j]);
-    for (int i = 0; i < Ptx; i++) {
-      free_and_zero(common_vars->txdataF[j][i]);
     }
-    free_and_zero(common_vars->txdataF[j]);
   }
+  free_and_zero(common_vars->beam_id);
+
+  for (int i = 0; i < gNB->frame_parms.nb_antennas_tx; i++) {
+    free_and_zero(common_vars->txdataF[i]);
+  }
+  free_and_zero(common_vars->txdataF);
 
   /* Do NOT free per-antenna txdataF/rxdataF: the gNB gets a pointer to the
    * RU's txdataF/rxdataF, and the RU will free that */
-  for (int j = 0; j < common_vars->num_beams_period; j++)
-    free_and_zero(common_vars->rxdataF[j]);
-  free_and_zero(common_vars->txdataF);
   free_and_zero(common_vars->rxdataF);
-  free_and_zero(common_vars->beam_id);
 
   free_and_zero(common_vars->debugBuff);
 
@@ -282,7 +244,6 @@ void phy_free_nr_gNB(PHY_VARS_gNB *gNB)
   free(gNB->pusch_vars);
 
   free_nrLDPC_coding_interface(&gNB->nrLDPC_coding_interface);
-
 }
 
 void nr_phy_config_request_sim(PHY_VARS_gNB *gNB,
@@ -313,31 +274,32 @@ void nr_phy_config_request_sim(PHY_VARS_gNB *gNB,
   gNB_config->carrier_config.num_tx_ant.value           = fp->nb_antennas_tx;
   gNB_config->carrier_config.num_rx_ant.value           = fp->nb_antennas_rx;
 
+  int nr_band = 78;
   switch (mu) {
     case 0:
       gNB->gNB_config.tdd_table.tdd_period.value = 7;
       fp->dl_CarrierFreq = 2600000000;
       fp->ul_CarrierFreq = 2600000000;
-      fp->nr_band = 38;
+      nr_band = 38;
       break;
     case 1:
       gNB->gNB_config.tdd_table.tdd_period.value = 6;
       fp->dl_CarrierFreq = 3600000000;
       fp->ul_CarrierFreq = 3600000000;
-      fp->nr_band = 78;
+      nr_band = 78;
       break;
     case 3:
       gNB->gNB_config.tdd_table.tdd_period.value = 3;
       fp->dl_CarrierFreq = 27524520000;
       fp->ul_CarrierFreq = 27524520000;
-      fp->nr_band = 261;
+      nr_band = 261;
       break;
     default:
       printf("unsupported numerology %d\n", mu);
       exit(-1);
   }
 
-  frequency_range_t frequency_range = get_freq_range_from_band(fp->nr_band);
+  frequency_range_t frequency_range = get_freq_range_from_band(nr_band);
   int bw_index = get_supported_band_index(mu, frequency_range, N_RB_DL);
   gNB_config->carrier_config.dl_bandwidth.value = get_supported_bw_mhz(frequency_range, bw_index);
 
@@ -366,9 +328,8 @@ void nr_phy_config_request(NR_PHY_Config_t *phy_config)
   fp->ul_CarrierFreq = ((ul_bw_khz>>1) + gNB_config->carrier_config.uplink_frequency.value)*1000 ;
 
   int32_t dlul_offset = fp->ul_CarrierFreq - fp->dl_CarrierFreq;
-  fp->nr_band = get_band(fp->dl_CarrierFreq, dlul_offset, dl_bw_khz, ul_bw_khz);
 
-  LOG_I(PHY, "DL frequency %lu Hz, UL frequency %lu Hz: band %d, uldl offset %d Hz\n", fp->dl_CarrierFreq, fp->ul_CarrierFreq, fp->nr_band, dlul_offset);
+  LOG_I(PHY, "DL frequency %lu Hz, UL frequency %lu Hz: uldl offset %d Hz\n", fp->dl_CarrierFreq, fp->ul_CarrierFreq, dlul_offset);
 
   fp->threequarter_fs = get_softmodem_params()->threequarter_fs;
   LOG_D(PHY,"Configuring MIB for instance %d, : (Nid_cell %d,DL freq %llu, UL freq %llu)\n",
@@ -435,8 +396,8 @@ void init_nr_transport(PHY_VARS_gNB *gNB)
                             fp->slots_per_frame;
   int nb_ul_slots_period = 0;
   if (cfg->cell_config.frame_duplex_type.value) {
-    for(int i=0; i<nb_slots_per_period; i++) {
-      for(int j=0; j<NR_NUMBER_OF_SYMBOLS_PER_SLOT; j++) {
+    for(int i = 0; i < nb_slots_per_period; i++) {
+      for(int j = 0; j < fp->symbols_per_slot; j++) {
         if(cfg->tdd_table.max_tdd_periodicity_list[i].max_num_of_symbol_per_slot_list[j].slot_config.value == 1) { // UL symbol
           nb_ul_slots_period++;
           break;
@@ -454,18 +415,18 @@ void init_nr_transport(PHY_VARS_gNB *gNB)
   else
     buffer_ul_slots = (nb_ul_slots_period < slot_ahead) ? nb_ul_slots_period : slot_ahead;
 
-  gNB->max_nb_pucch = buffer_ul_slots ? MAX_MOBILES_PER_GNB * buffer_ul_slots : 1;
   gNB->max_nb_pusch = buffer_ul_slots ? MAX_MOBILES_PER_GNB * buffer_ul_slots : 1;
-  gNB->max_nb_srs = buffer_ul_slots ? buffer_ul_slots << 1 : 1; // assuming at most 2 SRS per slot
 
-  gNB->pucch = (NR_gNB_PUCCH_t *)malloc16(gNB->max_nb_pucch * sizeof(NR_gNB_PUCCH_t));
-  for (int i = 0; i < gNB->max_nb_pucch; i++) {
-    memset(&gNB->pucch[i], 0, sizeof(gNB->pucch[i]));
-  }
+  int max_nb_pucch = buffer_ul_slots ? MAX_MOBILES_PER_GNB * buffer_ul_slots : 1;
+  bool ret;
+  ret = spsc_q_alloc(&gNB->pucch_queue, max_nb_pucch, sizeof(NR_gNB_PUCCH_job_t));
+  DevAssert(ret);
+  ret = spsc_q_alloc(&gNB->pusch_queue, gNB->max_nb_pusch, sizeof(NR_gNB_PUSCH_job_t));
+  DevAssert(ret);
 
-  gNB->srs = (NR_gNB_SRS_t *)malloc16(gNB->max_nb_srs * sizeof(NR_gNB_SRS_t));
-  for (int i = 0; i < gNB->max_nb_srs; i++)
-    gNB->srs[i].active = 0;
+  int max_nb_srs = buffer_ul_slots ? buffer_ul_slots << 1 : 1; // assuming at most 2 SRS per slot
+  ret = spsc_q_alloc(&gNB->srs_queue, max_nb_srs, sizeof(NR_gNB_SRS_job_t));
+  DevAssert(ret);
 
   gNB->ulsch = (NR_gNB_ULSCH_t *)malloc16(gNB->max_nb_pusch * sizeof(NR_gNB_ULSCH_t));
   for (int i = 0; i < gNB->max_nb_pusch; i++) {
@@ -482,8 +443,9 @@ void reset_nr_transport(PHY_VARS_gNB *gNB)
 {
   const NR_DL_FRAME_PARMS *fp = &gNB->frame_parms;
 
-  free(gNB->pucch);
-  free(gNB->srs);
+  spsc_q_free(&gNB->pucch_queue);
+  spsc_q_free(&gNB->pusch_queue);
+  spsc_q_free(&gNB->srs_queue);
 
   for (int i = 0; i < gNB->max_nb_pusch; i++)
     free_gNB_ulsch(&gNB->ulsch[i], fp->N_RB_UL);

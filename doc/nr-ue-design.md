@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 ## PHY and MAC Interface
 The PHY sends scheduling requests and data indication to MAC via `nr_ue_dl_indication` for DL path and `nr_ue_ul_indication()` for UL path and the MAC sends scheduling configuration to PHY via `nr_ue_scheduled_response()`. The following diagram shows the interaction for PDCCH and PDSCH reception.
 ```mermaid

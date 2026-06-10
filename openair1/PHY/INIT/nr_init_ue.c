@@ -1,40 +1,23 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
 #include "nr_phy_init.h"
 #include "openair1/PHY/defs_RU.h"
 #include "openair1/PHY/impl_defs_nr.h"
-#include "common/utils/LOG/vcd_signal_dumper.h"
 #include "assertions.h"
 #include "PHY/MODULATION/nr_modulation.h"
 #include "PHY/NR_UE_TRANSPORT/nr_transport_ue.h"
 #include "PHY/NR_UE_TRANSPORT/nr_transport_proto_ue.h"
 #include "PHY/NR_REFSIG/pss_nr.h"
 #include "PHY/NR_REFSIG/ul_ref_seq_nr.h"
-#include "PHY/NR_REFSIG/refsig_defs_ue.h"
+#include "PHY/NR_REFSIG/sl_refsig_defs.h"
 #include "PHY/NR_REFSIG/nr_refsig.h"
 #include "PHY/NR_REFSIG/nr_mod_table.h"
 #include "openair2/COMMON/prs_nr_paramdef.h"
 #include "SCHED_NR_UE/harq_nr.h"
 #include "nr-uesoftmodem.h"
+#include "common/config/config_userapi.h"
 
 void RCconfig_nrUE_prs(void *cfg)
 {
@@ -263,13 +246,11 @@ int init_nr_ue_signal(PHY_VARS_NR_UE *ue, int nb_connected_gNB)
 
     // ceil((NB_RB*8(max allocation per RB)*2(QPSK))/32)
     ue->nr_csi_info = malloc16_clear(sizeof(nr_csi_info_t));
-    ue->nr_csi_info->csi_rs_generated_signal = malloc16(NR_MAX_NB_PORTS * sizeof(*ue->nr_csi_info->csi_rs_generated_signal));
-    for (int i = 0; i < NR_MAX_NB_PORTS; i++) {
+    ue->nr_csi_info->csi_rs_generated_signal = malloc16(NR_MAX_CSI_PORTS * sizeof(*ue->nr_csi_info->csi_rs_generated_signal));
+    for (int i = 0; i < NR_MAX_CSI_PORTS; i++) {
       ue->nr_csi_info->csi_rs_generated_signal[i] =
-          malloc16_clear(fp->samples_per_frame_wCP * sizeof(**ue->nr_csi_info->csi_rs_generated_signal));
+          malloc16_clear(fp->samples_per_slot_wCP * sizeof(**ue->nr_csi_info->csi_rs_generated_signal));
     }
-
-    ue->nr_srs_info = malloc16_clear(sizeof(nr_srs_info_t));
   }
 
   ue->init_averaging = 1;
@@ -292,7 +273,7 @@ static void sl_ue_free(PHY_VARS_NR_UE *UE)
   }
 }
 
-void term_nr_ue_signal(PHY_VARS_NR_UE *ue, int nb_connected_gNB)
+void term_nr_ue_signal(PHY_VARS_NR_UE *ue)
 {
   const NR_DL_FRAME_PARMS* fp = &ue->frame_parms;
   phy_term_nr_top();
@@ -312,13 +293,11 @@ void term_nr_ue_signal(PHY_VARS_NR_UE *ue, int nb_connected_gNB)
 
   for (int gNB_id = 0; gNB_id < ue->n_connected_gNB; gNB_id++) {
 
-    for (int i=0; i<NR_MAX_NB_PORTS; i++) {
+    for (int i = 0; i < NR_MAX_CSI_PORTS; i++) {
       free_and_zero(ue->nr_csi_info->csi_rs_generated_signal[i]);
     }
     free_and_zero(ue->nr_csi_info->csi_rs_generated_signal);
     free_and_zero(ue->nr_csi_info);
-
-    free_and_zero(ue->nr_srs_info);
 
     free_and_zero(ue->prach_vars[gNB_id]);
   }
@@ -340,9 +319,9 @@ void term_nr_ue_signal(PHY_VARS_NR_UE *ue, int nb_connected_gNB)
   sl_ue_free(ue);
 }
 
-void free_nr_ue_dl_harq(NR_DL_UE_HARQ_t harq_list[2][NR_MAX_DLSCH_HARQ_PROCESSES], int number_of_processes, int num_rb) {
-
-  uint16_t a_segments = MAX_NUM_NR_DLSCH_SEGMENTS_PER_LAYER*NR_MAX_NB_LAYERS;
+void free_nr_ue_dl_harq(NR_DL_UE_HARQ_t harq_list[2][NR_MAX_HARQ_PROCESSES], int number_of_processes, int num_rb)
+{
+  uint16_t a_segments = MAX_NUM_NR_DLSCH_SEGMENTS;
   if (num_rb != 273) {
     a_segments = a_segments*num_rb;
     a_segments = (a_segments/273)+1;
@@ -350,11 +329,6 @@ void free_nr_ue_dl_harq(NR_DL_UE_HARQ_t harq_list[2][NR_MAX_DLSCH_HARQ_PROCESSES
 
   for (int j=0; j < 2; j++) {
     for (int i=0; i<number_of_processes; i++) {
-
-      for (int r=0; r<a_segments; r++) {
-        free_and_zero(harq_list[j][i].c[r]);
-        free_and_zero(harq_list[j][i].d[r]);
-      }
       free_and_zero(harq_list[j][i].b);
       free_and_zero(harq_list[j][i].c);
       free_and_zero(harq_list[j][i].d);
@@ -362,9 +336,9 @@ void free_nr_ue_dl_harq(NR_DL_UE_HARQ_t harq_list[2][NR_MAX_DLSCH_HARQ_PROCESSES
   }
 }
 
-void free_nr_ue_ul_harq(NR_UL_UE_HARQ_t harq_list[NR_MAX_ULSCH_HARQ_PROCESSES], int number_of_processes, int num_rb, int num_ant_tx) {
-
-  int max_layers = (num_ant_tx < NR_MAX_NB_LAYERS) ? num_ant_tx : NR_MAX_NB_LAYERS;
+void free_nr_ue_ul_harq(NR_UL_UE_HARQ_t harq_list[NR_MAX_HARQ_PROCESSES], int number_of_processes, int num_rb, int num_ant_tx)
+{
+  int max_layers = min(num_ant_tx, NR_MAX_NB_LAYERS);
   uint16_t a_segments = MAX_NUM_NR_ULSCH_SEGMENTS_PER_LAYER*max_layers;  //number of segments to be allocated
 
   if (num_rb != 273) {
@@ -389,13 +363,13 @@ void term_nr_ue_transport(PHY_VARS_NR_UE *ue)
 {
   const int N_RB_DL = ue->frame_parms.N_RB_DL;
   const int N_RB_UL = ue->frame_parms.N_RB_UL;
-  free_nr_ue_dl_harq(ue->dl_harq_processes, NR_MAX_DLSCH_HARQ_PROCESSES, N_RB_DL);
-  free_nr_ue_ul_harq(ue->ul_harq_processes, NR_MAX_ULSCH_HARQ_PROCESSES, N_RB_UL, ue->frame_parms.nb_antennas_tx);
+  free_nr_ue_dl_harq(ue->dl_harq_processes, NR_MAX_HARQ_PROCESSES, N_RB_DL);
+  free_nr_ue_ul_harq(ue->ul_harq_processes, NR_MAX_HARQ_PROCESSES, N_RB_UL, ue->frame_parms.nb_antennas_tx);
 }
 
-void nr_init_dl_harq_processes(NR_DL_UE_HARQ_t harq_list[2][NR_MAX_DLSCH_HARQ_PROCESSES], int number_of_processes, int num_rb) {
-
-  int a_segments = MAX_NUM_NR_DLSCH_SEGMENTS_PER_LAYER*NR_MAX_NB_LAYERS;  //number of segments to be allocated
+void nr_init_dl_harq_processes(NR_DL_UE_HARQ_t harq_list[2][NR_MAX_HARQ_PROCESSES], int number_of_processes, int num_rb)
+{
+  int a_segments = MAX_NUM_NR_DLSCH_SEGMENTS; // number of segments to be allocated
   if (num_rb != 273) {
     a_segments = a_segments*num_rb;
     a_segments = (a_segments/273)+1;
@@ -407,23 +381,18 @@ void nr_init_dl_harq_processes(NR_DL_UE_HARQ_t harq_list[2][NR_MAX_DLSCH_HARQ_PR
       init_downlink_harq_status(harq_list[j] + i);
 
       harq_list[j][i].b = malloc16_clear(a_segments * 1056);
-      harq_list[j][i].c = malloc16(a_segments*sizeof(uint8_t *));
-      harq_list[j][i].d = malloc16(a_segments*sizeof(int16_t *));
-      const int sz=5*8448*sizeof(int16_t);
+      harq_list[j][i].c = malloc16(a_segments * sizeof(*harq_list[j][i].c) * 1056);
+      harq_list[j][i].d = malloc16(a_segments * sizeof(*harq_list[j][i].d) * 3 * 8448);
       init_abort(&harq_list[j][i].abort_decode);
-      for (int r=0; r<a_segments; r++) {
-        harq_list[j][i].c[r] = malloc16_clear(1056);
-        harq_list[j][i].d[r] = malloc16_clear(sz);
-      }
       harq_list[j][i].status  = 0;
       harq_list[j][i].DLround = 0;
     }
   }
 }
 
-void nr_init_ul_harq_processes(NR_UL_UE_HARQ_t harq_list[NR_MAX_ULSCH_HARQ_PROCESSES], int number_of_processes, int num_rb, int num_ant_tx) {
-
-  int max_layers = (num_ant_tx < NR_MAX_NB_LAYERS) ? num_ant_tx : NR_MAX_NB_LAYERS;
+void nr_init_ul_harq_processes(NR_UL_UE_HARQ_t harq_list[NR_MAX_HARQ_PROCESSES], int number_of_processes, int num_rb, int num_ant_tx)
+{
+  int max_layers = min(num_ant_tx, NR_MAX_NB_LAYERS);
   uint16_t a_segments = MAX_NUM_NR_ULSCH_SEGMENTS_PER_LAYER*max_layers;  //number of segments to be allocated
 
   if (num_rb != 273) {
@@ -465,24 +434,21 @@ void nr_init_ul_harq_processes(NR_UL_UE_HARQ_t harq_list[NR_MAX_ULSCH_HARQ_PROCE
   }
 }
 
-void init_nr_ue_transport(PHY_VARS_NR_UE *ue) {
-
-  nr_init_dl_harq_processes(ue->dl_harq_processes, NR_MAX_DLSCH_HARQ_PROCESSES, ue->frame_parms.N_RB_DL);
-  nr_init_ul_harq_processes(ue->ul_harq_processes,
-                            NR_MAX_ULSCH_HARQ_PROCESSES,
-                            ue->frame_parms.N_RB_UL,
-                            ue->frame_parms.nb_antennas_tx);
+void init_nr_ue_transport(PHY_VARS_NR_UE *ue)
+{
+  nr_init_dl_harq_processes(ue->dl_harq_processes, NR_MAX_HARQ_PROCESSES, ue->frame_parms.N_RB_DL);
+  nr_init_ul_harq_processes(ue->ul_harq_processes, NR_MAX_HARQ_PROCESSES, ue->frame_parms.N_RB_UL, ue->frame_parms.nb_antennas_tx);
 }
 
 void clean_UE_harq(PHY_VARS_NR_UE *UE)
 {
-  for (int harq_pid = 0; harq_pid < NR_MAX_DLSCH_HARQ_PROCESSES; harq_pid++) {
+  for (int harq_pid = 0; harq_pid < NR_MAX_HARQ_PROCESSES; harq_pid++) {
     for (int i = 0; i < 2; i++) {
       NR_DL_UE_HARQ_t *dl_harq_process = &UE->dl_harq_processes[i][harq_pid];
       init_downlink_harq_status(dl_harq_process);
     }
   }
-  for (int harq_pid = 0; harq_pid < NR_MAX_ULSCH_HARQ_PROCESSES; harq_pid++) {
+  for (int harq_pid = 0; harq_pid < NR_MAX_HARQ_PROCESSES; harq_pid++) {
     NR_UL_UE_HARQ_t *ul_harq_process = &UE->ul_harq_processes[harq_pid];
     ul_harq_process->round = 0;
   }

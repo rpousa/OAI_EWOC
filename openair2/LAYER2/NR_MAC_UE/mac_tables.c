@@ -1,33 +1,9 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/* \file vars.h
+/*
  * \brief MAC Layer variables
- * \author R. Knopp, K.H. HSU
- * \date 2018
- * \version 0.1
- * \company Eurecom / NTUST
- * \email: knopp@eurecom.fr, kai-hsiang.hsu@eurecom.fr
- * \note
- * \warning
  */
 
 #include <stdint.h>
@@ -470,8 +446,7 @@ void set_antenna_port_parameters(fapi_nr_dl_config_dlsch_pdu_rel15_t *dlsch_pdu,
 void ul_ports_config(NR_UE_MAC_INST_t *mac,
                      int *n_front_load_symb,
                      nfapi_nr_ue_pusch_pdu_t *pusch_config_pdu,
-                     dci_pdu_rel15_t *dci,
-                     nr_dci_format_t dci_format)
+                     dci_pdu_rel15_t *dci)
 {
   uint8_t rank = pusch_config_pdu->nrOfLayers;
   NR_PUSCH_Config_t *pusch_Config = mac->current_UL_BWP->pusch_Config;

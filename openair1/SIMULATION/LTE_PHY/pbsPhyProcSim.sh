@@ -1,4 +1,6 @@
 #!/bin/bash
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 #PBS -q batch
 #PBS -N ul_dl_w_interfer_sim
 #PBS -o log.out

@@ -1,33 +1,11 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
-/*! \file common/utils/telnetsrv/telnetsrv.h
+
+/*!
  * \brief: include file for telnet server implementation
- * \author Francois TABURET
- * \date 2017
- * \version 0.1
- * \company NOKIA BellLabs France
- * \email: francois.taburet@nokia-bell-labs.com
- * \note
- * \warning
  */
+
 #ifndef TELNETSRV_H
 #define TELNETSRV_H
 
@@ -35,8 +13,8 @@
 
 #define TELNET_MAX_MSGLENGTH      2048
 #define TELNET_PROMPT_PREFIX      "softmodem"
-#define TELNET_MAXCMD             20
-#define TELNET_CMD_MAXSIZE        20
+#define TELNET_MAXCMD             64
+#define TELNET_CMD_MAXSIZE        64
 #define TELNET_HELPSTR_SIZE       80
 
 /* status return by the command parser after it analysed user input */
@@ -162,7 +140,7 @@ typedef struct {
      cmdparser_t CmdParsers[TELNET_MAXCMD];   // array of registered modules.
      char msgbuff[TELNET_MAX_MSGLENGTH];      // internal buffer of the client_printf function which is used to print to the client terminal */
      unsigned int   listenport;           // ip port the telnet server is listening on
-     unsigned int   listenaddr;           // ip address the telnet server is listening on
+     char          *listenaddr;           // ip address the telnet server is listening on
      unsigned int   listenstdin;          // enable command input from stdin    
      unsigned int   loopcount;            // loop command param: number of loop iteration
      unsigned int   loopdelay;            // loop command param: delay in ms between 2 iterations

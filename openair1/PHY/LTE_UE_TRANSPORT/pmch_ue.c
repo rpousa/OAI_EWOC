@@ -1,34 +1,10 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file PHY/LTE_UE_TRANSPORT/pmch_ue.c
-* \brief This includes routines for decoding the UE FeMBMS/PMCH physical/multicast/transport channel 3GPP TS 36.211 version 14.2.0 Release 14 Sections 6.5/6.10.2
-* \author J. Morgade
-* \date 2019
-* \version 0.1
-* \company Vicomtech
-* \email: javier.morgade@ieee.org
-* \note
-* \warning
-*/
+/*!
+ * \brief This includes routines for decoding the UE FeMBMS/PMCH physical/multicast/transport channel 3GPP TS 36.211 version 14.2.0 Release 14 Sections 6.5/6.10.2
+ */
 
 
 #include "PHY/defs_UE.h"
@@ -49,49 +25,6 @@
 #define MBSFN_FDD_SF6 0x10
 #define MBSFN_FDD_SF7 0x08
 #define MBSFN_FDD_SF8 0x04
-
-
-
-void dump_mch(PHY_VARS_UE *ue,uint8_t eNB_id,uint16_t coded_bits_per_codeword,int subframe) {
-  char fname[32],vname[32];
-#define NSYMB_PMCH 12
-  sprintf(fname,"mch_rxF_ext0.m");
-  sprintf(vname,"pmch_rxF_ext0");
-  LOG_M(fname,vname,ue->pdsch_vars_MCH[ue->current_thread_id[subframe]][eNB_id]->rxdataF_ext[0],12*(ue->frame_parms.N_RB_DL)*12,1,1);
-  sprintf(fname,"mch_ch_ext00.m");
-  sprintf(vname,"pmch_ch_ext00");
-  LOG_M(fname,vname,ue->pdsch_vars_MCH[ue->current_thread_id[subframe]][eNB_id]->dl_ch_estimates_ext[0],12*(ue->frame_parms.N_RB_DL)*NSYMB_PMCH,1,1);
-  /*
-    LOG_M("dlsch%d_ch_ext01.m","dl01_ch0_ext",pdsch_vars[eNB_id]->dl_ch_estimates_ext[1],12*N_RB_DL*NSYMB_PMCH,1,1);
-    LOG_M("dlsch%d_ch_ext10.m","dl10_ch0_ext",pdsch_vars[eNB_id]->dl_ch_estimates_ext[2],12*N_RB_DL*NSYMB_PMCH,1,1);
-    LOG_M("dlsch%d_ch_ext11.m","dl11_ch0_ext",pdsch_vars[eNB_id]->dl_ch_estimates_ext[3],12*N_RB_DL*NSYMB_PMCH,1,1);
-    LOG_M("dlsch%d_rho.m","dl_rho",pdsch_vars[eNB_id]->rho[0],12*N_RB_DL*NSYMB_PMCH,1,1);
-  */
-  sprintf(fname,"mch_rxF_comp0.m");
-  sprintf(vname,"pmch_rxF_comp0");
-  LOG_M(fname,vname,ue->pdsch_vars_MCH[ue->current_thread_id[subframe]][eNB_id]->rxdataF_comp0[0],12*(ue->frame_parms.N_RB_DL)*NSYMB_PMCH,1,1);
-  sprintf(fname,"mch_rxF_llr.m");
-  sprintf(vname,"pmch_llr");
-  LOG_M(fname,vname, ue->pdsch_vars_MCH[ue->current_thread_id[subframe]][eNB_id]->llr[0],coded_bits_per_codeword,1,0);
-  sprintf(fname,"mch_mag1.m");
-  sprintf(vname,"pmch_mag1");
-  LOG_M(fname,vname,ue->pdsch_vars_MCH[ue->current_thread_id[subframe]][eNB_id]->dl_ch_mag0[0],12*(ue->frame_parms.N_RB_DL)*NSYMB_PMCH,1,1);
-  sprintf(fname,"mch_mag2.m");
-  sprintf(vname,"pmch_mag2");
-  LOG_M(fname,vname,ue->pdsch_vars_MCH[ue->current_thread_id[subframe]][eNB_id]->dl_ch_magb0[0],12*(ue->frame_parms.N_RB_DL)*NSYMB_PMCH,1,1);
-  LOG_M("mch00_ch0.m","pmch00_ch0",
-        &(ue->common_vars.common_vars_rx_data_per_thread[ue->current_thread_id[subframe]].dl_ch_estimates[eNB_id][0][0]),
-        ue->frame_parms.ofdm_symbol_size*12,1,1);
-  LOG_M("rxsig_mch.m","rxs_mch",
-        &ue->common_vars.rxdata[0][subframe*ue->frame_parms.samples_per_tti],
-        ue->frame_parms.samples_per_tti,1,1);
-  /*
-  if (PHY_vars_eNB_g)
-    LOG_M("txsig_mch.m","txs_mch",
-                 &PHY_vars_eNB_g[0][0]->common_vars.txdata[0][0][subframe*ue->frame_parms.samples_per_tti],
-                 ue->frame_parms.samples_per_tti,1,1);*/
-}
-
 
 void fill_UE_dlsch_MCH(PHY_VARS_UE *ue,int mcs,int ndi,int rvidx,int eNB_id) {
   LTE_UE_DLSCH_t *dlsch = ue->dlsch_MCH[eNB_id];

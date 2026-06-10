@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 ## shared library names
 Shared library full names are built by the loader using the format:
 >  < *path* >/lib< *module name* >< *module version* >.so

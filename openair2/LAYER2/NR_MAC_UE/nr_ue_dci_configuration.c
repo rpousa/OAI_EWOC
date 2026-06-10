@@ -1,33 +1,9 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/* \file nr_ue_dci_configuration.c
+/*
  * \brief functions for generating dci search procedures based on RRC Serving Cell Group Configuration
- * \author R. Knopp, G. Casati
- * \date 2020
- * \version 0.2
- * \company Eurecom, Fraunhofer IIS
- * \email: knopp@eurecom.fr, guido.casati@iis.fraunhofer.de
- * \note
- * \warning
  */
 
 #include "mac_proto.h"
@@ -422,6 +398,38 @@ static bool monitor_dci_for_other_SI(NR_UE_MAC_INST_t *mac,
   return false;
 }
 
+void update_pdcch_config(NR_UE_MAC_INST_t *mac)
+{
+  int scs = mac->current_DL_BWP ? mac->current_DL_BWP->scs : mac->numerology;
+  const int slots_per_frame = get_slots_per_frame_from_scs(scs);
+  int ssb_sc_offset_norm;
+  if (mac->ssb_subcarrier_offset < 24 && mac->frequency_range == FR1)
+    ssb_sc_offset_norm = mac->ssb_subcarrier_offset >> scs;
+  else
+    ssb_sc_offset_norm = mac->ssb_subcarrier_offset;
+  uint16_t ssb_offset_point_a = (mac->ssb_start_subcarrier - ssb_sc_offset_norm) / 12;
+  int ssb_start_symbol = get_ssb_start_symbol(mac->nr_band, scs, mac->mib_ssb);
+  get_type0_PDCCH_CSS_config_parameters(&mac->type0_PDCCH_CSS_config,
+                                        mac->mib_frame,
+                                        mac->mib,
+                                        slots_per_frame,
+                                        ssb_sc_offset_norm,
+                                        ssb_start_symbol,
+                                        scs,
+                                        mac->frequency_range,
+                                        mac->nr_band,
+                                        273,  // at this point UE in principle doesn't know the grid size (we assume the largest)
+                                        mac->mib_ssb,
+                                        1, // If the UE is not configured with a periodicity, the UE assumes a periodicity of a half frame
+                                        ssb_offset_point_a);
+  if (mac->search_space_zero == NULL)
+    mac->search_space_zero = calloc(1, sizeof(*mac->search_space_zero));
+  if (mac->coreset0 == NULL)
+    mac->coreset0 = calloc(1, sizeof(*mac->coreset0));
+  fill_coresetZero(mac->coreset0, &mac->type0_PDCCH_CSS_config);
+  fill_searchSpaceZero(mac->search_space_zero, slots_per_frame, &mac->type0_PDCCH_CSS_config);
+}
+
 void ue_dci_configuration(NR_UE_MAC_INST_t *mac, fapi_nr_dl_config_request_t *dl_config, const frame_t frame, const int slot)
 {
   const NR_UE_DL_BWP_t *current_DL_BWP = mac->current_DL_BWP;
@@ -429,38 +437,18 @@ void ue_dci_configuration(NR_UE_MAC_INST_t *mac, fapi_nr_dl_config_request_t *dl
   NR_BWP_PDCCH_t *pdcch_config = &mac->config_BWP_PDCCH[dl_bwp_id];
   int scs = current_DL_BWP ? current_DL_BWP->scs : mac->numerology;
   const int slots_per_frame = get_slots_per_frame_from_scs(scs);
+  if (mac->get_sib1 || mac->update_pdcch_config) {
+    update_pdcch_config(mac);
+    mac->update_pdcch_config = false;
+  }
   if (mac->get_sib1) {
-    int ssb_sc_offset_norm;
-    if (mac->ssb_subcarrier_offset < 24 && mac->frequency_range == FR1)
-      ssb_sc_offset_norm = mac->ssb_subcarrier_offset >> scs;
-    else
-      ssb_sc_offset_norm = mac->ssb_subcarrier_offset;
-    uint16_t ssb_offset_point_a = (mac->ssb_start_subcarrier - ssb_sc_offset_norm) / 12;
-    int ssb_start_symbol = get_ssb_start_symbol(mac->nr_band, scs, mac->mib_ssb);
-    get_type0_PDCCH_CSS_config_parameters(&mac->type0_PDCCH_CSS_config,
-                                          mac->mib_frame,
-                                          mac->mib,
-                                          slots_per_frame,
-                                          ssb_sc_offset_norm,
-                                          ssb_start_symbol,
-                                          scs,
-                                          mac->frequency_range,
-                                          mac->nr_band,
-                                          273,  // at this point UE in principle doesn't know the grid size (we assume the largest)
-                                          mac->mib_ssb,
-                                          1, // If the UE is not configured with a periodicity, the UE assumes a periodicity of a half frame
-                                          ssb_offset_point_a);
-    if (mac->search_space_zero == NULL)
-      mac->search_space_zero = calloc(1, sizeof(*mac->search_space_zero));
-    if (mac->coreset0 == NULL)
-      mac->coreset0 = calloc(1, sizeof(*mac->coreset0));
-    fill_coresetZero(mac->coreset0, &mac->type0_PDCCH_CSS_config);
-    fill_searchSpaceZero(mac->search_space_zero, slots_per_frame, &mac->type0_PDCCH_CSS_config);
-    if (is_ss_monitor_occasion(frame, slot, slots_per_frame, mac->search_space_zero)) {
+    bool is_occasion = is_ss_monitor_occasion(frame, slot, slots_per_frame, mac->search_space_zero);
+    if (is_occasion) {
       LOG_D(NR_MAC_DCI, "Monitoring DCI for SIB1 in frame %d slot %d\n", frame, slot);
       config_dci_pdu(mac, dl_config, TYPE_SI_RNTI_, slot, mac->search_space_zero);
     }
   }
+
   for (int i = 0; i < MAX_SI_GROUPS; i++) {
     if (!mac->get_otherSI[i])
       continue;

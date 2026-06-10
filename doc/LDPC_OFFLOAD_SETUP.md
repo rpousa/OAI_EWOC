@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 # OAI LDPC offload (O-RAN AAL/DPDK BBDEV)
 
 **Table of Contents**
@@ -180,12 +182,12 @@ Baseband devices using DPDK-compatible driver
 
 ## Building OAI with ORAN-AAL
 OTA deployment is precisely described in the following tutorial:
-- [NR_SA_Tutorial_COTS_UE](https://gitlab.eurecom.fr/oai/openairinterface5g/-/blob/develop/doc/NR_SA_Tutorial_COTS_UE.md)
+- [NR_SA_Tutorial_COTS_UE](./NR_SA_Tutorial_COTS_UE.md)
 Instead of section *3.2 Build OAI gNB* from the tutorial, run the following commands:
 
 ```bash
 # Get openairinterface5g source code
-git clone https://gitlab.eurecom.fr/oai/openairinterface5g.git ~/openairinterface5g
+git clone https://github.com/duranta-project/openairinterface5g.git ~/openairinterface5g
 cd ~/openairinterface5g
 git checkout develop
 
@@ -303,7 +305,6 @@ Example configuration snippet:
 ...
 MACRLCs = (
 {
-  num_cc                      = 1;
   tr_s_preference             = "local_L1";
   tr_n_preference             = "local_RRC";
   pusch_TargetSNRx10          = 180;
@@ -320,7 +321,6 @@ MACRLCs = (
 
 L1s = (
 {
-  num_cc = 1;
   tr_n_preference       = "local_mac";
   prach_dtx_threshold   = 120;
   pucch0_dtx_threshold  = 100;

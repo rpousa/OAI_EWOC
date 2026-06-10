@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+
 CORES=$(nproc)
 MODEL=$(lscpu | awk -F: '/Model name/ {print $2; exit}' | xargs)
 MAX_FREQ=$(lscpu | awk -F: '/CPU max MHz/ {printf "%.2f MHz", $2; exit}')

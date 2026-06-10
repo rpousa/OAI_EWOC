@@ -1,5 +1,11 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
+ */
+
 #ifndef _UTILS_H_
 #define _UTILS_H_
+
+#define UNUSED(x) (void)x
 
 void new_thread(void *(*f)(void *), void *data);
 void sleepms(int ms);

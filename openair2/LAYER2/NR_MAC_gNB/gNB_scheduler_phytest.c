@@ -1,31 +1,9 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.0  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file gNB_scheduler_phytest.c
+/*!
  * \brief gNB scheduling procedures in phy_test mode
- * \author  Guy De Souza, G. Casati
- * \date 07/2018
- * \email: desouza@eurecom.fr, guido.casati@iis.fraunhofer.de
- * \version 1.0
- * @ingroup _mac
  */
 
 #include "nr_mac_gNB.h"
@@ -42,17 +20,24 @@
 
 /* This function checks whether the given Dl/UL slot is set
    in the input bitmap (per period), which is a mask indicating in which
-   slot to transmit (among those available in the TDD configuration) */
-static bool is_xlsch_in_slot(uint64_t bitmap, slot_t slot)
+   slot to transmit (among those available in the TDD configuration)
+   This function also checks if Dmod/Umod option is set, then the slot will be
+   scheduled in case slot % val == 0.
+   Use Dmod/Umod in case of FDD FR2. */
+static bool is_xlsch_in_slot(uint64_t bitmap, uint32_t modval, slot_t slot)
 {
-  AssertFatal(slot < 64, "Unable to handle periods with length larger than 64 slots in phy-test mode\n");
-  return (bitmap >> slot) & 0x01;
+  AssertFatal(modval || slot < 64, "Slot >= 64 cannot be scheduled using options 'D/U', use 'Dmod/Umod' option\n");
+
+  bool val1 = (bitmap >> slot) & 0x01;
+  bool val2 = (modval && (slot % modval == 0));
+  return (val1 || val2);
 }
 
 uint32_t target_dl_mcs = 9;
 uint32_t target_dl_Nl = 1;
 uint32_t target_dl_bw = 50;
 uint64_t dlsch_slot_bitmap = (1<<1);
+uint32_t dlsch_slot_modval = 0;
 
 /* schedules whole bandwidth for first user, all the time */
 void nr_preprocessor_phytest(gNB_MAC_INST *mac, post_process_pdsch_t *pp_pdsch)
@@ -62,9 +47,11 @@ void nr_preprocessor_phytest(gNB_MAC_INST *mac, post_process_pdsch_t *pp_pdsch)
 
   /* already mutex protected: held in gNB_dlsch_ulsch_scheduler() */
   int slot_period = slot % mac->frame_structure.numb_slots_period;
-  if (!is_xlsch_in_slot(dlsch_slot_bitmap, slot_period))
+  if (!is_xlsch_in_slot(dlsch_slot_bitmap, dlsch_slot_modval, slot_period))
     return;
   NR_UE_info_t *UE = mac->UE_info.connected_ue_list[0];
+  if (UE == NULL)
+    return;
   NR_ServingCellConfigCommon_t *scc = mac->common_channels[0].ServingCellConfigCommon;
   NR_UE_sched_ctrl_t *sched_ctrl = &UE->UE_sched_ctrl;
   NR_UE_DL_BWP_t *dl_bwp = &UE->current_DL_BWP;
@@ -104,7 +91,7 @@ void nr_preprocessor_phytest(gNB_MAC_INST *mac, post_process_pdsch_t *pp_pdsch)
       const long band = *scc->downlinkConfigCommon->frequencyInfoDL->frequencyBandList.list.array[0];
       uint16_t ssb_start_symbol = get_ssb_start_symbol(band, scs, i_ssb);
       // select beam for PDSCH in current slot based on SSB beam
-      if ((ssb_start_symbol / NR_NUMBER_OF_SYMBOLS_PER_SLOT) == (slot % mac->frame_structure.numb_slots_period)) {
+      if ((ssb_start_symbol / NR_SYMBOLS_PER_SLOT) == (slot % mac->frame_structure.numb_slots_period)) {
         ssb_idx_beam = i_ssb;
         break;
       }
@@ -120,35 +107,19 @@ void nr_preprocessor_phytest(gNB_MAC_INST *mac, post_process_pdsch_t *pp_pdsch)
   if (target_dl_bw>bwpSize)
     target_dl_bw = bwpSize;
   uint16_t *vrb_map = mac->common_channels[CC_id].vrb_map[beam.idx];
-  /* loop ensures that we allocate exactly target_dl_bw, or return */
-  while (true) {
-    /* advance to first free RB */
-    while (rbStart < bwpSize &&
-           (vrb_map[rbStart + BWPStart]&SL_to_bitmap(tda_info.startSymbolIndex, tda_info.nrOfSymbols)))
-      rbStart++;
-    rbSize = 1;
-    /* iterate until we are at target_dl_bw or no available RBs */
-    while (rbStart + rbSize < bwpSize &&
-           !(vrb_map[rbStart + rbSize + BWPStart]&SL_to_bitmap(tda_info.startSymbolIndex, tda_info.nrOfSymbols)) &&
-           rbSize < target_dl_bw)
-      rbSize++;
-    /* found target_dl_bw? */
-    if (rbSize == target_dl_bw)
-      break;
-    /* at end and below target_dl_bw? */
-    if (rbStart + rbSize >= bwpSize)
-      return;
-    rbStart += rbSize;
-  }
+  const uint16_t slbitmap = SL_to_bitmap(tda_info.startSymbolIndex, tda_info.nrOfSymbols);
+  /* ensure that we allocate exactly target_dl_bw, or return */
+  if (!get_rb_alloc(target_dl_bw, target_dl_bw, BWPStart, bwpSize, vrb_map, slbitmap, &rbStart, &rbSize))
+    return;
 
   sched_ctrl->num_total_bytes = 0;
   DevAssert(seq_arr_size(&sched_ctrl->lc_config) == 1);
   const nr_lc_config_t *c = seq_arr_at(&sched_ctrl->lc_config, 0);
-  const int lcid = c->lcid;
+  const logical_chan_id_t lcid = c->lcid;
   const uint16_t rnti = UE->rnti;
   /* update sched_ctrl->num_total_bytes so that postprocessor schedules data,
    * if available */
-  sched_ctrl->rlc_status[lcid] = nr_mac_rlc_status_ind(rnti, frame, lcid);
+  nr_mac_rlc_status_ind(rnti, frame, 1, &lcid, &sched_ctrl->rlc_status[lcid]);
   sched_ctrl->num_total_bytes += sched_ctrl->rlc_status[lcid].bytes_in_buffer;
 
   int CCEIndex = get_cce_index(mac,
@@ -196,6 +167,14 @@ void nr_preprocessor_phytest(gNB_MAC_INST *mac, post_process_pdsch_t *pp_pdsch)
       .time_domain_allocation = tda,
       .tda_info = tda_info,
   };
+  // Map antenna ports for this UE
+  const nr_pdsch_AntennaPorts_t *p = &mac->radio_config.pdsch_AntennaPorts;
+  const uint16_t num_log_ports = p->XP * p->N1 * p->N2;
+  sched_pdsch.ant_port_idx.numSpatialStreamIndices = num_log_ports;
+  const int start_stream_idx = beam.idx * num_log_ports;
+  for (int i = 0; i < sched_pdsch.ant_port_idx.numSpatialStreamIndices;i++)
+    sched_pdsch.ant_port_idx.spatialStreamIndices[i] = mac->radio_config.spatial_stream_index[start_stream_idx + i];
+
   sched_ctrl->dl_bler_stats.mcs = target_dl_mcs; /* for logging output */
   sched_pdsch.tb_size = nr_compute_tbs(sched_pdsch.Qm,
                                        sched_pdsch.R,
@@ -207,17 +186,30 @@ void nr_preprocessor_phytest(gNB_MAC_INST *mac, post_process_pdsch_t *pp_pdsch)
                                        target_dl_Nl)
                         >> 3;
 
-  post_process_dlsch(mac, pp_pdsch, UE, &sched_pdsch);
+  nr_dl_candidate_t candidate = {
+      .UE = UE,
+      .rnti = rnti,
+      .is_retx = sched_pdsch.dl_harq_pid >= 0,
+      .retx_harq_pid = sched_pdsch.dl_harq_pid,
+      .pending_bytes = sched_ctrl->num_total_bytes,
+      .mcs_table = dl_bwp->mcsTableIdx,
+      .bwp_start = sched_pdsch.bwp_info.bwpStart,
+      .bwp_size = sched_pdsch.bwp_info.bwpSize,
+  };
+  candidate.pending_bytes_per_lcid[lcid] = sched_ctrl->rlc_status[lcid].bytes_in_buffer;
+
+  post_process_dlsch(mac, pp_pdsch, UE, &sched_pdsch, &candidate);
 
   /* mark the corresponding RBs as used */
   for (int rb = 0; rb < sched_pdsch.rbSize; rb++)
-    vrb_map[rb + sched_pdsch.rbStart + BWPStart] = SL_to_bitmap(tda_info.startSymbolIndex, tda_info.nrOfSymbols);
+    vrb_map[rb + sched_pdsch.rbStart + BWPStart] = slbitmap;
 }
 
 uint32_t target_ul_mcs = 9;
 uint32_t target_ul_bw = 50;
 uint32_t target_ul_Nl = 1;
 uint64_t ulsch_slot_bitmap = (1 << 8);
+uint32_t ulsch_slot_modval = 0;
 void nr_ul_preprocessor_phytest(gNB_MAC_INST *nr_mac, post_process_pusch_t *pp_pusch)
 {
   int frame = pp_pusch->frame;
@@ -267,7 +259,7 @@ void nr_ul_preprocessor_phytest(gNB_MAC_INST *nr_mac, post_process_pusch_t *pp_p
    * limitations).  Note that if K2 or the TDD configuration is changed, below
    * conditions might exclude each other and never be true */
   int slot_period = sched_slot % nr_mac->frame_structure.numb_slots_period;
-  if (!is_xlsch_in_slot(ulsch_slot_bitmap, slot_period))
+  if (!is_xlsch_in_slot(ulsch_slot_bitmap, ulsch_slot_modval, slot_period))
     return;
 
   // TODO implement beam procedures for phy-test mode
@@ -319,7 +311,12 @@ void nr_ul_preprocessor_phytest(gNB_MAC_INST *nr_mac, post_process_pusch_t *pp_p
       .tda_info = tda_info,
       .dmrs_info = get_ul_dmrs_params(scc, ul_bwp, &tda_info, target_ul_Nl),
       .bwp_info = get_pusch_bwp_start_size(UE),
+      .ant_port_idx.numSpatialStreamIndices = nr_mac->radio_config.pusch_AntennaPorts,
   };
+  const uint16_t start_stream_idx = beam * nr_mac->radio_config.pusch_AntennaPorts;
+  for (int i = 0; i < sched.ant_port_idx.numSpatialStreamIndices; i++)
+    sched.ant_port_idx.spatialStreamIndices[i] = nr_mac->radio_config.spatial_stream_index[start_stream_idx + i];
+
   sched_ctrl->ul_bler_stats.mcs = sched.mcs; /* for logging output */
 
   /* Calculate TBS from MCS */
@@ -342,7 +339,7 @@ void nr_ul_preprocessor_phytest(gNB_MAC_INST *nr_mac, post_process_pusch_t *pp_p
                   >> 3;
 
   /* save allocation to FAPI structures */
-  post_process_ulsch(nr_mac, pp_pusch, UE, &sched);
+  post_process_ulsch(nr_mac, pp_pusch, UE, &sched, 0);
 
   /* mark the corresponding RBs as used */
   fill_pdcch_vrb_map(nr_mac,

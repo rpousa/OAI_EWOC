@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 # Thread pool
 
 The **thread pool** is a working server, made of a set of worker threads that can be mapped on CPU cores.

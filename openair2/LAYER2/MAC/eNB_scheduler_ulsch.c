@@ -1,32 +1,9 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file eNB_scheduler_ulsch.c
+/*!
  * \brief eNB procedures for the ULSCH transport channel
- * \author Navid Nikaein and Raymond Knopp
- * \date 2010 - 2014
- * \email: navid.nikaein@eurecom.fr
- * \version 1.0
- * @ingroup _mac
-
  */
 
 /* indented with: indent -kr eNB_scheduler_RA.c */
@@ -135,6 +112,7 @@ rx_sdu(const module_id_t enb_mod_idP,
   start_meas(&mac->rx_ulsch_sdu);
   VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME(VCD_SIGNAL_DUMPER_FUNCTIONS_RX_SDU, 1);
   ws_trace_t tmp = {.direction = DIRECTION_UPLINK,
+                    .type = mac->common_channels[CC_idP].tdd_Config == NULL ? FDD_RADIO : TDD_RADIO,
                     .pdu_buffer = sduP,
                     .pdu_buffer_size = sdu_lenP,
                     .ueid = 0,

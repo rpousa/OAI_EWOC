@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 The log command can be used to get the status of the log parameters and to dynamically modify these parameters. The log command has its own [help](telnethelp.md#oai-telnet-server-specific-commands-help)
 ```bash
 softmodem>  softmodem log disable 0-35
@@ -90,4 +92,3 @@ Connection closed by foreign host.
 
 [oai telnetserver home](telnetsrv.md)
 [oai telnetserver usage home](telnetusage.md)
-[oai Wikis home](https://gitlab.eurecom.fr/oai/openairinterface5g/wikis/home)

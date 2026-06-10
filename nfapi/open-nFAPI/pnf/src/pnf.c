@@ -1,17 +1,7 @@
 /*
+ * SPDX-License-Identifier: Apache-2.0
+ *
  * Copyright 2017 Cisco Systems, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
  */
 
 
@@ -29,9 +19,9 @@
 #include "nfapi_nr_interface.h"
 #include "nfapi_nr_interface_scf.h"
 #include "pnf.h"
-
-#include <socket/include/socket_common.h>
-
+#ifdef ENABLE_SOCKET
+#include "nfapi/oai_integration/socket/include/socket_common.h"
+#endif
 #include "nfapi/open-nFAPI/fapi/inc/nr_fapi.h"
 
 # if 1 // for hard-code (remove later)
@@ -50,7 +40,7 @@
 #include "NR_MIB.h"
 #include "openair2/LAYER2/NR_MAC_COMMON/nr_mac_common.h"
 #ifdef ENABLE_WLS
-#include "wls_integration/include/wls_pnf.h"
+#include "nfapi/oai_integration/wls_integration/include/wls_pnf.h"
 #endif
 #endif
 

@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 # csv
 
 This tracer is used to dump information of a single trace to a CSV.

@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
+ */
+
 #include <stdio.h>
 #include <math.h>
 #include "openair1/PHY/TOOLS/tools_defs.h"

@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 # CI test for 5G F1+E1 splits with RFsimulator
 
 ## General

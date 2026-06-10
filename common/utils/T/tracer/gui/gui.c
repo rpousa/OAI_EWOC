@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
+ */
+
 #include "gui.h"
 #include "gui_defs.h"
 #include "x.h"

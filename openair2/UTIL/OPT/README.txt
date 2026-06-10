@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: CC-BY-4.0
 
 How to configure wireshark for dissecting LTE/NR protocols:
 - start the wireshark as a sudoers

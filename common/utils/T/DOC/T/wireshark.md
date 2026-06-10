@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 # MAC PDUs and wireshark
 
 First, read the [basic usage](./basic.md) to compile things.

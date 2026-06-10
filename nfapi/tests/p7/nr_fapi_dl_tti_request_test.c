@@ -1,26 +1,10 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 #include "dci_payload_utils.h"
 #include "nr_fapi_p7.h"
 #include "nr_fapi_p7_utils.h"
+#include "nr_fapi_common_util_test.h"
 
 static void fill_dl_tti_request_beamforming(nfapi_nr_tx_precoding_and_beamforming_t *precodingAndBeamforming)
 {
@@ -64,6 +48,11 @@ static void fill_dl_tti_request_pdcch_pdu(nfapi_nr_dl_tti_pdcch_pdu_rel15_t *pdu
     pdu->dci_pdu[dl_dci].powerControlOffsetSS = rand8();
     pdu->dci_pdu[dl_dci].PayloadSizeBits = rand16_range(0, DCI_PAYLOAD_BYTE_LEN * 8);
     generate_payload(pdu->dci_pdu[dl_dci].PayloadSizeBits, pdu->dci_pdu[dl_dci].Payload);
+  }
+  pdu->param_v4.numSpatialStreams = get_num_spatial_streams();
+  for (int n = 0; n < pdu->param_v4.numSpatialStreams; n++) {
+    pdu->param_v4.dci_spatialStreamIndices[n].dci_index = rand16();
+    pdu->param_v4.dci_spatialStreamIndices[n].spatial_stream_index = rand16_range(0, pdu->param_v4.numSpatialStreams - 1);
   }
 }
 
@@ -126,6 +115,12 @@ static void fill_dl_tti_request_pdsch_pdu(nfapi_nr_dl_tti_pdsch_pdu_rel15_t *pdu
   }
   pdu->maintenance_parms_v3.ldpcBaseGraph = rand8();
   pdu->maintenance_parms_v3.tbSizeLbrmBytes = rand32();
+  pdu->param_v4.numberCodewords = rand8_range(0, MAX_NUM_CODEWORDS);
+  for (int c = 0; c < pdu->param_v4.numberCodewords; c++) {
+    pdu->param_v4.spatialStreamsCw[c].numSpatialStreamIndices = get_num_spatial_streams();
+    fill_spatial_streams(pdu->param_v4.spatialStreamsCw[c].numSpatialStreamIndices,
+                         pdu->param_v4.spatialStreamsCw[c].spatialStreamIndices);
+  }
 }
 
 static void fill_dl_tti_request_csi_rs_pdu(nfapi_nr_dl_tti_csi_rs_pdu_rel15_t *pdu)
@@ -164,6 +159,9 @@ static void fill_dl_tti_request_csi_rs_pdu(nfapi_nr_dl_tti_csi_rs_pdu_rel15_t *p
   pdu->power_control_offset = rand8_range(0, 23);
   pdu->power_control_offset_ss = rand8_range(0, 3);
   fill_dl_tti_request_beamforming(&pdu->precodingAndBeamforming);
+  pdu->param_v4.numSpatialStreamIndices = get_num_spatial_streams();
+  for (int n = 0; n < pdu->param_v4.numSpatialStreamIndices; n++)
+    pdu->param_v4.spatialStreamIndices[n] = rand8_range(0, pdu->param_v4.numSpatialStreamIndices - 1);
 }
 
 static void fill_dl_tti_request_ssb_pdu(nfapi_nr_dl_tti_ssb_pdu_rel15_t *pdu)
@@ -176,6 +174,8 @@ static void fill_dl_tti_request_ssb_pdu(nfapi_nr_dl_tti_ssb_pdu_rel15_t *pdu)
   pdu->bchPayloadFlag = rand8_range(0, 2);
   pdu->bchPayload = rand24();
   fill_dl_tti_request_beamforming(&pdu->precoding_and_beamforming);
+  pdu->param_v4.spatialStreamIndexPresent = rand8(0, 1);
+  pdu->param_v4.spatialStreamIndex = rand16_range(0, MAX_NUM_SPATIAL_STREAMS);
 }
 
 static void fill_dl_tti_request(nfapi_nr_dl_tti_request_t *msg)
@@ -263,7 +263,7 @@ static void test_copy(const nfapi_nr_dl_tti_request_t *msg)
   free_dl_tti_request(&copy);
 }
 
-int main(int n, char *v[])
+int main()
 {
   fapi_test_init();
 

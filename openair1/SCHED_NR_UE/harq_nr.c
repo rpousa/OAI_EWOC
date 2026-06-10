@@ -1,22 +1,5 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
 /**********************************************************************
@@ -112,7 +95,7 @@
 
 void init_downlink_harq_status(NR_DL_UE_HARQ_t *dl_harq)
 {
-  dl_harq->status = SCH_IDLE;
+  dl_harq->status = NR_SCH_IDLE;
   dl_harq->first_rx = 1;
   dl_harq->DLround  = 0;
   dl_harq->decodeResult = false;
@@ -141,7 +124,7 @@ void downlink_harq_process(NR_DL_UE_HARQ_t *dl_harq, int harq_pid, int dci_ndi, 
       rnti_type == TYPE_P_RNTI_ ||
       rnti_type == TYPE_RA_RNTI_) {
     dl_harq->DLround = 0;
-    dl_harq->status = ACTIVE;
+    dl_harq->status = NR_ACTIVE;
     dl_harq->first_rx = 1;
   }  else {
     LOG_D(PHY,
@@ -153,7 +136,7 @@ void downlink_harq_process(NR_DL_UE_HARQ_t *dl_harq, int harq_pid, int dci_ndi, 
           rnti_type,
           dci_ndi ? "yes" : "no");
     AssertFatal(rv<4 && rv>=0, "invalid redondancy version %d\n", rv);
-    dl_harq->status = ACTIVE;
+    dl_harq->status = NR_ACTIVE;
   }
 }
 

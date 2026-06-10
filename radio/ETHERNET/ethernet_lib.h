@@ -1,33 +1,9 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file ethernet_lib.h
+/*!
  * \brief API to stream I/Q samples over standard ethernet
- * \author Katerina Trilyraki, Navid Nikaein
- * \date 2015
- * \version 0.2
- * \company Eurecom
- * \maintainer:  navid.nikaein@eurecom.fr
- * \note
- * \warning 
  */
 #ifndef ETHERNET_LIB_H
 #define ETHERNET_LIB_H
@@ -41,6 +17,7 @@
 #include <sys/socket.h>
 #include <net/if.h>
 #include <netinet/ether.h>
+#include "common/utils/threadPool/notified_fifo.h"
 
 #define MAX_INST 4
 
@@ -52,6 +29,14 @@
 #define ECPRIPCID_BYTES 2
 #define APP_HEADER_SIZE_BYTES (ECPRICOMMON_BYTES + ECPRIPCID_BYTES + sizeof(openair0_timestamp_t))
 #define ECPRIREV 1 // ECPRI Version 1, C=0 - single ECPRI message per OAI TX packet
+
+/*! \brief Structure used for initializing UDP read threads */
+typedef struct {
+  openair0_device_t *device;
+  int thread_id;
+  pthread_t pthread;
+  notifiedFIFO_t *resp;
+} udp_ctx_t;
 
 /*!\brief opaque ethernet data structure */
 typedef struct {
@@ -139,6 +124,8 @@ typedef struct {
   struct ether_header ehd;
   /*!\brief local address (user) for RAW socket*/
   struct sockaddr_ll local_addrd_ll;
+  /*!brief UDP TX thread context*/
+  udp_ctx_t **utx;
 } eth_state_t;
 
 

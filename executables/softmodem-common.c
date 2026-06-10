@@ -1,33 +1,9 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file softmodem-common.c
+/*!
  * \brief common code for 5G and LTE softmodem main xNB and UEs source (nr-softmodem.c, lte-softmodem.c...)
- * \author Nokia BellLabs France, francois Taburet
- * \date 2020
- * \version 0.1
- * \company Nokia BellLabs France
- * \email: francois.taburet@nokia-bell-labs.com
- * \note
- * \warning
  */
 #include <time.h>
 #include <dlfcn.h>
@@ -179,14 +155,14 @@ void softmodem_verify_mode(const softmodem_params_t *p)
   AssertFatal(num_modes == 1, "--phy-test, --do-ra, and --nsa are mutually exclusive\n");
 }
 
-void softmodem_printresources(int sig, telnet_printfunc_t pf) {
+static void softmodem_printresources(telnet_printfunc_t pf)
+{
   struct rusage usage;
   struct timespec stop;
 
   clock_gettime(CLOCK_BOOTTIME, &stop);
 
   uint64_t elapse = (stop.tv_sec - start.tv_sec) ;   // in seconds
-
 
   int st = getrusage(RUSAGE_SELF,&usage);
   if (!st) {
@@ -219,7 +195,7 @@ void signal_handler(int sig) {
     exit(-1);
   } else {
     if(sig==SIGINT ||sig==SOFTMODEM_RTSIGNAL)
-      softmodem_printresources(sig,(telnet_printfunc_t)printf);
+      softmodem_printresources((telnet_printfunc_t)printf);
     if (sig != SOFTMODEM_RTSIGNAL) {
       printf("Linux signal %s...\n",strsignal(sig));
       exit_function(__FILE__, __FUNCTION__, __LINE__, "softmodem starting exit procedure\n", OAI_EXIT_NORMAL);

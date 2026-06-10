@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 add_executable(nr-cuup-load-test nr-cuup-load-test.c)
 add_dependencies(nr-cuup-load-test params_libconfig)
 target_link_libraries(nr-cuup-load-test PRIVATE GTPV1U ${T_LIB} utils ITTI e1ap
@@ -11,4 +13,5 @@ if(ENABLE_TESTS)
            COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/nr-cuup-functional-test.sh ${CMAKE_CURRENT_SOURCE_DIR}/load-test.conf
            WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
   )
+  set_tests_properties(nr_cuup_functional_test PROPERTIES ENVIRONMENT "LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}")
 endif()

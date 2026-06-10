@@ -1,22 +1,5 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 #include "dci_payload_utils.h"
 #include "nr_fapi_p7.h"
@@ -31,8 +14,8 @@ static void fill_uci_indication_sr_pdu_0_1(nfapi_nr_sr_pdu_0_1_t *pdu)
 static void fill_uci_indication_sr_pdu_2_3_4(nfapi_nr_sr_pdu_2_3_4_t *pdu)
 {
   pdu->sr_bit_len = rand16_range(1, 8);
-  pdu->sr_payload = calloc(((pdu->sr_bit_len / 8) + 1), sizeof(*pdu->sr_payload));
-  for (int i = 0; i < (pdu->sr_bit_len / 8) + 1; ++i) {
+  pdu->sr_payload = calloc(nr_bits_to_bytes(pdu->sr_bit_len), sizeof(*pdu->sr_payload));
+  for (int i = 0; i < nr_bits_to_bytes(pdu->sr_bit_len); ++i) {
     pdu->sr_payload[i] = rand8();
   }
 }
@@ -50,8 +33,8 @@ static void fill_uci_indication_harq_pdu_2_3_4(nfapi_nr_harq_pdu_2_3_4_t *pdu)
 {
   pdu->harq_crc = rand8_range(0, 2);
   pdu->harq_bit_len = rand16_range(1, 1706);
-  pdu->harq_payload = calloc(((pdu->harq_bit_len / 8) + 1), sizeof(*pdu->harq_payload));
-  for (int i = 0; i < (pdu->harq_bit_len / 8) + 1; ++i) {
+  pdu->harq_payload = calloc(nr_bits_to_bytes(pdu->harq_bit_len), sizeof(*pdu->harq_payload));
+  for (int i = 0; i < nr_bits_to_bytes(pdu->harq_bit_len); ++i) {
     pdu->harq_payload[i] = rand8();
   }
 }
@@ -60,8 +43,8 @@ static void fill_uci_indication_csi_part1(nfapi_nr_csi_part1_pdu_t *pdu)
 {
   pdu->csi_part1_crc = rand8_range(0, 2);
   pdu->csi_part1_bit_len = rand16_range(1, 1706);
-  pdu->csi_part1_payload = calloc(((pdu->csi_part1_bit_len / 8) + 1), sizeof(*pdu->csi_part1_payload));
-  for (int i = 0; i < (pdu->csi_part1_bit_len / 8) + 1; ++i) {
+  pdu->csi_part1_payload = calloc(nr_bits_to_bytes(pdu->csi_part1_bit_len), sizeof(*pdu->csi_part1_payload));
+  for (int i = 0; i < nr_bits_to_bytes(pdu->csi_part1_bit_len); ++i) {
     pdu->csi_part1_payload[i] = rand8();
   }
 }
@@ -70,8 +53,8 @@ static void fill_uci_indication_csi_part2(nfapi_nr_csi_part2_pdu_t *pdu)
 {
   pdu->csi_part2_crc = rand8_range(0, 2);
   pdu->csi_part2_bit_len = rand16_range(1, 1706);
-  pdu->csi_part2_payload = calloc(((pdu->csi_part2_bit_len / 8) + 1), sizeof(*pdu->csi_part2_payload));
-  for (int i = 0; i < (pdu->csi_part2_bit_len / 8) + 1; ++i) {
+  pdu->csi_part2_payload = calloc(nr_bits_to_bytes(pdu->csi_part2_bit_len), sizeof(*pdu->csi_part2_payload));
+  for (int i = 0; i < nr_bits_to_bytes(pdu->csi_part2_bit_len); ++i) {
     pdu->csi_part2_payload[i] = rand8();
   }
 }
@@ -222,7 +205,7 @@ static void test_copy(const nfapi_nr_uci_indication_t *msg)
   free_uci_indication(&copy);
 }
 
-int main(int n, char *v[])
+int main()
 {
   fapi_test_init();
 

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 add_boolean_option(GENERATE_DOXYGEN OFF "Generate source code doc using doxygen" OFF)
 
 if(GENERATE_DOXYGEN)

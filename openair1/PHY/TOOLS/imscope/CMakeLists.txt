@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 if (ENABLE_IMSCOPE)
   CPMAddPackage("gh:ocornut/imgui#v1.91.3-docking")
   add_library(imgui

@@ -1,31 +1,9 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file rrc_UE.c
+/*!
  * \brief rrc procedures for UE / rrc procedures for FeMBMS UE
- * \author Navid Nikaein, Raymond Knopp and Javier Morgade
- * \date 2011 - 2014 / FeMBMS 2019
- * \version 1.0
- * \company Eurecom, Vicomtech
- * \email: navid.nikaein@eurecom.fr, raymond.knopp@eurecom.fr and javier.morgade@ieee.org
  */
 
 #define RRC_UE
@@ -35,7 +13,7 @@
 #include <arpa/inet.h>
 
 #include "assertions.h"
-#include "hashtable.h"
+#include "ds/hashtable.h"
 #include "oai_asn1.h"
 #include "rrc_defs.h"
 #include "rrc_extern.h"
@@ -110,8 +88,6 @@ static const float RSRQ_meas_mapping[35] = {-19, -18.5, -18, -17.5, -17, -16.5, 
 extern void pdcp_config_set_security(
   const protocol_ctxt_t *const  ctxt_pP,
   pdcp_t          *const pdcp_pP,
-  const rb_id_t         rb_idP,
-  const uint16_t        lc_idP,
   const uint8_t         security_modeP,
   uint8_t         *const kRRCenc,
   uint8_t         *const kRRCint,
@@ -130,9 +106,8 @@ static int decode_SIB1( const protocol_ctxt_t *const ctxt_pP, const uint8_t eNB_
 
 static int decode_SIB1_MBMS( const protocol_ctxt_t *const ctxt_pP, const uint8_t eNB_index, const uint8_t rsrq, const uint8_t rsrp );
 
-typedef struct rrc_dcch_data_copy_t
-{
-    LTE_DL_DCCH_Message_t *dl_dcch_msg;
+typedef struct {
+  LTE_DL_DCCH_Message_t *dl_dcch_msg;
 } rrc_dcch_data_copy_t;
 
 static void rrc_ue_process_ueCapabilityEnquiry(const protocol_ctxt_t *const ctxt_pP,
@@ -1537,7 +1512,7 @@ rrc_ue_process_securityModeCommand(
     derive_key_nas(UP_ENC_ALG, UE_rrc_inst[ctxt_pP->module_id].ciphering_algorithm, UE_rrc_inst[ctxt_pP->module_id].kenb, kUPenc);
 
     if (securityMode != 0xff) {
-      pdcp_config_set_security(ctxt_pP, pdcp_p, 0, 0,
+      pdcp_config_set_security(ctxt_pP, pdcp_p,
                                UE_rrc_inst[ctxt_pP->module_id].ciphering_algorithm
                                | (UE_rrc_inst[ctxt_pP->module_id].integrity_algorithm << 4),
                                kRRCenc, kRRCint, kUPenc);
@@ -2842,8 +2817,6 @@ int decode_SIB1( const protocol_ctxt_t *const ctxt_pP, const uint8_t eNB_index, 
   UE_rrc_inst[ctxt_pP->module_id].Info[eNB_index].SIB1systemInfoValueTag = sib1->systemInfoValueTag;
 
   if (!IS_SOFTMODEM_NOS1) {
-    int cell_valid = 0;
-
     if (sib1->cellAccessRelatedInfo.cellBarred == LTE_SystemInformationBlockType1__cellAccessRelatedInfo__cellBarred_notBarred) {
       /* Cell is not barred */
       int plmn;
@@ -2886,23 +2859,10 @@ int decode_SIB1( const protocol_ctxt_t *const ctxt_pP, const uint8_t eNB_index, 
           NAS_CELL_SELECTION_CNF (msg_p).rsrq = rsrq;
           NAS_CELL_SELECTION_CNF (msg_p).rsrp = rsrp;
           itti_send_msg_to_task(TASK_NAS_UE, ctxt_pP->instance, msg_p);
-          cell_valid = 1;
           UE_rrc_inst[ctxt_pP->module_id].selected_plmn_identity = plmn + 1;
           break;
         }
       }
-    }
-
-    if (cell_valid == 0) {
-      /* Cell can not be used, ask PHY to try the next one */
-      MessageDef  *msg_p;
-      msg_p = itti_alloc_new_message(TASK_RRC_UE, 0, PHY_FIND_NEXT_CELL_REQ);
-      itti_send_msg_to_task(TASK_PHY_UE, ctxt_pP->instance, msg_p);
-      LOG_E(RRC,
-            "Synched with a cell, but PLMN doesn't match our SIM "
-            "(selected_plmn_identity %d), the message PHY_FIND_NEXT_CELL_REQ "
-            "is sent but lost in current UE implementation!\n",
-            UE_rrc_inst[ctxt_pP->module_id].selected_plmn_identity);
     }
   }
 
@@ -4480,11 +4440,7 @@ void *rrc_ue_task( void *args_p ) {
 
           case RRC_STATE_IDLE: {
             /* Ask to layer 1 to find a cell matching the criterion */
-            MessageDef *message_p;
-            message_p = itti_alloc_new_message(TASK_RRC_UE, 0, PHY_FIND_CELL_REQ);
-            PHY_FIND_CELL_REQ (message_p).earfcn_start = 1;
-            PHY_FIND_CELL_REQ (message_p).earfcn_end = 1;
-            itti_send_msg_to_task(TASK_PHY_UE, UE_MODULE_ID_TO_INSTANCE(ue_mod_id), message_p);
+            LOG_W(RRC, "PHY_FIND_CELL_REQ message to L1/PHY not implemented\n");
             rrc_set_sub_state (ue_mod_id, RRC_SUB_STATE_IDLE_SEARCHING);
             break;
           }

@@ -1,4 +1,6 @@
 #!/bin/bash
+# SPDX-License-Identifier: MIT
+
 set -e
 CONTAINER_NAME=openair-dev-$USER
 if [ "$EUID" -eq 0 ]; then

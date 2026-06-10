@@ -1,30 +1,13 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
 #include "PHY/defs_nr_UE.h"
-#include "PHY/LTE_REFSIG/lte_refsig.h"
 #include "PHY/NR_REFSIG/nr_mod_table.h"
 #include "PHY/NR_UE_TRANSPORT/nr_transport_proto_ue.h"
 #include "PHY/CODING/nrPolar_tools/nr_polar_psbch_defs.h"
 #include "PHY/MODULATION/nr_modulation.h"
+#include "PHY/gold.h"
 
 // #define SL_DEBUG
 
@@ -37,7 +20,7 @@
 void sl_psbch_scrambling(uint32_t *output, uint32_t id, uint16_t length)
 {
   uint32_t x1, x2, s = 0;
-  // x1 is set in lte_gold_generic
+  // x1 is set in gold_generic
   x2 = id; // C_INIT
 
 #ifdef SL_DEBUG
@@ -47,7 +30,7 @@ void sl_psbch_scrambling(uint32_t *output, uint32_t id, uint16_t length)
 #endif
 
   // get initial 32 scrambing bits
-  s = lte_gold_generic(&x1, &x2, 1);
+  s = gold_generic(&x1, &x2, 1);
 #ifdef SL_DEBUG
   printf("s: %04x\t", s);
 #endif
@@ -58,7 +41,7 @@ void sl_psbch_scrambling(uint32_t *output, uint32_t id, uint16_t length)
     output[i >> 5] ^= s;
 
     i += 32;
-    s = lte_gold_generic(&x1, &x2, 0);
+    s = gold_generic(&x1, &x2, 0);
 #ifdef SL_DEBUG
     printf("s: %04x\t", s);
 #endif

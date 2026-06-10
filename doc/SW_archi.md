@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 
 ```mermaid
 flowchart TB
@@ -167,7 +169,6 @@ generate DL shared channel (user data)
 
 #### nr_feptx_prec()
 tx precoding
-<<<<<<< HEAD:doc/SW_archi.md
 
 #### nr_feptx0
 do the inverse DFT

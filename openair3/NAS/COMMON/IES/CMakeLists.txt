@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 add_library(nas_common_ies_lib OBJECT
     AuthenticationResponseParameter.c
     NasKeySetIdentifier.c

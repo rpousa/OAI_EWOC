@@ -1,23 +1,5 @@
-#/*
-# * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
-# * contributor license agreements.  See the NOTICE file distributed with
-# * this work for additional information regarding copyright ownership.
-# * The OpenAirInterface Software Alliance licenses this file to You under
-# * the OAI Public License, Version 1.1  (the "License"); you may not use this file
-# * except in compliance with the License.
-# * You may obtain a copy of the License at
-# *
-# *      http://www.openairinterface.org/?page_id=698
-# *
-# * Unless required by applicable law or agreed to in writing, software
-# * distributed under the License is distributed on an "AS IS" BASIS,
-# * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# * See the License for the specific language governing permissions and
-# * limitations under the License.
-# *-------------------------------------------------------------------------------
-# * For more information about the OpenAirInterface (OAI) Software Alliance:
-# *      contact@openairinterface.org
-# */
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 #---------------------------------------------------------------------
 # Python for CI of OAI-eNB + COTS-UE
 #
@@ -51,11 +33,8 @@ class HTMLManagement():
 		self.htmlHeaderCreated = False
 		self.htmlFooterCreated = False
 
-		self.ranRepository = ''
-		self.ranBranch = ''
-		self.ranCommitID = ''
-		self.ranAllowMerge = False
-		self.ranTargetBranch = ''
+		self.repository = ''
+		self.branch = ''
 
 		self.nbTestXMLfiles = 0
 		self.htmlTabRefs = []
@@ -114,47 +93,24 @@ class HTMLManagement():
 			self.htmlFile.write('     </tr>\n')
 			self.htmlFile.write('     <tr>\n')
 			self.htmlFile.write('       <td bgcolor = "lightcyan" > <span class="glyphicon glyphicon-cloud-upload"></span> GIT Repository </td>\n')
-			self.htmlFile.write('       <td><a href="' + self.ranRepository + '">' + self.ranRepository + '</a></td>\n')
+			self.htmlFile.write('       <td><a href="' + self.repository + '">' + self.repository + '</a></td>\n')
 			self.htmlFile.write('     </tr>\n')
 			self.htmlFile.write('     <tr>\n')
-			self.htmlFile.write('       <td bgcolor = "lightcyan" > <span class="glyphicon glyphicon-wrench"></span> Job Trigger </td>\n')
-			if (self.ranAllowMerge):
-				self.htmlFile.write('       <td>Merge-Request</td>\n')
-			else:
-				self.htmlFile.write('       <td>Push to Branch</td>\n')
+			self.htmlFile.write('       <td bgcolor = "lightcyan" > <span class="glyphicon glyphicon-log-out"></span> Test Branch </td>\n')
+			self.htmlFile.write('       <td>' + self.branch + '</td>\n')
 			self.htmlFile.write('     </tr>\n')
+			commit_id = subprocess.check_output("git log -n1 --pretty=format:\"%H\" ", shell=True, universal_newlines=True)
+			commit_id = commit_id.strip()
 			self.htmlFile.write('     <tr>\n')
-			if (self.ranAllowMerge):
-				self.htmlFile.write('       <td bgcolor = "lightcyan" > <span class="glyphicon glyphicon-log-out"></span> Source Branch </td>\n')
-			else:
-				self.htmlFile.write('       <td bgcolor = "lightcyan" > <span class="glyphicon glyphicon-tree-deciduous"></span> Branch</td>\n')
-			self.htmlFile.write('       <td>' + self.ranBranch + '</td>\n')
+			self.htmlFile.write('       <td bgcolor = "lightcyan" > <span class="glyphicon glyphicon-tag"></span> Commit ID </td>\n')
+			self.htmlFile.write('       <td>' + commit_id + '</td>\n')
 			self.htmlFile.write('     </tr>\n')
+			commit_message = subprocess.check_output("git log -n1 --pretty=format:\"%s\" ", shell=True, universal_newlines=True)
+			commit_message = commit_message.strip()
 			self.htmlFile.write('     <tr>\n')
-			if (self.ranAllowMerge):
-				self.htmlFile.write('       <td bgcolor = "lightcyan" > <span class="glyphicon glyphicon-tag"></span> Source Commit ID </td>\n')
-			else:
-				self.htmlFile.write('       <td bgcolor = "lightcyan" > <span class="glyphicon glyphicon-tag"></span> Commit ID </td>\n')
-			self.htmlFile.write('       <td>' + self.ranCommitID + '</td>\n')
+			self.htmlFile.write('       <td bgcolor = "lightcyan" > <span class="glyphicon glyphicon-comment"></span> Commit Message </td>\n')
+			self.htmlFile.write('       <td>' + commit_message + '</td>\n')
 			self.htmlFile.write('     </tr>\n')
-			if self.ranAllowMerge != '' and self.ranCommitID != 'develop':
-				commit_message = subprocess.check_output("git log -n1 --pretty=format:\"%s\" " + self.ranCommitID, shell=True, universal_newlines=True)
-				commit_message = commit_message.strip()
-				self.htmlFile.write('     <tr>\n')
-				if (self.ranAllowMerge):
-					self.htmlFile.write('       <td bgcolor = "lightcyan" > <span class="glyphicon glyphicon-comment"></span> Source Commit Message </td>\n')
-				else:
-					self.htmlFile.write('       <td bgcolor = "lightcyan" > <span class="glyphicon glyphicon-comment"></span> Commit Message </td>\n')
-				self.htmlFile.write('       <td>' + commit_message + '</td>\n')
-				self.htmlFile.write('     </tr>\n')
-			if (self.ranAllowMerge):
-				self.htmlFile.write('     <tr>\n')
-				self.htmlFile.write('       <td bgcolor = "lightcyan" > <span class="glyphicon glyphicon-log-in"></span> Target Branch </td>\n')
-				if (self.ranTargetBranch == ''):
-					self.htmlFile.write('       <td>develop</td>\n')
-				else:
-					self.htmlFile.write('       <td>' + self.ranTargetBranch + '</td>\n')
-				self.htmlFile.write('     </tr>\n')
 			self.htmlFile.write('  </table>\n')
 
 			self.htmlFile.write('  <br>\n')
@@ -218,7 +174,7 @@ class HTMLManagement():
 				cmd = "sed -i -e 's/__STATE_" + self.htmlTabNames[0] + "__//' test_results.html"
 				subprocess.run(cmd, shell=True)
 			else:
-				cmd = "sed -i -e 's/__STATE_" + self.htmlTabNames[0] + "__/<span class=\"glyphicon glyphicon-remove\"><\/span>/' test_results.html"
+				cmd = "sed -i -e 's/__STATE_" + self.htmlTabNames[0] + r"__/<span class=\"glyphicon glyphicon-remove\"><\/span>/' test_results.html"
 				subprocess.run(cmd, shell=True)
 		self.htmlFooterCreated = False
 
@@ -247,7 +203,7 @@ class HTMLManagement():
 			self.htmlFile.write('      </tr>\n')
 			self.htmlFile.write('  </table>\n')
 			self.htmlFile.write('  <p></p>\n')
-			self.htmlFile.write('  <div class="well well-lg">End of Test Report -- Copyright <span class="glyphicon glyphicon-copyright-mark"></span> 2025 <a href="http://www.openairinterface.org/">OpenAirInterface</a>. All Rights Reserved.</div>\n')
+			self.htmlFile.write('  <div class="well well-lg">End of Test Report -- Copyright <span class="glyphicon glyphicon-copyright-mark"></span> 2026 <a href="http://www.openairinterface.org/">OpenAirInterface</a>. All Rights Reserved.</div>\n')
 			self.htmlFile.write('</div></body>\n')
 			self.htmlFile.write('</html>\n')
 			self.htmlFile.close()
@@ -396,90 +352,6 @@ class HTMLManagement():
 			self.htmlFile.write('                </td>')
 			self.htmlFile.write('      </tr>\n')
 			self.htmlFile.close()
-
-	def CreateHtmlTestRowCppCheckResults(self, CCR):
-		if (self.htmlFooterCreated or (not self.htmlHeaderCreated)):
-			return
-		self.htmlFile = open('test_results.html', 'a')
-		vId = 0
-		for version in CCR.versions:
-			self.htmlFile.write('      <tr bgcolor = "#F0F0F0" >\n')
-			self.htmlFile.write('        <td colspan="6"><b> Results for cppcheck v ' + version + ' </b></td>\n')
-			self.htmlFile.write('      </tr>\n')
-			self.htmlFile.write('      <tr>\n')
-			self.htmlFile.write('        <td></td>\n')
-			self.htmlFile.write('        <td colspan="2" bgcolor = "lightcyan" ><b> NB ERRORS</b></td>\n')
-			if CCR.nbErrors[vId] == 0:
-				myColor = 'lightgreen'
-			elif CCR.nbErrors[vId] < 20:
-				myColor = 'orange'
-			else:
-				myColor = 'lightcoral'
-			self.htmlFile.write('        <td colspan="3" bgcolor = "' + myColor + '"><b>' + str(CCR.nbErrors[vId]) + '</b></td>\n')
-			self.htmlFile.write('      </tr>\n')
-			self.htmlFile.write('      <tr>\n')
-			self.htmlFile.write('        <td></td>\n')
-			self.htmlFile.write('        <td colspan="2" bgcolor = "lightcyan" ><b> NB WARNINGS</b></td>\n')
-			if CCR.nbWarnings[vId] == 0:
-				myColor = 'lightgreen'
-			elif CCR.nbWarnings[vId] < 20:
-				myColor = 'orange'
-			else:
-				myColor = 'lightcoral'
-			self.htmlFile.write('        <td colspan="3" bgcolor = "' + myColor + '"><b>' + str(CCR.nbWarnings[vId]) + '</b></td>\n')
-			self.htmlFile.write('      </tr>\n')
-			self.htmlFile.write('      <tr bgcolor = "#F0F0F0" >\n')
-			self.htmlFile.write('        <td colspan="6"> ----------------- </td>\n')
-			self.htmlFile.write('      </tr>\n')
-			self.htmlFile.write('      <tr>\n')
-			self.htmlFile.write('        <td></td>\n')
-			self.htmlFile.write('        <td colspan="2" bgcolor = "lightcyan" ><b> Memory leak</b></td>\n')
-			self.htmlFile.write('        <td colspan="3">' + str(CCR.nbMemLeaks[vId]) + '</td>\n')
-			self.htmlFile.write('      </tr>\n')
-			self.htmlFile.write('      <tr>\n')
-			self.htmlFile.write('        <td></td>\n')
-			self.htmlFile.write('        <td colspan="2" bgcolor = "lightcyan" ><b> Possible null pointer deference</b></td>\n')
-			self.htmlFile.write('        <td colspan="3">' + str(CCR.nbNullPtrs[vId]) + '</td>\n')
-			self.htmlFile.write('      </tr>\n')
-			self.htmlFile.write('      <tr>\n')
-			self.htmlFile.write('        <td></td>\n')
-			self.htmlFile.write('        <td colspan="2" bgcolor = "lightcyan" ><b> Uninitialized variable</b></td>\n')
-			self.htmlFile.write('        <td colspan="3">' + str(CCR.nbUninitVars[vId]) + '</td>\n')
-			self.htmlFile.write('      </tr>\n')
-			self.htmlFile.write('      <tr>\n')
-			self.htmlFile.write('        <td></td>\n')
-			self.htmlFile.write('        <td colspan="2" bgcolor = "lightcyan" ><b> Undefined behaviour shifting</b></td>\n')
-			self.htmlFile.write('        <td colspan="3">' + str(CCR.nbTooManyBitsShift[vId]) + '</td>\n')
-			self.htmlFile.write('      </tr>\n')
-			self.htmlFile.write('      <tr>\n')
-			self.htmlFile.write('        <td></td>\n')
-			self.htmlFile.write('        <td colspan="2" bgcolor = "lightcyan" ><b> Signed integer overflow</b></td>\n')
-			self.htmlFile.write('        <td colspan="3">' + str(CCR.nbIntegerOverflow[vId]) + '</td>\n')
-			self.htmlFile.write('      </tr>\n')
-			self.htmlFile.write('      <tr bgcolor = "#F0F0F0" >\n')
-			self.htmlFile.write('        <td colspan="6"> </td>\n')
-			self.htmlFile.write('      </tr>\n')
-			self.htmlFile.write('      <tr>\n')
-			self.htmlFile.write('        <td></td>\n')
-			self.htmlFile.write('        <td colspan="2" bgcolor = "lightcyan" ><b> Printf formatting issues</b></td>\n')
-			self.htmlFile.write('        <td colspan="3">' + str(CCR.nbInvalidPrintf[vId]) + '</td>\n')
-			self.htmlFile.write('      </tr>\n')
-			self.htmlFile.write('      <tr>\n')
-			self.htmlFile.write('        <td></td>\n')
-			self.htmlFile.write('        <td colspan="2" bgcolor = "lightcyan" ><b> Modulo result is predetermined</b></td>\n')
-			self.htmlFile.write('        <td colspan="3">' + str(CCR.nbModuloAlways[vId]) + '</td>\n')
-			self.htmlFile.write('      </tr>\n')
-			self.htmlFile.write('      <tr>\n')
-			self.htmlFile.write('        <td></td>\n')
-			self.htmlFile.write('        <td colspan="2" bgcolor = "lightcyan" ><b> Opposite Condition -> dead code</b></td>\n')
-			self.htmlFile.write('        <td colspan="3">' + str(CCR.nbOppoInnerCondition[vId]) + '</td>\n')
-			self.htmlFile.write('      </tr>\n')
-			self.htmlFile.write('      <tr>\n')
-			self.htmlFile.write('        <td></td>\n')
-			self.htmlFile.write('        <td colspan="2" bgcolor = "lightcyan" ><b> Wrong Scanf Nb Args</b></td>\n')
-			self.htmlFile.write('        <td colspan="3">' + str(CCR.nbWrongScanfArg[vId]) + '</td>\n')
-			self.htmlFile.write('      </tr>\n')
-			vId += 1
 
 	def CreateHtmlTestRowPhySimTestResult(self, testSummary, testResult):
 		if (self.htmlFooterCreated or (not self.htmlHeaderCreated)):

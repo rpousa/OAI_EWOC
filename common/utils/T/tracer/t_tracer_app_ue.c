@@ -1,33 +1,9 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file common/utils/T/tracer/t_tracer_app_ue.c
- * \brief T-Tracer UE service to capture tracee Messages from UE, it is used by data recording application
- * \author Abdo Gaber
- * \date 2025
- * \version 1.0
- * \company Emerson, NI Test and Measurement
- * \email:
- * \note
- * \warning
+/*!
+ * \brief T-Tracer UE service to capture trace Messages from UE, it is used by data recording application
  */
 
 #include <stdio.h>
@@ -56,7 +32,21 @@
 #define DEBUG_BUFFER
 // Duration to discard recording in milliseconds to mitigate stale or previous record data
 #define DISCARD_RECORD_DURATION_MS 10
-// #include <linux/time.h>
+
+// Sentinel values for field_descriptor: source is e.sending_time
+#define FIELD_SENDING_TIME_SEC  -2
+#define FIELD_SENDING_TIME_NSEC -3
+
+// State machine constants for shared memory protocol
+#define STATE_WAIT   0
+#define STATE_CONFIG 1
+#define STATE_RECORD 2
+#define STATE_STOP   3
+
+// Visual separator for state machine transitions in console output
+#define STATE_SEPARATOR "========================================"
+#define PRINT_STATE_BANNER(state_name) \
+  printf("\n%s\n  [STATE: %s]\n%s\n", STATE_SEPARATOR, state_name, STATE_SEPARATOR)
 
 // Combine bytes in little-endian format
 int combine_bytes(const uint8_t *bytes, size_t num_bytes)
@@ -68,19 +58,11 @@ int combine_bytes(const uint8_t *bytes, size_t num_bytes)
   return result;
 }
 
-// Convert an integer to an array of bytes in little-endian format
-void int_to_bytes(int num, uint8_t *bytes, size_t num_bytes)
+// Check if a message ID is present in an array of message IDs (generic array lookup)
+bool is_message_in_list(int msg_id_list[], int list_size, int msg_id)
 {
-  for (size_t i = 0; i < num_bytes; ++i) {
-    bytes[i] = (num >> (i * 8)) & 0xFF;
-  }
-}
-
-// Check if the message is in the list of bits messages
-bool is_bits_messages(int traces_bits_support_data_Collection_format_idx[], int n_bits_msgs, int msg_id)
-{
-  for (int i = 0; i < n_bits_msgs; i++) {
-    if (msg_id == traces_bits_support_data_Collection_format_idx[i]) {
+  for (int i = 0; i < list_size; i++) {
+    if (msg_id == msg_id_list[i]) {
       return true;
     }
   }
@@ -95,12 +77,6 @@ struct timespec get_current_time()
   return time;
 }
 
-// Function to convert timespec to microseconds
-long long timespec_to_microseconds(struct timespec time)
-{
-  return (time.tv_sec * 1000000LL) + (time.tv_nsec / 1000);
-}
-
 // Calculate the time difference in milliseconds
 double calculate_time_difference(struct timespec start, struct timespec end)
 {
@@ -112,7 +88,7 @@ double calculate_time_difference(struct timespec start, struct timespec end)
 // Get Time Stamp in microseconds in YYYYMMDDHHMMSSmmmuuu format
 char *get_time_stamp_usec(char time_stamp_str[])
 {
-  // initialization to measure time stamp --This part should be moved to inilization part
+  // initialization to measure time stamp
   time_t my_time;
   struct tm *timeinfo;
   time(&my_time);
@@ -128,29 +104,10 @@ char *get_time_stamp_usec(char time_stamp_str[])
   uint8_t hour = timeinfo->tm_hour;
   uint8_t min = timeinfo->tm_min;
   uint8_t sec = timeinfo->tm_sec;
-  uint16_t usec = (tv.tv_usec);
-  // printf ("Time stamp: %d_%d_%d_%d_%d_%d_%d \n",year,mon,mday,hour,min,sec,usec);
-  // sprintf(time_stamp_str, "%d_%d_%d_%d_%d_%d_%d",year,mon,mday,hour,min,sec,usec);
-  sprintf(time_stamp_str, "%04d%02d%02d%02d%02d%02d%06d", year, mon, mday, hour, min, sec, usec);
+  uint32_t usec = (tv.tv_usec);
+  sprintf(time_stamp_str, "%04d%02d%02d%02d%02d%02d%06u", year, mon, mday, hour, min, sec, usec);
 
   return time_stamp_str;
-}
-
-// Convert timestamp string to integer
-int convert_time_stamp_to_int(const char *timestamp)
-{
-  return atoi(timestamp);
-}
-
-// Split timestamp string and convert to integer
-int split_time_stamp_and_convert_to_int(char time_stamp_str[], int shift, int length)
-{
-  char time_part[length + 1]; // Buffer to hold the date part YYYYMMDD or HHMMSSmmm
-  // Copy the first 8 or 9 characters (YYYYMMDD) to HHMMSSmmm
-  strncpy(time_part, time_stamp_str + shift, length);
-  time_part[length] = '\0'; // Null-terminate the string
-  // Convert timestamp string to integer
-  return convert_time_stamp_to_int(time_part);
 }
 
 void err_exit(char *buf)
@@ -177,7 +134,7 @@ int create_shm(char **addrN, const char *shm_path, int projectId)
   shm_id = shmget(key, SHMSIZE, IPC_CREAT | IPC_EXCL | 0664);
   if (shm_id == -1) {
     if (errno == EEXIST) {
-      printf("Error: shared memeory already exist\n");
+      printf("Error: shared memory already exists\n");
       shm_id = shmget(key, 0, 0);
       printf("reference shm_id = %d\n", shm_id);
     } else {
@@ -234,75 +191,28 @@ void usage(void)
   exit(1);
 }
 
-// class to store the message and the action to enable capture selected data
-// 0: do not record message
-// 1: record message
-struct trace_struct {
-  char on_off_name[100];
-  int on_off_action;
-};
-
 // struct for trace message based on Data Collection Trace Messages Structure
-// you need to define the vararibles of each message
+// you need to define the variables of each message
 typedef struct {
   /* Data Collection Trace Message Structure  */
   int frame;
   int slot;
-  int datetime_yyyymmdd;
-  int datetime_hhmmssmmm;
   int frame_type, freq_range, subcarrier_spacing, cyclic_prefix, symbols_per_slot;
   int Nid_cell, rnti;
   int rb_size, rb_start, start_symbol_index, nr_of_symbols;
   int qam_mod_order, mcs_index, mcs_table, nrOfLayers, transform_precoding;
   int dmrs_config_type, ul_dmrs_symb_pos, number_dmrs_symbols;
   int dmrs_port, dmrs_nscid, nb_antennas_tx, number_of_bits;
-  int data_size, data;
-} event_trace_msg_data;
+  int data;
+} event_trace_msg_ul_data;
 
-void setup_trace_msg_data(event_trace_msg_data *d, void *database)
+void setup_trace_msg_ul_data(event_trace_msg_ul_data *d, void *database)
 {
   database_event_format f;
   int i;
 
-  /* Data Collection Trace Message Structure */
-  // FORMAT = int,frame : int,slot : int,datetime_yyyymmdd : int,datetime_hhmmssmmm :
-  // int,frame_type : int,freq_range : int,subcarrier_spacing : int,cyclic_prefix : int,symbols_per_slot :
-  // int,Nid_cell : int,rnti :
-  // int,rb_size : int,rb_start : int,start_symbol_index : int,nr_of_symbols :
-  // int,qam_mod_order : int,mcs_index : int,mcs_table : int,nrOfLayers :
-  // int,transform_precoding : int,dmrs_config_type : int,ul_dmrs_symb_pos :  int,number_dmrs_symbols :
-  // int,dmrs_port : int,dmrs_nscid :
-  // int,nb_antennas_tx : int,number_of_bits : buffer,data
-
-  // Initialize the data structure
-  d->frame = -1;
-  d->slot = -1;
-  d->datetime_yyyymmdd = -1;
-  d->datetime_hhmmssmmm = -1;
-  d->frame_type = -1;
-  d->freq_range = -1;
-  d->subcarrier_spacing = -1;
-  d->cyclic_prefix = -1;
-  d->symbols_per_slot = -1;
-  d->Nid_cell = -1;
-  d->rnti = -1;
-  d->rb_size = -1;
-  d->rb_start = -1;
-  d->start_symbol_index = -1;
-  d->nr_of_symbols = -1;
-  d->qam_mod_order = -1;
-  d->mcs_index = -1;
-  d->mcs_table = -1;
-  d->nrOfLayers = -1;
-  d->transform_precoding = -1;
-  d->dmrs_config_type = -1;
-  d->ul_dmrs_symb_pos = -1;
-  d->number_dmrs_symbols = -1;
-  d->dmrs_port = -1;
-  d->dmrs_nscid = -1;
-  d->nb_antennas_tx = -1;
-  d->number_of_bits = -1;
-  d->data = -1;
+  // Initialize all fields to -1 (marks unset indices)
+  memset(d, -1, sizeof(*d));
 
 /* this macro looks for a particular element and checks its type */
 #define G(var_name, var_type, var)                                      \
@@ -315,35 +225,14 @@ void setup_trace_msg_data(event_trace_msg_data *d, void *database)
     continue;                                                           \
   }
 
-  /* ------------------------------*/
-  /* Create Macro for Data Collection Trace Message */
-  /* ------------------------------*/
-  // Data Collection Trace Message Structure
-  // Example: GNB_PHY_UL_FD_PUSCH_IQ,  GNB_PHY_UL_FD_DMRS_ID,
-  //          GNB_PHY_UL_FD_CHAN_EST_DMRS_POS, GNB_PHY_UL_FD_CHAN_EST_DMRS_INTERPL
-  //          GNB_PHY_UL_PAYLOAD_RX_BITS
-  //          UE_PHY_UL_SCRAMBLED_TX_BITS
-  //          UE_PHY_UL_PAYLOAD_TX_BITS
-  // Get a template of any message based on Data Collection Trace Messages Structure
+  // Get a template of any UL message based on Data Collection Trace Messages Structure
   int Trace_MSG_ID = event_id_from_name(database, "GNB_PHY_UL_FD_PUSCH_IQ");
   f = get_format(database, Trace_MSG_ID);
 
-  /* get the elements of the trace
-   * the value is an index in the event, see below */
-  // FORMAT = int,frame : int,slot : int,datetime_yyyymmdd : int,datetime_hhmmssmmm :
-  // int,frame_type : int,freq_range : int,subcarrier_spacing : int,cyclic_prefix : int,symbols_per_slot :
-  // int,Nid_cell : int,rnti :
-  // int,rb_size : int,rb_start : int,start_symbol_index : int,nr_of_symbols :
-  // int,qam_mod_order : int,mcs_index : int,mcs_table : int,nrOfLayers :
-  // int,transform_precoding : int,dmrs_config_type : int,ul_dmrs_symb_pos :  int,number_dmrs_symbols :
-  // int,dmrs_port : int,dmrs_nscid :
-  // int,nb_antennas_tx : int,number_of_bits : buffer,data
-
+  // Map each field name to its index in the event structure
   for (i = 0; i < f.count; i++) {
     G("frame", "int", d->frame)
     G("slot", "int", d->slot)
-    G("datetime_yyyymmdd", "int", d->datetime_yyyymmdd)
-    G("datetime_hhmmssmmm", "int", d->datetime_hhmmssmmm)
     G("frame_type", "int", d->frame_type)
     G("freq_range", "int", d->freq_range)
     G("subcarrier_spacing", "int", d->subcarrier_spacing)
@@ -371,20 +260,108 @@ void setup_trace_msg_data(event_trace_msg_data *d, void *database)
     G("number_of_bits", "int", d->number_of_bits)
     G("data", "buffer", d->data)
   }
-  // if (d->frame == -1 || d->slot == -1) goto error;
 #undef G
-  return;
 }
 
-// Function to check if a value is in the array
-int isValueInArray(int value, int arr[], int size)
+// -------------------------------------------------------------------
+// Table-driven UL metadata shared memory writer and debug printer
+// -------------------------------------------------------------------
+
+// Number of UL metadata fields written to shared memory (excludes msg_id and buffer)
+#define N_UL_METADATA_FIELDS 27
+
+// Descriptor for one metadata field to write to shared memory
+typedef struct {
+  int field_idx;     // index into event e.e[] array
+  size_t wire_size;  // number of bytes to write to shm
+} field_descriptor;
+
+// Build UL field descriptor array from a populated event_trace_msg_ul_data struct.
+// Must be called after setup_trace_msg_ul_data() so that field indices are populated.
+// Note: nb_antennas_tx maps to database field "nb_antennas_rx" (see G macro workaround above)
+void build_ul_field_descriptors(field_descriptor *fields, const event_trace_msg_ul_data *d)
 {
-  for (int i = 0; i < size; i++) {
-    if (arr[i] == value) {
-      return 1; // Value found
+  int i = 0;
+  fields[i++] = (field_descriptor){ d->frame, sizeof(uint16_t) };
+  fields[i++] = (field_descriptor){ d->slot, sizeof(uint8_t) };
+  fields[i++] = (field_descriptor){ FIELD_SENDING_TIME_SEC, sizeof(uint32_t) };
+  fields[i++] = (field_descriptor){ FIELD_SENDING_TIME_NSEC, sizeof(uint32_t) };
+  fields[i++] = (field_descriptor){ d->frame_type, sizeof(uint8_t) };
+  fields[i++] = (field_descriptor){ d->freq_range, sizeof(uint8_t) };
+  fields[i++] = (field_descriptor){ d->subcarrier_spacing, sizeof(uint8_t) };
+  fields[i++] = (field_descriptor){ d->cyclic_prefix, sizeof(uint8_t) };
+  fields[i++] = (field_descriptor){ d->symbols_per_slot, sizeof(uint8_t) };
+  fields[i++] = (field_descriptor){ d->Nid_cell, sizeof(uint16_t) };
+  fields[i++] = (field_descriptor){ d->rnti, sizeof(uint16_t) };
+  fields[i++] = (field_descriptor){ d->rb_size, sizeof(uint16_t) };
+  fields[i++] = (field_descriptor){ d->rb_start, sizeof(uint16_t) };
+  fields[i++] = (field_descriptor){ d->start_symbol_index, sizeof(uint8_t) };
+  fields[i++] = (field_descriptor){ d->nr_of_symbols, sizeof(uint8_t) };
+  fields[i++] = (field_descriptor){ d->qam_mod_order, sizeof(uint8_t) };
+  fields[i++] = (field_descriptor){ d->mcs_index, sizeof(uint8_t) };
+  fields[i++] = (field_descriptor){ d->mcs_table, sizeof(uint8_t) };
+  fields[i++] = (field_descriptor){ d->nrOfLayers, sizeof(uint8_t) };
+  fields[i++] = (field_descriptor){ d->transform_precoding, sizeof(uint8_t) };
+  fields[i++] = (field_descriptor){ d->dmrs_config_type, sizeof(uint8_t) };
+  fields[i++] = (field_descriptor){ d->ul_dmrs_symb_pos, sizeof(uint16_t) };
+  fields[i++] = (field_descriptor){ d->number_dmrs_symbols, sizeof(uint8_t) };
+  fields[i++] = (field_descriptor){ d->dmrs_port, sizeof(uint16_t) };
+  fields[i++] = (field_descriptor){ d->dmrs_nscid, sizeof(uint16_t) };
+  fields[i++] = (field_descriptor){ d->nb_antennas_tx, sizeof(uint8_t) };
+  fields[i++] = (field_descriptor){ d->number_of_bits, sizeof(uint32_t) };
+}
+
+// Print UL metadata fields for debug output
+// Note: nb_antennas_tx is the UE transmit antenna count (maps to database field "nb_antennas_rx")
+void print_ul_metadata_debug(event e, const event_trace_msg_ul_data *d, void *database)
+{
+  printf("\nUnix TS: %ld.%09ld", e.sending_time.tv_sec, e.sending_time.tv_nsec);
+  printf("\nMessage Info: msg_id %s (%d) \n", event_name_from_id(database, e.type), e.type);
+  printf("frame %d, slot %d, unix_ts %ld.%09ld\n",
+         e.e[d->frame].i, e.e[d->slot].i,
+         e.sending_time.tv_sec, e.sending_time.tv_nsec);
+  printf("frame_type %d, freq_range %d, subcarrier_spacing %d, cyclic_prefix %d, symbols_per_slot %d\n",
+         e.e[d->frame_type].i, e.e[d->freq_range].i,
+         e.e[d->subcarrier_spacing].i, e.e[d->cyclic_prefix].i,
+         e.e[d->symbols_per_slot].i);
+  printf("Nid_cell %d, rnti %d, rb_size %d, rb_start %d, start_symbol_index %d, nr_of_symbols %d\n",
+         e.e[d->Nid_cell].i, e.e[d->rnti].i,
+         e.e[d->rb_size].i, e.e[d->rb_start].i,
+         e.e[d->start_symbol_index].i, e.e[d->nr_of_symbols].i);
+  printf("qam_mod_order %d, mcs_index %d, mcs_table %d, nrOfLayers %d, transform_precoding %d\n",
+         e.e[d->qam_mod_order].i, e.e[d->mcs_index].i,
+         e.e[d->mcs_table].i, e.e[d->nrOfLayers].i,
+         e.e[d->transform_precoding].i);
+  printf("dmrs_config_type %d, ul_dmrs_symb_pos %d, number_dmrs_symbols %d, dmrs_port %d, dmrs_nscid %d\n",
+         e.e[d->dmrs_config_type].i, e.e[d->ul_dmrs_symb_pos].i,
+         e.e[d->number_dmrs_symbols].i, e.e[d->dmrs_port].i,
+         e.e[d->dmrs_nscid].i);
+  printf("nb_antennas_tx %d, number_of_bits %d, data size %d\n",
+         e.e[d->nb_antennas_tx].i, e.e[d->number_of_bits].i,
+         e.e[d->data].bsize);
+}
+
+// Write metadata fields to shared memory using field descriptor table.
+// Writes msg_id first, then loops through all fields.
+void write_metadata_to_shm(char *addr_wr, unsigned int *bufIdx_wr, event e,
+                           const field_descriptor *fields, int n_fields)
+{
+  // Write message ID
+  memcpy(&addr_wr[*bufIdx_wr], &e.type, sizeof(uint16_t));
+  *bufIdx_wr += sizeof(uint16_t);
+  // Write all metadata fields
+  for (int i = 0; i < n_fields; i++) {
+    if (fields[i].field_idx == FIELD_SENDING_TIME_SEC) {
+      uint32_t ts_sec = (uint32_t)e.sending_time.tv_sec;
+      memcpy(&addr_wr[*bufIdx_wr], &ts_sec, fields[i].wire_size);
+    } else if (fields[i].field_idx == FIELD_SENDING_TIME_NSEC) {
+      uint32_t ts_nsec = (uint32_t)e.sending_time.tv_nsec;
+      memcpy(&addr_wr[*bufIdx_wr], &ts_nsec, fields[i].wire_size);
+    } else {
+      memcpy(&addr_wr[*bufIdx_wr], &e.e[fields[i].field_idx].i, fields[i].wire_size);
     }
+    *bufIdx_wr += fields[i].wire_size;
   }
-  return 0; // Value not found
 }
 
 void reestablish_connection(int *socket, char *ip, int port, int number_of_events, int *is_on)
@@ -412,40 +389,24 @@ int main(int n, char **v)
   // trace_msgs_support_data_Collection_format
   // it is used to parse the requested messages if it is based
   // on Data Collection Trace Messages Structure and supported tracer messages indices
-  char *traces_iq_support_data_Collection_format[] = {"GNB_PHY_UL_FD_PUSCH_IQ",
-                                                            "GNB_PHY_UL_FD_DMRS",
-                                                            "GNB_PHY_UL_FD_CHAN_EST_DMRS_POS",
-                                                            "GNB_PHY_UL_FD_CHAN_EST_DMRS_INTERPL"};
-  char *traces_bits_support_data_Collection_format[] = {"GNB_PHY_UL_PAYLOAD_RX_BITS",
-                                                              "UE_PHY_UL_SCRAMBLED_TX_BITS",
-                                                              "UE_PHY_UL_PAYLOAD_TX_BITS"};
-  // extra number of records to simlify Sync between base station and UE synchronization records.
+  char *traces_ul_support_data_Collection_format[] = {"GNB_PHY_UL_FD_PUSCH_IQ",
+                                                      "GNB_PHY_UL_FD_DMRS",
+                                                      "GNB_PHY_UL_FD_CHAN_EST_DMRS_POS",
+                                                      "GNB_PHY_UL_FD_CHAN_EST_DMRS_INTERPL",
+                                                      "GNB_PHY_UL_PAYLOAD_RX_BITS",
+                                                      "UE_PHY_UL_SCRAMBLED_TX_BITS",
+                                                      "UE_PHY_UL_PAYLOAD_TX_BITS"};
+  // extra number of records to simplify sync between base station and UE synchronization records.
   // if you have network delay, you can increase the number of records to capture
   int max_sync_offset = 6; // 6 frames ~ 60 ms
-  // all supported messages
-  // Calculate the size of the combined array
-  int n_iq_msgs = sizeof(traces_iq_support_data_Collection_format) / sizeof(traces_iq_support_data_Collection_format[0]);
-  int n_bits_msgs = sizeof(traces_bits_support_data_Collection_format) / sizeof(traces_bits_support_data_Collection_format[0]);
-  int n_msgs_based_data_Collection_format = n_iq_msgs + n_bits_msgs;
-
-  // Create the combined array
-  char *traces_support_data_Collection_format[n_msgs_based_data_Collection_format];
-  // Copy IQ messages to the combined array
-  for (int i = 0; i < n_iq_msgs; i++) {
-    traces_support_data_Collection_format[i] = traces_iq_support_data_Collection_format[i];
-  }
-
-  // Copy Bits messages to the combined array
-  for (int i = 0; i < n_bits_msgs; i++) {
-    traces_support_data_Collection_format[i + n_iq_msgs] = traces_bits_support_data_Collection_format[i];
-  }
+  // Calculate the size of the UL message array
+  int n_ul_msgs = sizeof(traces_ul_support_data_Collection_format) / sizeof(traces_ul_support_data_Collection_format[0]);
 
   uint16_t msg_id = 0;
   uint16_t start_frame_number = 0;
   uint32_t number_records = 0; // number of records to capture, it is number of slots
   // array to store the requested tracer messages indices
   int req_tracer_msgs_indices[100] = {0};
-  // define variables --> to do: add all of them to be class of pointers
   char *database_filename = NULL;
   void *database;
   char *ip = DEFAULT_REMOTE_IP;
@@ -458,18 +419,19 @@ int main(int n, char **v)
   char trace_time_stamp_str[30];
 
   // data structure for the trace messages based on Data Collection Trace Messages Structure
-  event_trace_msg_data trace_msg_data;
+  event_trace_msg_ul_data trace_msg_ul_data;
 
-  // initlization variables
+  // initialization variables
   unsigned int bufIdx_wr = 0;
   unsigned int bufIdx_rd = 0;
   uint8_t num_req_tracer_msgs = 0;
 
-  // initilaze shared memory
+  // initialize shared memory
   char *addr_wr, *addr_rd;
-  printf("\n Data Collection Service: Initializing shared memory ...");
-  printf("\n Directory 1: %s, Directory 2: %s", GETKEYDIR1_UE, GETKEYDIR2_UE);
-  printf("\n Project ID: %d\n", PROJECTID_UE);
+  PRINT_STATE_BANNER("INIT");
+  printf("  Data Collection Service: Initializing shared memory ...\n");
+  printf("  Directory 1: %s, Directory 2: %s\n", GETKEYDIR1_UE, GETKEYDIR2_UE);
+  printf("  Project ID: %d\n", PROJECTID_UE);
   int shm_id_wr = create_shm(&addr_wr, GETKEYDIR1_UE, PROJECTID_UE);
   int shm_id_rd = create_shm(&addr_rd, GETKEYDIR2_UE, PROJECTID_UE);
   del_shm(addr_wr, shm_id_wr);
@@ -526,20 +488,18 @@ int main(int n, char **v)
   addr_rd[0] = 0; // important to check if we have new requested messages
 
   // read requested tracer msg indices from memory
-  printf("\n Data Collection Service: Waiting for messages request ...\n");
-  // 0: Wait
-  // 1: config
-  // 2: record
-  // 3: stop
+  PRINT_STATE_BANNER("WAIT");
+  printf("  Data Collection Service: Waiting for config message ...\n");
   // Wait for Action Config
   while (1) {
-    if ((uint8_t)(addr_rd[0]) == 0) {
+    if ((uint8_t)(addr_rd[0]) == STATE_WAIT) {
       usleep(50); // sleep for 50 us: 0.5 ms slot duration
     }
     // config state
-    else if ((uint8_t)(addr_rd[0]) == 1) {
+    else if ((uint8_t)(addr_rd[0]) == STATE_CONFIG) {
       get_time_stamp_usec(trace_time_stamp_str);
-      printf("\n Received config message. Time Stamp: %s", trace_time_stamp_str);
+      PRINT_STATE_BANNER("CONFIG");
+      printf("  Received config message. Time Stamp: %s\n", trace_time_stamp_str);
 
       // get the IP address length in bytes
       bufIdx_rd = 1;
@@ -556,11 +516,11 @@ int main(int n, char **v)
 
       // get the array bytes of the port number : 2 bytes
       uint8_t port_number_bytes[2] = {addr_rd[bufIdx_rd], addr_rd[bufIdx_rd + 1]};
-      bufIdx_rd += 2; // + 2 bytes = start frame number
+      bufIdx_rd += 2; // + 2 bytes = port number
 
       port = combine_bytes(port_number_bytes, 2);
-      printf("\n Parameters: IP Address length: %d, IP Address: %s, Port Number: %d \n", ip_address_length, ip_address, port);
-      addr_rd[0] = 0; // reset memory : to wait for record action
+      printf("  Parameters: IP Address length: %d, IP Address: %s, Port Number: %d\n", ip_address_length, ip_address, port);
+      addr_rd[0] = STATE_WAIT; // reset memory : to wait for record action
       break;
     }
   }
@@ -571,37 +531,39 @@ int main(int n, char **v)
 
   /* connect to the nr-softmodem */
   socket = connect_to(ip, port);
-  printf("\n Connected to nr-UEsoftmodem");
+  printf("  Connected to nr-uesoftmodem\n");
 
   // Read Action record or stop
-  printf("\n Data Collection Service: Waiting for record message ...\n");
+  PRINT_STATE_BANNER("WAIT");
+  printf("  Data Collection Service: Waiting for record/stop message ...\n");
   while (1) {
     // wait for Action record
-    if ((uint8_t)(addr_rd[0]) == 0) {
+    if ((uint8_t)(addr_rd[0]) == STATE_WAIT) {
       usleep(50); // sleep for 50 us: 0.5 ms slot duration
     }
 
     // quit state
-    else if ((uint8_t)(addr_rd[0]) == 3) {
-      printf("\n Received 'stop' command. Exiting...");
-      printf("\n ");
+    else if ((uint8_t)(addr_rd[0]) == STATE_STOP) {
+      PRINT_STATE_BANNER("STOP");
+      printf("  Received 'stop' command. Exiting...\n");
       // Clean up and exit
       break;
     }
     // record state
-    else if ((uint8_t)(addr_rd[0]) == 2) {
+    else if ((uint8_t)(addr_rd[0]) == STATE_RECORD) {
       // clear remote buffer if there is
       clear_remote_config();
       get_time_stamp_usec(trace_time_stamp_str);
-      printf("\n Received record message. Time Stamp: %s", trace_time_stamp_str);
+      PRINT_STATE_BANNER("RECORD");
+      printf("  Received record message. Time Stamp: %s\n", trace_time_stamp_str);
 
       // read number of requested messages
       bufIdx_rd = 1;
       num_req_tracer_msgs = addr_rd[bufIdx_rd];
       bufIdx_rd += 1;
-      printf("\n Number of requested tracer messages: %d,", num_req_tracer_msgs);
+      printf("  Number of requested tracer messages: %d\n", num_req_tracer_msgs);
       // reset memory : action to wait for next record action
-      addr_rd[0] = 0;
+      addr_rd[0] = STATE_WAIT;
 
       // read tracer msg IDs - every message ID has been stored in two bytes
       for (uint8_t msg_n = 0; msg_n < num_req_tracer_msgs; msg_n++) {
@@ -633,40 +595,36 @@ int main(int n, char **v)
       printf("start_frame: %d\n", start_frame_number);
 
       /* activate the trace in this array */
-      printf("\n Activate Tracer messages in on_off array: \n");
+      printf("  Activating tracer messages:\n");
       for (i = 0; i < num_req_tracer_msgs; i++) {
         char *on_off_name = event_name_from_id(database, req_tracer_msgs_indices[i]);
         on_off(database, on_off_name, is_on, 1);
-        printf("%d, %s, ", req_tracer_msgs_indices[i], on_off_name);
-        // on_off(database, "GNB_PHY_DL_OUTPUT_SIGNAL", is_on, 1);
+        printf("    %d: %s\n", req_tracer_msgs_indices[i], on_off_name);
       }
 
-      // get the event IDs for the bit messages
-      int traces_bits_support_data_Collection_format_idx[n_bits_msgs];
-      for (int i = 0; i < n_bits_msgs; i++) {
-        traces_bits_support_data_Collection_format_idx[i] =
-            event_id_from_name(database, traces_bits_support_data_Collection_format[i]);
-      }
-
-      // all supported messages
-      int traces_support_data_Collection_format_idx[n_msgs_based_data_Collection_format];
-      for (int i = 0; i < n_msgs_based_data_Collection_format; i++) {
-        traces_support_data_Collection_format_idx[i] = event_id_from_name(database, traces_support_data_Collection_format[i]);
+      // Build UL message ID array for generic UL dispatch
+      int ul_msg_ids[n_ul_msgs];
+      for (int i = 0; i < n_ul_msgs; i++) {
+        ul_msg_ids[i] = event_id_from_name(database, traces_ul_support_data_Collection_format[i]);
       }
 
       // setup data for the trace messages
-      setup_trace_msg_data(&trace_msg_data, database);
-      printf("\n Setup Trace Data Done");
+      setup_trace_msg_ul_data(&trace_msg_ul_data, database);
+      printf("  Setup UL trace data done\n");
+
+      // Build field descriptor table for table-driven shared memory writes
+      field_descriptor ul_fields[N_UL_METADATA_FIELDS];
+      build_ul_field_descriptors(ul_fields, &trace_msg_ul_data);
 
       // Get the start time
       struct timespec start_time = get_current_time();
 
-      /* activate the tracee in the nr-softmodem */
+      /* activate the traces in the nr-uesoftmodem */
       activate_traces(socket, number_of_events, is_on);
-      printf("\n Activated Traces in nr-UEsoftmodem");
+      printf("  Activated traces in nr-uesoftmodem\n");
 
       /* a buffer needed to receive events from the nr-softmodem */
-      OBUF ebuf = {osize : 0, omaxsize : 0, obuf : NULL};
+      OBUF ebuf = {.osize = 0, .omaxsize = 0, .obuf = NULL};
       /* read events */
       int nrecord_idx = 0;
       bufIdx_wr = 0;
@@ -680,8 +638,8 @@ int main(int n, char **v)
       int current_frame = 0, prev_frame = 0, current_slot = 0, prev_slot = 0;
       // offset to sync between base station and UE synchronization records or power measurements
       int sync_offset_index = 0; // increase the index only if the index of frame changes after getting all records
-      // since we will use the frame differece to do extra records, we should be sure that the last slot is recorded completely
-      printf("\n\n Data Collection Service: Start reading messages ...");
+      // since we will use the frame difference to do extra records, we should be sure that the last slot is recorded completely
+      printf("\n  Data Collection Service: Start reading messages ...\n");
       struct pollfd event_poll_fd;
       event_poll_fd.fd = socket;
       event_poll_fd.events = POLLIN;
@@ -701,27 +659,23 @@ int main(int n, char **v)
             continue; // Skip further processing and retry
           }
 
-          //-------------------------
-          // GNB_PHY_UL_FD_PUSCH_IQ,  GNB_PHY_UL_FD_DMRS_ID, GNB_PHY_UL_FD_CHAN_EST_DMRS_POS,
-          // UE_PHY_UL_SCRAMBLED_TX_BITS, GNB_PHY_UL_PAYLOAD_RX_BITS, UE_PHY_UL_PAYLOAD_TX_BITS
-          //-------------------------
           // is it a requested message
-          if (isValueInArray(e.type, req_tracer_msgs_indices, num_req_tracer_msgs)) {
+          if (is_message_in_list(req_tracer_msgs_indices, num_req_tracer_msgs, e.type)) {
             // is it based on Data Collection Trace Messages Structure
-            if (isValueInArray(e.type, traces_support_data_Collection_format_idx, n_msgs_based_data_Collection_format)) {
+            if (is_message_in_list(ul_msg_ids, n_ul_msgs, e.type)) {
               // Start recording from the next slot to mitigate capturing partial data
               // check if the current frame and slot are different from the previous frame and slot
               // Then, increase the record index
               if (start_recording == false) {
                 if (got_ref_frame_slot == false) {
-                  ref_frame = e.e[trace_msg_data.frame].i;
-                  ref_slot = e.e[trace_msg_data.slot].i;
+                  ref_frame = e.e[trace_msg_ul_data.frame].i;
+                  ref_slot = e.e[trace_msg_ul_data.slot].i;
                   printf("\nMessage Info: msg_id %s (%d) \n", event_name_from_id(database, e.type), e.type);
                   got_ref_frame_slot = true;
                 }
 
-                current_frame = e.e[trace_msg_data.frame].i;
-                current_slot = e.e[trace_msg_data.slot].i;
+                current_frame = e.e[trace_msg_ul_data.frame].i;
+                current_slot = e.e[trace_msg_ul_data.slot].i;
                 frame_difference = (current_frame - ref_frame + MAX_FRAME_INDEX + 1) % (MAX_FRAME_INDEX + 1);
                 slot_difference = (current_slot - ref_slot + MAX_SLOT_INDEX + 1) % (MAX_SLOT_INDEX + 1);
                 printf("\n First frame.slot: %d.%d, current frame.slot: %d.%d, diff frame.slot: %d.%d",
@@ -734,130 +688,30 @@ int main(int n, char **v)
 
                 if ((ref_frame != current_frame) || (ref_slot != current_slot)) {
                   start_recording = true;
-                  printf("\n Start recording from frame: %d, slot: %d ", e.e[trace_msg_data.frame].i, e.e[trace_msg_data.slot].i);
+                  printf("\n Start recording from frame: %d, slot: %d ", e.e[trace_msg_ul_data.frame].i, e.e[trace_msg_ul_data.slot].i);
                 }
               }
               // start recording from the next frame to mitigate capturing partial data
               if (start_recording == true) {
-                /* this is how to access the elements of the Data Collection trace messages.
-                 * we use e.e[<element>] and then the correct suffix, here
-                 * it's .i for the integer and .b for the buffer and .bsize for the buffer size
-                 * see in event.h the structure event_arg
-                 */
-                unsigned char *buf = e.e[trace_msg_data.data].b;
-
                 printf("\n\nRecord number: %d", nrecord_idx);
 #ifdef DEBUG_BUFFER
                 printf("\nBuffer index in bytes: %d", bufIdx_wr);
 #endif
-
-                // add general message header:  message ID,
-                // T-Tracer Message format
-                // FORMAT = int,frame : int,slot : int,datetime_yyyymmdd : int,datetime_hhmmssmmm :
-                // int,frame_type : int,freq_range : int,subcarrier_spacing : int,cyclic_prefix : int,symbols_per_slot :
-                // int,Nid_cell : int,rnti :
-                // int,rb_size : int,rb_start : int,start_symbol_index : int,nr_of_symbols :
-                // int,qam_mod_order : int,mcs_index : int,mcs_table : int,nrOfLayers :
-                // int,transform_precoding : int,dmrs_config_type : int,ul_dmrs_symb_pos :  int,number_dmrs_symbols :
-                // int,dmrs_port : int,dmrs_nscid :
-                // int,nb_antennas_tx : int,number_of_bits : buffer,data
-                // printf("\nTX : %d", e.e[trace_msg_data.nb_antennas_tx].i);
-                memcpy(&addr_wr[bufIdx_wr], &e.type, sizeof(uint16_t));
-                bufIdx_wr += sizeof(uint16_t);
-                memcpy(&addr_wr[bufIdx_wr], &e.e[trace_msg_data.frame].i, sizeof(uint16_t));
-                bufIdx_wr += sizeof(uint16_t);
-                memcpy(&addr_wr[bufIdx_wr], &e.e[trace_msg_data.slot].i, sizeof(uint8_t));
-                bufIdx_wr += sizeof(uint8_t);
-                memcpy(&addr_wr[bufIdx_wr], &e.e[trace_msg_data.datetime_yyyymmdd].i, sizeof(uint32_t));
+                // --- UL IQ/Bits handler ---
+                // Write metadata + buffer to shared memory
+                write_metadata_to_shm(addr_wr, &bufIdx_wr, e, ul_fields, N_UL_METADATA_FIELDS);
+                // Write buffer: size (uint32_t) + raw data
+                memcpy(&addr_wr[bufIdx_wr], &e.e[trace_msg_ul_data.data].bsize, sizeof(uint32_t));
                 bufIdx_wr += sizeof(uint32_t);
-                memcpy(&addr_wr[bufIdx_wr], &e.e[trace_msg_data.datetime_hhmmssmmm].i, sizeof(uint32_t));
-                bufIdx_wr += sizeof(uint32_t);
-                memcpy(&addr_wr[bufIdx_wr], &e.e[trace_msg_data.frame_type].i, sizeof(uint8_t));
-                bufIdx_wr += sizeof(uint8_t);
-                memcpy(&addr_wr[bufIdx_wr], &e.e[trace_msg_data.freq_range].i, sizeof(uint8_t));
-                bufIdx_wr += sizeof(uint8_t);
-                memcpy(&addr_wr[bufIdx_wr], &e.e[trace_msg_data.subcarrier_spacing].i, sizeof(uint8_t));
-                bufIdx_wr += sizeof(uint8_t);
-                memcpy(&addr_wr[bufIdx_wr], &e.e[trace_msg_data.cyclic_prefix].i, sizeof(uint8_t));
-                bufIdx_wr += sizeof(uint8_t);
-                memcpy(&addr_wr[bufIdx_wr], &e.e[trace_msg_data.symbols_per_slot].i, sizeof(uint8_t));
-                bufIdx_wr += sizeof(uint8_t);
-                memcpy(&addr_wr[bufIdx_wr], &e.e[trace_msg_data.Nid_cell].i, sizeof(uint16_t));
-                bufIdx_wr += sizeof(uint16_t);
-                memcpy(&addr_wr[bufIdx_wr], &e.e[trace_msg_data.rnti].i, sizeof(uint16_t));
-                bufIdx_wr += sizeof(uint16_t);
-                memcpy(&addr_wr[bufIdx_wr], &e.e[trace_msg_data.rb_size].i, sizeof(uint16_t));
-                bufIdx_wr += sizeof(uint16_t);
-                memcpy(&addr_wr[bufIdx_wr], &e.e[trace_msg_data.rb_start].i, sizeof(uint16_t));
-                bufIdx_wr += sizeof(uint16_t);
-                memcpy(&addr_wr[bufIdx_wr], &e.e[trace_msg_data.start_symbol_index].i, sizeof(uint8_t));
-                bufIdx_wr += sizeof(uint8_t);
-                memcpy(&addr_wr[bufIdx_wr], &e.e[trace_msg_data.nr_of_symbols].i, sizeof(uint8_t));
-                bufIdx_wr += sizeof(uint8_t);
-                memcpy(&addr_wr[bufIdx_wr], &e.e[trace_msg_data.qam_mod_order].i, sizeof(uint8_t));
-                bufIdx_wr += sizeof(uint8_t);
-                memcpy(&addr_wr[bufIdx_wr], &e.e[trace_msg_data.mcs_index].i, sizeof(uint8_t));
-                bufIdx_wr += sizeof(uint8_t);
-                memcpy(&addr_wr[bufIdx_wr], &e.e[trace_msg_data.mcs_table].i, sizeof(uint8_t));
-                bufIdx_wr += sizeof(uint8_t);
-                memcpy(&addr_wr[bufIdx_wr], &e.e[trace_msg_data.nrOfLayers].i, sizeof(uint8_t));
-                bufIdx_wr += sizeof(uint8_t);
-                memcpy(&addr_wr[bufIdx_wr], &e.e[trace_msg_data.transform_precoding].i, sizeof(uint8_t));
-                bufIdx_wr += sizeof(uint8_t);
-                memcpy(&addr_wr[bufIdx_wr], &e.e[trace_msg_data.dmrs_config_type].i, sizeof(uint8_t));
-                bufIdx_wr += sizeof(uint8_t);
-                memcpy(&addr_wr[bufIdx_wr], &e.e[trace_msg_data.ul_dmrs_symb_pos].i, sizeof(uint16_t));
-                bufIdx_wr += sizeof(uint16_t);
-                memcpy(&addr_wr[bufIdx_wr], &e.e[trace_msg_data.number_dmrs_symbols].i, sizeof(uint8_t));
-                bufIdx_wr += sizeof(uint8_t);
-                memcpy(&addr_wr[bufIdx_wr], &e.e[trace_msg_data.dmrs_port].i, sizeof(uint16_t));
-                bufIdx_wr += sizeof(uint16_t);
-                memcpy(&addr_wr[bufIdx_wr], &e.e[trace_msg_data.dmrs_nscid].i, sizeof(uint16_t));
-                bufIdx_wr += sizeof(uint16_t);
-                memcpy(&addr_wr[bufIdx_wr], &e.e[trace_msg_data.nb_antennas_tx].i, sizeof(uint8_t));
-                bufIdx_wr += sizeof(uint8_t);
-                memcpy(&addr_wr[bufIdx_wr], &e.e[trace_msg_data.number_of_bits].i, sizeof(uint32_t));
-                bufIdx_wr += sizeof(uint32_t);
-
-                printf("\nTime Stamp: %d_%d", e.e[trace_msg_data.datetime_yyyymmdd].i, e.e[trace_msg_data.datetime_hhmmssmmm].i);
-
-                // add message body: length in bytes + recorded data
-                memcpy(&addr_wr[bufIdx_wr], &e.e[trace_msg_data.data].bsize, sizeof(uint32_t));
-                bufIdx_wr += sizeof(uint32_t);
-
-                // read data from buffer and convert from unsigned char * array to int 16 using the right endianness
-                // T-tracer: Little Endian
-                // For BITS Messages, example: UE_PHY_UL_SCRAMBLED_TX_BITS: data in bytes
-
-                if (is_bits_messages(traces_bits_support_data_Collection_format_idx, n_bits_msgs, e.type)) {
-                  for (int byte_idx = 0; byte_idx < e.e[trace_msg_data.data].bsize; byte_idx += 1) {
-                    // printf("%d, ", buf[byte_idx]);
-                    memcpy(&addr_wr[bufIdx_wr], &buf[byte_idx], sizeof(uint8_t));
-                    bufIdx_wr += sizeof(uint8_t);
-                  }
-
-                } else {
-                  for (int byte_idx = 0; byte_idx < e.e[trace_msg_data.data].bsize; byte_idx += 2) {
-                    // For a little-endian system:
-                    memcpy(&addr_wr[bufIdx_wr], &buf[byte_idx], sizeof(uint8_t));
-                    bufIdx_wr += sizeof(uint8_t);
-                    memcpy(&addr_wr[bufIdx_wr], &buf[byte_idx + 1], sizeof(uint8_t));
-                    bufIdx_wr += sizeof(uint8_t);
-                  }
-                }
-                /*
-                for (int byte_idx_i = 0; byte_idx_i < e.e[d.nr_ul_fd_dmrs_data].bsize; byte_idx_i+=4) {
-                  int16_t I = buf[byte_idx_i] | (buf[byte_idx_i+1] << 8);
-                  int16_t Q = buf[byte_idx_i+2] | (buf[byte_idx_i+3] << 8);
-                  printf ("idx %d, ", byte_idx_i);
-                  printf ("\n%d", I);
-                  printf ("\n%d", Q);
-                }
-                */
+                memcpy(&addr_wr[bufIdx_wr], e.e[trace_msg_ul_data.data].b, e.e[trace_msg_ul_data.data].bsize);
+                bufIdx_wr += e.e[trace_msg_ul_data.data].bsize;
+#ifdef DEBUG_T_Tracer
+                print_ul_metadata_debug(e, &trace_msg_ul_data, database);
+#endif
                 // check if the current frame and slot are different from the previous frame and slot
                 // Then, increase the record index
-                current_frame = e.e[trace_msg_data.frame].i;
-                current_slot = e.e[trace_msg_data.slot].i;
+                current_frame = e.e[trace_msg_ul_data.frame].i;
+                current_slot = e.e[trace_msg_ul_data.slot].i;
 
                 // increase sync offset index if the current frame is different from the previous frame
                 if ((current_frame != prev_frame) && nrecord_idx >= number_records) {
@@ -870,43 +724,6 @@ int main(int n, char **v)
                   prev_frame = current_frame;
                   prev_slot = current_slot;
                 }
-#ifdef DEBUG_T_Tracer
-                printf("\nMessage Info: msg_id %s (%d) \n", event_name_from_id(database, e.type), e.type);
-                printf("frame %d, slot %d, datetime %d_%d\n",
-                       e.e[trace_msg_data.frame].i,
-                       e.e[trace_msg_data.slot].i,
-                       e.e[trace_msg_data.datetime_yyyymmdd].i,
-                       e.e[trace_msg_data.datetime_hhmmssmmm].i);
-                printf("frame_type %d, freq_range %d, subcarrier_spacing %d, cyclic_prefix %d, symbols_per_slot %d\n",
-                       e.e[trace_msg_data.frame_type].i,
-                       e.e[trace_msg_data.freq_range].i,
-                       e.e[trace_msg_data.subcarrier_spacing].i,
-                       e.e[trace_msg_data.cyclic_prefix].i,
-                       e.e[trace_msg_data.symbols_per_slot].i);
-                printf("Nid_cell %d, rnti %d, rb_size %d, rb_start %d, start_symbol_index %d, nr_of_symbols %d\n",
-                       e.e[trace_msg_data.Nid_cell].i,
-                       e.e[trace_msg_data.rnti].i,
-                       e.e[trace_msg_data.rb_size].i,
-                       e.e[trace_msg_data.rb_start].i,
-                       e.e[trace_msg_data.start_symbol_index].i,
-                       e.e[trace_msg_data.nr_of_symbols].i);
-                printf("qam_mod_order %d, mcs_index %d, mcs_table %d, nrOfLayers %d, transform_precoding %d\n",
-                       e.e[trace_msg_data.qam_mod_order].i,
-                       e.e[trace_msg_data.mcs_index].i,
-                       e.e[trace_msg_data.mcs_table].i,
-                       e.e[trace_msg_data.nrOfLayers].i,
-                       e.e[trace_msg_data.transform_precoding].i);
-                printf("dmrs_config_type %d, ul_dmrs_symb_pos %d, number_dmrs_symbols %d, dmrs_port %d, dmrs_nscid %d\n",
-                       e.e[trace_msg_data.dmrs_config_type].i,
-                       e.e[trace_msg_data.ul_dmrs_symb_pos].i,
-                       e.e[trace_msg_data.number_dmrs_symbols].i,
-                       e.e[trace_msg_data.dmrs_port].i,
-                       e.e[trace_msg_data.dmrs_nscid].i);
-                printf("nb_antennas_tx %d, number_of_bits %d, data size %d\n",
-                       e.e[trace_msg_data.nb_antennas_tx].i,
-                       e.e[trace_msg_data.number_of_bits].i,
-                       e.e[trace_msg_data.data].bsize);
-#endif
               } // End of start recording flag
             } // end of if statement for the supported messages based on Data Collection Trace Messages Structure
             else {
@@ -917,28 +734,25 @@ int main(int n, char **v)
         } // end while loop of reading events
         else {
           // No data, just loop and check time
-          usleep(100); // optional: avoid busy-waiting
+          usleep(50); // optional: avoid busy-waiting
         }
       } // End of while loop to read messages
 
-      // de-activate the tracee in the nr-softmodem
-      printf("\n De-activated Tracer message:\n");
+      // de-activate the traces in the nr-uesoftmodem
+      printf("\n  De-activating tracer messages\n");
       for (i = 0; i < num_req_tracer_msgs; i++) {
         char *on_off_name = event_name_from_id(database, req_tracer_msgs_indices[i]);
         on_off(database, on_off_name, is_on, 0);
-        // printf("\n %d, %s, ", req_tracer_msgs_indices[i], on_off_name);
-        // on_off(database, "GNB_PHY_DL_OUTPUT_SIGNAL", is_on, 1);
       }
-      // De-activate the tracee in the nr-softmodem
       activate_traces(socket, number_of_events, is_on);
-      printf("\n De-activated Traces");
+      printf("  De-activated traces\n");
 
       // Get the end time
       struct timespec end_time = get_current_time();
       // Calculate the time difference
       double time_diff = calculate_time_difference(start_time, end_time);
-      printf("Total Time difference: %.2f ms\n", time_diff);
-      printf("Time difference per record: %.2f ms\n", time_diff / (number_records + max_sync_offset));
+      printf("  Total time: %.2f ms\n", time_diff);
+      printf("  Time per record: %.2f ms\n", time_diff / (number_records + max_sync_offset));
 
       // discard stale or previous record data for the first DISCARD_RECORD_DURATION_MS
       struct timespec record_start, record_now;
@@ -965,10 +779,9 @@ int main(int n, char **v)
         }
       } // End of while loop to discard stale records
     }
-  } // End a while loop to check for the "stop" command
-  // de-activate the tracee in the nr-softmodem
+  } // End of while loop for record/stop
 
-  // free_database(database); //Do on one app, for example on gNB App
+  // free_database(database); // Done on gNB App only
   free(is_on);
   close(socket);
 

@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 # Environment variables
 
 OAI uses/supports a number of environment variables, documented in the following:

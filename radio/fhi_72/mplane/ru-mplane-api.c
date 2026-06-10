@@ -1,22 +1,5 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
 #include "ru-mplane-api.h"
@@ -170,20 +153,22 @@ static void free_match_list(char **match_list, size_t count)
 static void fix_benetel_setting(xran_mplane_t *xran_mplane, const uint32_t interface_mtu, const int16_t first_iq_width, const int max_num_ant, const char *model_name)
 {
   if (interface_mtu == 1500) {
-    MP_LOG_I("Interface MTU %d unreliable/not correctly reported by Benetel O-RU, hardcoding to 9600.\n", interface_mtu);
-    xran_mplane->mtu = 9600;
+    MP_LOG_I("Interface MTU %d unreliable/not correctly reported by Benetel O-RU, hardcoding to 9216.\n", interface_mtu);
+    xran_mplane->mtu = 9216;
   } else {
     xran_mplane->mtu = interface_mtu;
   }
 
-  if (first_iq_width != 9) {
-    MP_LOG_I("IQ bitwidth %d unreliable/not correctly reported by Benetel O-RU, hardcoding to 9.\n", first_iq_width);
-    xran_mplane->iq_width = 9;
-  } else {
-    xran_mplane->iq_width = first_iq_width;
+  if (xran_mplane->iq_width == 255) {
+    if (first_iq_width != 9) {
+      MP_LOG_I("IQ bitwidth %d unreliable/not correctly reported by Benetel O-RU, hardcoding to 9.\n", first_iq_width);
+      xran_mplane->iq_width = 9;
+    } else {
+      xran_mplane->iq_width = first_iq_width;
+    }
   }
 
-  xran_mplane->prach_offset = max_num_ant;
+  xran_mplane->prach_offset = (max_num_ant == 2) ? 8 : max_num_ant;
 
   if (strcasecmp(model_name, "RAN550") == 0) {
     xran_mplane->max_tx_gain = 24.0;
@@ -264,6 +249,7 @@ bool get_config_for_xran(const char *buffer, const int max_num_ant, xran_mplane_
   MP_LOG_I("Storing the following information to forward to xran:\n\
     RU MAC address %s\n\
     MTU %d\n\
+    Compression header type %s\n\
     IQ bitwidth %d\n\
     PRACH offset %d\n\
     DU port bitmask %d\n\
@@ -277,6 +263,7 @@ bool get_config_for_xran(const char *buffer, const int max_num_ant, xran_mplane_
     max Tx gain %.1f\n",
       xran_mplane->ru_mac_addr,
       xran_mplane->mtu,
+      xran_mplane->comp_hdr_type == 0 ? "dynamic" : "static",
       xran_mplane->iq_width,
       xran_mplane->prach_offset,
       xran_mplane->du_port_bitmask,

@@ -1,29 +1,9 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file LAYER2/PDCP_v10.1.0/pdcp.h
+/*!
 * \brief pdcp interface with RLC, RRC
-* \author  Lionel GAUTHIER and Navid Nikaein
-* \date 2009-2012
-* \version 1.0
 */
 
 /** @defgroup _pdcp PDCP
@@ -46,6 +26,7 @@
 #include "LTE_PMCH-InfoList-r9.h"
 
 #include "openair3/SECU/secu_defs.h"
+#include "common/utils/threadPool/notified_fifo.h"
 
 #define MAX_NUMBER_NETIF                 1 //16
 #define ENB_NAS_USE_TUN_W_MBMS_BIT      (1<< 10)
@@ -260,8 +241,6 @@ bool cu_f1u_data_req(protocol_ctxt_t  *ctxt_pP,
  * \param[in] rab_id Radio Bearer ID
  * \param[in] sdu_buffer_size Size of incoming SDU in bytes
  * \param[in] sdu_buffer Buffer carrying SDU
- * \param[in] srcID
- * \param[in] dstID
  * \return TRUE on success, false otherwise
  * \note None
  * @ingroup _pdcp
@@ -271,9 +250,7 @@ bool pdcp_data_ind(const protocol_ctxt_t *const ctxt_pP,
                    const MBMS_flag_t MBMS_flagP,
                    const rb_id_t rb_idP,
                    const sdu_size_t sdu_buffer_sizeP,
-                   uint8_t *const sdu_buffer_pP,
-                   const uint32_t *const srcID,
-                   const uint32_t *const dstID);
+                   uint8_t *const sdu_buffer_pP);
 
 /*! \fn void rrc_pdcp_config_req(const protocol_ctxt_t* const ,uint32_t,rb_id_t,uint8_t)
 * \brief This functions initializes relevant PDCP entity

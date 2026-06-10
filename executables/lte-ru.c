@@ -1,33 +1,9 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file lte-ru.c
+/*!
  * \brief Top-level threads for RU entity
- * \author R. Knopp, F. Kaltenberger, Navid Nikaein
- * \date 2019
- * \version 0.1
- * \company Eurecom
- * \email: {knopp, florian.kaltenberger, navid.nikaein}@eurecom.fr
- * \note
- * \warning
  */
 
 #define _GNU_SOURCE
@@ -52,7 +28,7 @@
 #include "PHY/phy_extern.h"
 #include "PHY/LTE_ESTIMATION/lte_estimation.h"
 #include "PHY/LTE_REFSIG/lte_refsig.h"
-#include "PHY/LTE_TRANSPORT/if4_tools.h"
+#include "PHY/if4_tools.h"
 #include "PHY/LTE_TRANSPORT/transport_proto.h"
 #include "SCHED/sched_common.h"
 #include "common/utils/LOG/log.h"
@@ -802,7 +778,7 @@ static void *ru_thread_asynch_rxtx( void *param ) {
   RU_t *ru         = (RU_t *)param;
   RU_proc_t *proc  = &ru->proc;
   int subframe=0, frame=0;
-  thread_top_init("ru_thread_asynch_rxtx",1,870000,1000000,1000000);
+  thread_top_init("ru_thread_asynch_rxtx");
   // wait for top-level synchronization and do one acquisition to get timestamp for setting frame/subframe
   wait_sync("ru_thread_asynch_rxtx");
   // wait for top-level synchronization and do one acquisition to get timestamp for setting frame/subframe
@@ -893,7 +869,7 @@ void *ru_thread_prach( void *param ) {
   RU_proc_t *proc = (RU_proc_t *)&ru->proc;
   // set default return value
   ru_thread_prach_status = 0;
-  thread_top_init("ru_thread_prach",1,500000,1000000,20000000);
+  thread_top_init("ru_thread_prach");
   //wait_sync("ru_thread_prach");
 
   while (*ru->ru_mask>0 && ru->function!=eNodeB_3GPP) {
@@ -943,7 +919,7 @@ void *ru_thread_prach_br( void *param ) {
   RU_proc_t *proc = (RU_proc_t *)&ru->proc;
   // set default return value
   ru_thread_prach_status = 0;
-  thread_top_init("ru_thread_prach_br",1,500000,1000000,20000000);
+  thread_top_init("ru_thread_prach_br");
   //wait_sync("ru_thread_prach_br");
 
   while (!oai_exit) {
@@ -1435,7 +1411,7 @@ static void *ru_thread_tx( void *param ) {
   L1_rxtx_proc_t *L1_proc;
   cpu_set_t cpuset;
   CPU_ZERO(&cpuset);
-  thread_top_init("ru_thread_tx",1,400000,500000,500000);
+  thread_top_init("ru_thread_tx");
   //CPU_SET(5, &cpuset);
   //pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
   //wait_sync("ru_thread_tx");
@@ -1542,7 +1518,7 @@ static void *ru_thread( void *param ) {
   dlsch_ue_select_tbl_in_use = 1;
 #endif
   // set default return value
-  thread_top_init("ru_thread",1,400000,500000,500000);
+  thread_top_init("ru_thread");
   //CPU_SET(1, &cpuset);
   //pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
   pthread_setname_np( pthread_self(),"ru thread");
@@ -1823,7 +1799,7 @@ static void *ru_thread_synch(void *arg) {
   int64_t peak_val, avg;
   static int ru_thread_synch_status = 0;
   int cnt=0;
-  thread_top_init("ru_thread_synch",0,5000000,10000000,10000000);
+  thread_top_init("ru_thread_synch");
   wait_sync("ru_thread_synch");
   // initialize variables for PSS detection
   ru_sync_time_init(ru); //lte_sync_time_init(ru->frame_parms);
@@ -1897,7 +1873,7 @@ void *pre_scd_thread( void *param ) {
 
   frame = 0;
   subframe = 4;
-  thread_top_init("pre_scd_thread",0,870000,1000000,1000000);
+  thread_top_init("pre_scd_thread");
 
   while (!oai_exit) {
     if(oai_exit) {
@@ -1957,7 +1933,7 @@ static void *eNB_thread_phy_tx( void *param ) {
   // set default return value
   eNB_thread_phy_tx_status = 0;
   int ret;
-  thread_top_init("eNB_thread_phy_tx",1,500000L,1000000L,20000000L);
+  thread_top_init("eNB_thread_phy_tx");
 
   while (!oai_exit) {
     if (oai_exit) break;
@@ -2012,7 +1988,7 @@ static void *rf_tx( void *param ) {
   RU_proc_t *proc = &ru->proc;
   // set default return value
   rf_tx_status = 0;
-  thread_top_init("rf_tx",1,500000L,1000000L,20000000L);
+  thread_top_init("rf_tx");
 
   while (!oai_exit) {
     if (oai_exit) break;

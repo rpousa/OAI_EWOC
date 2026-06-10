@@ -1,31 +1,10 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-#include "PHY/types.h"
 #include "PHY/defs_nr_UE.h"
 #include "PHY/NR_UE_ESTIMATION/nr_estimation.h"
-#include "PHY/impl_defs_top.h"
-
 #include "executables/nr-uesoftmodem.h"
-#include "common/utils/LOG/vcd_signal_dumper.h"
 
 //#define DEBUG_PHY
 
@@ -33,18 +12,14 @@
 // The adjustment is performed once per frame based on the
 // last channel estimate of the receiver
 
-int nr_adjust_synch_ue(NR_DL_FRAME_PARMS *frame_parms,
+int nr_adjust_synch_ue(const NR_DL_FRAME_PARMS *frame_parms,
                        PHY_VARS_NR_UE *ue,
-                       module_id_t gNB_id,
-                       const int estimateSz,
-                       struct complex16 dl_ch_estimates_time[][estimateSz],
+                       const c16_t dl_ch_estimates_time[][frame_parms->ofdm_symbol_size],
                        uint8_t frame,
                        uint8_t slot,
                        short coef)
 {
   int max_val = 0, max_pos = 0;
-
-  VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME(VCD_SIGNAL_DUMPER_FUNCTIONS_UE_ADJUST_SYNCH, VCD_FUNCTION_IN);
 
   // search for maximum position within the cyclic prefix
   for (int i = -frame_parms->nb_prefix_samples; i < frame_parms->nb_prefix_samples; i++) {
@@ -95,6 +70,5 @@ int nr_adjust_synch_ue(NR_DL_FRAME_PARMS *frame_parms,
   ue->max_pos_iir += -round(sampleShift * PID_P) * 32768;
   ue->max_pos_acc += max_pos;
 
-  VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME(VCD_SIGNAL_DUMPER_FUNCTIONS_UE_ADJUST_SYNCH, VCD_FUNCTION_OUT);
   return sample_shift;
 }

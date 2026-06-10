@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 ifndef PROJDIR
 PROJDIR  = $(PWD)/../../..
 INCLUDES = -I. -I$(INCDIR) -I$(UTILDIR) -I$(IESDIR) -I$(EMMMSGDIR) -I$(ESMMSGDIR) 

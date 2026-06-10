@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 # Documentation Best Practices
 
 The following contribution guidelines ensure that all documentation in the

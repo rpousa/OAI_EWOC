@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 The telnet server implements a simple history system
 ```bash
 softmodem> telnet history list

@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <signal.h>
@@ -35,7 +39,7 @@ static int socket = -1;
 
 void force_stop(int x)
 {
-  printf("\ngently quit...\n");
+  printf("\ngently quit (%d)...\n", x);
   close(socket);
   socket = -1;
   run = 0;

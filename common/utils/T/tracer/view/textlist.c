@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
+ */
+
 #include "view.h"
 #include "../utils.h"
 #include "gui/gui.h"
@@ -67,6 +71,7 @@ static void *textlist_thread(void *_this)
 static void clear(view *this)
 {
   /* TODO */
+  UNUSED(this);
 }
 
 static void append(view *_this, char *s)
@@ -116,9 +121,11 @@ static void scroll(void *private, gui *g,
   if (pthread_mutex_unlock(&this->lock)) abort();
 }
 
-static void click(void *private, gui *g,
-    char *notification, widget *w, void *notification_data)
+static void click(void *private, gui *g, char *notification, widget *w, void *notification_data)
 {
+  UNUSED(notification);
+  UNUSED(g);
+  UNUSED(w);
   struct textlist *this = private;
   int *d = notification_data;
   int button = d[1];

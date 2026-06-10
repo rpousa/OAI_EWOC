@@ -1,22 +1,5 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
 #include <gtest/gtest.h>
@@ -31,11 +14,60 @@ extern "C" {
 #include "NR_DRB-ToAddMod.h"
 #include "NR_DRB-ToAddModList.h"
 #include "NR_SRB-ToAddModList.h"
+#include "NR_InterFreqCarrierFreqInfo.h"
 #include "ds/byte_array.h"
+#include "NR_SIB2.h"
+#include "NR_SIB3.h"
+#include "NR_SIB4.h"
+#include "NR_IntraFreqNeighCellInfo.h"
+#include "NR_IntraFreqNeighCellList.h"
+#include "NR_InterFreqCarrierFreqInfo.h"
+#include "NR_InterFreqNeighCellInfo.h"
+#include "NR_InterFreqNeighCellList.h"
+#include "asn_application.h"
 RAN_CONTEXT_t RC;
 #ifdef __cplusplus
 }
 #endif
+
+static NR_SIB2_t *encode_and_decode_sib2(const NR_SIB2_t *sib2, byte_array_t *ba_out)
+{
+  *ba_out = do_SIB2_NR(sib2);
+  EXPECT_GT(ba_out->len, 0);
+  EXPECT_NE(ba_out->buf, nullptr);
+
+  NR_SIB2_t *decoded = nullptr;
+  asn_dec_rval_t dec = uper_decode(nullptr, &asn_DEF_NR_SIB2, (void **)&decoded, ba_out->buf, ba_out->len, 0, 0);
+  EXPECT_EQ(dec.code, RC_OK);
+  EXPECT_NE(decoded, nullptr);
+  return decoded;
+}
+
+static NR_SIB3_t *encode_and_decode_sib3(const NR_SIB3_t *sib3, byte_array_t *ba_out)
+{
+  *ba_out = do_SIB3_NR(sib3);
+  EXPECT_GT(ba_out->len, 0);
+  EXPECT_NE(ba_out->buf, nullptr);
+
+  NR_SIB3_t *decoded = nullptr;
+  asn_dec_rval_t dec = uper_decode(nullptr, &asn_DEF_NR_SIB3, (void **)&decoded, ba_out->buf, ba_out->len, 0, 0);
+  EXPECT_EQ(dec.code, RC_OK);
+  EXPECT_NE(decoded, nullptr);
+  return decoded;
+}
+
+static NR_SIB4_t *encode_and_decode_sib4(NR_SIB4_t *sib4, byte_array_t *ba_out)
+{
+  *ba_out = do_SIB4_NR(sib4);
+  EXPECT_GT(ba_out->len, 0);
+  EXPECT_NE(ba_out->buf, nullptr);
+
+  NR_SIB4_t *decoded = nullptr;
+  asn_dec_rval_t dec = uper_decode(nullptr, &asn_DEF_NR_SIB4, (void **)&decoded, ba_out->buf, ba_out->len, 0, 0);
+  EXPECT_EQ(dec.code, RC_OK);
+  EXPECT_NE(decoded, nullptr);
+  return decoded;
+}
 
 TEST(nr_asn1, rrc_reject)
 {
@@ -153,6 +185,167 @@ TEST(nr_asn1, rrc_reconfiguration)
 
   free_byte_array(msg);
   free_RRCReconfiguration_params(params);
+}
+
+TEST(nr_asn1, sib2_basic_encode_decode)
+{
+  NR_SIB2_t *sib2 = (NR_SIB2_t *)calloc_or_fail(1, sizeof(*sib2));
+  sib2->cellReselectionInfoCommon.q_Hyst = NR_SIB2__cellReselectionInfoCommon__q_Hyst_dB0;
+  sib2->cellReselectionServingFreqInfo.cellReselectionPriority = 3;
+  sib2->cellReselectionServingFreqInfo.threshServingLowP = 10;
+  sib2->intraFreqCellReselectionInfo.q_RxLevMin = -56;
+  sib2->intraFreqCellReselectionInfo.s_IntraSearchP = 22;
+  sib2->intraFreqCellReselectionInfo.t_ReselectionNR = 1;
+  sib2->intraFreqCellReselectionInfo.deriveSSB_IndexFromCell = true;
+
+  byte_array_t ba = {};
+  NR_SIB2_t *decoded = encode_and_decode_sib2(sib2, &ba);
+
+  EXPECT_EQ(decoded->cellReselectionServingFreqInfo.cellReselectionPriority,
+            sib2->cellReselectionServingFreqInfo.cellReselectionPriority);
+  EXPECT_EQ(decoded->cellReselectionServingFreqInfo.threshServingLowP, sib2->cellReselectionServingFreqInfo.threshServingLowP);
+
+  ASN_STRUCT_FREE(asn_DEF_NR_SIB2, sib2);
+  ASN_STRUCT_FREE(asn_DEF_NR_SIB2, decoded);
+  free_byte_array(ba);
+}
+
+TEST(nr_asn1, sib3_basic_encode_decode)
+{
+  NR_SIB3_t *sib3 = (NR_SIB3_t *)calloc_or_fail(1, sizeof(*sib3));
+  sib3->intraFreqNeighCellList = (struct NR_IntraFreqNeighCellList *)calloc_or_fail(1, sizeof(*sib3->intraFreqNeighCellList));
+
+  NR_IntraFreqNeighCellInfo_t *cell = (NR_IntraFreqNeighCellInfo_t *)calloc_or_fail(1, sizeof(*cell));
+  cell->physCellId = 100;
+  cell->q_OffsetCell = NR_Q_OffsetRange_dB0;
+  ASN_SEQUENCE_ADD(&sib3->intraFreqNeighCellList->list, cell);
+
+  byte_array_t ba = {};
+  NR_SIB3_t *decoded = encode_and_decode_sib3(sib3, &ba);
+
+  ASSERT_NE(decoded->intraFreqNeighCellList, nullptr);
+  EXPECT_EQ(decoded->intraFreqNeighCellList->list.count, 1);
+  EXPECT_EQ(decoded->intraFreqNeighCellList->list.array[0]->physCellId, cell->physCellId);
+
+  ASN_STRUCT_FREE(asn_DEF_NR_SIB3, sib3);
+  ASN_STRUCT_FREE(asn_DEF_NR_SIB3, decoded);
+  free_byte_array(ba);
+}
+
+TEST(nr_asn1, sib4_basic_encode_decode)
+{
+  NR_SIB4_t *sib4 = (NR_SIB4_t *)calloc_or_fail(1, sizeof(*sib4));
+
+  NR_InterFreqCarrierFreqInfo_t *carrier = (NR_InterFreqCarrierFreqInfo_t *)calloc_or_fail(1, sizeof(*carrier));
+  carrier->dl_CarrierFreq = 2000;
+  carrier->ssbSubcarrierSpacing = NR_SubcarrierSpacing_kHz15;
+  carrier->deriveSSB_IndexFromCell = true;
+  carrier->q_RxLevMin = -56;
+  carrier->t_ReselectionNR = 1;
+  carrier->threshX_HighP = 5;
+  carrier->threshX_LowP = 3;
+  carrier->interFreqNeighCellList = (struct NR_InterFreqNeighCellList *)calloc_or_fail(1, sizeof(*carrier->interFreqNeighCellList));
+
+  NR_InterFreqNeighCellInfo_t *ncell = (NR_InterFreqNeighCellInfo_t *)calloc_or_fail(1, sizeof(*ncell));
+  ncell->physCellId = 200;
+  ncell->q_OffsetCell = NR_Q_OffsetRange_dB0;
+  ASN_SEQUENCE_ADD(&carrier->interFreqNeighCellList->list, ncell);
+  ASN_SEQUENCE_ADD(&sib4->interFreqCarrierFreqList.list, carrier);
+
+  byte_array_t ba = {};
+  NR_SIB4_t *decoded = encode_and_decode_sib4(sib4, &ba);
+
+  ASSERT_GT(decoded->interFreqCarrierFreqList.list.count, 0);
+  EXPECT_EQ(decoded->interFreqCarrierFreqList.list.array[0]->dl_CarrierFreq, carrier->dl_CarrierFreq);
+
+  ASN_STRUCT_FREE(asn_DEF_NR_SIB4, sib4);
+  ASN_STRUCT_FREE(asn_DEF_NR_SIB4, decoded);
+  free_byte_array(ba);
+}
+
+TEST(nr_asn1, inter_freq_carrier_freq_info_ranges)
+{
+  NR_SIB4_t *sib4 = (NR_SIB4_t *)calloc_or_fail(1, sizeof(*sib4));
+  ASN_SEQUENCE_ADD(&sib4->interFreqCarrierFreqList.list,
+                   (NR_InterFreqCarrierFreqInfo_t *)calloc_or_fail(1, sizeof(NR_InterFreqCarrierFreqInfo_t)));
+
+  NR_InterFreqCarrierFreqInfo_t *carrier = sib4->interFreqCarrierFreqList.list.array[0];
+  carrier->dl_CarrierFreq = 640000;
+  carrier->ssbSubcarrierSpacing = NR_SubcarrierSpacing_kHz30;
+  carrier->deriveSSB_IndexFromCell = 1;
+  carrier->threshX_HighP = 0;
+  carrier->threshX_LowP = 0;
+
+  NR_Q_OffsetRange_t *qoff = (NR_Q_OffsetRange_t *)calloc_or_fail(1, sizeof(*qoff));
+  *qoff = 15; // arbitrary valid Q-OffsetRange enum
+  carrier->q_OffsetFreq = qoff;
+
+  // Optional threshX_Q struct
+  carrier->threshX_Q = (decltype(carrier->threshX_Q))calloc_or_fail(1, sizeof(*carrier->threshX_Q));
+  carrier->threshX_Q->threshX_HighQ = 0;
+  carrier->threshX_Q->threshX_LowQ = 0;
+
+  auto try_encode = [](NR_SIB4_t *s, bool expect_success) {
+    byte_array_t ba = do_SIB4_NR(s);
+    int len = (int)ba.len;
+    if (expect_success) {
+      EXPECT_GT(len, 0);
+      EXPECT_NE(ba.buf, nullptr);
+    } else {
+      EXPECT_LE(len, 0);
+    }
+    free_byte_array(ba);
+  };
+
+  // Valid lower bounds for all constrained scalars
+  carrier->q_RxLevMin = -70;
+  carrier->t_ReselectionNR = 0;
+  carrier->threshX_HighP = 0;
+  carrier->threshX_LowP = 0;
+  carrier->threshX_Q->threshX_HighQ = 0;
+  carrier->threshX_Q->threshX_LowQ = 0;
+  *qoff = 15;
+  try_encode(sib4, true);
+
+  // Invalid q_RxLevMin (below ASN.1 range)
+  carrier->q_RxLevMin = -80;
+  carrier->t_ReselectionNR = 0;
+  try_encode(sib4, false);
+
+  // Invalid t_ReselectionNR (above ASN.1 range)
+  carrier->q_RxLevMin = -70;
+  carrier->t_ReselectionNR = 8;
+  try_encode(sib4, false);
+
+  // Restore valid q_RxLevMin / t_ReselectionNR
+  carrier->q_RxLevMin = -70;
+  carrier->t_ReselectionNR = 0;
+
+  // Invalid threshX_HighP (below 0)
+  carrier->threshX_HighP = -1;
+  try_encode(sib4, false);
+  carrier->threshX_HighP = 0;
+
+  // Invalid threshX_LowP (below 0)
+  carrier->threshX_LowP = -1;
+  try_encode(sib4, false);
+  carrier->threshX_LowP = 0;
+
+  // Invalid threshX_HighQ (below 0)
+  carrier->threshX_Q->threshX_HighQ = -1;
+  try_encode(sib4, false);
+  carrier->threshX_Q->threshX_HighQ = 0;
+
+  // Invalid threshX_LowQ (below 0)
+  carrier->threshX_Q->threshX_LowQ = -1;
+  try_encode(sib4, false);
+  carrier->threshX_Q->threshX_LowQ = 0;
+
+  // Invalid q_OffsetFreq (outside [-24,24] enum range)
+  *qoff = 99;
+  try_encode(sib4, false);
+
+  ASN_STRUCT_FREE(asn_DEF_NR_SIB4, sib4);
 }
 
 int main(int argc, char **argv)

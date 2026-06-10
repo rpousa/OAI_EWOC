@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 # Configuration files: naming style guide
 
 The configuration files should have the following name format:

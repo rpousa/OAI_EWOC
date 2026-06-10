@@ -1,44 +1,9 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file lte-enb.c
+/*!
  * \brief Top-level threads for eNodeB
- * \author R. Knopp, F. Kaltenberger, Navid Nikaein
- * \date 2012
- * \version 0.1
- * \company Eurecom
- * \email: knopp@eurecom.fr,florian.kaltenberger@eurecom.fr, navid.nikaein@eurecom.fr
- * \note
- * \warning
- */
-
-/*! \function wakeup_txfh
- * \brief Implementation of creating multiple RU threads for beamforming emulation
- * \author TH Wang(Judy), TY Hsu, SY Yeh(fdragon)
- * \date 2018
- * \version 0.1
- * \company Eurecom and ISIP@NCTU
- * \email: Tsu-Han.Wang@eurecom.fr,tyhsu@cs.nctu.edu.tw,fdragon.cs96g@g2.nctu.edu.tw
- * \note
- * \warning
  */
 
 
@@ -55,7 +20,7 @@
 #include "nfapi/oai_integration/vendor_ext.h"
 #include "radio/COMMON/common_lib.h"
 
-#include "PHY/LTE_TRANSPORT/if4_tools.h"
+#include "PHY/if4_tools.h"
 #include "PHY/LTE_ESTIMATION/lte_estimation.h"
 
 #include "PHY/phy_extern.h"
@@ -294,7 +259,7 @@ static void *L1_thread_tx(void *param) {
   PHY_VARS_eNB *eNB = eNB_proc->eNB;
   char thread_name[100];
   sprintf(thread_name,"TXnp4_%d\n",&eNB->proc.L1_proc == proc ? 0 : 1);
-  thread_top_init(thread_name,1,470000,500000,500000);
+  thread_top_init(thread_name);
   int ret;
 
   //wait_sync("tx_thread");
@@ -377,7 +342,7 @@ static void *L1_thread( void *param ) {
     }
   }
 #else
-  thread_top_init(thread_name,1,470000,500000,500000);
+  thread_top_init(thread_name);
 #endif
   LOG_I(PHY,"thread rxtx created id=%ld\n", syscall(__NR_gettid));
 
@@ -734,7 +699,7 @@ static void *eNB_thread_prach( void *param ) {
   L1_proc_t *proc = &eNB->proc;
   // set default return value
   eNB_thread_prach_status = 0;
-  thread_top_init("eNB_thread_prach",1,500000,1000000,20000000);
+  thread_top_init("eNB_thread_prach");
 
   //wait_sync("eNB_thread_prach");
 
@@ -767,7 +732,7 @@ static void *eNB_thread_prach_br( void *param ) {
   L1_proc_t *proc = &eNB->proc;
   // set default return value
   eNB_thread_prach_status = 0;
-  thread_top_init("eNB_thread_prach_br",1,500000,1000000,20000000);
+  thread_top_init("eNB_thread_prach_br");
 
   while (!oai_exit) {
     if (wait_on_condition(&proc->mutex_prach_br,&proc->cond_prach_br,&proc->instance_cnt_prach_br,"eNB_prach_thread_br") < 0) break;

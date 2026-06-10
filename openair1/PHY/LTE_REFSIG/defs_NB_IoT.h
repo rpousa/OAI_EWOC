@@ -1,15 +1,8 @@
 /*******************************************************************************
 
  *******************************************************************************/
-/*! \file defs_NB_IoT.h
+/*!
  * \function called by lte_dl_cell_spec_NB_IoT.c ,	 TS 36-211, V13.4.0 2017-02
- * \author M. KANJ
- * \date 2017
- * \version 0.0
- * \company bcom
- * \email: matthieu.kanj@b-com.com
- * \note
- * \warning
  */
 
 /* Definitions for NB_IoT Reference signals */
@@ -48,10 +41,6 @@ int lte_dl_cell_spec_NB_IoT(PHY_VARS_eNB_NB_IoT  *phy_vars_eNB,
                      		unsigned char 		 p,
 					 		unsigned short 		 RB_IoT_ID); 
 
-
-unsigned int lte_gold_generic_NB_IoT(unsigned int  *x1,
-									 unsigned int  *x2,
-									 unsigned char reset);
 		
 void generate_ul_ref_sigs_rx_NB_IoT(void);
 

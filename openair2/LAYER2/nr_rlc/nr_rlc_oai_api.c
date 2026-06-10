@@ -1,22 +1,5 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
 /* from openair */
@@ -39,6 +22,7 @@
 #include "NR_UL-CCCH-Message.h"
 
 #include "openair2/F1AP/f1ap_du_rrc_message_transfer.h"
+#include "openair2/F1AP/f1ap_common.h"
 #include "openair2/F1AP/f1ap_ids.h"
 #include "openair3/ocp-gtpu/gtp_itf.h"
 #include <stdint.h>
@@ -163,12 +147,12 @@ void nr_rlc_release_entity(int ue_id, logical_chan_id_t channel_id)
 void nr_mac_rlc_data_ind(const module_id_t  module_idP,
                          const uint16_t ue_id,
                          const bool gnb_flagP,
-                         const logical_chan_id_t channel_idP,
-                         char *buffer_pP,
-                         const tb_size_t tb_sizeP)
+                         const nr_rlc_data_ind_t *data,
+                         int num_data)
 {
   if (gnb_flagP)
-    T(T_ENB_RLC_MAC_UL, T_INT(module_idP), T_INT(ue_id), T_INT(channel_idP), T_INT(tb_sizeP));
+    for (int i = 0; i < num_data; ++i)
+      T(T_ENB_RLC_MAC_UL, T_INT(module_idP), T_INT(ue_id), T_INT(data[i].ch), T_INT(data[i].len));
 
   nr_rlc_manager_lock(nr_rlc_ue_manager);
   nr_rlc_ue_t *ue = nr_rlc_manager_get_ue(nr_rlc_ue_manager, ue_id);
@@ -176,18 +160,63 @@ void nr_mac_rlc_data_ind(const module_id_t  module_idP,
   if(ue == NULL)
     LOG_I(RLC, "RLC instance for the given UE was not found \n");
 
-  nr_rlc_entity_t *rb = get_rlc_entity_from_lcid(ue, channel_idP);
-
-  if (rb != NULL) {
-    LOG_D(RLC, "RB found! (channel ID %d) \n", channel_idP);
-    rb->set_time(rb, get_nr_rlc_current_time());
-    rb->recv_pdu(rb, buffer_pP, tb_sizeP);
-  } else {
-    LOG_E(RLC, "Fatal: no RB found (channel ID %d UE ID %d)\n", channel_idP, ue_id);
-    // exit(1);
+  for (int i = 0; i < num_data; ++i) {
+    logical_chan_id_t ch = data[i].ch;
+    nr_rlc_entity_t *rb = get_rlc_entity_from_lcid(ue, ch);
+    if (rb != NULL) {
+      LOG_D(RLC, "RB found! (instance %d channel ID %d) \n", module_idP, ch);
+      rb->set_time(rb, get_nr_rlc_current_time());
+      rb->recv_pdu(rb, (char *)data[i].buf, data[i].len);
+    } else {
+      LOG_W(RLC, "no RB found (channel ID %d UE ID %d)\n", ch, ue_id);
+    }
   }
 
   nr_rlc_manager_unlock(nr_rlc_ue_manager);
+}
+
+int nr_mac_rlc_multi_data_req(const module_id_t module_idP,
+                              const uint16_t ue_id,
+                              const bool gnb_flagP,
+                              const logical_chan_id_t channel_idP,
+                              tb_size_t tb_sizeP,
+                              char *buffer_pP,
+                              tb_size_t *pdu_siz,
+                              int pdu_siz_len)
+{
+  int ret = 0;
+
+  nr_rlc_manager_lock(nr_rlc_ue_manager);
+  nr_rlc_ue_t *ue = nr_rlc_manager_get_ue(nr_rlc_ue_manager, ue_id);
+  nr_rlc_entity_t *rb = get_rlc_entity_from_lcid(ue, channel_idP);
+
+  if (rb != NULL) {
+    rb->set_time(rb, get_nr_rlc_current_time());
+    while (tb_sizeP - 3 > 0 && pdu_siz_len > 0) {
+      // fill PDU in buffer, store size of PDU
+      pdu_siz[0] = rb->generate_pdu(rb, buffer_pP + 3, tb_sizeP - 3);
+      if (pdu_siz[0] == 0)
+        break;
+      LOG_D(RLC, "MAC PDU created: instance %d channel_idP %d len %d\n", module_idP, channel_idP, pdu_siz[0]);
+      // reserve header
+      tb_sizeP -= 3 + pdu_siz[0];
+      buffer_pP += 3 + pdu_siz[0];
+      pdu_siz++;
+      pdu_siz_len--;
+      ret++;
+    }
+  } else {
+    LOG_D(RLC, "MAC PDU failed to get created for channel_idP:%d \n", channel_idP);
+    ret = 0;
+  }
+
+  nr_rlc_manager_unlock(nr_rlc_ue_manager);
+
+  if (gnb_flagP)
+    T(T_ENB_RLC_MAC_DL, T_INT(module_idP), T_INT(ue_id),
+      T_INT(channel_idP), T_INT(ret));
+
+  return ret;
 }
 
 tbs_size_t nr_mac_rlc_data_req(const module_id_t  module_idP,
@@ -205,7 +234,7 @@ tbs_size_t nr_mac_rlc_data_req(const module_id_t  module_idP,
   nr_rlc_entity_t *rb = get_rlc_entity_from_lcid(ue, channel_idP);
 
   if (rb != NULL) {
-    LOG_D(RLC, "MAC PDU to get created for channel_idP:%d \n", channel_idP);
+    LOG_D(RLC, "MAC PDU to get created for channel_idP:%d instance %d\n", channel_idP, module_idP);
     rb->set_time(rb, get_nr_rlc_current_time());
     maxsize = tb_sizeP;
     ret = rb->generate_pdu(rb, buffer_pP, maxsize);
@@ -217,18 +246,15 @@ tbs_size_t nr_mac_rlc_data_req(const module_id_t  module_idP,
   nr_rlc_manager_unlock(nr_rlc_ue_manager);
 
   if (gnb_flagP)
-    T(T_ENB_RLC_MAC_DL, T_INT(module_idP), T_INT(ue_id),
-      T_INT(channel_idP), T_INT(ret));
+    T(T_ENB_RLC_MAC_DL, T_INT(module_idP), T_INT(ue_id), T_INT(channel_idP), T_INT(ret));
 
   return ret;
 }
 
-mac_rlc_status_resp_t nr_mac_rlc_status_ind(const uint16_t ue_id, const frame_t frame, const logical_chan_id_t channel_idP)
+static mac_rlc_status_resp_t _nr_rlc_status_ind(nr_rlc_ue_t *ue, frame_t frame, logical_chan_id_t channel_idP)
 {
   mac_rlc_status_resp_t ret;
 
-  nr_rlc_manager_lock(nr_rlc_ue_manager);
-  nr_rlc_ue_t *ue = nr_rlc_manager_get_ue(nr_rlc_ue_manager, ue_id);
   nr_rlc_entity_t *rb = get_rlc_entity_from_lcid(ue, channel_idP);
 
   if (rb != NULL) {
@@ -243,11 +269,9 @@ mac_rlc_status_resp_t nr_mac_rlc_status_ind(const uint16_t ue_id, const frame_t 
     ret.bytes_in_buffer = buf_stat.status_size + buf_stat.retx_size + buf_stat.tx_size;
   } else {
     if (!(frame % 128) || channel_idP == 0) //to suppress this warning message
-      LOG_W(RLC, "Radio Bearer (channel ID %d) is NULL for UE %d\n", channel_idP, ue_id);
+      LOG_W(RLC, "Radio Bearer (channel ID %d) is NULL for UE %d\n", channel_idP, ue->ue_id);
     ret.bytes_in_buffer = 0;
   }
-
-  nr_rlc_manager_unlock(nr_rlc_ue_manager);
 
   ret.pdus_in_buffer = 0;
   /* TODO: creation time may be important (unit: frame, as it seems) */
@@ -255,6 +279,16 @@ mac_rlc_status_resp_t nr_mac_rlc_status_ind(const uint16_t ue_id, const frame_t 
   ret.head_sdu_remaining_size_to_send = 0;
   ret.head_sdu_is_segmented = 0;
   return ret;
+}
+
+void nr_mac_rlc_status_ind(uint16_t ue_id, frame_t frame, int n_ch, const logical_chan_id_t *ch, mac_rlc_status_resp_t *ret)
+{
+  nr_rlc_manager_lock(nr_rlc_ue_manager);
+  nr_rlc_ue_t *ue = nr_rlc_manager_get_ue(nr_rlc_ue_manager, ue_id);
+  for (int i = 0; i < n_ch; ++i) {
+    ret[i] = _nr_rlc_status_ind(ue, frame, ch[i]);
+  }
+  nr_rlc_manager_unlock(nr_rlc_ue_manager);
 }
 
 rlc_op_status_t nr_rlc_data_req(const protocol_ctxt_t *const ctxt_pP,
@@ -451,8 +485,9 @@ rb_found:
         return;
       } else {
         LOG_D(RLC, "Received uplink user-plane traffic at RLC-DU to be sent to the CU, size %d \n", size);
-        extern instance_t DUuniqInstance;
-        gtpv1uSendDirect(DUuniqInstance, ue->ue_id, rb_id, (uint8_t*) buf, size, false, false);
+        const f1ap_cudu_inst_t *inst = getCxt(0);
+        DevAssert(inst);
+        gtpv1uSendDirect(inst->gtpInst, ue->ue_id, rb_id, (uint8_t*) buf, size, false, false);
         return;
       }
     }
@@ -875,9 +910,9 @@ struct srb0_data {
   void (*send_initial_ul_rrc_message)(int ue_id, const uint8_t *sdu, sdu_size_t sdu_len, void *data);
 };
 
-void deliver_sdu_srb0(void *deliver_sdu_data, struct nr_rlc_entity_t *entity,
-                      char *buf, int size)
+void deliver_sdu_srb0(void *deliver_sdu_data, nr_rlc_entity_t *entity, char *buf, int size)
 {
+  UNUSED(entity);
   struct srb0_data *s0 = (struct srb0_data *)deliver_sdu_data;
   s0->send_initial_ul_rrc_message(s0->ue_id, (unsigned char *)buf, size, s0->data);
 }
@@ -900,8 +935,7 @@ bool nr_rlc_activate_srb0(int ue_id,
   srb0_data->data = data;
   srb0_data->send_initial_ul_rrc_message = send_initial_ul_rrc_message;
 
-  nr_rlc_entity_t *nr_rlc_tm = new_nr_rlc_entity_tm(10000,
-                                  deliver_sdu_srb0, srb0_data);
+  nr_rlc_entity_t *nr_rlc_tm = new_nr_rlc_entity_tm(10000, deliver_sdu_srb0, srb0_data);
   nr_rlc_ue_add_srb_rlc_entity(ue, 0, nr_rlc_tm);
 
   LOG_I(RLC, "Activated srb0 for UE %d\n", ue_id);
@@ -1023,7 +1057,7 @@ bool nr_rlc_get_statistics(int ue_id, int srb_flag, int rb_id, nr_rlc_statistics
 
     // Patch buffer status using OAI results (no need to change anything in the RB)
     // rb->set_time(rb, get_nr_rlc_current_time());
-    nr_rlc_entity_buffer_status_t oai_stat = rb->buffer_status(rb, 1000*1000);
+    nr_rlc_entity_buffer_status_t oai_stat = rb->buffer_status(rb, 256 * 1000);
     out->rxbuf_occ_bytes = oai_stat.status_size;
     out->txbuf_occ_bytes = oai_stat.tx_size + oai_stat.retx_size;
   } else {

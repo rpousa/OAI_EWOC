@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 add_library(fgs_5gsm_lib OBJECT PduSessionEstablishRequest.c
                             PduSessionEstablishmentAccept.c)
 

@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 This directory contains the necessary schema files to generate all the LTE configuration data structures based on the ASN.1 RRC
 source code from the 36.331 RRC specifications.  These structures are used by MAC and PHY for configuration purposes.
 

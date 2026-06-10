@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 find_package(SoapySDR REQUIRED)
 
 add_library(oai_irisdevif MODULE iris_lib.cpp)

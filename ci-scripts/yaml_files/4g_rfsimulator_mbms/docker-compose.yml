@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+
 services:
     oai_enb0:
         image: ${REGISTRY-oaisoftwarealliance/}${ENB_IMG:-oai-enb}:${TAG:-develop}

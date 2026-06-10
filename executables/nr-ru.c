@@ -1,22 +1,5 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
 #define _GNU_SOURCE
@@ -32,14 +15,14 @@
 #include "common/utils/nr/nr_common.h"
 #include "common/utils/assertions.h"
 #include "common/utils/system.h"
+#include "common/utils/fsn.h"
 #include "common/ran_context.h"
 
 #include "radio/COMMON/common_lib.h"
 #include "radio/ETHERNET/ethernet_lib.h"
 
-#include "PHY/LTE_TRANSPORT/if4_tools.h"
+#include "PHY/if4_tools.h"
 
-#include "PHY/types.h"
 #include "PHY/defs_nr_common.h"
 #include "PHY/phy_extern.h"
 #include "PHY/NR_TRANSPORT/nr_transport_proto.h"
@@ -48,7 +31,6 @@
 
 #include "common/utils/LOG/log.h"
 #include "common/utils/time_manager/time_manager.h"
-#include "common/utils/LOG/vcd_signal_dumper.h"
 
 #include <executables/softmodem-common.h>
 /* these variables have to be defined before including ENB_APP/enb_paramdef.h and GNB_APP/gnb_paramdef.h */
@@ -71,182 +53,11 @@ static int DEFRUTPCORES[] = {-1,-1,-1,-1};
 static void NRRCconfig_RU(configmodule_interface_t *cfg);
 
 /*************************************************************/
-/* Functions to attach and configure RRU                     */
-
-int attach_rru(RU_t *ru)
-{
-  RRU_CONFIG_msg_t rru_config_msg;
-  int received_capabilities=0;
-  wait_gNBs();
-
-  // Wait for capabilities
-  while (received_capabilities==0) {
-    rru_config_msg = (RRU_CONFIG_msg_t){.type = RAU_tick, .len = sizeof(rru_config_msg.msg)};
-    LOG_D(PHY, "Sending RAU tick to RRU %d\n", ru->idx);
-    AssertFatal((ru->ifdevice.trx_ctlsend_func(&ru->ifdevice,&rru_config_msg,rru_config_msg.len)!=-1),
-                "RU %d cannot access remote radio\n",ru->idx);
-    ssize_t msg_len = rru_config_msg.len + sizeof(RRU_capabilities_t);
-    // wait for answer with timeout
-    ssize_t len = ru->ifdevice.trx_ctlrecv_func(&ru->ifdevice, &rru_config_msg, msg_len);
-    if (len < 0) {
-      LOG_D(PHY, "Waiting for RRU %d\n", ru->idx);
-    } else if (rru_config_msg.type == RRU_capabilities) {
-      AssertFatal(rru_config_msg.len == msg_len,
-                  "Received capabilities with incorrect length (%ld!=%ld)\n",
-                  rru_config_msg.len,
-                  msg_len);
-      RRU_capabilities_t *cap = (RRU_capabilities_t *)rru_config_msg.msg;
-      LOG_I(PHY,
-            "Received capabilities from RRU %d (len %ld/%ld, num_bands %d,max_pdschReferenceSignalPower %d, max_rxgain %d, nb_tx "
-            "%d, nb_rx %d)\n",
-            ru->idx,
-            rru_config_msg.len,
-            msg_len,
-            cap->num_bands,
-            cap->max_pdschReferenceSignalPower[0],
-            cap->max_rxgain[0],
-            cap->nb_tx[0],
-            cap->nb_rx[0]);
-      received_capabilities=1;
-    } else {
-      LOG_E(PHY,"Received incorrect message %d from RRU %d\n",rru_config_msg.type,ru->idx);
-    }
-  }
-
-  configure_ru(ru, (RRU_capabilities_t *)rru_config_msg.msg);
-  rru_config_msg.type = RRU_config;
-  rru_config_msg.len  = sizeof(RRU_CONFIG_msg_t)-MAX_RRU_CONFIG_SIZE+sizeof(RRU_config_t);
-  RRU_config_t *conf = (RRU_config_t *)rru_config_msg.msg;
-  LOG_I(PHY,
-        "Sending Configuration to RRU %d (num_bands %d,band0 %d,txfreq %u,rxfreq %u,att_tx %d,att_rx %d,N_RB_DL %d,N_RB_UL "
-        "%d,3/4FS %d, prach_FO %d, prach_CI %d)\n",
-        ru->idx,
-        conf->num_bands,
-        conf->band_list[0],
-        conf->tx_freq[0],
-        conf->rx_freq[0],
-        conf->att_tx[0],
-        conf->att_rx[0],
-        conf->N_RB_DL[0],
-        conf->N_RB_UL[0],
-        conf->threequarter_fs[0],
-        conf->prach_FreqOffset[0],
-        conf->prach_ConfigIndex[0]);
-  AssertFatal((ru->ifdevice.trx_ctlsend_func(&ru->ifdevice,&rru_config_msg,rru_config_msg.len)!=-1),
-              "RU %d failed send configuration to remote radio\n",ru->idx);
-  int len = ru->ifdevice.trx_ctlrecv_func(&ru->ifdevice, &rru_config_msg, sizeof(rru_config_msg.msg));
-  if (len < 0) {
-    LOG_I(PHY,"Waiting for RRU %d\n",ru->idx);
-  } else if (rru_config_msg.type == RRU_config_ok) {
-    LOG_I(PHY, "RRU_config_ok received\n");
-  } else {
-    LOG_E(PHY,"Received incorrect message %d from RRU %d\n",rru_config_msg.type,ru->idx);
-  }
-
-  return 0;
-}
-
-int connect_rau(RU_t *ru) {
-  RRU_CONFIG_msg_t rru_config_msg;
-
-  // wait for RAU_tick
-  int tick_received = 0;
-  while (tick_received == 0) {
-    ssize_t msg_len = sizeof(rru_config_msg.msg);
-    int len = ru->ifdevice.trx_ctlrecv_func(&ru->ifdevice, &rru_config_msg, msg_len);
-    if (len < 0) {
-      LOG_I(PHY,"Waiting for RAU\n");
-    } else {
-      if (rru_config_msg.type == RAU_tick) {
-        LOG_I(PHY,"Tick received from RAU\n");
-        tick_received = 1;
-      } else
-        LOG_E(PHY, "Received erroneous message (%d)from RAU, expected RAU_tick\n", rru_config_msg.type);
-    }
-  }
-
-  // send capabilities
-  rru_config_msg.type = RRU_capabilities;
-  rru_config_msg.len  = sizeof(RRU_CONFIG_msg_t)-MAX_RRU_CONFIG_SIZE+sizeof(RRU_capabilities_t);
-  RRU_capabilities_t *cap = (RRU_capabilities_t *)rru_config_msg.msg;
-  LOG_I(PHY,
-        "Sending Capabilities (len %ld, num_bands %d,max_pdschReferenceSignalPower %d, max_rxgain %d, nb_tx %d, nb_rx %d)\n",
-        rru_config_msg.len,
-        ru->num_bands,
-        ru->max_pdschReferenceSignalPower,
-        ru->max_rxgain,
-        ru->nb_tx,
-        ru->nb_rx);
-
-  switch (ru->function) {
-    case NGFI_RRU_IF4p5:
-      cap->FH_fmt = OAI_IF4p5_only;
-      break;
-
-    case NGFI_RRU_IF5:
-      cap->FH_fmt = OAI_IF5_only;
-      break;
-
-    case MBP_RRU_IF5:
-      cap->FH_fmt = MBP_IF5;
-      break;
-
-    default:
-      AssertFatal(false, "RU_function is unknown %d\n", RC.ru[0]->function);
-      break;
-  }
-
-  cap->num_bands = ru->num_bands;
-  for (int i = 0; i < ru->num_bands; i++) {
-    LOG_I(PHY,"Band %d: nb_rx %d nb_tx %d pdschReferenceSignalPower %d rxgain %d\n",
-          ru->band[i],ru->nb_rx,ru->nb_tx,ru->max_pdschReferenceSignalPower,ru->max_rxgain);
-    cap->band_list[i]                             = ru->band[i];
-    cap->nb_rx[i]                                 = ru->nb_rx;
-    cap->nb_tx[i]                                 = ru->nb_tx;
-    cap->max_pdschReferenceSignalPower[i]         = ru->max_pdschReferenceSignalPower;
-    cap->max_rxgain[i]                            = ru->max_rxgain;
-  }
-
-  AssertFatal((ru->ifdevice.trx_ctlsend_func(&ru->ifdevice,&rru_config_msg,rru_config_msg.len)!=-1),
-              "RU %d failed send capabilities to RAU\n",ru->idx);
-  // wait for configuration
-  rru_config_msg.len  = sizeof(RRU_CONFIG_msg_t)-MAX_RRU_CONFIG_SIZE+sizeof(RRU_config_t);
-
-  int configuration_received = 0;
-  while (configuration_received == 0) {
-    int len = ru->ifdevice.trx_ctlrecv_func(&ru->ifdevice, &rru_config_msg, rru_config_msg.len);
-    if (len < 0) {
-      LOG_I(PHY,"Waiting for configuration from RAU\n");
-    } else {
-      RRU_config_t *conf = (RRU_config_t *)rru_config_msg.msg;
-      LOG_I(PHY,
-            "Configuration received from RAU  (num_bands %d,band0 %d,txfreq %u,rxfreq %u,att_tx %d,att_rx %d,N_RB_DL %d,N_RB_UL "
-            "%d,3/4FS %d, prach_FO %d, prach_CI %d)\n",
-            conf->num_bands,
-            conf->band_list[0],
-            conf->tx_freq[0],
-            conf->rx_freq[0],
-            conf->att_tx[0],
-            conf->att_rx[0],
-            conf->N_RB_DL[0],
-            conf->N_RB_UL[0],
-            conf->threequarter_fs[0],
-            conf->prach_FreqOffset[0],
-            conf->prach_ConfigIndex[0]);
-      configure_rru(ru, (void *)rru_config_msg.msg);
-      configuration_received = 1;
-    }
-  }
-
-  return 0;
-}
-/*************************************************************/
 /* Southbound Fronthaul functions, RCC/RAU                   */
 
 // southbound IF5 fronthaul for 16-bit OAI format
-void fh_if5_south_out(RU_t *ru, int frame, int slot, uint64_t timestamp) {
-  if (ru == RC.ru[0])
-    VCD_SIGNAL_DUMPER_DUMP_VARIABLE_BY_NAME(VCD_SIGNAL_DUMPER_VARIABLES_TRX_TST, ru->proc.timestamp_tx & 0xffffffff);
+void fh_if5_south_out(RU_t *ru, int frame, int slot, uint64_t timestamp)
+{
   int offset = get_samples_slot_timestamp(ru->nr_frame_parms, slot);
   void *buffs[ru->nb_tx];
   for (int aid = 0; aid < ru->nb_tx; aid++)
@@ -266,10 +77,8 @@ void fh_if5_south_out(RU_t *ru, int frame, int slot, uint64_t timestamp) {
 }
 
 // southbound IF4p5 fronthaul
-void fh_if4p5_south_out(RU_t *ru, int frame, int slot, uint64_t timestamp) {
-  if (ru == RC.ru[0])
-    VCD_SIGNAL_DUMPER_DUMP_VARIABLE_BY_NAME(VCD_SIGNAL_DUMPER_VARIABLES_TRX_TST, ru->proc.timestamp_tx & 0xffffffff);
-
+void fh_if4p5_south_out(RU_t *ru, int frame, int slot, uint64_t timestamp)
+{
   LOG_D(PHY,"Sending IF4p5 for frame %d subframe %d\n",ru->proc.frame_tx,ru->proc.tti_tx);
 
   if ((nr_slot_select(&ru->config, ru->proc.frame_tx, ru->proc.tti_tx) & NR_DOWNLINK_SLOT) > 0)
@@ -281,12 +90,10 @@ void fh_if4p5_south_out(RU_t *ru, int frame, int slot, uint64_t timestamp) {
 
 // Synchronous if5 from south
 
-void fh_if5_south_in(RU_t *ru,
-                     int *frame,
-                     int *tti) {
+void fh_if5_south_in(RU_t *ru, int *frame, int *tti)
+{
   NR_DL_FRAME_PARMS *fp = ru->nr_frame_parms;
   RU_proc_t *proc = &ru->proc;
-  VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME( VCD_SIGNAL_DUMPER_FUNCTIONS_RECV_IF5, 1 );   
   start_meas(&ru->rx_fhaul);
 
   ru->ifdevice.trx_read_func2(&ru->ifdevice, &proc->timestamp_rx, NULL, get_samples_per_slot(*tti, fp));
@@ -339,9 +146,6 @@ void fh_if5_south_in(RU_t *ru,
           proc->first_rx,
           ru->rx_fhaul.p_time / (cpu_freq_GHz * 1000.0),
           rxmeas.tv_nsec);
-  VCD_SIGNAL_DUMPER_DUMP_VARIABLE_BY_NAME( VCD_SIGNAL_DUMPER_VARIABLES_TRX_TS, proc->timestamp_rx&0xffffffff );
-  VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME( VCD_SIGNAL_DUMPER_FUNCTIONS_RECV_IF5, 0 );
-
 }
 
 // Synchronous if4p5 from south
@@ -398,15 +202,7 @@ void fh_if4p5_south_in(RU_t *ru,
     *slot = proc->tti_rx;
   }
 
-  if (ru == RC.ru[0]) {
-    VCD_SIGNAL_DUMPER_DUMP_VARIABLE_BY_NAME( VCD_SIGNAL_DUMPER_VARIABLES_FRAME_NUMBER_RX0_RU, f );
-    VCD_SIGNAL_DUMPER_DUMP_VARIABLE_BY_NAME( VCD_SIGNAL_DUMPER_VARIABLES_TTI_NUMBER_RX0_RU,  sl);
-    VCD_SIGNAL_DUMPER_DUMP_VARIABLE_BY_NAME( VCD_SIGNAL_DUMPER_VARIABLES_FRAME_NUMBER_TX0_RU, proc->frame_tx );
-    VCD_SIGNAL_DUMPER_DUMP_VARIABLE_BY_NAME( VCD_SIGNAL_DUMPER_VARIABLES_TTI_NUMBER_TX0_RU, proc->tti_tx );
-  }
-
   proc->symbol_mask[proc->tti_rx] = 0;
-  VCD_SIGNAL_DUMPER_DUMP_VARIABLE_BY_NAME( VCD_SIGNAL_DUMPER_VARIABLES_TRX_TS, proc->timestamp_rx&0xffffffff );
   LOG_D(PHY,"RU %d: fh_if4p5_south_in sleeping ...\n",ru->idx);
 }
 
@@ -448,7 +244,8 @@ void fh_if4p5_south_asynch_in(RU_t *ru,int *frame,int *slot) {
 
 // RRU IF4p5 TX fronthaul receiver. Assumes an if_device on input and if or rf device on output
 // receives one subframe's worth of IF4p5 OFDM symbols and OFDM modulates
-void fh_if4p5_north_in(RU_t *ru,int *frame,int *slot) {
+void fh_if4p5_north_in(RU_t *ru,int *frame,int *slot)
+{
   uint32_t symbol_number=0;
   uint32_t symbol_mask, symbol_mask_full;
   uint16_t packet_type;
@@ -461,12 +258,6 @@ void fh_if4p5_north_in(RU_t *ru,int *frame,int *slot) {
     recv_IF4p5(ru, frame, slot, &packet_type, &symbol_number);
     symbol_mask = symbol_mask | (1<<symbol_number);
   } while (symbol_mask != symbol_mask_full);
-
-  // dump VCD output for first RU in list
-  if (ru == RC.ru[0]) {
-    VCD_SIGNAL_DUMPER_DUMP_VARIABLE_BY_NAME( VCD_SIGNAL_DUMPER_VARIABLES_FRAME_NUMBER_TX0_RU, *frame );
-    VCD_SIGNAL_DUMPER_DUMP_VARIABLE_BY_NAME( VCD_SIGNAL_DUMPER_VARIABLES_TTI_NUMBER_TX0_RU, *slot );
-  }
 }
 
 void fh_if5_north_asynch_in(RU_t *ru, int *frame, int *slot)
@@ -525,12 +316,6 @@ void fh_if4p5_north_asynch_in(RU_t *ru,int *frame,int *slot) {
       ((uint64_t)frame_tx + proc->frame_tx_unwrap) * fp->samples_per_subframe * 10 + get_samples_slot_timestamp(fp, slot_tx);
   LOG_D(PHY, "RU %d/%d TST %lu, frame %d, subframe %d\n", ru->idx, 0, proc->timestamp_tx, frame_tx, slot_tx);
 
-  // dump VCD output for first RU in list
-  if (ru == RC.ru[0]) {
-    VCD_SIGNAL_DUMPER_DUMP_VARIABLE_BY_NAME( VCD_SIGNAL_DUMPER_VARIABLES_FRAME_NUMBER_TX0_RU, frame_tx );
-    VCD_SIGNAL_DUMPER_DUMP_VARIABLE_BY_NAME( VCD_SIGNAL_DUMPER_VARIABLES_TTI_NUMBER_TX0_RU, slot_tx );
-  }
-
   if (ru->feptx_ofdm)
     ru->feptx_ofdm(ru, frame_tx, slot_tx);
 
@@ -538,18 +323,16 @@ void fh_if4p5_north_asynch_in(RU_t *ru,int *frame,int *slot) {
     ru->fh_south_out(ru, frame_tx, slot_tx, proc->timestamp_tx);
 }
 
-void fh_if5_north_out(RU_t *ru) {
+void fh_if5_north_out(RU_t *ru)
+{
   /// **** send_IF5 of rxdata to BBU **** ///
-  VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME( VCD_SIGNAL_DUMPER_FUNCTIONS_SEND_IF5, 1 );
   AssertFatal(1 == 0, "Shouldn't get here\n");
 }
 
 // RRU IF4p5 northbound interface (RX)
-void fh_if4p5_north_out(RU_t *ru) {
+void fh_if4p5_north_out(RU_t *ru)
+{
   RU_proc_t *proc=&ru->proc;
-  if (ru->idx == 0)
-    VCD_SIGNAL_DUMPER_DUMP_VARIABLE_BY_NAME(VCD_SIGNAL_DUMPER_VARIABLES_TTI_NUMBER_RX0_RU, proc->tti_rx);
-
   start_meas(&ru->tx_fhaul);
   send_IF4p5(ru, proc->frame_rx, proc->tti_rx, IF4p5_PULFFT);
   stop_meas(&ru->tx_fhaul);
@@ -564,20 +347,17 @@ static void rx_rf(RU_t *ru, int *frame, int *slot)
   AssertFatal(*slot < fp->slots_per_frame && *slot >= 0, "slot %d is illegal (%d)\n", *slot, fp->slots_per_frame);
 
   start_meas(&ru->rx_fhaul);
-  int nb = ru->nb_rx * ru->num_beams_period;
+  int nb = ru->nb_rx;
   void *rxp[nb];
   for (int i = 0; i < nb; i++)
     rxp[i] = (void *)&ru->common.rxdata[i][get_samples_slot_timestamp(fp, *slot)];
 
-  VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME(VCD_SIGNAL_DUMPER_FUNCTIONS_TRX_READ, 1);
   openair0_timestamp_t old_ts = proc->timestamp_rx;
   LOG_D(PHY,"Reading %d samples for slot %d (%p)\n", samples_per_slot, *slot, rxp[0]);
 
   openair0_timestamp_t ts;
   unsigned int rxs;
   rxs = ru->rfdevice.trx_read_func(&ru->rfdevice, &ts, rxp, samples_per_slot, nb);
-
-  VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME( VCD_SIGNAL_DUMPER_FUNCTIONS_TRX_READ, 0 );
   proc->timestamp_rx = ts-ru->ts_offset;
 
   if (rxs != samples_per_slot)
@@ -617,12 +397,6 @@ static void rx_rf(RU_t *ru, int *frame, int *slot)
         proc->tti_tx,
         fp->slots_per_frame);
 
-  // dump VCD output for first RU in list
-  if (ru == RC.ru[0]) {
-    VCD_SIGNAL_DUMPER_DUMP_VARIABLE_BY_NAME( VCD_SIGNAL_DUMPER_VARIABLES_FRAME_NUMBER_RX0_RU, proc->frame_rx );
-    VCD_SIGNAL_DUMPER_DUMP_VARIABLE_BY_NAME( VCD_SIGNAL_DUMPER_VARIABLES_TTI_NUMBER_RX0_RU, proc->tti_rx );
-  }
-
   if (proc->first_rx == 0) {
     if (proc->tti_rx != *slot) {
       LOG_E(PHY,
@@ -648,17 +422,29 @@ static void rx_rf(RU_t *ru, int *frame, int *slot)
     proc->first_rx = 0;
     *frame = proc->frame_rx;
     *slot  = proc->tti_rx;
+
+    // Align to slot boundary
+    uint64_t samples_to_slot_boundary = 0;
+    uint64_t sample_offset_within_frame = proc->timestamp_rx % fp->samples_per_frame;
+    uint64_t sample_offset_within_slot = sample_offset_within_frame - get_samples_slot_timestamp(fp, *slot);
+    if (sample_offset_within_slot > 0) {
+      samples_to_slot_boundary = get_samples_per_slot(*slot, fp) - sample_offset_within_slot;
+      LOG_A(NR_PHY, "Aligning to the slot boundary %lu\n", samples_to_slot_boundary);
+
+      // Read and discard the samples in the first_rx to align to the slot boundary
+      rxs = ru->rfdevice.trx_read_func(&ru->rfdevice, &ts, rxp, samples_to_slot_boundary, nb);
+      if (rxs != samples_to_slot_boundary)
+        LOG_E(PHY, "rx_rf: Asked for %ld samples, got %d from USRP\n", samples_to_slot_boundary, rxs);
+
+      proc->timestamp_rx += samples_to_slot_boundary;
+      if (*slot + 1 >= fp->slots_per_frame)
+        *frame = *frame + 1;
+      *slot = (*slot + 1) % fp->slots_per_frame;
+    }
   }
 
   metadata mt = {.slot = *slot, .frame = *frame};
   gNBscopeCopyWithMetadata(ru, gNbTimeDomainSamples, rxp[0], sizeof(c16_t), 1, samples_per_slot, 0, &mt);
-
-  VCD_SIGNAL_DUMPER_DUMP_VARIABLE_BY_NAME( VCD_SIGNAL_DUMPER_VARIABLES_TRX_TS, (proc->timestamp_rx+ru->ts_offset)&0xffffffff );
-
-  if (rxs != samples_per_slot) {
-    //exit_fun( "problem receiving samples" );
-    LOG_E(PHY, "problem receiving samples\n");
-  }
 
   stop_meas(&ru->rx_fhaul);
 }
@@ -676,12 +462,12 @@ static radio_tx_gpio_flag_t get_gpio_flags(RU_t *ru, int slot)
 
       if (ru->common.beam_id) {
         int prev_slot = (slot - 1 + fp->slots_per_frame) % fp->slots_per_frame;
-        const int *beam_ids = ru->common.beam_id[0];
-        int prev_beam = beam_ids[prev_slot * fp->symbols_per_slot];
-        int beam = beam_ids[slot * fp->symbols_per_slot];
+        uint16_t **beam_ids = ru->common.beam_id;
+        uint16_t prev_beam = beam_ids[prev_slot * fp->symbols_per_slot][0];
+        int beam = beam_ids[slot * fp->symbols_per_slot][0];
         if (prev_beam != beam) {
           flags_gpio = beam | TX_GPIO_CHANGE; // enable change of gpio
-          LOG_I(HW, "slot %d, beam %d\n", slot, ru->common.beam_id[0][slot * fp->symbols_per_slot]);
+          LOG_I(HW, "slot %d, beam %d\n", slot, beam_ids[slot * fp->symbols_per_slot][0]);
         }
       }
       break;
@@ -690,7 +476,7 @@ static radio_tx_gpio_flag_t get_gpio_flags(RU_t *ru, int slot)
       // the beam index is written in bits 8-10 of the flags
       // bit 11 enables the gpio programming
       int beam = 0;
-      if ((slot % 10 == 0) && ru->common.beam_id && (ru->common.beam_id[0][slot * fp->symbols_per_slot] < 64)) {
+      if ((slot % 10 == 0) && ru->common.beam_id && (ru->common.beam_id[slot * fp->symbols_per_slot][0] < 64)) {
         // beam = ru->common.beam_id[0][slot*fp->symbols_per_slot] | 64;
         beam = 1024; // hardcoded now for beam32 boresight
         // beam = 127; //for the sake of trying beam63
@@ -730,7 +516,7 @@ void tx_rf(RU_t *ru, int frame,int slot, uint64_t timestamp)
     if(slot_type == NR_MIXED_SLOT) {
       int txsymb = 0;
 
-      for(int symbol_count = 0; symbol_count<NR_NUMBER_OF_SYMBOLS_PER_SLOT; symbol_count++) {
+      for(int symbol_count = 0; symbol_count < fp->symbols_per_slot; symbol_count++) {
         if (cfg->tdd_table.max_tdd_periodicity_list[slot].max_num_of_symbol_per_slot_list[symbol_count].slot_config.value == 0)
           txsymb++;
       }
@@ -773,17 +559,11 @@ void tx_rf(RU_t *ru, int frame,int slot, uint64_t timestamp)
   const int flags = flags_burst | (flags_gpio << 4);
   proc->first_tx = 0;
 
-  VCD_SIGNAL_DUMPER_DUMP_VARIABLE_BY_NAME(VCD_SIGNAL_DUMPER_VARIABLES_TRX_WRITE_FLAGS, flags);
-  VCD_SIGNAL_DUMPER_DUMP_VARIABLE_BY_NAME(VCD_SIGNAL_DUMPER_VARIABLES_FRAME_NUMBER_TX0_RU, frame);
-  VCD_SIGNAL_DUMPER_DUMP_VARIABLE_BY_NAME(VCD_SIGNAL_DUMPER_VARIABLES_TTI_NUMBER_TX0_RU, slot);
-
-  int nt = ru->nb_tx * ru->num_beams_period;
+  int nt = ru->nb_tx;
   void *txp[nt];
   for (int i = 0; i < nt; i++)
     txp[i] = (void *)&ru->common.txdata[i][get_samples_slot_timestamp(fp, slot)] - sf_extension * sizeof(int32_t);
 
-  VCD_SIGNAL_DUMPER_DUMP_VARIABLE_BY_NAME(VCD_SIGNAL_DUMPER_VARIABLES_TRX_TST, (timestamp + ru->ts_offset) & 0xffffffff);
-  VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME(VCD_SIGNAL_DUMPER_FUNCTIONS_TRX_WRITE, 1);
   // prepare tx buffer pointers
   uint32_t txs = ru->rfdevice.trx_write_func(&ru->rfdevice,
                                              timestamp + ru->ts_offset - sf_extension,
@@ -804,7 +584,6 @@ void tx_rf(RU_t *ru, int frame,int slot, uint64_t timestamp)
         siglen + sf_extension,
         txs,
         10 * log10((double)signal_energy(txp[0], siglen + sf_extension)));
-  VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME(VCD_SIGNAL_DUMPER_FUNCTIONS_TRX_WRITE, 0);
 }
 
 static void fill_rf_config(RU_t *ru, char *rf_config_file)
@@ -833,13 +612,13 @@ static void fill_rf_config(RU_t *ru, char *rf_config_file)
   AssertFatal(ru->nb_rx > 0 && ru->nb_rx <= 8, "openair0 does not support more than 8 antennas\n");
 
   cfg->num_rb_dl = N_RB;
-  cfg->tx_num_channels = ru->nb_tx * ru->num_beams_period;
-  cfg->rx_num_channels = ru->nb_rx * ru->num_beams_period;
-  cfg->num_distributed_ru = ru->num_beams_period;
+  cfg->tx_num_channels = ru->nb_tx;
+  cfg->rx_num_channels = ru->nb_rx;
+  cfg->num_distributed_ru = 1;
   LOG_I(PHY,"Setting RF config for N_RB %d, NB_RX %d, NB_TX %d\n",cfg->num_rb_dl,cfg->rx_num_channels,cfg->tx_num_channels);
   LOG_I(PHY,"tune_offset %.0f Hz, sample_rate %.0f Hz\n",cfg->tune_offset,cfg->sample_rate);
 
-  for (int i = 0; i < ru->nb_tx * ru->num_beams_period; i++) {
+  for (int i = 0; i < ru->nb_tx; i++) {
     if (ru->if_frequency == 0) {
       cfg->tx_freq[i] = fp->dl_CarrierFreq;
     } else if (ru->if_freq_offset) {
@@ -854,7 +633,7 @@ static void fill_rf_config(RU_t *ru, char *rf_config_file)
           i, cfg->tx_gain[i],cfg->tx_freq[i]);
   }
 
-  for (int i = 0; i < ru->nb_rx * ru->num_beams_period; i++) {
+  for (int i = 0; i < ru->nb_rx; i++) {
     if (ru->if_frequency == 0) {
       cfg->rx_freq[i] = fp->ul_CarrierFreq;
     } else if (ru->if_freq_offset) {
@@ -927,7 +706,7 @@ int setup_RU_buffers(RU_t *ru)
 
   if (ru->openair0_cfg.mmapped_dma == 1) {
     // replace RX signal buffers with mmaped HW versions
-    for (int i = 0; i < ru->nb_rx * ru->num_beams_period; i++) {
+    for (int i = 0; i < ru->nb_rx; i++) {
       int card = i / 4;
       int ant = i % 4;
       LOG_D(PHY, "Mapping RU id %u, rx_ant %d, on card %d, chain %d\n", ru->idx, i, ru->rf_map.card + card, ru->rf_map.chain + ant);
@@ -939,7 +718,7 @@ int setup_RU_buffers(RU_t *ru)
       }
     }
 
-    for (int i = 0; i < ru->nb_tx * ru->num_beams_period; i++) {
+    for (int i = 0; i < ru->nb_tx; i++) {
       int card = i / 4;
       int ant = i % 4;
       LOG_D(PHY, "Mapping RU id %u, tx_ant %d, on card %d, chain %d\n", ru->idx, i, ru->rf_map.card + card, ru->rf_map.chain + ant);
@@ -1080,16 +859,7 @@ void *ru_thread(void *param)
     }
 
     LOG_I(PHY, "Starting IF interface for RU %d, nb_rx %d\n", ru->idx, ru->nb_rx);
-    AssertFatal(ru->nr_start_if(ru, NULL) == 0, "Could not start the IF device\n");
-
-    if (ru->has_ctrl_prt > 0) {
-      if (ru->if_south == LOCAL_RF)
-        ret = connect_rau(ru);
-      else
-        ret = attach_rru(ru);
-
-      AssertFatal(ret == 0, "Cannot connect to remote radio\n");
-    }
+    AssertFatal(ru->nr_start_if(ru) == 0, "Could not start the IF device\n");
 
   } else if (ru->if_south == LOCAL_RF) { // configure RF parameters only
     ret = openair0_device_load(&ru->rfdevice,&ru->openair0_cfg);
@@ -1206,12 +976,16 @@ void *ru_thread(void *param)
                      proc->tti_rx * gNB->frame_parms.samples_per_slot_wCP);
 
         // Do PRACH RU processing
-        prach_item_t *p = find_nr_prach(&gNB->prach_list, proc->frame_rx, proc->tti_rx, SEARCH_EXIST);
-        if (p) {
-          VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME( VCD_SIGNAL_DUMPER_FUNCTIONS_PHY_RU_PRACH_RX, 1 );
-          // need to extract RACH data for lqter processing by rx_nr_prach()
-          rx_nr_prach_ru(p, ru->common.rxdata, ru->nr_frame_parms, ru->N_TA_offset);
-          VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME(VCD_SIGNAL_DUMPER_FUNCTIONS_PHY_RU_PRACH_RX, 0);
+        fsn_t now = {.f = proc->frame_rx, .s = proc->tti_rx, .mu = fp->numerology_index};
+        prach_item_t p;
+        while (get_next_nr_prach(&gNB->prach_ru_queue, &now, &p)) {
+          // need to extract RACH data for later processing by rx_nr_prach()
+          rx_nr_prach_ru(&p, ru->common.rxdata, ru->nr_frame_parms, ru->N_TA_offset, gNB->enable_analog_das);
+          bool success = spsc_q_put(&gNB->prach_l1rx_queue, &p, sizeof(p));
+          // assume prach_l1rx_queue never full: prach_ru_queue filled at
+          // constant pace, but prach_l1rx_queue emptied as fast as possible,
+          // see rx_func()
+          DevAssert(success);
         } // end if (prach_id >= 0)
       } // end if (ru->feprx)
     } // end if (slot_type == NR_UPLINK_SLOT || slot_type == NR_MIXED_SLOT) {
@@ -1237,20 +1011,22 @@ int start_streaming(RU_t *ru) {
   return ru->ifdevice.thirdparty_startstreaming(&ru->ifdevice);
 }
 
-int nr_start_if(struct RU_t_s *ru, struct PHY_VARS_gNB_s *gNB) {
+int nr_start_if(struct RU_t_s *ru)
+{
   if (ru->if_south <= REMOTE_IF5)
     for (int i = 0; i < ru->nb_rx; i++)
       ru->openair0_cfg.rxbase[i] = ru->common.rxdata[i];
   ru->openair0_cfg.rxsize = ru->nr_frame_parms->samples_per_subframe*10;
-  reset_meas(&ru->ifdevice.tx_fhaul);
   return ru->ifdevice.trx_start_func(&ru->ifdevice);
 }
 
-int start_rf(RU_t *ru) {
+int start_rf(RU_t *ru)
+{
   return(ru->rfdevice.trx_start_func(&ru->rfdevice));
 }
 
-int stop_rf(RU_t *ru) {
+int stop_rf(RU_t *ru)
+{
   if (ru->rfdevice.trx_get_stats_func) {
     ru->rfdevice.trx_get_stats_func(&ru->rfdevice);
   }
@@ -1305,123 +1081,6 @@ void kill_NR_RU_proc(int inst) {
     return;
   }
   LOG_I(PHY, "RU %d RF device stopped\n",ru->idx);
-}
-
-int check_capabilities(RU_t *ru,RRU_capabilities_t *cap) {
-  FH_fmt_options_t fmt = cap->FH_fmt;
-  int i;
-  LOG_I(PHY,"RRU %d, num_bands %d, looking for band %d\n",ru->idx,cap->num_bands,ru->nr_frame_parms->nr_band);
-
-  for (i=0; i<cap->num_bands; i++) {
-    LOG_I(PHY,"band %d on RRU %d\n",cap->band_list[i],ru->idx);
-    if (ru->nr_frame_parms->nr_band == cap->band_list[i])
-      break;
-  }
-
-  if (i == cap->num_bands) {
-    LOG_I(PHY,"Couldn't find target NR band %d on RRU %d\n",ru->nr_frame_parms->nr_band,ru->idx);
-    return(-1);
-  }
-
-  switch (ru->if_south) {
-    case LOCAL_RF:
-      AssertFatal(1==0, "This RU should not have a local RF, exiting\n");
-      return(0);
-      break;
-
-    case REMOTE_IF5:
-      if (fmt == OAI_IF5_only || fmt == OAI_IF5_and_IF4p5)
-        return (0);
-      break;
-
-    case REMOTE_IF4p5:
-      if (fmt == OAI_IF4p5_only || fmt == OAI_IF5_and_IF4p5)
-        return (0);
-      break;
-
-    case REMOTE_MBP_IF5:
-      if (fmt == MBP_IF5)
-        return (0);
-      break;
-
-    default:
-      LOG_I(PHY,"No compatible Fronthaul interface found for RRU %d\n", ru->idx);
-      return(-1);
-  }
-
-  return(-1);
-}
-
-const char rru_format_options[4][20] = {"OAI_IF5_only", "OAI_IF4p5_only", "OAI_IF5_and_IF4p5", "MBP_IF5"};
-const char rru_formats[3][20] = {"OAI_IF5", "MBP_IF5", "OAI_IF4p5"};
-const char ru_if_formats[4][20] = {"LOCAL_RF", "REMOTE_OAI_IF5", "REMOTE_MBP_IF5", "REMOTE_OAI_IF4p5"};
-
-void configure_ru(void *ruu, void *arg)
-{
-  RU_t *ru = (RU_t *)ruu;
-  nfapi_nr_config_request_scf_t *cfg = &ru->config;
-  int ret;
-  LOG_I(PHY, "Received capabilities from RRU %d\n", ru->idx);
-
-  RRU_capabilities_t *capabilities = (RRU_capabilities_t *)arg;
-  if (capabilities->FH_fmt < MAX_FH_FMTs)
-    LOG_I(PHY, "RU FH options %s\n", rru_format_options[capabilities->FH_fmt]);
-
-  ret = check_capabilities(ru,capabilities);
-  AssertFatal(ret == 0, "Cannot configure RRU %d, check_capabilities returned %d\n", ru->idx, ret);
-  // take antenna capabilities of RRU
-  ru->nb_tx = capabilities->nb_tx[0];
-  ru->nb_rx = capabilities->nb_rx[0];
-  // Pass configuration to RRU
-  LOG_I(PHY, "Using %s fronthaul (%d), band %d \n",ru_if_formats[ru->if_south],ru->if_south,ru->nr_frame_parms->nr_band);
-
-  // wait for configuration
-  RRU_config_t *config = (RRU_config_t *)arg;
-  *config = (RRU_config_t){.FH_fmt = ru->if_south,
-                           .num_bands = 1,
-                           .band_list[0] = ru->nr_frame_parms->nr_band,
-                           .tx_freq[0] = ru->nr_frame_parms->dl_CarrierFreq,
-                           .rx_freq[0] = ru->nr_frame_parms->ul_CarrierFreq,
-                           .att_tx[0] = ru->att_tx,
-                           .att_rx[0] = ru->att_rx,
-                           .N_RB_DL[0] = cfg->carrier_config.dl_grid_size[cfg->ssb_config.scs_common.value].value,
-                           .N_RB_UL[0] = cfg->carrier_config.dl_grid_size[cfg->ssb_config.scs_common.value].value,
-                           .threequarter_fs[0] = ru->nr_frame_parms->threequarter_fs};
-  nr_init_frame_parms(&ru->config, ru->nr_frame_parms);
-  nr_phy_init_RU(ru);
-}
-
-void configure_rru(void *ruu, void *arg)
-{
-  RRU_config_t *config     = (RRU_config_t *)arg;
-  RU_t *ru = (RU_t *)ruu;
-  nfapi_nr_config_request_scf_t *cfg = &ru->config;
-  NR_DL_FRAME_PARMS *fp = ru->nr_frame_parms;
-
-  fp->nr_band = config->band_list[0];
-  fp->dl_CarrierFreq = config->tx_freq[0];
-  fp->ul_CarrierFreq = config->rx_freq[0];
-
-  if (fp->dl_CarrierFreq == fp->ul_CarrierFreq) {
-    cfg->cell_config.frame_duplex_type.value = TDD;
-  } else
-    cfg->cell_config.frame_duplex_type.value = FDD;
-
-  ru->att_tx = config->att_tx[0];
-  ru->att_rx = config->att_rx[0];
-  int mu = cfg->ssb_config.scs_common.value;
-  cfg->carrier_config.dl_grid_size[mu].value = config->N_RB_DL[0];
-  cfg->carrier_config.dl_grid_size[mu].value = config->N_RB_UL[0];
-  fp->threequarter_fs = config->threequarter_fs[0];
-
-  if (ru->function==NGFI_RRU_IF4p5) {
-    fp->att_rx = ru->att_rx;
-    fp->att_tx = ru->att_tx;
-  }
-
-  fill_rf_config(ru,ru->rf_config_file);
-  nr_init_frame_parms(&ru->config, fp);
-  nr_phy_init_RU(ru);
 }
 
 void set_function_spec_param(RU_t *ru)
@@ -1494,7 +1153,6 @@ void set_function_spec_param(RU_t *ru)
       ru->nr_start_if            = nr_start_if;         // need to start if interface for IF5
       ru->ifdevice.host_type     = RAU_HOST;
       ru->ifdevice.eth_params    = &ru->eth_params;
-      ru->ifdevice.configure_rru = configure_ru;
 
       break;
 
@@ -1514,7 +1172,6 @@ void set_function_spec_param(RU_t *ru)
       ru->nr_start_if            = nr_start_if;         // need to start if interface for IF4p5
       ru->ifdevice.host_type     = RAU_HOST;
       ru->ifdevice.eth_params    = &ru->eth_params;
-      ru->ifdevice.configure_rru = configure_ru;
       break;
 
     default:
@@ -1797,13 +1454,12 @@ static void NRRCconfig_RU(configmodule_interface_t *cfg)
     for (int i = 0; i < ru->num_bands; i++)
       ru->band[i] = param[RU_BAND_LIST_IDX].iptr[i];
     ru->openair0_cfg.nr_flag = *param[RU_NR_FLAG].iptr;
-    ru->openair0_cfg.nr_band = ru->band[0];
+    // TODO remove band from RU?
     ru->openair0_cfg.nr_scs_for_raster = *param[RU_NR_SCS_FOR_RASTER].iptr;
     LOG_D(PHY,
-          "[RU %d] Setting nr_flag %d, nr_band %d, nr_scs_for_raster %d\n",
+          "[RU %d] Setting nr_flag %d, nr_scs_for_raster %d\n",
           j,
           ru->openair0_cfg.nr_flag,
-          ru->openair0_cfg.nr_band,
           ru->openair0_cfg.nr_scs_for_raster);
     ru->openair0_cfg.rxfh_cores[0] = *param[RU_RXFH_CORE_ID].iptr;
     ru->openair0_cfg.txfh_cores[0] = *param[RU_TXFH_CORE_ID].iptr;

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 include $(OPENAIR_TARGETS)/Makefile.common
 ifdef TEST_OMG
 
@@ -100,7 +102,7 @@ $(OBJ) : %.o : %.c
 $(L2_OBJS) : %.o : %.c
 	$(CC) -c $(CFLAGS) $(EXTRA_CFLAGS) -DMAC_CONTEXT=1 -DPHY_CONTEXT=1 -I$(TOP_DIR) $(L2_incl) -o $@ $<
 
-physim : $(OBJ) $(L2_OBJS) OMG.c common.c static.c job.c rwp.c rwalk.c hashtable.c mobility_parser.c trace.c -I$(TOP_DIR) $(L2_incl) -o physim $(CFLAGS) $(EXTRA_CFLAGS) $(OBJ) $(L2_OBJS) -lm -lforms -L/usr/local/lib -lforms -lX11 -L/usr/X11R6/lib -lXpm -lblas -lpthread
+physim : $(OBJ) $(L2_OBJS) OMG.c common.c static.c job.c rwp.c rwalk.c hashtable.c mobility_parser.c trace.c -I$(TOP_DIR) $(L2_incl) -o physim $(CFLAGS) $(EXTRA_CFLAGS) $(OBJ) $(L2_OBJS) -lm -lforms -L/usr/local/lib -lforms -lX11 -L/usr/X11R6/lib -lXpm -lpthread
 
 clean:
 	rm -f physim

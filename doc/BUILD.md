@@ -1,8 +1,10 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 # OAI Build Procedures
 
-[[_TOC_]]
+This page describes how to build OAI.
 
-This page is valid on tags starting from **`2019.w09`**.
+[[_TOC_]]
 
 ## Overview
 
@@ -10,7 +12,11 @@ The [OAI EPC](https://github.com/OPENAIRINTERFACE/openair-epc-fed/blob/master/do
 
 OAI softmodem sources, which aim to implement 3GPP compliant UEs, eNodeB and gNodeB can be downloaded from the Eurecom [gitlab repository](./GET_SOURCES.md).
 
-Sources come with a build script [build_oai](../cmake_targets/build_oai) located at the root of the `openairinterface5g/cmake_targets` directory. This script is developed to build the oai binaries (executables,shared libraries) for different hardware platforms, and use cases.
+The historically convential way to build OAI is
+[build_oai](../cmake_targets/build_oai) located at the root of the
+`openairinterface5g/cmake_targets` directory. This script is developed to build
+the oai binaries (executables,shared libraries) for different hardware
+platforms, and use cases, and is a wrapper on top of `cmake`.
 
 The main oai binaries, which are tested by the Continuous Integration process are:
 
@@ -36,6 +42,81 @@ The oai softmodem supports many use cases, and new ones are regularly added. Mos
 
 - s1, noS1
 - all simulators as the rfsimulator, the L2 simulator, with exception of PHY simulators, which are distinct executables. 
+
+## Dependencies
+
+TODO.
+
+## Running `cmake` directly
+
+As mentioned, `build_oai` is a wrapper on top of `cmake`. It is therefore
+possible, and now recommended, to run `cmake` directly. To build all of OAI in
+a default install:
+
+```
+cd openairinterface5g
+mkdir build
+cd build
+cmake .. -GNinja
+ninja
+```
+
+Alternatively, let cmake generate the directory:
+
+```
+cd openairinterface5g
+cmake -B build -G Ninja
+cmake --build build
+```
+
+To build additional libraries, e.g., telnetsrv, do the following:
+```bash
+cmake .. -GNinja -DENABLE_TELNETSRV=ON
+ninja telnetsrv
+```
+
+A list of all libraries can be seen using `ccmake ..` or `cmake-gui ..`.
+
+The default target directory of `build_oai` is the following, for historical
+reasons:
+```bash
+cd openairinterface5g/cmake_targets/ran_build/build
+cmake ../../.. -GNinja
+ccmake ../../..
+cmake-gui ../../..
+```
+
+You can of course use all standard cmake/ninja/make commands in this directory,
+assuming you already build with `build_oai`. For instance, to compile sources
+after modifying the code, do
+```
+cd cmake_targets/ran_build/build
+ninja
+```
+
+### cmake presets
+
+CMake presets are common project configure options. See [here](https://cmake.org/cmake/help/latest/manual/cmake-presets.7.html).
+
+Configure presets:
+
+ - `default`: Configure compilation with default options
+ - `tests`: Same as above but `ENABLE_TESTS` and `SANITIZE_ADDRESS` is ON
+
+Build presets:
+
+ - `5gdefault`: Build the software for NR rfsimulator test
+ - `default`: same as 5gdefault
+ - `4gdefault`: Build the software for LTE rfsimulator test
+ - `tests`: build all unit tests
+
+To configure using configuration preset:
+
+    cmake --preset <preset_name>
+
+To build using a build preset:
+
+    cmake --build --preset <preset_name>
 
 ## Running `build_oai`
 
@@ -111,7 +192,7 @@ Now, when installing the pre-requisites, especially the `UHD` driver, you can no
 
 ```bash
 export BUILD_UHD_FROM_SOURCE=True
-export UHD_VERSION=3.15.0.0
+export UHD_VERSION=4.10.0.0
 ./build_oai -I -w USRP
 ```
 
@@ -125,6 +206,7 @@ See:
 
 * `cmake_targets/tools/uhd-3.15-tdd-patch.diff`
 * `cmake_targets/tools/uhd-4.x-tdd-patch.diff`
+* `cmake_targets/tools/uhd-4.5plus-tdd-patch.diff`
 * `cmake_targets/tools/build_helper` --> function `install_usrp_uhd_driver_from_source`
 
 ### Building PHY Simulators
@@ -171,63 +253,8 @@ The following libraries are build in CI and should always work: `telnetsrv`,
 
 Some libraries have further dependencies and might not build on every system:
 - `enbscope`, `uescope`, `nrscope`: libforms/X
-- `ldpc_cuda`: CUDA
 - `websrv`: npm and others
 - `ldpc_aal`: DPDK with patch
-
-## Running `cmake` directly
-
-`build_oai` is a wrapper on top of `cmake`. It is therefore possible to run `cmake` directly. An example using `ninja`: to build all "main targets" for 5G, excluding additional libraries:
-```
-cd openairinterface5g
-mkdir build && cd build
-cmake .. -GNinja && ninja nr-softmodem nr-uesoftmodem nr-cuup params_libconfig coding rfsimulator ldpc
-```
-
-To build additional libraries, e.g., telnetsrv, do the following:
-```bash
-cmake .. -GNinja -DENABLE_TELNETSRV=ON && ninja telnetsrv
-```
-
-A list of all libraries can be seen using `ccmake ..` or `cmake-gui ..`.
-
-It is currently not possible to build all targets in the form of `cmake ..
--GNinja && ninja`: currently, SDRs are always exposed, even if you don't have
-the dependencies, and some targets are simply broken. Again, `build_oai` list
-all targets that it builds, and you can use them with `ninja`
-
-The default target directory of `build_oai` is the following, for historical reasons:
-```bash
-cd openairinterface5g/cmake_targets/ran_build/build
-cmake ../../.. -GNinja
-ccmake ../../..
-cmake-gui ../../..
-```
-You can of course use all standard cmake/ninja/make commands in this directory.
-
-### cmake presets
-
-CMake presets are common project configure options. See [here](https://cmake.org/cmake/help/latest/manual/cmake-presets.7.html).
-
-Configure presets:
-
- - `default`: Configure compilation with default options
- - `tests`: Same as above but ENABLE_TESTS and SANITIZE_ADDRESS is ON
-
-Build presets:
-
- - `5gdefault`: Build the software for NR rfsimulator test
- - `default`: same as 5gdefault
- - `4gdefault`: Build the software for LTE rfsimulator test
- - `tests`: build all unit tests
-
-To configure using configuration preset:
-
-    cmake --preset <preset_name>
-
-To build using a build preset:
-
-    cmake --build --preset <preset_name>
 
 ## Cross Compile
 

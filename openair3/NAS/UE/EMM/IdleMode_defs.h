@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
+ */
+
 #ifndef _IDLEMODE_DEFS_H
 #define _IDLEMODE_DEFS_H
 

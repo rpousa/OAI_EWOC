@@ -1,22 +1,5 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
 #include "mac_rrc_dl_handler.h"
@@ -53,33 +36,6 @@ static instance_t get_f1_gtp_instance(void)
   return inst->gtpInst;
 }
 
-static int drb_gtpu_create(instance_t instance,
-                           uint32_t ue_id,
-                           int incoming_id,
-                           int outgoing_id,
-                           int qfi,
-                           in_addr_t tlAddress, // only IPv4 now
-                           teid_t outgoing_teid,
-                           gtpCallback callBack,
-                           gtpCallbackSDAP callBackSDAP,
-                           gtpv1u_gnb_create_tunnel_resp_t *create_tunnel_resp)
-{
-  gtpv1u_gnb_create_tunnel_req_t create_tunnel_req = {0};
-  create_tunnel_req.incoming_rb_id[0] = incoming_id;
-  create_tunnel_req.pdusession_id[0] = outgoing_id;
-  memcpy(&create_tunnel_req.dst_addr[0].buffer, &tlAddress, sizeof(uint8_t) * 4);
-  create_tunnel_req.dst_addr[0].length = 32;
-  create_tunnel_req.outgoing_teid[0] = outgoing_teid;
-  create_tunnel_req.outgoing_qfi[0] = qfi;
-  create_tunnel_req.num_tunnels = 1;
-  create_tunnel_req.ue_id = ue_id;
-
-  // we use gtpv1u_create_ngu_tunnel because it returns the interface
-  // address and port of the interface; apart from that, we also might call
-  // newGtpuCreateTunnel() directly
-  return gtpv1u_create_ngu_tunnel(instance, &create_tunnel_req, create_tunnel_resp, callBack, callBackSDAP);
-}
-
 bool DURecvCb(protocol_ctxt_t *ctxt_pP,
               const srb_flag_t srb_flagP,
               const rb_id_t rb_idP,
@@ -91,11 +47,37 @@ bool DURecvCb(protocol_ctxt_t *ctxt_pP,
               const uint32_t *sourceL2Id,
               const uint32_t *destinationL2Id)
 {
+  UNUSED(confirmP);
+  UNUSED(modeP);
+  UNUSED(sourceL2Id);
+  UNUSED(destinationL2Id);
   // The buffer comes from the stack in gtp-u thread, we have a make a separate buffer to enqueue in a inter-thread message queue
   uint8_t *sdu = malloc16(sdu_buffer_sizeP);
   memcpy(sdu, sdu_buffer_pP, sdu_buffer_sizeP);
   nr_rlc_data_req(ctxt_pP, srb_flagP, rb_idP, muiP, sdu_buffer_sizeP, sdu);
   return true;
+}
+
+/** @brief Fill and send request to create GTP-U tunnel on F1 */
+static f1ap_up_tnl_t f1_drb_gtpu_create(const gtpv1u_gnb_create_tunnel_req_t *req)
+{
+  f1ap_up_tnl_t out = {0};
+
+  LOG_I(GTPU, "Incoming DRB %d / PDU Session %d - UL TEID %d\n", req->incoming_rb_id, req->pdusession_id, req->outgoing_teid);
+
+  instance_t f1inst = get_f1_gtp_instance();
+  DevAssert(f1inst >= 0);
+  gtpv1u_gnb_create_tunnel_resp_t resp = {0};
+  int ret = gtpv1u_create_ngu_tunnel(f1inst, req, &resp, DURecvCb, NULL);
+  AssertFatal(ret >= 0, "Unable to create GTP Tunnel for F1-U\n");
+  AssertFatal(resp.gnb_addr.length == sizeof(in_addr_t),
+              "GTP tunnel response address length %d does not match IPv4 size %zu\n",
+              resp.gnb_addr.length,
+              sizeof(in_addr_t));
+  memcpy(&out.tl_address, &resp.gnb_addr.buffer, resp.gnb_addr.length);
+  out.teid = resp.gnb_NGu_teid;
+
+  return out;
 }
 
 static bool check_plmn_identity(const plmn_id_t *check_plmn, const plmn_id_t *plmn)
@@ -213,6 +195,7 @@ void f1_setup_response(const f1ap_setup_resp_t *resp)
 
 void f1_setup_failure(const f1ap_setup_failure_t *failure)
 {
+  UNUSED(failure);
   LOG_E(MAC, "the CU reported F1AP Setup Failure, is there a configuration mismatch?\n");
   exit(1);
 }
@@ -347,23 +330,15 @@ static int handle_ue_context_drbs_setup(NR_UE_info_t *UE,
     // just put same number of tunnels in DL as in UL
     DevAssert(drb->up_ul_tnl_len == 1);
     resp_drb->up_dl_tnl_len = drb->up_ul_tnl_len;
-
     if (f1inst >= 0) { // we actually use F1-U
-      int qfi = -1; // don't put PDU session marker in GTP
-      gtpv1u_gnb_create_tunnel_resp_t resp_f1 = {0};
-      int ret = drb_gtpu_create(f1inst,
-                                UE->rnti,
-                                drb->id,
-                                drb->id,
-                                qfi,
-                                drb->up_ul_tnl[0].tl_address,
-                                drb->up_ul_tnl[0].teid,
-                                DURecvCb,
-                                NULL,
-                                &resp_f1);
-      AssertFatal(ret >= 0, "Unable to create GTP Tunnel for F1-U\n");
-      memcpy(&resp_drb->up_dl_tnl[0].tl_address, &resp_f1.gnb_addr.buffer, 4);
-      resp_drb->up_dl_tnl[0].teid = resp_f1.gnb_NGu_teid[0];
+      // F1-U tunnel setup: 1 GTP-U tunnel per DRB
+      gtpv1u_gnb_create_tunnel_req_t req = {.ue_id = UE->rnti,
+                                            .outgoing_teid = drb->up_ul_tnl[0].teid,
+                                            .pdusession_id = drb->id,
+                                            .incoming_rb_id = drb->id,
+                                            .dst_addr.length = 32};
+      memcpy(&req.dst_addr.buffer, &drb->up_ul_tnl[0].tl_address, sizeof(uint8_t) * 4); // only IPv4 now
+      resp_drb->up_dl_tnl[0] = f1_drb_gtpu_create(&req);
     }
 
     if (!cellGroupConfig->rlc_BearerToAddModList)
@@ -560,19 +535,20 @@ static NR_UE_info_t *create_new_UE(gNB_MAC_INST *mac, uint32_t cu_id, const NR_C
   bool success = du_add_f1_ue_data(rnti, &new_ue_data);
   DevAssert(success);
 
-  NR_UE_info_t *UE = get_new_nr_ue_inst(&mac->UE_info.uid_allocator, rnti, NULL);
+  NR_UE_info_t *UE = get_new_nr_ue_inst(&mac->UE_info.uid_allocator, rnti, NULL, &mac->radio_config);
   AssertFatal(UE->uid < MAX_MOBILES_PER_GNB, "cannot create UE context, UE context setup failure not implemented\n");
 
   NR_CellGroupConfig_t *cellGroupConfig = NULL;
   NR_COMMON_channels_t *cc = &mac->common_channels[CC_id];
   const NR_ServingCellConfigCommon_t *scc = cc->ServingCellConfigCommon;
   const nr_mac_config_t *configuration = &mac->radio_config;
+  int ssb_index = get_ssbidx_from_beam(mac, UE->UE_beam_index);
   if (is_SA) {
-    cellGroupConfig = get_initial_cellGroupConfig(UE->uid, scc, &mac->radio_config, &mac->rlc_config);
+    cellGroupConfig = get_initial_cellGroupConfig(UE->uid, scc, &mac->radio_config, &mac->rlc_config, ssb_index);
     cellGroupConfig->spCellConfig->reconfigurationWithSync = get_reconfiguration_with_sync(UE->rnti, UE->uid, scc, mac->frame);
   } else {
     NR_UE_NR_Capability_t *cap = get_ue_nr_cap_from_cg_config_info(cgci);
-    cellGroupConfig = get_default_secondaryCellGroup(scc, cap, 1, 1, configuration, UE->uid);
+    cellGroupConfig = get_default_secondaryCellGroup(scc, cap, 1, 1, configuration, UE->uid, ssb_index);
     cellGroupConfig->spCellConfig->reconfigurationWithSync = get_reconfiguration_with_sync(UE->rnti, UE->uid, scc, mac->frame);
     // TODO: in NSA we assign capabilities here, otherwise outside => not logic
     UE->capability = cap;
@@ -593,7 +569,7 @@ static NR_UE_info_t *create_new_UE(gNB_MAC_INST *mac, uint32_t cu_id, const NR_C
     DevAssert(res);
   } else {
     if (!add_new_UE_RA(mac, UE)) {
-      delete_nr_ue_data(UE, /*not used*/ NULL, &mac->UE_info.uid_allocator);
+      delete_nr_ue_data(UE, &mac->UE_info.uid_allocator);
       LOG_E(NR_MAC, "UE list full while creating new UE\n");
       return NULL;
     }
@@ -663,8 +639,12 @@ static NR_CellGroupConfig_t *get_cellgroup_config(NR_UE_info_t *UE)
 static void update_cellgroup_for_reestablishment(NR_UE_info_t *UE, NR_CellGroupConfig_t *new_CellGroup)
 {
   DevAssert(new_CellGroup);
-  DevAssert(new_CellGroup->spCellConfig);
   DevAssert(UE->reestablish_rlc);
+  if (!new_CellGroup->spCellConfig) {
+    LOG_E(NR_MAC, "UE %04x: CellGroupConfig has no spCellConfig during reestablishment "
+          "(possible double reestablishment race), skipping reestablishRLC update\n", UE->rnti);
+    return;
+  }
   LOG_I(NR_MAC, "UE %04x: Re-establishment detected, setting reestablishRLC flags\n", UE->rnti);
   struct NR_CellGroupConfig__rlc_BearerToAddModList *addmod = new_CellGroup->rlc_BearerToAddModList;
   if (addmod && addmod->list.count > 0) {
@@ -1079,6 +1059,10 @@ void dl_rrc_message_transfer(const f1ap_dl_rrc_message_t *dl_rrc)
       ASN_STRUCT_FREE(asn_DEF_NR_CellGroupConfig, UE->CellGroup);
       UE->CellGroup = oldUE->CellGroup;
       oldUE->CellGroup = NULL;
+      ASN_STRUCT_FREE(asn_DEF_NR_CellGroupConfig, UE->reconfigCellGroup);
+      UE->reconfigCellGroup = oldUE->reconfigCellGroup;
+      oldUE->reconfigCellGroup = NULL;
+      UE->reestablish_rlc = oldUE->reestablish_rlc;
       ASN_STRUCT_FREE(asn_DEF_NR_UE_NR_Capability, UE->capability);
       UE->capability = oldUE->capability;
       oldUE->capability = NULL;
@@ -1095,10 +1079,18 @@ void dl_rrc_message_transfer(const f1ap_dl_rrc_message_t *dl_rrc)
     }
     /* Per TS 38.331 5.3.7.2: the UE releases the spCellConfig, so we drop it
      * from the current configuration. It will be reapplied when the
-     * reconfiguration has succeeded (indicated by the CU) */
-    asn_copy(&asn_DEF_NR_CellGroupConfig, (void **)&UE->reconfigCellGroup, UE->CellGroup);
-    ASN_STRUCT_FREE(asn_DEF_NR_SpCellConfig, UE->CellGroup->spCellConfig);
-    UE->CellGroup->spCellConfig = NULL;
+     * reconfiguration has succeeded (indicated by the CU).
+     * Guard against double reestablishment: if reestablish_rlc is already set,
+     * reconfigCellGroup was saved by the first reestablishment and
+     * CellGroup.spCellConfig is already NULL — don't overwrite. */
+    if (!UE->reestablish_rlc) {
+      asn_copy(&asn_DEF_NR_CellGroupConfig, (void **)&UE->reconfigCellGroup, UE->CellGroup);
+      ASN_STRUCT_FREE(asn_DEF_NR_SpCellConfig, UE->CellGroup->spCellConfig);
+      UE->CellGroup->spCellConfig = NULL;
+    } else {
+      LOG_W(NR_MAC, "UE %04x: reestablishment while previous reestablishment still pending, "
+            "keeping saved reconfigCellGroup with spCellConfig\n", UE->rnti);
+    }
     UE->reestablish_rlc = true;
     /* Per TS 38.331 clause 5.3.7.4: apply gNB RLC configuration for SRB1 to match the UE RLC configuration defined in 9.2.1.
      * Use configuration file values for timers t_poll_retransmit, t_reassembly and t_status_prohibit */

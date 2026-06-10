@@ -1,4 +1,5 @@
 #!/bin/bash
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
 
 # use UP and DOWN arrow keys to scroll the view displayed by timeplot
 

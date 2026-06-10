@@ -1,31 +1,10 @@
-/* Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+/*
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file RRC/NR/nr_rrc_defs.h
-* \brief NR RRC struct definitions and function prototypes
-* \author Navid Nikaein, Raymond Knopp, WEI-TAI CHEN
-* \date 2010 - 2014, 2018
-* \version 1.0
-* \company Eurecom, NTSUT
-* \email: navid.nikaein@eurecom.fr, raymond.knopp@eurecom.fr, kroempa@gmail.com
-*/
+/*!
+ * \brief NR RRC struct definitions and function prototypes
+ */
 
 #ifndef __OPENAIR_RRC_DEFS_NR_H__
 #define __OPENAIR_RRC_DEFS_NR_H__
@@ -91,9 +70,7 @@ typedef struct nr_e_rab_param_s {
 
 typedef enum pdu_session_satus_e {
   PDU_SESSION_STATUS_NEW,
-  PDU_SESSION_STATUS_DONE,
   PDU_SESSION_STATUS_ESTABLISHED,
-  PDU_SESSION_STATUS_REESTABLISHED, // after HO
   PDU_SESSION_STATUS_TOMODIFY, // ENDC NSA
   PDU_SESSION_STATUS_FAILED,
   PDU_SESSION_STATUS_TORELEASE, // to release DRB between eNB and UE
@@ -148,6 +125,16 @@ typedef enum {
   RRC_UECAPABILITY_ENQUIRY,
 } rrc_action_t;
 
+typedef struct nr_rrc_config {
+  uint32_t tac;
+  plmn_id_t plmn[PLMN_LIST_MAX_SIZE];
+  uint8_t num_plmn;
+
+  bool um_on_default_drb;
+  bool enable_sdap;
+  int drbs;
+} nr_rrc_config_t;
+
 /* Small state for delaying NG-triggered actions (setup/release) */
 typedef struct {
   int max_delays;
@@ -164,7 +151,29 @@ typedef struct nr_redcap_ue_cap {
 typedef struct {
   int drb_id;
   pdusession_level_qos_parameter_t qos;
+  /** Indicate if the QoS flow is pending for NGAP modify response. */
+  bool ngap_pending;
 } nr_rrc_qos_t;
+
+typedef struct {
+  uint64_t dl_br;
+  uint64_t ul_br;
+} nr_rrc_ambr_t;
+
+/** @brief UE serving cell information
+ * @note ServCellIndex is a short identity used to uniquely identify a serving cell
+ *       (PCell, PSCell, or SCell) across cell groups (TS 38.331).
+ *       Value 0 applies for the PCell, while the SCellIndex that has previously
+ *       been assigned applies for SCells.
+ * @note Range: 0..maxNrofServingCells-1 where maxNrofServingCells = 32 */
+typedef struct {
+  /* NR Cell Identity (cell_id) */
+  uint64_t nci;
+  /* ServCellIndex (TS 38.331): 0 = PCell, 1-31 = SCell */
+  uint8_t serving_cell_id;
+  /* SCTP association ID of the DU that owns this cell (for fast lookup) */
+  sctp_assoc_t assoc_id;
+} ue_serving_cell_t;
 
 /* forward declaration */
 typedef struct nr_handover_context_s nr_handover_context_t;
@@ -207,7 +216,9 @@ typedef struct gNB_RRC_UE_s {
   uint64_t                           ng_5G_S_TMSI_Part1;
   NR_EstablishmentCause_t            establishment_cause;
 
-  uint64_t nr_cellid;
+  /* Dynamic array of UE serving cells */
+  seq_arr_t serving_cells; /* ue_serving_cell_t */
+
   uint32_t                           rrc_ue_id;
   uint64_t amf_ue_ngap_id;
   // Globally Unique AMF Identifier
@@ -243,6 +254,9 @@ typedef struct gNB_RRC_UE_s {
    * delayed after security (and capability); PDU sessions are stored here */
   int n_initial_pdu;
   pdusession_t *initial_pdus;
+
+  // Aggregate Maximum Bit Rate
+  nr_rrc_ambr_t ambr;
 
   /* Nas Pdu */
   byte_array_t nas_pdu;
@@ -298,21 +312,107 @@ typedef struct {
   bool is_default_a3_configuration_exists;
 } nr_measurement_configuration_t;
 
+/** @brief Per-neighbor cell-specific offsets (TS 38.331), shared by SIB3 and SIB4
+ * Maps to ASN.1 IntraFreqNeighCellInfo and InterFreqNeighCellInfo
+ * (SIB3.IntraFreqNeighCellList, SIB4.InterFreqCarrierFreqInfo.neighCellList) */
 typedef struct {
+  // q-OffsetCell: (Q-OffsetRange values -24,-22,-20,-18,-16,-14,-12,-10,-8,-6,-5,-4,-3,-2,-1,0,1,2,3,4,5,6,8,10,12,14,16,18,20,22,24 dB)
+  // per-neighbor cell ranking
+  int q_OffsetCell;
+  // q-RxLevMinOffsetCell: Q-OffsetCellSmall (1..8): Per-neighbor RSRP minimum offset
+  int q_RxLevMinOffsetCell;
+  // q-QualMinOffsetCell: Q-OffsetCellSmall (1..8): Per-neighbor RSRQ minimum offset
+  int q_QualMinOffsetCell;
+} nr_neighbour_cell_neighbor_offset_t;
+
+/** @brief SIB3 (intra-frequency) neighbor list parameters (TS 38.331)
+ * Per-neighbor fields for SIB3.IntraFreqNeighCellList.IntraFreqNeighCellInfo.
+ * SIB3 carries intra-freq neighbor offsets for ranking. */
+typedef struct {
+  nr_neighbour_cell_neighbor_offset_t offset;
+} nr_neighbour_cell_sib3_t;
+
+/** @brief SIB4 inter-frequency carrier parameters (TS 38.331)
+ * Per-frequency fields for SIB4.InterFreqCarrierFreqList.InterFreqCarrierFreqInfo.
+ * Stored once per ARFCN; all neighbors on that frequency share this config. */
+typedef struct {
+  // cellReselectionPriority (0..7): Absolute priority of this inter-freq carrier
+  int cellReselectionPriority;
+  // threshX-HighP (0..31): RSRP threshold for reselection to a higher-priority inter-freq
+  int threshX_HighP;
+  // threshX-LowP (0..31): RSRP threshold for reselection to a lower-priority inter-freq
+  int threshX_LowP;
+  // threshX-HighQ (0..31): RSRQ threshold for higher-priority inter-freq reselection
+  int threshX_HighQ;
+  // threshX-LowQ (0..31): RSRQ threshold for lower-priority inter-freq reselection
+  int threshX_LowQ;
+  // q-OffsetFreq (Q-OffsetRange values: -24,-22,-20,-18,-16,-14,-12,-10,-8,-6,-5,-4,-3,-2,-1,0,1,2,3,4,5,6,8,10,12,14,16,18,20,22,24 dB):
+  // Frequency-specific offset in inter-freq cell ranking formula
+  int q_OffsetFreq;
+} nr_neighbour_cell_sib4_freq_t;
+
+/** @brief SIB4 (inter-frequency) parameters per neighbor (TS 38.331)
+ * Combines per-frequency carrier info (InterFreqCarrierFreqInfo) and per-neighbor
+ * offsets (InterFreqNeighCellInfo). */
+typedef struct {
+  // Per-frequency carrier (InterFreqCarrierFreqInfo)
+  nr_neighbour_cell_sib4_freq_t sib4_freq;
+  // Per-neighbor offsets (InterFreqNeighCellInfo)
+  nr_neighbour_cell_neighbor_offset_t offset;
+} nr_neighbour_cell_sib4_t;
+
+/** @brief Per-frequency SIB4 configuration (TS 38.331), keyed by ARFCN
+ * One entry per inter-freq carrier (absoluteFrequencySSB + subcarrierSpacing).
+ * freq_cfg holds InterFreqCarrierFreqInfo parameters. Analogous to one “carrier” slice of SIB4
+ * interFreqCarrierFreqList. */
+typedef struct {
+  // absoluteFrequencySSB (ARFCN)
+  int arfcn;
+  // ssbSubcarrierSpacing
+  int scs;
+  // q-RxLevMin (-70..-22 dBm)
+  int q_RxLevMin;
+  // t-ReselectionNR (0..7)
+  int t_ReselectionNR;
+  // Inter-frequency carrier parameters (InterFreqCarrierFreqInfo)
+  nr_neighbour_cell_sib4_freq_t freq_cfg;
+} nr_inter_freq_cfg_t;
+
+/** @brief Neighbor cell configuration structure
+ * Single source of truth for neighbor cell information, used across multiple protocols/scopes:
+ * - Handover (NGAP/XnAP): for target gNB (ID, plmn, tac, nrcell_id, physicalCellId)
+ * - Measurement (MeasConfig): physicalCellId, absoluteFrequencySSB, band
+ * - DU validation: all fields validated against actual cell information
+ * - SIB3/SIB4 generation: physicalCellId, absoluteFrequencySSB, subcarrierSpacing, band
+ * References:
+ * - 3GPP TS 38.331 (RRC) for SIB3/SIB4 and MeasConfig
+ * - 3GPP TS 38.413 (NGAP) / TS 38.423 (XnAP) for target cell identification */
+typedef struct {
+  // gNB identifier (for target node in NGAP/XnAP handover)
   uint32_t gNB_ID;
+  // NR Cell Global Identifier (for NGAP/XnAP handover, DU validation)
   uint64_t nrcell_id;
+  // Physical Cell ID (PCI) (used in HandoverPreparationInformation and MeasObjectNR)
   int physicalCellId;
+  // SSB absolute frequency (ARFCN) (for MeasObjectNR, intra/inter-frequency determination)
   int absoluteFrequencySSB;
+  // SSB subcarrier spacing (for MeasObjectNR/SIB4)
   int subcarrierSpacing;
+  // Frequency band indicator (for MeasObjectNR/SIB4)
   int band;
+  // PLMN identity (for target node in NGAP/XnAP handover)
   plmn_id_t plmn;
+  // Tracking Area Code (for target node in NGAP/XnAP handover)
   uint32_t tac;
-  bool isIntraFrequencyNeighbour;
+  // SIB3 (intra-frequency neighbor cell-specific offsets)
+  nr_neighbour_cell_sib3_t sib3;
+  // SIB4 (inter-frequency neighbor cell-specific parameters)
+  nr_neighbour_cell_sib4_t sib4;
 } nr_neighbour_cell_t;
 
 typedef struct neighbour_cell_configuration_s {
   uint64_t nr_cell_id;
-  seq_arr_t *neighbour_cells;
+  seq_arr_t neighbour_cells;
 } neighbour_cell_configuration_t;
 
 typedef struct nr_mac_rrc_dl_if_s {
@@ -327,6 +427,7 @@ typedef struct nr_mac_rrc_dl_if_s {
   ue_context_modification_refuse_func_t ue_context_modification_refuse;
   ue_context_release_command_func_t ue_context_release_command;
   dl_rrc_message_transfer_func_t dl_rrc_message_transfer;
+  f1_paging_transfer_func_t paging_transfer;
 } nr_mac_rrc_dl_if_t;
 
 typedef struct cucp_cuup_if_s {
@@ -335,15 +436,64 @@ typedef struct cucp_cuup_if_s {
   cucp_cuup_bearer_context_release_func_t bearer_context_release;
 } cucp_cuup_if_t;
 
+typedef struct {
+  int band;
+  uint32_t arfcn;
+  uint8_t scs;
+  uint16_t nrb;
+} nr_rrc_freq_info_t;
+
+typedef struct {
+  nr_rrc_freq_info_t dlul;
+} nr_rrc_tdd_info_t;
+
+typedef struct {
+  nr_rrc_freq_info_t dl;
+  nr_rrc_freq_info_t ul;
+} nr_rrc_fdd_info_t;
+
+typedef struct {
+  /* operating mode: TDD or FDD */
+  enum { NR_MODE_TDD = 0, NR_MODE_FDD = 1 } mode;
+  uint64_t cell_id;
+  uint16_t pci;
+  union {
+    nr_rrc_tdd_info_t tdd;
+    nr_rrc_fdd_info_t fdd;
+  };
+  plmn_id_t plmn;
+  uint16_t tac;
+} nr_rrc_cell_info_t;
+
+typedef struct nr_rrc_cell_container_t {
+  /* Tree-related data */
+  RB_ENTRY(nr_rrc_cell_container_t) entries;
+  /* transport association */
+  sctp_assoc_t assoc_id;
+  /* Cell-only RRC-local info */
+  nr_rrc_cell_info_t info;
+  /* MIB message (6.2.2 TS 38.331) */
+  NR_MIB_t *mib;
+  /* SIB1 message (6.2.2 TS 38.331) */
+  NR_SIB1_t *sib1;
+  /* MeasurementTimingConfiguration inter-node (TS 38.331) */
+  NR_MeasurementTimingConfiguration_t *mtc;
+} nr_rrc_cell_container_t;
+
 typedef struct nr_rrc_du_container_t {
   /* Tree-related data */
   RB_ENTRY(nr_rrc_du_container_t) entries;
-
+  /* DU-only information */
+  /* Transport association identifier for this DU */
   sctp_assoc_t assoc_id;
-  f1ap_setup_req_t *setup_req;
-  NR_MIB_t *mib;
-  NR_SIB1_t *sib1;
-  NR_MeasurementTimingConfiguration_t *mtc;
+  /* DU identity */
+  uint64_t gNB_DU_id;
+  /* DU name */
+  char *gNB_DU_name;
+  /* RRC version */
+  uint8_t rrc_ver[3];
+  /* Cells, indexed by cell_id */
+  seq_arr_t cells; /* nr_rrc_cell_container_t* */
 } nr_rrc_du_container_t;
 
 typedef struct nr_rrc_cuup_container_t {
@@ -353,6 +503,101 @@ typedef struct nr_rrc_cuup_container_t {
   e1ap_setup_req_t *setup_req;
   sctp_assoc_t assoc_id;
 } nr_rrc_cuup_container_t;
+
+/**Timers for SIB2 MobilityStateParameters (TS 38.331)
+ * Value set shared by T-Evaluation and T-HystNormal: (s30, s60, s120, s180, s240). */
+typedef enum sib2_mobility_state_timer_e {
+  SIB2_MOBILITY_STATE_TIMER_S30,
+  SIB2_MOBILITY_STATE_TIMER_S60,
+  SIB2_MOBILITY_STATE_TIMER_S120,
+  SIB2_MOBILITY_STATE_TIMER_S180,
+  SIB2_MOBILITY_STATE_TIMER_S240,
+} sib2_mobility_state_timer_t;
+
+/** Q-HystSF scaling factors for Q_hyst (TS 38.331)
+ * Speed-dependent offsets (-6, -4, -2, 0 dB) applied to the base Q_hyst
+ * when the UE is in medium or high mobility state. */
+typedef enum sib2_q_hystsf_e {
+  SIB2_Q_HYSTSF_DB_6,
+  SIB2_Q_HYSTSF_DB_4,
+  SIB2_Q_HYSTSF_DB_2,
+  SIB2_Q_HYSTSF_DB0,
+} sib2_q_hystsf_t;
+
+/** SIB2 speedStateReselectionPars configuration
+ * Mirrors TS 38.331 MobilityStateParameters and Q-hystSF. */
+typedef struct sib2_speed_state_reselection_pars_s {
+  /* t-Evaluation: duration for evaluating allowed reselections
+   * to enter mobility states (s30, s60, s120, s180, s240) */
+  sib2_mobility_state_timer_t t_Evaluation;
+  /* t-HystNormal: additional time period to evaluate reselection criteria
+   * before returning to normal mobility (s30, s60, s120, s180, s240) */
+  sib2_mobility_state_timer_t t_HystNormal;
+  /* n-CellChangeMedium: max number of cell reselections to enter medium mobility state (1..16) */
+  int n_CellChangeMedium;
+  /* n-CellChangeHigh: max number of cell reselections to enter high mobility state (1..16) */
+  int n_CellChangeHigh;
+  /* sf-Medium: speed-dependent scaling factor for Qhyst in medium state (-6, -4, -2, 0 dB) */
+  sib2_q_hystsf_t sf_Medium;
+  /* sf-High: speed-dependent scaling factor for Qhyst in high state (-6, -4, -2, 0 dB) */
+  sib2_q_hystsf_t sf_High;
+} sib2_speed_state_reselection_pars_t;
+
+/** SIB2 cellReselectionServingFreqInfo (TS 38.331) */
+typedef struct {
+  /* s-NonIntraSearchP: Srxlev threshold to trigger NR inter-freq / inter-RAT measurements (0..31)*2 dB.
+   * Set to -1 to omit (optional ASN.1 field). */
+  int s_NonIntraSearchP;
+  /* s-NonIntraSearchQ: Squal threshold to trigger NR inter-freq / inter-RAT measurements (0..31)*2 dB */
+  int s_NonIntraSearchQ;
+  /* threshServingLowP: Srxlev threshold (dB) used by the UE on the serving cell
+   * when reselecting towards a lower-priority RAT/frequency (0..31)*2 dB */
+  int threshServingLowP;
+  /* threshServingLowQ: Squal threshold (dB) used by the UE on the serving cell
+   * when reselecting towards a lower-priority RAT/frequency (0..31)*2 dB.
+   * Set to -1 to omit (optional ASN.1 field). */
+  int threshServingLowQ;
+  /* cellReselectionPriority: absolute priority of serving NR frequency (0..7) */
+  int cellReselectionPriority;
+} cell_reselection_serving_freq_info_t;
+
+/** SIB2 cellReselectionInfoCommon (TS 38.331) */
+typedef struct {
+  /* q-Hyst: hysteresis added to serving-cell ranking R_s (0..24 dB) */
+  int q_Hyst;
+  /* speedStateReselectionPars: MobilityStateParameters + q-HystSF */
+  sib2_speed_state_reselection_pars_t *speedStateReselectionPars;
+} cell_reselection_info_common_t;
+
+/** SIB2 intraFreqCellReselectionInfo (TS 38.331) */
+typedef struct {
+  /* q-RxLevMin: minimum required RX level in the cell (dBm) */
+  int q_RxLevMin;
+  /* q-QualMin: minimum required quality level in the cell (dB); */
+  int q_QualMin;
+  /* s-IntraSearchP: Srxlev threshold for intra-freq meas (0..31) */
+  int s_IntraSearchP;
+  /* s-IntraSearchQ: Squal threshold for intra-freq meas (0..31) */
+  int s_IntraSearchQ;
+  /* t-ReselectionNR: NR cell reselection timer (0..7) */
+  int t_ReselectionNR;
+} intra_freq_cell_reselection_info_t;
+
+/** SIB2 configuration for idle/inactive cell reselection
+ *  (maps to SIB2 reselection parameters in TS 38.304/38.331, per cell).
+ * @note Squal = Cell selection quality value (dB)
+ *       Srxlev = Cell selection RX level value (dB) */
+typedef struct sib2_config_s {
+  // cellReselectionInfoCommon
+  cell_reselection_info_common_t cell_reselection_info_common;
+  // cellReselectionServingFreqInfo
+  cell_reselection_serving_freq_info_t cell_reselection_serving_freq_info;
+  // intraFreqCellReselectionInfo
+  intra_freq_cell_reselection_info_t intra_freq_cell_reselection_info;
+  /* deriveSSB_IndexFromCell: SIB2 deriveSSB-IndexFromCell - whether UE may
+   * assume SFN/SSB alignment across cells on serving freq (per TS 38.304/38.133) */
+  bool deriveSSB_IndexFromCell;
+} sib2_config_t;
 
 //---NR---(completely change)---------------------
 typedef struct gNB_RRC_INST_s {
@@ -364,12 +609,12 @@ typedef struct gNB_RRC_INST_s {
   eth_params_t                                        eth_params_s;
   uid_allocator_t                                     uid_allocator;
   RB_HEAD(rrc_nr_ue_tree_s, rrc_gNB_ue_context_s) rrc_ue_head; // ue_context tree key search by rnti
-  /// NR cell id
-  uint64_t nr_cellid;
 
   // RRC configuration
-  gNB_RrcConfigurationReq configuration;
+  nr_rrc_config_t configuration;
   seq_arr_t *SIBs;
+  // SIB2 configuration for cell reselection parameters
+  sib2_config_t sib2_config;
 
   // gNB N3 GTPU instance
   instance_t e1_inst;
@@ -381,11 +626,18 @@ typedef struct gNB_RRC_INST_s {
 
   nr_mac_rrc_dl_if_t mac_rrc;
   cucp_cuup_if_t cucp_cuup;
+  // Per-frequency SIB4 configurations, indexed by ARFCN
+  seq_arr_t inter_freqs; /* array of nr_inter_freq_cfg_t */
+  // Per-cell neighbour configurations, indexed by cell_id
   seq_arr_t *neighbour_cell_configuration;
   nr_measurement_configuration_t measurementConfiguration;
 
   RB_HEAD(rrc_du_tree, nr_rrc_du_container_t) dus; // DUs, indexed by assoc_id
   size_t num_dus;
+
+  /* Global cell tree, indexed by cell_id */
+  RB_HEAD(rrc_cell_tree, nr_rrc_cell_container_t) cells;
+  size_t num_cells;
 
   RB_HEAD(rrc_cuup_tree, nr_rrc_cuup_container_t) cuups; // CU-UPs, indexed by assoc_id
   size_t num_cuups;
@@ -395,8 +647,12 @@ typedef struct gNB_RRC_INST_s {
   nr_rlc_configuration_t rlc_config;
 } gNB_RRC_INST;
 
+/** Forward declaration for UE log macros */
+const ue_serving_cell_t *ue_get_pcell_entry(const gNB_RRC_UE_t *ue);
+
 #define UE_LOG_FMT "(cellID %lx, UE ID %d RNTI %04x)"
-#define UE_LOG_ARGS(ue_context) (ue_context)->nr_cellid, (ue_context)->rrc_ue_id, (ue_context)->rnti
+#define UE_LOG_ARGS(ue_context) \
+  (ue_get_pcell_entry(ue_context) ? ue_get_pcell_entry(ue_context)->nci : 0), (ue_context)->rrc_ue_id, (ue_context)->rnti
 
 #define LOG_UE_DL_EVENT(ue_context, fmt, ...) LOG_A(NR_RRC, "[DL] " UE_LOG_FMT " " fmt, UE_LOG_ARGS(ue_context) __VA_OPT__(,) __VA_ARGS__)
 #define LOG_UE_EVENT(ue_context, fmt, ...)    LOG_A(NR_RRC, "[--] " UE_LOG_FMT " " fmt, UE_LOG_ARGS(ue_context) __VA_OPT__(,) __VA_ARGS__)

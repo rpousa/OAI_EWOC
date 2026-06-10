@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 # 5GS NAS Overview and OAI Implementation status
 
 This document provides an overview of the 5G System Non-Access Stratum (5GS NAS) protocol as specified in 3GPP TS 24.501. It highlights key message types involved in Mobility and Session Management and explains how these are implemented within the OAI software stack. The document outlines the structure of the OAI codebase by detailing current support for encoding, decoding, and unit testing of specific NAS messages, and explains how the UE handles USIM simulation and message generation.
@@ -76,18 +78,22 @@ The simulation reads values from a named section in the config file.
 
 **Config options in the `uicc` section**:
 
-| Parameter     | Description                       | Default value                              |
-|---------------|-----------------------------------|--------------------------------------------|
-| `imsi`        | User IMSI                         | `2089900007487`                            |
-| `nmc_size`    | Number of digits in NMC           | `2`                                        |
-| `key`         | Subscription key (Ki)             | `fec86ba6eb707ed08905757b1bb44b8f`         |
-| `opc`         | OPc value                         | `c42449363bbad02b66d16bc975d77cc1`         |
-| `amf`         | AMF value                         | `8000`                                     |
-| `sqn`         | Sequence number                   | `000000`                                   |
-| `dnn`         | Default DNN (APN)                 | `oai`                                      |
-| `nssai_sst`   | NSSAI slice/service type          | `1`                                        |
-| `nssai_sd`    | NSSAI slice differentiator        | `0xffffff`                                 |
-| `imeisv`      | IMEISV string                     | `6754567890123413`                         |
+| Parameter                    | Description                       | Default value                                                      |
+|------------------------------|-----------------------------------|--------------------------------------------------------------------|
+| `imsi`                       | User IMSI                         | `2089900007487`                                                    |
+| `nmc_size`                   | Number of digits in NMC           | `2`                                                                |
+| `key`                        | Subscription key (Ki)             | `fec86ba6eb707ed08905757b1bb44b8f`                                 |
+| `opc`                        | OPc value                         | `c42449363bbad02b66d16bc975d77cc1`                                 |
+| `amf`                        | AMF value                         | `8000`                                                             |
+| `sqn`                        | Sequence number                   | `000000`                                                           |
+| `dnn`                        | Default DNN (APN)                 | `oai`                                                              |
+| `nssai_sst`                  | NSSAI slice/service type          | `1`                                                                |
+| `nssai_sd`                   | NSSAI slice differentiator        | `0xffffff`                                                         |
+| `imeisv`                     | IMEISV string                     | `6754567890123413`                                                 |
+| `routing_indicator`          | Routing Indicator                 | `0000`                                                             |
+| `protection_scheme`          | SUCI Profile Scheme               | `0`                                                                |
+| `home_network_public_key_id` | Home Network Public Key ID        | `1`                                                                |
+| `home_network_public_key`    | Home Network Public Key           | `5a8d38864820197c3394b92613b20b91633cbd897119273bf8e4a6f4eec0a650` |
 
 These are parsed and stored in the `uicc_t` structure.
 
@@ -114,3 +120,37 @@ The **IMEISV**, is encoded using the `fill_imeisv()` helper. This function extra
 
 See TS 24.501 §4.4 for reference.
 
+#### SUCI (Subscription Concealed Identifier)
+
+The **SUCI**, is generated using the `fill_suci()` helper. This function extracts the MCC, MNC, and MSIN from the configured `imsi` with the use of `nmc_size` in the UICC context and populates the mobile identity structure.
+
+Contains:
+* MCC and MNC (public network identity)
+* Routing Indicator
+* Protection Scheme ID
+* Home Network Public Key ID
+* Concealed or clear MSIN depending on the protection scheme
+
+If the UE is unable to generate SUCI due to configuration or crypto limitations, the UE will fail to generate a `Registration Request`.
+
+###### 0. Null Scheme (TS 33.501 §C.2)
+
+MSIN in cleartext.
+
+###### 1. Profile A (TS 33.501 §C.3.4.1)
+
+MSIN is concealed using elliptic curve cryptography.
+Based on:
+* Curve25519 for key agreement
+* X9.63 KDF for key derivation
+
+(requires OpenSSL ≥ 3.0)
+
+###### 2. Profile B (TS 33.501 §C.3.4.2)
+
+MSIN is concealed using elliptic curve cryptography.
+Based on:
+* P-256 for key agreement
+* X9.63 KDF for key derivation
+
+(currently not supported)

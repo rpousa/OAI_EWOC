@@ -1,33 +1,9 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file common/utils/T/tracer/shared_memory_config.h
+/*!
  * \brief shared memory to store data captured by T-Tracer services to be processed by data recording application
- * \author Abdo Gaber
- * \date 2024
- * \version 1.0
- * \company Emerson, NI Test and Measurement
- * \email:
- * \note
- * \warning
  */
 
 #include <stdio.h>
@@ -42,10 +18,13 @@
 #ifndef _SHARED_MEMORY_CONFIG_H_
 #define _SHARED_MEMORY_CONFIG_H_
 
-#define SHMSIZE ((122.88e6 / (100 * 20)) * 1000 * 8) // Assume capture in 1000, each I+Q represented by 8 byts
-//  122.88e6: 10ms at 100 MHz BW of 5G NR
-// 20: 20 slots in 10ms
-// subcarrier spacing: 30 KHz
+#define NUM_MESSAGES_PER_SLOT 5
+#define SHMSIZE ((122.88e6 / (100 * 20)) * 100 * NUM_MESSAGES_PER_SLOT * 8) // ~229 MiB
+//  122.88e6: sample rate at 100 MHz BW of 5G NR
+//  100 * 20: 2000 slots/s (20 slots/frame, 100 frames/s) at SCS 30 kHz
+//  100: number of slots to capture
+//  NUM_MESSAGES_PER_SLOT: messages captured per slot
+//  8: bytes per complex I+Q sample
 
 // for gNB T Tracer App
 #define GETKEYDIR1_gNB ("/tmp/gnb_app1")

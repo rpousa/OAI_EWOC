@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 # OAI gNB LTTng Tracing Setup Guide
 
 ## Overview

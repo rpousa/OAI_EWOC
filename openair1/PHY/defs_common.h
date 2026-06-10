@@ -1,34 +1,10 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file defs_common.h
- \brief Top-level defines and structure definitions
- \author R. Knopp, F. Kaltenberger
- \date 2011
- \version 0.1
- \company Eurecom
- \email: knopp@eurecom.fr,florian.kaltenberger@eurecom.fr
- \note
- \warning
-*/
+/*!
+ * \brief Top-level defines and structure definitions
+ */
 
 #ifndef __PHY_DEFS_COMMON__H__
 #define __PHY_DEFS_COMMON__H__
@@ -57,7 +33,6 @@
 #include <common/utils/LOG/log.h>
 #include "assertions.h"
 
-//#include <complex.h>
 #include "time_meas.h"
 #include "common/platform_types.h"
 #include "softmodem-common.h"
@@ -66,7 +41,7 @@
 #include <pthread.h>
 
 #include "TOOLS/tools_defs.h"
-
+#include "PHY/CODING/coding_defs.h"
 #include "common/openairinterface5g_limits.h"
 #include "common/utils/LOG/log.h"
 
@@ -598,8 +573,7 @@ typedef struct {
   int non_mbsfn_SubframeConfig;
 } NonMBSFN_config_t;
 
-
-typedef struct LTE_DL_FRAME_PARMS {
+typedef struct LTE_DL_FRAME_PARMS_s {
   /// Number of resource blocks (RB) in DL
   uint8_t N_RB_DL;
   /// Number of resource blocks (RB) in UL
@@ -989,39 +963,6 @@ extern int sync_var;
 #define MBSFN_FDD_SF6 0x10
 #define MBSFN_FDD_SF7 0x08
 #define MBSFN_FDD_SF8 0x04
-
-#define NUMBER_OF_NR_RU_PRACH_OCCASIONS_MAX 12
-
-typedef struct {
-  pthread_mutex_t mutex_failure;
-  bool failed;
-} decode_abort_t;
-
-static inline void init_abort(decode_abort_t *ab)
-{
-  int ret = pthread_mutex_init(&ab->mutex_failure, NULL);
-  AssertFatal(ret == 0, "mutex failed with %d\n", ret);
-  ab->failed = false;
-}
-
-static inline bool check_abort(decode_abort_t *ab)
-{
-  int ret = pthread_mutex_lock(&ab->mutex_failure);
-  AssertFatal(ret == 0, "mutex failed with %d\n", ret);
-  bool failed = ab->failed;
-  ret = pthread_mutex_unlock(&ab->mutex_failure);
-  AssertFatal(ret == 0, "mutex failed with %d\n", ret);
-  return failed;
-}
-
-static inline void set_abort(decode_abort_t *ab, bool v)
-{
-  int ret = pthread_mutex_lock(&ab->mutex_failure);
-  AssertFatal(ret == 0, "mutex failed with %d\n", ret);
-  ab->failed = v;
-  ret = pthread_mutex_unlock(&ab->mutex_failure);
-  AssertFatal(ret == 0, "mutex failed with %d\n", ret);
-}
 
 typedef uint8_t(decoder_if_t)(int16_t *y,
                               int16_t *y2,

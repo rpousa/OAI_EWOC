@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 find_package(LimeSuite REQUIRED)
 
 add_library(oai_lmssdrdevif MODULE lms_lib.cpp)

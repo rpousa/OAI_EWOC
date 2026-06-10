@@ -1,22 +1,5 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 #include "nr_fapi.h"
 #include "nr_fapi_p5.h"
@@ -83,6 +66,7 @@ int fapi_nr_p5_message_pack(void *pMessageBuf,
                             const uint32_t packedBufLen,
                             nfapi_p4_p5_codec_config_t *config)
 {
+  UNUSED(messageBufLen);
   nfapi_nr_p4_p5_message_header_t *pMessageHeader = pMessageBuf;
   uint8_t *pWritePackedMessage = pPackedBuf;
   AssertFatal(isFAPIMessageIDValid(pMessageHeader->message_id),
@@ -721,8 +705,7 @@ uint8_t unpack_nr_param_response(uint8_t **ppReadPackedMsg, uint8_t *end, void *
                                 config,
                                 &pNfapiMsg->vendor_extension));
 }
-#ifndef ENABLE_AERIAL
-static uint8_t pack_dbt_table_tlv_value(void *tlv, uint8_t **ppWritePackedMsg, uint8_t *end)
+uint8_t pack_dbt_table_tlv_value(void *tlv, uint8_t **ppWritePackedMsg, uint8_t *end)
 {
   nfapi_nr_dbt_tlv_ve_t *dbt_ve = (nfapi_nr_dbt_tlv_ve_t *)tlv;
   nfapi_nr_dbt_pdu_t *dbt_config = &dbt_ve->value;
@@ -744,6 +727,7 @@ static uint8_t pack_dbt_table_tlv_value(void *tlv, uint8_t **ppWritePackedMsg, u
   return 1;
 }
 
+#ifndef ENABLE_AERIAL
 static uint8_t pack_pm_table_tlv_value(void *tlv, uint8_t **ppWritePackedMsg, uint8_t *end)
 {
   nfapi_nr_pm_tlv_ve_t *pm_ve = (nfapi_nr_pm_tlv_ve_t *)tlv;
@@ -1032,6 +1016,10 @@ uint8_t pack_nr_config_request(void *msg, uint8_t **ppWritePackedMsg, uint8_t *e
   numTLVs++;
 #endif
   retval &=
+      pack_nr_tlv(NFAPI_NR_CONFIG_BETA_PSS_TAG, &(pNfapiMsg->ssb_table.beta_pss), ppWritePackedMsg, end, &pack_uint8_tlv_value);
+  numTLVs++;
+
+  retval &=
       pack_nr_tlv(NFAPI_NR_CONFIG_SSB_PERIOD_TAG, &(pNfapiMsg->ssb_table.ssb_period), ppWritePackedMsg, end, &pack_uint8_tlv_value);
   numTLVs++;
 
@@ -1139,15 +1127,36 @@ uint8_t pack_nr_config_request(void *msg, uint8_t **ppWritePackedMsg, uint8_t *e
                         &pack_uint8_tlv_value);
   numTLVs++;
   // END Measurement Config
-#ifndef ENABLE_AERIAL
+
   // START Digital Beam Table (DBT) PDU
   if (pNfapiMsg->dbt_config.num_dig_beams != 0) {
     nfapi_nr_dbt_tlv_ve_t dbt_tlv = {.tl.tag = NFAPI_NR_CONFIG_BEAMFORMING_TABLE_TAG, .value = pNfapiMsg->dbt_config};
-    pack_nr_tlv(NFAPI_NR_CONFIG_BEAMFORMING_TABLE_TAG, &dbt_tlv, ppWritePackedMsg, end, &pack_dbt_table_tlv_value);
+#ifdef ENABLE_AERIAL
+    // For Aerial, DBT payload is sent in a separate nvIPC data buffer.
+    dbt_tlv.value.num_dig_beams = 0;
+    dbt_tlv.value.num_txrus = 0;
+#endif
+    retval &= pack_nr_tlv(NFAPI_NR_CONFIG_BEAMFORMING_TABLE_TAG, &dbt_tlv, ppWritePackedMsg, end, &pack_dbt_table_tlv_value);
     numTLVs++;
   }
   // END Digital Beam Table (DBT) PDU
 
+#ifdef ENABLE_AERIAL
+  UNUSED(config);
+  retval &= pack_nr_tlv(NFAPI_NR_CONFIG_NUM_TX_PORT_TAG,
+                        &(pNfapiMsg->carrier_config.num_tx_port),
+                        ppWritePackedMsg,
+                        end,
+                        &pack_uint16_tlv_value);
+  numTLVs++;
+
+  retval &= pack_nr_tlv(NFAPI_NR_CONFIG_NUM_RX_PORT_TAG,
+                        &(pNfapiMsg->carrier_config.num_rx_port),
+                        ppWritePackedMsg,
+                        end,
+                        &pack_uint16_tlv_value);
+  numTLVs++;
+#else  
   // START Precoding Matrix (PM) PDU
   if (pNfapiMsg->pmi_list.num_pm_idx != 0) {
     nfapi_nr_pm_tlv_ve_t pm_tlv = {.tl.tag = NFAPI_NR_CONFIG_PRECODING_TABLE_V6_TAG, .value = pNfapiMsg->pmi_list};
@@ -1205,9 +1214,7 @@ uint8_t pack_nr_config_request(void *msg, uint8_t **ppWritePackedMsg, uint8_t *e
     NFAPI_TRACE(NFAPI_TRACE_DEBUG, "Packing CONFIG.request vendor_extension_tlv %d\n", pNfapiMsg->vendor_extension->tag);
     numTLVs++;
   }
-#endif
 
-  AssertFatal(pNfapiMsg->analog_beamforming_ve.num_beams_period_vendor_ext.tl.tag == 0, "BF Vendor extension shouldn't be set!");
   // The call to pack the TLV would be the same as any other TLV, it is only packed if the tag is set,
   // so, it's safe to add the call to pack_nr_tlv even if it is not always set
   retval &= pack_nr_tlv(NFAPI_NR_FAPI_NUM_BEAMS_PERIOD_VENDOR_EXTENSION_TAG,
@@ -1218,7 +1225,7 @@ uint8_t pack_nr_config_request(void *msg, uint8_t **ppWritePackedMsg, uint8_t *e
   // only increase if it was set
   numTLVs += pNfapiMsg->analog_beamforming_ve.num_beams_period_vendor_ext.tl.tag == NFAPI_NR_FAPI_NUM_BEAMS_PERIOD_VENDOR_EXTENSION_TAG;
 
-  AssertFatal(pNfapiMsg->analog_beamforming_ve.analog_bf_vendor_ext.tl.tag == 0, "BF Vendor extension shouldn't be set!");
+
   // The call to pack the TLV would be the same as any other TLV, it is only packed if the tag is set,
   // so, it's safe to add the call to pack_nr_tlv even if it is not always set
   retval &= pack_nr_tlv(NFAPI_NR_FAPI_ANALOG_BF_VENDOR_EXTENSION_TAG,
@@ -1228,6 +1235,14 @@ uint8_t pack_nr_config_request(void *msg, uint8_t **ppWritePackedMsg, uint8_t *e
                         &pack_uint8_tlv_value);
   // only increase if it was set
   numTLVs += pNfapiMsg->analog_beamforming_ve.analog_bf_vendor_ext.tl.tag == NFAPI_NR_FAPI_ANALOG_BF_VENDOR_EXTENSION_TAG;
+#endif
+  retval &= pack_nr_tlv(NFAPI_NR_FAPI_SSB_CASE_VENDOR_EXTENSION_TAG,
+                      &(pNfapiMsg->ssb_table.case_v3),
+                      ppWritePackedMsg,
+                      end,
+                      &pack_uint8_tlv_value);
+
+  numTLVs += pNfapiMsg->ssb_table.case_v3.tl.tag == NFAPI_NR_FAPI_SSB_CASE_VENDOR_EXTENSION_TAG;
 
   pNfapiMsg->num_tlv = numTLVs;
   retval &= push8(pNfapiMsg->num_tlv, &pNumTLVFields, end);
@@ -1391,10 +1406,13 @@ uint8_t unpack_nr_config_request(uint8_t **ppReadPackedMsg, uint8_t *end, void *
 #endif
       {NFAPI_NR_FAPI_NUM_BEAMS_PERIOD_VENDOR_EXTENSION_TAG,
        &(pNfapiMsg->analog_beamforming_ve.num_beams_period_vendor_ext),
-       &unpack_uint8_tlv_value},
-      {NFAPI_NR_FAPI_ANALOG_BF_VENDOR_EXTENSION_TAG,
-       &(pNfapiMsg->analog_beamforming_ve.analog_bf_vendor_ext),
-       &unpack_uint8_tlv_value},
+        &unpack_uint8_tlv_value},
+       {NFAPI_NR_FAPI_ANALOG_BF_VENDOR_EXTENSION_TAG,
+        &(pNfapiMsg->analog_beamforming_ve.analog_bf_vendor_ext),
+         &unpack_uint8_tlv_value},
+       {NFAPI_NR_FAPI_SSB_CASE_VENDOR_EXTENSION_TAG,
+        &(pNfapiMsg->ssb_table.case_v3),
+        &unpack_uint8_tlv_value},
       {NFAPI_NR_CONFIG_RSSI_MEASUREMENT_TAG, &(pNfapiMsg->measurement_config.rssi_measurement), &unpack_uint8_tlv_value},
       {NFAPI_NR_CONFIG_BEAMFORMING_TABLE_TAG, NULL, &unpack_dbt_table_tlv_value},
       {NFAPI_NR_CONFIG_PRECODING_TABLE_V6_TAG, NULL, &unpack_pm_table_tlv_value},

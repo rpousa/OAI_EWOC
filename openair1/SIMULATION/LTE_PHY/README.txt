@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: CC-BY-4.0
+
 This directory contains unitary testbenches/Monte Carlo Simulators for physical/transport channel processing:
 
 pbchsim.c       // PBCH simulation testbench

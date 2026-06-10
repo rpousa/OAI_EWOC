@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
+ */
+
 #include <stdio.h>  // perror, printf, fprintf, snprintf
 #include <stdlib.h> // exit, free
 #include <string.h> // memset, strncpy

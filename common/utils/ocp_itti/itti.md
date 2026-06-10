@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 # interthread interface (ITTI)
 
 A Middleware called “itti” (interthread interface) provides classical send/receive message queues between threads.

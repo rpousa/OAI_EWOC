@@ -1,4 +1,5 @@
 #!/bin/bash
+# SPDX-License-Identifier: MIT
 
 if [ $# -ne 3 ]; then
   echo "usage: $0 <image> <coredump> <path-to-sources>"

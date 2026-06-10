@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 include $(OPENAIR_DIR)/common/utils/Makefile.inc
 
 COMMON_UTILS_DIR = $(OPENAIR_DIR)/common/utils
@@ -44,12 +46,12 @@ $(OBJ) : %.o : %.c
 	$(CC) -c $(CFLAGS) -Wall -I$(TOP_DIR) -I$(TOP_DIR)/PHY/CODING -I$(OPENAIR0_DIR)/express-mimo/simulator/baseband/C/channel_decoder -o $@ $<
 
 ltetest: $(OBJ) ltetest.c
-	$(CC) ltetest.c -O2 -I$(TOP_DIR) -I$(TOP_DIR)/PHY/CODING -I$(OPENAIR0_DIR)/express-mimo/simulator/baseband/C/channel_decoder -o ltetest $(CFLAGS) $(OBJ) -lm -DOPENAIR_LTE -lblas -lrt
+	$(CC) ltetest.c -O2 -I$(TOP_DIR) -I$(TOP_DIR)/PHY/CODING -I$(OPENAIR0_DIR)/express-mimo/simulator/baseband/C/channel_decoder -o ltetest $(CFLAGS) $(OBJ) -lm -DOPENAIR_LTE -lrt
 
 pdcch_test: $(OBJ) pdcch_test.c
-	$(CC) pdcch_test.c -I$(TOP_DIR) -o pdcch_test $(CFLAGS) $(PHY_OBJS) -lm -lblas
+	$(CC) pdcch_test.c -I$(TOP_DIR) -o pdcch_test $(CFLAGS) $(PHY_OBJS) -lm
 viterbi_test: $(OBJ) viterbi_test.c
-	$(CC) viterbi_test.c -I$(TOP_DIR) -o viterbi_test $(CFLAGS) $(PHY_OBJS) -lm -lblas
+	$(CC) viterbi_test.c -I$(TOP_DIR) -o viterbi_test $(CFLAGS) $(PHY_OBJS) -lm
 
 clean: 
 	rm $(OBJ)

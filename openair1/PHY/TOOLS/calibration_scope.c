@@ -1,5 +1,11 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
+ */
+
 #include <stdlib.h>
-#include <openair1/PHY/impl_defs_top.h>
+#include "common/utils/system.h"
+#include "common/utils/utils.h"
+#include "common/utils/LOG/log.h"
 #include "executables/softmodem-common.h"
 #include "executables/nr-softmodem-common.h"
 #include <forms.h>

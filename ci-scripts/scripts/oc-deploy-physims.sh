@@ -1,4 +1,5 @@
 #!/bin/bash
+# SPDX-License-Identifier: MIT
 
 function die() { echo $@; exit 1; }
 [ $# -eq 4 ] || die "usage: $0 <namespace> <release> <image tag> <oai directory>"

@@ -1,22 +1,5 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
 #include "PHY/sse_intrin.h"
@@ -594,16 +577,20 @@ int nr_rate_matching_ldpc(uint32_t Tbslbrm,
   }
 
   while (k < E) { // case where we do repetitions (low mcs)
-    for (ind = 0; (ind < Ncb) && (k < E); ind++) {
-#ifdef RM_DEBUG
-      printf("RM_TX k%u Ind: %u (%d)\n", k, ind, d[ind]);
-#endif
-
-      if (ind == Foffset)
-        ind = F + Foffset; // skip filler bits
-
-      e[k++] = d[ind];
-
+    // chunk before filler: d[0 .. Foffset)
+    if (Foffset > 0) {
+      uint32_t n = min(Foffset, E - k);
+      memcpy(e + k, d, n);
+      k += n;
+      if (k >= E)
+        break;
+    }
+    // chunk after filler: d[Foffset+F .. Ncb)
+    uint32_t after = Ncb - Foffset - F;
+    if (after > 0) {
+      uint32_t n = min(after, E - k);
+      memcpy(e + k, d + Foffset + F, n);
+      k += n;
     }
   }
 

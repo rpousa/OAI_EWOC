@@ -1,22 +1,5 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
 #include "nr_phy_init.h"
@@ -24,77 +7,11 @@
 #include "common/utils/LOG/log.h"
 #include "executables/softmodem-common.h"
 #include "PHY/MODULATION/nr_modulation.h"
+#include "PHY/nr_phy_common/inc/nr_phy_common.h"
 
 /// Subcarrier spacings in Hz indexed by numerology index
 static const uint32_t nr_subcarrier_spacing[MAX_NUM_SUBCARRIER_SPACING] = {15e3, 30e3, 60e3, 120e3, 240e3};
 static const uint16_t nr_slots_per_subframe[MAX_NUM_SUBCARRIER_SPACING] = {1, 2, 4, 8, 16};
-
-// Table 5.4.3.3-1 38-101
-static const int nr_ssb_table[][3] = {
-    {1, 15, nr_ssb_type_A},
-    {2, 15, nr_ssb_type_A},
-    {3, 15, nr_ssb_type_A},
-    {5, 15, nr_ssb_type_A},
-    {5, 30, nr_ssb_type_B},
-    {7, 15, nr_ssb_type_A},
-    {8, 15, nr_ssb_type_A},
-    {12, 15, nr_ssb_type_A},
-    {13, 15, nr_ssb_type_A},
-    {14, 15, nr_ssb_type_A},
-    {18, 15, nr_ssb_type_A},
-    {20, 15, nr_ssb_type_A},
-    {24, 15, nr_ssb_type_A},
-    {24, 30, nr_ssb_type_B},
-    {25, 15, nr_ssb_type_A},
-    {26, 15, nr_ssb_type_A},
-    {28, 15, nr_ssb_type_A},
-    {29, 15, nr_ssb_type_A},
-    {30, 15, nr_ssb_type_A},
-    {34, 15, nr_ssb_type_A},
-    {34, 30, nr_ssb_type_C},
-    {38, 15, nr_ssb_type_A},
-    {38, 30, nr_ssb_type_C},
-    {39, 15, nr_ssb_type_A},
-    {39, 30, nr_ssb_type_C},
-    {40, 30, nr_ssb_type_C},
-    {41, 15, nr_ssb_type_A},
-    {41, 30, nr_ssb_type_C},
-    {46, 30, nr_ssb_type_C},
-    {48, 30, nr_ssb_type_C},
-    {50, 30, nr_ssb_type_C},
-    {51, 15, nr_ssb_type_A},
-    {53, 15, nr_ssb_type_A},
-    {53, 30, nr_ssb_type_C},
-    {65, 15, nr_ssb_type_A},
-    {66, 15, nr_ssb_type_A},
-    {66, 30, nr_ssb_type_B},
-    {67, 15, nr_ssb_type_A},
-    {70, 15, nr_ssb_type_A},
-    {71, 15, nr_ssb_type_A},
-    {74, 15, nr_ssb_type_A},
-    {75, 15, nr_ssb_type_A},
-    {76, 15, nr_ssb_type_A},
-    {77, 30, nr_ssb_type_C},
-    {78, 30, nr_ssb_type_C},
-    {79, 30, nr_ssb_type_C},
-    {85, 15, nr_ssb_type_A},
-    {90, 15, nr_ssb_type_A},
-    {90, 30, nr_ssb_type_C},
-    {91, 15, nr_ssb_type_A},
-    {92, 15, nr_ssb_type_A},
-    {93, 15, nr_ssb_type_A},
-    {94, 15, nr_ssb_type_A},
-    {96, 30, nr_ssb_type_C},
-    {100, 15, nr_ssb_type_A},
-    {101, 15, nr_ssb_type_A},
-    {101, 30, nr_ssb_type_C},
-    {102, 30, nr_ssb_type_C},
-    {104, 30, nr_ssb_type_C},
-    {254, 15, nr_ssb_type_A},
-    {254, 30, nr_ssb_type_C},
-    {255, 15, nr_ssb_type_A},
-    {255, 30, nr_ssb_type_B},
-    {256, 15, nr_ssb_type_A}};
 
 void set_Lmax(NR_DL_FRAME_PARMS *fp) {
   // definition of Lmax according to ts 38.213 section 4.1
@@ -150,55 +67,34 @@ int nr_get_ssb_start_symbol(const NR_DL_FRAME_PARMS *fp, uint8_t i_ssb)
   return symbol;
 }
 
-void set_scs_parameters (NR_DL_FRAME_PARMS *fp, int mu, int N_RB_DL)
+static void set_scs_parameters(NR_DL_FRAME_PARMS *fp, int mu, int N_RB_DL, int ssb_case)
 {
-  int idx = 0;
   switch(mu) {
     case NR_MU_0: //15kHz scs
       fp->subcarrier_spacing = nr_subcarrier_spacing[NR_MU_0];
       fp->slots_per_subframe = nr_slots_per_subframe[NR_MU_0];
-      fp->ssb_type = nr_ssb_type_A;
-      while (nr_ssb_table[idx][0] != fp->nr_band)
-        idx++;
-      AssertFatal(nr_ssb_table[idx][1] == 15,"SCS %d not applicable to band %d\n",
-                  fp->subcarrier_spacing,fp->nr_band);
       break;
-
     case NR_MU_1: //30kHz scs
       fp->subcarrier_spacing = nr_subcarrier_spacing[NR_MU_1];
       fp->slots_per_subframe = nr_slots_per_subframe[NR_MU_1];
-      while(nr_ssb_table[idx][0] != fp->nr_band ||
-            nr_ssb_table[idx][1] != 30) {
-        AssertFatal(nr_ssb_table[idx][0] <= fp->nr_band,
-                    "SCS %d not applicable to band %d\n",
-                    fp->subcarrier_spacing,
-                    fp->nr_band);
-        idx++;
-      }
-      fp->ssb_type = nr_ssb_table[idx][2];
       break;
-
     case NR_MU_2: //60kHz scs
       fp->subcarrier_spacing = nr_subcarrier_spacing[NR_MU_2];
       fp->slots_per_subframe = nr_slots_per_subframe[NR_MU_2];
       break;
-
     case NR_MU_3:
       fp->subcarrier_spacing = nr_subcarrier_spacing[NR_MU_3];
       fp->slots_per_subframe = nr_slots_per_subframe[NR_MU_3];
-      fp->ssb_type = nr_ssb_type_D;
       break;
-
     case NR_MU_4:
       fp->subcarrier_spacing = nr_subcarrier_spacing[NR_MU_4];
       fp->slots_per_subframe = nr_slots_per_subframe[NR_MU_4];
-      fp->ssb_type = nr_ssb_type_E;
       break;
-
     default:
-      AssertFatal(1==0,"Invalid numerology index %d", mu);
+      AssertFatal(false, "Invalid numerology index %d", mu);
   }
 
+  fp->ssb_type = ssb_case;
   // Start with FFT size 512
   fp->ofdm_symbol_size = 512;
 
@@ -231,7 +127,7 @@ void set_scs_parameters (NR_DL_FRAME_PARMS *fp, int mu, int N_RB_DL)
         fp->ofdm_symbol_size);
 }
 
-void sl_set_scs_parameters (NR_DL_FRAME_PARMS *fp, int mu, int N_RB_SL)
+void sl_set_scs_parameters(NR_DL_FRAME_PARMS *fp, int mu, int N_RB_SL)
 {
 
   AssertFatal(mu >= NR_MU_0 && mu <= NR_MU_4,"Invalid numerology index %d", mu);
@@ -402,14 +298,14 @@ void nr_init_frame_parms(nfapi_nr_config_request_scf_t* cfg, NR_DL_FRAME_PARMS *
   fp->half_frame_bit = 0;  // half frame bit initialized to 0 here
   fp->numerology_index = mu;
 
-  set_scs_parameters(fp, mu, fp->N_RB_DL);
+  set_scs_parameters(fp, mu, fp->N_RB_DL, cfg->ssb_table.case_v3.value);
 
   fp->slots_per_frame = 10* fp->slots_per_subframe;
 
   fp->nb_antennas_rx = cfg->carrier_config.num_rx_ant.value;      // It denotes the number of rx antennas at gNB
   fp->nb_antennas_tx = cfg->carrier_config.num_tx_ant.value;      // It corresponds to pdsch_AntennaPorts (logical antenna ports)
 
-  fp->symbols_per_slot = ((Ncp == NORMAL)? 14 : 12); // to redefine for different slot formats
+  fp->symbols_per_slot = ((Ncp == NR_NORMAL)? 14 : 12); // to redefine for different slot formats
   fp->samples_per_subframe_wCP = fp->ofdm_symbol_size * fp->symbols_per_slot * fp->slots_per_subframe;
   fp->samples_per_frame_wCP = 10 * fp->samples_per_subframe_wCP;
   fp->samples_per_slot_wCP = fp->symbols_per_slot*fp->ofdm_symbol_size; 
@@ -435,15 +331,13 @@ void nr_init_frame_parms(nfapi_nr_config_request_scf_t* cfg, NR_DL_FRAME_PARMS *
   fp->print_ue_help_cmdline_log = true;
 }
 
-int nr_init_frame_parms_ue(NR_DL_FRAME_PARMS *fp,
-                           fapi_nr_config_request_t* config,
-                           uint16_t nr_band)
+int nr_init_frame_parms_ue(NR_DL_FRAME_PARMS *fp, fapi_nr_config_request_t* config, uint16_t nr_band)
 {
 
   uint8_t nb_ant_ports_gNB  = 1;
   uint8_t tdd_cfg           = 3;
   uint8_t Nid_cell          = 0;
-  int     Ncp               = NORMAL;
+  int Ncp = NR_NORMAL;
 
   if(fp->nb_antennas_rx == 0)
     fp->nb_antennas_rx = 1;
@@ -454,7 +348,6 @@ int nr_init_frame_parms_ue(NR_DL_FRAME_PARMS *fp,
   fp->nb_antenna_ports_gNB = nb_ant_ports_gNB;
   fp->tdd_config           = tdd_cfg;
   fp->Nid_cell             = Nid_cell;
-  fp->nr_band              = nr_band;
 
   LOG_I(PHY, "Initializing frame parms: set nb_antenna_ports_gNB %d, tdd_config, %d, Nid_cell %d\n", fp->nb_antenna_ports_gNB, fp->tdd_config, fp->Nid_cell);
 
@@ -472,13 +365,21 @@ int nr_init_frame_parms_ue(NR_DL_FRAME_PARMS *fp,
   fp->N_RB_DL = config->carrier_config.dl_grid_size[fp->numerology_index];
   fp->N_RB_SL = config->carrier_config.sl_grid_size[fp->numerology_index];
 
-  fp->frame_type = get_frame_type(fp->nr_band, fp->numerology_index);
+  fp->frame_type = get_frame_type(nr_band, fp->numerology_index);
   int64_t uplink_frequency_offset = fp->ul_CarrierFreq - fp->dl_CarrierFreq;
   uplink_frequency_offset *= 1000;
 
-  LOG_I(PHY, "Initializing frame parms: DL frequency %lu Hz, UL frequency %lu Hz: band %d, uldl offset %ld Hz\n", fp->dl_CarrierFreq, fp->ul_CarrierFreq, fp->nr_band, uplink_frequency_offset);
+  LOG_I(PHY,
+        "Initializing frame parms: DL frequency %lu Hz, UL frequency %lu Hz: band %d, uldl offset %ld Hz\n",
+        fp->dl_CarrierFreq,
+        fp->ul_CarrierFreq,
+        nr_band,
+        uplink_frequency_offset);
 
-  AssertFatal(fp->frame_type==config->cell_config.frame_duplex_type, "Invalid duplex type (frame_type %d,cell_config.frame_duplex_type %d) in config request file for band %d\n", fp->frame_type,config->cell_config.frame_duplex_type,fp->nr_band);
+  AssertFatal(fp->frame_type == config->cell_config.frame_duplex_type,
+              "Invalid duplex type (frame_type %d,cell_config.frame_duplex_type %d) in config request file for band %d\n",
+              fp->frame_type,config->cell_config.frame_duplex_type,
+              nr_band);
 
   LOG_I(PHY,"Initializing frame parms for mu %d, N_RB %d, Ncp %d\n",fp->numerology_index, fp->N_RB_DL, Ncp);
 
@@ -488,10 +389,10 @@ int nr_init_frame_parms_ue(NR_DL_FRAME_PARMS *fp,
 
   fp->Ncp = Ncp;
   int N_RB = fp->N_RB_DL;
-  set_scs_parameters(fp, fp->numerology_index, N_RB);
+  set_scs_parameters(fp, fp->numerology_index, N_RB, config->ssb_table.ssb_case);
 
   fp->slots_per_frame = 10* fp->slots_per_subframe;
-  fp->symbols_per_slot = ((Ncp == NORMAL)? 14 : 12); // to redefine for different slot formats
+  fp->symbols_per_slot = ((Ncp == NR_NORMAL)? NR_SYMBOLS_PER_SLOT : NR_SYMBOLS_PER_SLOT_EXTENDED_CP);
   fp->samples_per_subframe_wCP = fp->ofdm_symbol_size * fp->symbols_per_slot * fp->slots_per_subframe;
   fp->samples_per_frame_wCP = 10 * fp->samples_per_subframe_wCP;
   fp->samples_per_slot_wCP = fp->symbols_per_slot*fp->ofdm_symbol_size; 
@@ -504,16 +405,11 @@ int nr_init_frame_parms_ue(NR_DL_FRAME_PARMS *fp,
   fp->samples_per_frame = 10 * fp->samples_per_subframe;
   fp->freq_range = get_freq_range_from_freq(fp->dl_CarrierFreq);
 
-  uint8_t sco = 0;
-  if (((fp->freq_range == FR1) && (config->ssb_table.ssb_subcarrier_offset < 24)) ||
-      ((fp->freq_range == FR2) && (config->ssb_table.ssb_subcarrier_offset < 12))) {
-    if (fp->freq_range == FR1)
-      sco = config->ssb_table.ssb_subcarrier_offset>>config->ssb_config.scs_common;
-    else
-      sco = config->ssb_table.ssb_subcarrier_offset;
-  }
+  fp->ssb_start_subcarrier = nr_get_ssb_start_sc(config->ssb_config.scs_common,
+                                                 config->ssb_table.ssb_offset_point_a,
+                                                 config->ssb_table.ssb_subcarrier_offset,
+                                                 fp->freq_range);
 
-  fp->ssb_start_subcarrier = (12 * config->ssb_table.ssb_offset_point_a + sco);
   set_Lmax(fp);
 
   fp->L_ssb = (((uint64_t) config->ssb_table.ssb_mask_list[0].ssb_mask)<<32) | config->ssb_table.ssb_mask_list[1].ssb_mask;
@@ -549,15 +445,14 @@ void nr_init_frame_parms_ue_sa(NR_DL_FRAME_PARMS *frame_parms, const nrUE_cell_p
   frame_parms->N_RB_DL = N_RB_DL;
   frame_parms->N_RB_UL = frame_parms->N_RB_DL;
 
-  frame_parms->nr_band = nr_band;
-  frame_parms->frame_type = get_frame_type(frame_parms->nr_band, frame_parms->numerology_index);
+  frame_parms->frame_type = get_frame_type(nr_band, frame_parms->numerology_index);
 
-  frame_parms->Ncp = NORMAL;
-  set_scs_parameters(frame_parms, frame_parms->numerology_index, frame_parms->N_RB_DL);
+  frame_parms->Ncp = NR_NORMAL;
+  set_scs_parameters(frame_parms, frame_parms->numerology_index, frame_parms->N_RB_DL, set_ssb_case(mu, nr_band));
   set_Lmax(frame_parms);
 
   frame_parms->slots_per_frame = 10* frame_parms->slots_per_subframe;
-  frame_parms->symbols_per_slot = ((frame_parms->Ncp == NORMAL)? 14 : 12); // to redefine for different slot formats
+  frame_parms->symbols_per_slot = ((frame_parms->Ncp == NR_NORMAL)? NR_SYMBOLS_PER_SLOT : NR_SYMBOLS_PER_SLOT_EXTENDED_CP);
   frame_parms->samples_per_subframe_wCP = frame_parms->ofdm_symbol_size * frame_parms->symbols_per_slot * frame_parms->slots_per_subframe;
   frame_parms->samples_per_frame_wCP = 10 * frame_parms->samples_per_subframe_wCP;
   frame_parms->samples_per_slot_wCP = frame_parms->symbols_per_slot*frame_parms->ofdm_symbol_size;
@@ -596,7 +491,6 @@ void nr_dump_frame_parms(NR_DL_FRAME_PARMS *fp)
   LOG_I(PHY, "fp->Ncp=%d\n", fp->Ncp);
   LOG_I(PHY, "fp->N_RB_DL=%d\n", fp->N_RB_DL);
   LOG_I(PHY, "fp->numerology_index=%d\n", fp->numerology_index);
-  LOG_I(PHY, "fp->nr_band=%d\n", fp->nr_band);
   LOG_I(PHY, "fp->ofdm_offset_divisor=%d\n", fp->ofdm_offset_divisor);
   LOG_I(PHY, "fp->threequarter_fs=%d\n", fp->threequarter_fs);
   LOG_I(PHY, "fp->sl_CarrierFreq=%lu\n", fp->sl_CarrierFreq);
@@ -612,8 +506,6 @@ int nr_init_frame_parms_ue_sl(NR_DL_FRAME_PARMS *fp,
   fp->ofdm_offset_divisor = ofdm_offset_divisor;
   fp->threequarter_fs = threequarter_fs;
 
-  fp->nr_band = get_band(config->sl_carrier_config.sl_frequency, 0, 0, 0);
-
   fp->att_rx = 0;
   fp->att_tx = 0;
   fp->nb_antennas_rx = config->sl_carrier_config.sl_num_rx_ant;
@@ -625,7 +517,7 @@ int nr_init_frame_parms_ue_sl(NR_DL_FRAME_PARMS *fp,
   fp->N_RB_UL = fp->N_RB_SL;
   fp->Ncp = config->sl_bwp_config.sl_cyclic_prefix;
 
-  fp->frame_type = get_frame_type(fp->nr_band, fp->numerology_index);
+  fp->frame_type = get_frame_type(config->sl_carrier_config.band, fp->numerology_index);
 
   uint64_t bw_khz = (12 * config->sl_carrier_config.sl_grid_size) * (15 << config->sl_bwp_config.sl_scs);
   // REfer to section 3GPP spec 38.101 5.4E.2.1
@@ -645,14 +537,14 @@ int nr_init_frame_parms_ue_sl(NR_DL_FRAME_PARMS *fp,
         fp->dl_CarrierFreq,
         fp->ul_CarrierFreq,
         fp->sl_CarrierFreq,
-        fp->nr_band);
+        config->sl_carrier_config.band);
 
   AssertFatal(fp->frame_type == TDD, "Sidelink bands only support TDD");
 
 
   LOG_I(PHY, "Initializing frame parms for mu %d, N_RB %d, Ncp %d\n", fp->numerology_index, fp->N_RB_DL, fp->Ncp);
 
-  if (fp->Ncp == EXTENDED)
+  if (fp->Ncp == NR_EXTENDED)
     AssertFatal(fp->numerology_index == NR_MU_2,
                 "Invalid cyclic prefix %d for numerology index %d\n",
                 fp->Ncp,
@@ -661,7 +553,7 @@ int nr_init_frame_parms_ue_sl(NR_DL_FRAME_PARMS *fp,
   sl_set_scs_parameters(fp, fp->numerology_index, fp->N_RB_SL);
 
   fp->slots_per_frame = 10 * fp->slots_per_subframe;
-  fp->symbols_per_slot = ((fp->Ncp == NORMAL) ? 14 : 12); // to redefine for different slot formats
+  fp->symbols_per_slot = ((fp->Ncp == NR_NORMAL) ? NR_SYMBOLS_PER_SLOT : NR_SYMBOLS_PER_SLOT_EXTENDED_CP);
   fp->samples_per_subframe_wCP = fp->ofdm_symbol_size * fp->symbols_per_slot * fp->slots_per_subframe;
   fp->samples_per_frame_wCP = 10 * fp->samples_per_subframe_wCP;
   fp->samples_per_slot_wCP = fp->symbols_per_slot * fp->ofdm_symbol_size;

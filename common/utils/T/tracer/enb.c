@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -424,7 +428,7 @@ static void enb_main_gui(enb_gui *e, gui *g, event_handler *h, void *database,
   for (i = 0; i < 8; i++)
     timeline_set_subline_background_color(g, timeline_plot, i,
         new_color(g, i==0 || i==4 ? "#aaf" : "#eee"));
-  timeview = new_view_time(3600, 10, g, timeline_plot);
+  timeview = new_view_time(10, g, timeline_plot);
   /* DL tick logging */
   timelog = new_timelog(h, database, "ENB_PHY_DL_TICK");
   subview = new_subview_time(timeview, 0, new_color(g, "#77c"), 3600*1000);

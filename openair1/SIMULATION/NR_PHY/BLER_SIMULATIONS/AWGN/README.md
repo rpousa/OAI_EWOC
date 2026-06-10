@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 # Overview of AWGN BLER Table #
 
 Look-up tables of performance versus signal-to-noise ratio (SNR) are obtained via PHY simulations in additive white Gaussian noise (AWGN) channels. Then, to evaluate the BLER of fading channel, we map the received SINR to an AWGN curve using these look-up tables. Note that due to time/frequency selective fading, the received SINR value for each packet/ resource block varies. This requires the computation of AWGN equivalent SINR, also generally known as effective SINR, by mapping the individual symbol SINRs to a scalar. Then, the performance of the PHY in a fading channel at a given effective SINR is equivalent to the performance in AWGN channel.

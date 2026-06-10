@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 # The gNB RACH Processing
 
 ## 1. Collect I/Q Samples

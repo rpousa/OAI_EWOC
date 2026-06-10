@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
+ */
+
 #ifndef __COMMON_UTILS_T_TRACER_CONFIG__H__
 #define __COMMON_UTILS_T_TRACER_CONFIG__H__
 

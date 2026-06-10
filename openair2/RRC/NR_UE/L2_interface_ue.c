@@ -1,33 +1,9 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/* \file l2_interface_ue.c
+/*
  * \brief layer 2 interface, used to support different RRC sublayer
- * \author R. Knopp, K.H. HSU
- * \date 2018
- * \version 0.1
- * \company Eurecom / NTUST
- * \email: knopp@eurecom.fr, kai-hsiang.hsu@eurecom.fr
- * \note
- * \warning
  */
 
 #include "L2_interface_ue.h"
@@ -57,12 +33,10 @@ void nr_mac_rrc_sync_ind(const module_id_t module_id, const frame_t frame, const
 }
 
 void nr_mac_rrc_data_ind_ue(const module_id_t module_id,
-                            const int CC_id,
                             const uint8_t gNB_index,
                             const int hfn,
                             const frame_t frame,
                             const int slot,
-                            const rnti_t rnti,
                             const uint32_t cellid,
                             const long arfcn,
                             const channel_t channel,
@@ -179,6 +153,13 @@ void process_msg_rcc_to_mac(nr_mac_rrc_message_t *msg, int instance_id)
     default:
       LOG_E(NR_MAC, "Unexpected msg from RRC: %d\n", msg->payload_type);
   }
+}
+
+void nr_mac_rrc_verification_failed(const module_id_t mod_id)
+{
+  MessageDef *message_p = itti_alloc_new_message(TASK_MAC_UE, 0, NR_RRC_MAC_VERIFY);
+  NR_RRC_MAC_VERIFY (message_p).L2_RRC_verification_failed = true;
+  itti_send_msg_to_task(TASK_RRC_NRUE, GNB_MODULE_ID_TO_INSTANCE(mod_id), message_p);
 }
 
 void nr_mac_rrc_inactivity_timer_ind(const module_id_t mod_id)

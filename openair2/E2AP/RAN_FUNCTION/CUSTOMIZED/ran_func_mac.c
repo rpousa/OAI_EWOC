@@ -1,22 +1,5 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
 #include "ran_func_mac.h"
@@ -48,6 +31,8 @@ bool read_mac_sm(void* data)
     assert(mac->msg.ue_stats != NULL && "Memory exhausted" );
   }
 
+  gNB_MAC_INST *mac_inst = RC.nrmac[0];
+  NR_SCHED_LOCK(&mac_inst->sched_lock);
   size_t i = 0; //TODO
   UE_iterator(UE_info->connected_ue_list, UE) {
     const NR_UE_sched_ctrl_t* sched_ctrl = &UE->UE_sched_ctrl;
@@ -81,8 +66,8 @@ bool read_mac_sm(void* data)
     rd->dl_aggr_sdus = UE->mac_stats.dl.num_mac_sdu;
     rd->ul_aggr_sdus = UE->mac_stats.ul.num_mac_sdu;
 
-    rd->pusch_snr = (float) sched_ctrl->pusch_snrx10 / 10; //: float = -64;
-    rd->pucch_snr = (float) sched_ctrl->pucch_snrx10 / 10; //: float = -64;
+    rd->pusch_snr = sched_ctrl->pusch_pc.avg_snr; //: float = -64;
+    rd->pucch_snr = sched_ctrl->pucch_pc.avg_snr; //: float = -64;
 
     rd->wb_cqi = sched_ctrl->CSI_report.cri_ri_li_pmi_cqi_report.wb_cqi_1tb;
     rd->dl_mcs1 = sched_ctrl->dl_bler_stats.mcs;
@@ -110,6 +95,7 @@ bool read_mac_sm(void* data)
 
     ++i;
   }
+  NR_SCHED_UNLOCK(&mac_inst->sched_lock);
 
   return num_ues > 0;
 }

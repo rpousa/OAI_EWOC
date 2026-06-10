@@ -1,22 +1,5 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
 #include <string.h>
@@ -71,10 +54,8 @@ void get_num_re_dmrs(nfapi_nr_ue_pusch_pdu_t *pusch_pdu, uint8_t *nb_dmrs_re_per
 }
 
 uint64_t downlink_frequency[MAX_NUM_CCs][4];
-int32_t uplink_frequency_offset[MAX_NUM_CCs][4];
+int64_t uplink_frequency_offset[MAX_NUM_CCs][4];
 THREAD_STRUCT thread_struct;
-instance_t DUuniqInstance = 0;
-instance_t CUuniqInstance = 0;
 openair0_config_t openair0_cfg[MAX_CARDS];
 
 RAN_CONTEXT_t RC;
@@ -246,7 +227,7 @@ static int freq_domain_loopback(PHY_VARS_NR_UE *UE_tx, PHY_VARS_NR_UE *UE_rx, in
          sl_ue2->sl_config.sl_sync_source.rx_slss_id);
 
   NR_DL_FRAME_PARMS *fp = &sl_ue1->sl_frame_params;
-  const int samplesF_per_slot = NR_SYMBOLS_PER_SLOT * fp->ofdm_symbol_size;
+  const int samplesF_per_slot = fp->symbols_per_slot * fp->ofdm_symbol_size;
   c16_t txdataF_buf[fp->nb_antennas_tx * samplesF_per_slot] __attribute__((aligned(32)));
   memset(txdataF_buf, 0, sizeof(txdataF_buf));
   c16_t *txdataF[fp->nb_antennas_tx]; /* workaround to be compatible with current txdataF usage in all tx procedures. */
@@ -255,36 +236,39 @@ static int freq_domain_loopback(PHY_VARS_NR_UE *UE_tx, PHY_VARS_NR_UE *UE_rx, in
 
   nr_tx_psbch(UE_tx, frame, slot, &phy_data->psbch_vars, txdataF);
 
-  int estimateSz = sl_ue2->sl_frame_params.samples_per_slot_wCP;
-  __attribute__((aligned(32))) c16_t rxdataF[1][estimateSz];
-  memcpy(rxdataF[0], txdataF[0], sl_ue1->sl_frame_params.samples_per_slot_wCP * sizeof(**rxdataF));
-
-  uint8_t err_status = 0;
-
   UE_nr_rxtx_proc_t proc;
   proc.frame_rx = frame;
   proc.nr_slot_rx = slot;
 
-  struct complex16 dl_ch_estimates[1][estimateSz];
   uint8_t decoded_output[4] = {0};
 
+  int psbch_e_rx_offset = 0;
+  int16_t psbch_e_rx[SL_NR_POLAR_PSBCH_E_NORMAL_CP + 2];
+  int16_t psbch_unClipped[SL_NR_POLAR_PSBCH_E_NORMAL_CP + 2];
   LOG_I(PHY, "DEBUG: HIJACKING DL CHANNEL ESTIMATES.\n");
-  for (int s = 0; s < 14; s++) {
+  for (int s = 0; s < 14;) {
+    __attribute__((aligned(32))) c16_t rxdataF[fp->nb_antennas_rx][fp->ofdm_symbol_size];
+    __attribute__((aligned(32))) c16_t dl_ch_estimates[fp->nb_antennas_rx][fp->ofdm_symbol_size];
+    /* Copy freq domain buffer from Tx to Rx */
+    memcpy(rxdataF[0], &txdataF[0][s * fp->ofdm_symbol_size], sizeof(c16_t) * fp->ofdm_symbol_size);
+    /* Fill perfect channel estimates */
     for (int j = 0; j < sl_ue2->sl_frame_params.ofdm_symbol_size; j++) {
-      struct complex16 *dlch = (struct complex16 *)(&dl_ch_estimates[0][s * sl_ue2->sl_frame_params.ofdm_symbol_size]);
+      struct complex16 *dlch = dl_ch_estimates[0];
       dlch[j].r = 128;
       dlch[j].i = 0;
     }
+    /* Extract and produce LLRs */
+    nr_generate_psbch_llr(fp, rxdataF, dl_ch_estimates, s, &psbch_e_rx_offset, psbch_e_rx, psbch_unClipped);
+    s = (s == 0) ? 5 : s + 1;
   }
 
-  err_status = nr_rx_psbch(UE_rx,
-                           &proc,
-                           estimateSz,
-                           dl_ch_estimates,
-                           &sl_ue2->sl_frame_params,
-                           decoded_output,
-                           rxdataF,
-                           sl_ue2->sl_config.sl_sync_source.rx_slss_id);
+  const int err_status = nr_psbch_decode(UE_rx,
+                                         psbch_e_rx,
+                                         &proc,
+                                         psbch_e_rx_offset,
+                                         sl_ue2->sl_config.sl_sync_source.rx_slss_id,
+                                         NULL,
+                                         decoded_output);
 
   int error_payload = 0;
   error_payload = test_rx_mib(decoded_output, frame, slot);
@@ -673,8 +657,8 @@ int main(int argc, char **argv)
   free(r_re);
   free(r_im);
 
-  term_nr_ue_signal(UE_TX, 1);
-  term_nr_ue_signal(UE_RX, 1);
+  term_nr_ue_signal(UE_TX);
+  term_nr_ue_signal(UE_RX);
 
   free(UE_TX);
   free(UE_RX);

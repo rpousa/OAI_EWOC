@@ -1,22 +1,5 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
 #ifndef _GNU_SOURCE
@@ -31,11 +14,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include "LAYER2/MAC/mac_extern.h"
-#include "LTE_DRB-ToAddModList.h"
-#include "LTE_DRB-ToReleaseList.h"
-#include "LTE_PMCH-InfoList-r9.h"
-#include "LTE_SRB-ToAddModList.h"
 #include "NR_DRB-ToAddMod.h"
 #include "NR_QFI.h"
 #include "NR_SDAP-Config.h"
@@ -53,13 +31,14 @@
 #include "f1ap_messages_types.h"
 #include "gnb_config.h"
 #include "gtpv1_u_messages_types.h"
-#include "hashtable.h"
+#include "ds/hashtable.h"
 #include "intertask_interface.h"
 #include "common/utils/LOG/log.h"
 #include "nfapi/oai_integration/vendor_ext.h"
 #include "nr_pdcp_asn1_utils.h"
 #include "nr_pdcp_timer_thread.h"
 #include "nr_pdcp_ue_manager.h"
+#include "openair2/F1AP/f1ap_common.h"
 #include "openair2/F1AP/f1ap_ids.h"
 #include "openair2/SDAP/nr_sdap/nr_sdap.h"
 #include "pdcp.h"
@@ -398,7 +377,9 @@ void nr_pdcp_layer_init(void)
   if ((RC.nrrrc == NULL) || (!NODE_IS_CU(node_type))) {
     init_nr_rlc_data_req_queue();
   }
+#ifdef PDCP_CUCP_CUUP
   nr_pdcp_e1_if_init(node_type == ngran_gNB_CUUP || node_type == ngran_gNB_CUCP);
+#endif
   init_nr_pdcp_data_ind_queue();
   nr_pdcp_init_timer_thread(nr_pdcp_ue_manager);
 }
@@ -420,7 +401,7 @@ static void deliver_sdu_drb(void *_ue, nr_pdcp_entity_t *entity,
     LOG_D(PDCP, "IP packet received with size %d, to be sent to SDAP interface, UE ID/RNTI: %ld\n", size, ue->ue_id);
     // in NoS1 mode: the SDAP should write() packets to an FD (TUN interface),
     // so below, set is_gnb == 0 to do that
-    sdap_data_ind(entity->rb_id, 0, entity->has_sdap_rx, entity->pdusession_id, ue->ue_id, buf, size);
+    sdap_data_ind(entity->rb_id, 0, entity->pdusession_id, ue->ue_id, buf, size);
   }
   else{
     for (i = 0; i < MAX_DRBS_PER_UE; i++) {
@@ -436,13 +417,7 @@ static void deliver_sdu_drb(void *_ue, nr_pdcp_entity_t *entity,
     rb_found:
     {
       LOG_D(PDCP, "%s() (drb %d) sending message to SDAP size %d\n", __func__, rb_id, size);
-      sdap_data_ind(rb_id,
-                    ue->drb[rb_id - 1]->is_gnb,
-                    ue->drb[rb_id - 1]->has_sdap_rx,
-                    ue->drb[rb_id - 1]->pdusession_id,
-                    ue->ue_id,
-                    buf,
-                    size);
+      sdap_data_ind(rb_id, ue->drb[rb_id - 1]->is_gnb, ue->drb[rb_id - 1]->pdusession_id, ue->ue_id, buf, size);
     }
   }
 }
@@ -468,8 +443,9 @@ static void deliver_pdu_drb_gnb(void *deliver_pdu_data, ue_id_t ue_id, int rb_id
 
   if (NODE_IS_CU(node_type)) {
     LOG_D(PDCP, "%s() (drb %d) sending message to gtp size %d\n", __func__, rb_id, size);
-    extern instance_t CUuniqInstance;
-    gtpv1uSendDirectWithNRUSeqNum(CUuniqInstance, ue_id, rb_id, (uint8_t *)buf, size);
+    const f1ap_cudu_inst_t *inst = getCxt(0);
+    DevAssert(inst);
+    gtpv1uSendDirectWithNRUSeqNum(inst->gtpInst, ue_id, rb_id, (uint8_t *)buf, size);
   } else {
     uint8_t *memblock = malloc16(size);
     memcpy(memblock, buf, size);

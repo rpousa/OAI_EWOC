@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 # this script expects
 # - TEST_CMD (program + options)
 # - CHECK_SCRIPT (path to analyze-timing.sh)

@@ -1,5 +1,9 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 CC=gcc
+CXX=g++
 CFLAGS=-Wall -g -pthread -DT_TRACER -I. -I../incgen
+CXXFLAGS=-Wall -g -pthread -DT_TRACER -I. -I../incgen -std=c++11
 
 #CFLAGS += -O3 -ffast-math -fomit-frame-pointer
 
@@ -12,6 +16,9 @@ all: record replay extract_config textlog enb ue vcd macpdu2wireshark \
 
 record: utils.o record.o database.o configuration.o
 	$(CC) $(CFLAGS) -o record $^ $(LIBS)
+
+record_db: utils.o record_db.o database.o configuration.o
+	$(CXX) $(CXXFLAGS) -o record_db $^ $(LIBS) -lclickhouse-cpp-lib $(FMTLOG_LIBS)
 
 replay: utils.o replay.o
 	$(CC) $(CFLAGS) -o replay $^ $(LIBS)
@@ -102,8 +109,11 @@ filter/filter.a:
 %.o: %.c
 	$(CC) $(CFLAGS) -c -o $@ $<
 
+%.o: %.cpp
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+
 clean:
-	rm -f *.o core tracer_remote textlog enb ue vcd record replay
+	rm -f *.o core tracer_remote textlog enb ue vcd record record_db replay
 	rm -f extract_config macpdu2wireshark extract_input_subframe
 	rm -f extract_output_subframe to_vcd extract multi gnb
 	rm -f t_tracer_app_gnb t_tracer_app_ue gnb_mac csv

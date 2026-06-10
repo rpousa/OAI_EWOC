@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
+ */
+
 #include "view.h"
 #include "../utils.h"
 #include "logger.h"
@@ -160,9 +164,10 @@ static void *ticktime_thread(void *_this)
   return 0;
 }
 
-static void scroll(void *private, gui *g,
-    char *notification, widget *w, void *notification_data)
+static void scroll(void *private, gui *g, char *notification, widget *w, void *notification_data)
 {
+  UNUSED(g);
+  UNUSED(w);
   struct ticktime *this = private;
   int *d = notification_data;
   int x = d[0];
@@ -221,9 +226,11 @@ end:
   if (pthread_mutex_unlock(&this->lock)) abort();
 }
 
-static void click(void *private, gui *g,
-    char *notification, widget *w, void *notification_data)
+static void click(void *private, gui *g, char *notification, widget *w, void *notification_data)
 {
+  UNUSED(g);
+  UNUSED(w);
+  UNUSED(notification);
   struct ticktime *this = private;
   int *d = notification_data;
   int button = *d;
@@ -361,9 +368,9 @@ struct clock_ticktime {
   struct ticktime *parent;
 };
 
-static void clock_append(view *_this, struct timespec t,
-    int frame, int subframe)
+static void clock_append(view *_this, struct timespec t, int frame, int subframe)
 {
+  UNUSED(t);
   struct clock_ticktime *this = (struct clock_ticktime *)_this;
   struct ticktime *tt = this->parent;
   int64_t diff;

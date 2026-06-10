@@ -1,4 +1,5 @@
 #!/bin/bash
+# SPDX-License-Identifier: MIT
 
 [[ $# -lt 1 ]] && { echo "Usage: $0 <distance_in_meters...>"; exit 1; }
 DISTANCES=("$@")

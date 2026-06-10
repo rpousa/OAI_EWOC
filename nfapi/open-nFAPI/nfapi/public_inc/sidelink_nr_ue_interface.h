@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
+ */
+
 #ifndef _SIDELINK_NR_UE_INTERFACE_H_
 #define _SIDELINK_NR_UE_INTERFACE_H_
 
@@ -365,7 +369,7 @@ typedef struct
   //Indicates presence of +/-5Khz shift wrt FREF for V2X reference frequencies.
   //Possible values: {-1,0,1}
   int8_t  sl_value_N;
-
+  uint32_t band;
 } sl_nr_carrier_config_t;
 
 

@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 loader command can be used to check loader configuration parameters and the list of loaded shared libraries and for each library the list of available functions.
 
 ```bash

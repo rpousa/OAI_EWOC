@@ -1,23 +1,5 @@
-#/*
-# * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
-# * contributor license agreements.  See the NOTICE file distributed with
-# * this work for additional information regarding copyright ownership.
-# * The OpenAirInterface Software Alliance licenses this file to You under
-# * the OAI Public License, Version 1.1  (the "License"); you may not use this file
-# * except in compliance with the License.
-# * You may obtain a copy of the License at
-# *
-# *      http://www.openairinterface.org/?page_id=698
-# *
-# * Unless required by applicable law or agreed to in writing, software
-# * distributed under the License is distributed on an "AS IS" BASIS,
-# * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# * See the License for the specific language governing permissions and
-# * limitations under the License.
-# *-------------------------------------------------------------------------------
-# * For more information about the OpenAirInterface (OAI) Software Alliance:
-# *      contact@openairinterface.org
-# */
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 #---------------------------------------------------------------------
 # Python for CI of OAI-eNB + COTS-UE
 #
@@ -40,7 +22,7 @@ import constants as CONST
 
 import cls_oaicitest		 #main class for OAI CI test framework
 import cls_containerize	 #class Containerize for all container-based operations on RAN/UE objects
-import cls_static_code_analysis  #class for static code analysis
+import cls_static_code_analysis as SCA
 import cls_cluster		 # class for building/deploying on cluster
 import cls_native        # class for all native/source-based operations
 from cls_ci_helper import TestCaseCtx
@@ -62,13 +44,6 @@ import lxml.etree as ET
 import logging
 import signal
 import traceback
-logging.basicConfig(
-	level=logging.DEBUG,
-	stream=sys.stdout,
-	format="[%(asctime)s] %(levelname)8s: %(message)s"
-)
-
-
 
 
 #-----------------------------------------------------------
@@ -89,61 +64,37 @@ def ExecuteActionWithParam(action, ctx, node):
 	global RAN
 	global HTML
 	global CONTAINERS
-	global SCA
 	global CLUSTER
-	if action == 'Build_eNB' or action == 'Build_Image' or action == 'Build_Proxy' or action == "Build_Cluster_Image" or action == "Build_Run_Tests":
+	if action == 'Build_eNB' or action == 'Build_Image' or action == "Build_Cluster_Image" or action == "Build_Run_Tests":
 		RAN.Build_eNB_args=test.findtext('Build_eNB_args')
 		CONTAINERS.imageKind=test.findtext('kind')
-		proxy_commit = test.findtext('proxy_commit')
-		if proxy_commit is not None:
-			CONTAINERS.proxyCommit = proxy_commit
+		dockerfile = test.findtext('dockerfile') or ''
+		runtime_opt = test.findtext('runtime-opt') or ''
+		ctest_opt = test.findtext('ctest-opt') or ''
 		if action == 'Build_eNB':
-			success = cls_native.Native.Build(ctx, node, HTML, RAN.eNBSourceCodePath, RAN.Build_eNB_args)
+			success = cls_native.Native.Build(ctx, node, HTML, RAN.workspace, RAN.Build_eNB_args)
 		elif action == 'Build_Image':
 			success = CONTAINERS.BuildImage(ctx, node, HTML)
-		elif action == 'Build_Proxy':
-			success = CONTAINERS.BuildProxy(ctx, node, HTML)
 		elif action == 'Build_Cluster_Image':
 			success = CLUSTER.BuildClusterImage(ctx, node, HTML)
 		elif action == 'Build_Run_Tests':
-			success = CONTAINERS.BuildRunTests(ctx, node, HTML)
+			success = CONTAINERS.BuildRunTests(ctx, node, dockerfile, runtime_opt, ctest_opt, HTML)
 
 	elif action == 'Initialize_eNB':
-		datalog_rt_stats_file=test.findtext('rt_stats_cfg')
-		if datalog_rt_stats_file is None:
-			RAN.datalog_rt_stats_file='datalog_rt_stats.default.yaml'
-		else:
-			RAN.datalog_rt_stats_file=datalog_rt_stats_file
 		RAN.Initialize_eNB_args=test.findtext('Initialize_eNB_args')
-		USRPIPAddress = test.findtext('USRP_IPAddress') or ''
-
-		#local variable air_interface
-		air_interface = test.findtext('air_interface')		
-		if (air_interface is None) or (air_interface.lower() not in ['nr','lte']):
-			RAN.air_interface = 'lte-softmodem'
-		else:
-			RAN.air_interface = air_interface.lower() +'-softmodem'
-
 		cmd_prefix = test.findtext('cmd_prefix')
 		if cmd_prefix is not None: RAN.cmd_prefix = cmd_prefix
 		success = RAN.InitializeeNB(ctx, node, HTML)
 
 	elif action == 'Terminate_eNB':
-		#retx checkers
-		string_field = test.findtext('d_retx_th')
-		if (string_field is not None):
-			RAN.ran_checkers['d_retx_th'] = [float(x) for x in string_field.split(',')]
-		string_field=test.findtext('u_retx_th')
-		if (string_field is not None):
-			RAN.ran_checkers['u_retx_th'] = [float(x) for x in string_field.split(',')]
-
-		#local variable air_interface
-		air_interface = test.findtext('air_interface')		
-		if (air_interface is None) or (air_interface.lower() not in ['nr','lte']):
-			RAN.air_interface = 'lte-softmodem'
-		else:
-			RAN.air_interface = air_interface.lower() +'-softmodem'
-		success = RAN.TerminateeNB(ctx, node, HTML)
+		services = []
+		analysis = test.find("analysis")
+		if analysis is not None:
+			# services: multiple services to analyse, separated by whitespace
+			services = analysis.findtext("services", default="").split()
+			# service: individual services to analyze, in case they have whitespace
+			services = services + [s.text for s in analysis.findall("service")]
+		success = RAN.TerminateeNB(ctx, node, HTML, services)
 
 	elif action == 'Initialize_UE' or action == 'Attach_UE' or action == 'Detach_UE' or action == 'Terminate_UE' or action == 'CheckStatusUE' or action == 'DataEnable_UE' or action == 'DataDisable_UE':
 		CiTestObj.ue_ids = test.findtext('id').split(' ')
@@ -197,16 +148,16 @@ def ExecuteActionWithParam(action, ctx, node):
 	elif action == 'Deploy_Run_OC_PhySim':
 		oc_release = test.findtext('oc_release')
 		script = "scripts/oc-deploy-physims.sh"
-		image_tag = cls_containerize.CreateTag(CLUSTER.ranCommitID, CLUSTER.ranBranch, CLUSTER.ranAllowMerge)
-		options = f"oaicicd-core-for-ci-ran {oc_release} {image_tag} {CLUSTER.eNBSourceCodePath}"
-		workdir = CLUSTER.eNBSourceCodePath
+		image_tag = CLUSTER.branch
+		options = f"oaicicd-core-for-ci-ran {oc_release} {image_tag} {CLUSTER.workspace}"
+		workdir = CLUSTER.workspace
 		success = cls_oaicitest.Deploy_Physim(ctx, HTML, node, workdir, script, options)
 
-	elif action == 'Build_Deploy_Docker_PhySim' or action == 'Build_Deploy_Source_PhySim':
+	elif action == 'Build_Deploy_PhySim':
 		ctest_opt = test.findtext('ctest-opt') or ''
-		script = "scripts/docker-build-and-deploy-physims.sh" if action == 'Build_Deploy_Docker_PhySim' else 'scripts/source-deploy-physims.sh'
-		options = f"{CONTAINERS.eNBSourceCodePath} {ctest_opt}"
-		workdir = CONTAINERS.eNBSourceCodePath
+		script = test.findtext('script')
+		options = f"{CONTAINERS.workspace} {ctest_opt}"
+		workdir = CONTAINERS.workspace
 		success = cls_oaicitest.Deploy_Physim(ctx, HTML, node, workdir, script, options)
 
 	elif action == 'DeployCoreNetwork' or action == 'UndeployCoreNetwork':
@@ -214,23 +165,33 @@ def ExecuteActionWithParam(action, ctx, node):
 		core_op = getattr(cls_oaicitest.OaiCiTest, action)
 		success = core_op(cn_id, ctx, HTML)
 
+	elif action == 'DeployWithScript' or action == 'UndeployWithScript':
+		script = test.findtext('script')
+		options = test.findtext('options')
+		if action == 'DeployWithScript':
+			deploymentTag = RAN.branch
+			success = cls_oaicitest.DeployWithScript(HTML, node, script, options, deploymentTag)
+		elif action == 'UndeployWithScript':
+			success = cls_oaicitest.UndeployWithScript(HTML, ctx, node, script, options)
+
 	elif action == 'Deploy_Object' or action == 'Undeploy_Object' or action == "Create_Workspace" or action == "Stop_Object":
 		CONTAINERS.yamlPath = test.findtext('yaml_path')
-		string_field=test.findtext('d_retx_th')
-		if (string_field is not None):
-			CONTAINERS.ran_checkers['d_retx_th'] = [float(x) for x in string_field.split(',')]
-		string_field=test.findtext('u_retx_th')
-		if (string_field is not None):
-			CONTAINERS.ran_checkers['u_retx_th'] = [float(x) for x in string_field.split(',')]
 		CONTAINERS.services = test.findtext('services')
 		CONTAINERS.num_attempts = int(test.findtext('num_attempts') or 1)
-		CONTAINERS.deploymentTag = cls_containerize.CreateTag(CONTAINERS.ranCommitID, CONTAINERS.ranBranch, CONTAINERS.ranAllowMerge)
+		CONTAINERS.deploymentTag = CONTAINERS.branch
 		if action == 'Deploy_Object':
 			success = CONTAINERS.DeployObject(ctx, node, HTML)
 		elif action == 'Stop_Object':
 			success = CONTAINERS.StopObject(ctx, node, HTML)
 		elif action == 'Undeploy_Object':
-			success = CONTAINERS.UndeployObject(ctx, node, HTML, RAN)
+			analysis = test.find("analysis")
+			services = []
+			if analysis is not None:
+				# services: multiple services to analyse, separated by whitespace
+				services = analysis.findtext("services", default="").split()
+				# service: individual services to analyze, in case they have whitespace
+				services = services + [s.text for s in analysis.findall("service")]
+			success = CONTAINERS.UndeployObject(ctx, node, HTML, services)
 		elif action == 'Create_Workspace':
 			if force_local:
 				# Do not create a working directory when running locally. Current repo directory will be used
@@ -238,10 +199,7 @@ def ExecuteActionWithParam(action, ctx, node):
 			success = CONTAINERS.Create_Workspace(node, HTML)
 
 	elif action == 'LicenceAndFormattingCheck':
-		success = SCA.LicenceAndFormattingCheck(ctx, node, HTML)
-
-	elif action == 'Cppcheck_Analysis':
-		success = SCA.CppCheckAnalysis(ctx, node, HTML)
+		success = SCA.StaticCodeAnalysis.LicenceAndFormattingCheck(ctx, node, HTML, RAN.workspace, RAN.branch, RAN.merge, RAN.targetBranch)
 
 	elif action == 'Push_Local_Registry':
 		tag_prefix = test.findtext('tag_prefix') or ""
@@ -265,14 +223,14 @@ def ExecuteActionWithParam(action, ctx, node):
 	elif action == 'Custom_Command':
 		command = test.findtext('command')
 		# Allow referencing repository workspace path in XML via %%workspace%%
-		command = command.replace("%%workspace%%", CONTAINERS.eNBSourceCodePath)
+		command = command.replace("%%workspace%%", CONTAINERS.workspace)
 		success = cls_oaicitest.Custom_Command(HTML, node, command)
 
 	elif action == 'Custom_Script':
 		script = test.findtext('script')
 		args = test.findtext('args')
 		# Allow referencing repository workspace path in XML via %%workspace%%
-		script = script.replace("%%workspace%%", CONTAINERS.eNBSourceCodePath)
+		script = script.replace("%%workspace%%", CONTAINERS.workspace)
 		success = cls_oaicitest.Custom_Script(HTML, node, script, args)
 
 	elif action == 'Pull_Cluster_Image':
@@ -280,20 +238,20 @@ def ExecuteActionWithParam(action, ctx, node):
 		images = test.findtext('images').split()
 		success = CLUSTER.PullClusterImage(HTML, node, images, tag_prefix=tag_prefix)
 
+	elif action == 'AnalyzeRTStats':
+		yaml = test.findtext('stats_cfg')
+		success = RAN.AnalyzeRTStats(HTML, node, ctx, yaml)
+
+	elif action == 'AnalyzeRTStats_Object':
+		yaml = test.findtext('stats_cfg')
+		service = test.findtext('service')
+		success = CONTAINERS.AnalyzeRTStatsObject(HTML, node, ctx, yaml, service)
+
 	else:
 		logging.warning(f"unknown action {action}, skip step")
 		success = True # by default, we skip the step and print a warning
 
 	return success
-
-#check if given test is in list
-#it is in list if one of the strings in 'list' is at the beginning of 'test'
-def test_in_list(test, list):
-	for check in list:
-		check=check.replace('+','')
-		if (test.startswith(check)):
-			return True
-	return False
 
 test_runner_abort = False
 def receive_signal(signum, frame):
@@ -339,7 +297,6 @@ CiTestObj = cls_oaicitest.OaiCiTest()
 RAN = ran.RANManagement()
 HTML = cls_oai_html.HTMLManagement()
 CONTAINERS = cls_containerize.Containerize()
-SCA = cls_static_code_analysis.StaticCodeAnalysis()
 CLUSTER = cls_cluster.Cluster()
 
 #-----------------------------------------------------------
@@ -349,7 +306,12 @@ CLUSTER = cls_cluster.Cluster()
 import args_parse
 # Force local execution, move all execution targets to localhost
 force_local = False
-mode, force_local = args_parse.ArgsParse(sys.argv,CiTestObj,RAN,HTML,CONTAINERS,HELP,SCA,CLUSTER)
+mode, force_local, date_fmt = args_parse.ArgsParse(sys.argv,CiTestObj,RAN,HTML,CONTAINERS,HELP,CLUSTER)
+fmt = "%(levelname)8s: %(message)s"
+if date_fmt:
+    fmt = "[%(asctime)s] %(levelname)s %(message)s"
+logging.basicConfig(level=logging.DEBUG, stream=sys.stdout, format=fmt, datefmt=date_fmt,)
+
 
 #-----------------------------------------------------------
 # mode amd XML class (action) analysis
@@ -367,18 +329,7 @@ elif re.match('^TerminateSPGW$', mode, re.IGNORECASE):
 elif re.match('^LogCollectBuild$', mode, re.IGNORECASE):
 	logging.warning("Option LogCollectBuild ignored")
 elif re.match('^LogCollecteNB$', mode, re.IGNORECASE):
-	if RAN.eNBSourceCodePath == '':
-		HELP.GenericHelp(CONST.Version)
-		sys.exit('Insufficient Parameter')
-	if os.path.isdir('cmake_targets/log'):
-		cmd = 'zip -r enb.log.' + RAN.BuildId + '.zip cmake_targets/log'
-		logging.info(cmd)
-		try:
-			zipStatus = subprocess.check_output(cmd, shell=True, stderr=subprocess.STDOUT, universal_newlines=True, timeout=60)
-		except subprocess.CalledProcessError as e:
-			logging.error("Command '{}' returned non-zero exit status {}.".format(e.cmd, e.returncode))
-			logging.error("Error output:\n{}".format(e.output))
-		sys.exit(0)
+	logging.warning("Option LogCollecteNB ignored")
 elif re.match('^LogCollectHSS$', mode, re.IGNORECASE):
 	logging.warning("Option LogCollectHSS ignored")
 elif re.match('^LogCollectMME$', mode, re.IGNORECASE):
@@ -423,15 +374,15 @@ elif re.match('^TesteNB$', mode, re.IGNORECASE) or re.match('^TestUE$', mode, re
 	logging.info('\u001B[1m  Starting Scenario: ' + CiTestObj.testXMLfiles[0] + '\u001B[0m')
 	logging.info('\u001B[1m----------------------------------------\u001B[0m')
 	if re.match('^TesteNB$', mode, re.IGNORECASE):
-		if RAN.ranRepository == '' or RAN.ranBranch == '' or RAN.eNBSourceCodePath == '':
+		if RAN.repository == '' or RAN.branch == '' or RAN.workspace == '':
 			HELP.GenericHelp(CONST.Version)
-			if RAN.ranRepository == '':
-				HELP.GitSrvHelp(RAN.ranRepository, RAN.ranBranch, RAN.ranCommitID, RAN.ranAllowMerge, RAN.ranTargetBranch)
-			if RAN.eNBSourceCodePath == '':
-				HELP.eNBSrvHelp(RAN.eNBSourceCodePath)
+			if RAN.repository == '':
+				HELP.GitSrvHelp(RAN.repository, RAN.branch, RAN.merge, RAN.targetBranch)
+			if RAN.workspace == '':
+				HELP.SrvHelp(RAN.workspace)
 			sys.exit('Insufficient Parameter')
 	else:
-		if CiTestObj.ranRepository == '' or CiTestObj.ranBranch == '':
+		if CiTestObj.repository == '' or CiTestObj.branch == '':
 			HELP.GenericHelp(CONST.Version)
 			sys.exit('UE: Insufficient Parameter')
 

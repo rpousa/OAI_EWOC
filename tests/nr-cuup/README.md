@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 This is a simple tester for the CU-UP. It configures the CU-UP via E1, and can
 stream data via GTP in uplink and downlink directions.
 

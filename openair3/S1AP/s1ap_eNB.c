@@ -1,30 +1,9 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file s1ap_eNB.c
+/*!
  * \brief S1AP eNB task
- * \author  S. Roux and Navid Nikaein
- * \date 2010 - 2015
- * \email: navid.nikaein@eurecom.fr
- * \version 1.0
  * @ingroup _s1ap
  */
 
@@ -59,9 +38,6 @@
 
 #include "assertions.h"
 #include "conversions.h"
-#if defined(TEST_S1C_MME)
-  #include "oaisim_mme_test_s1c.h"
-#endif
 
 static int s1ap_eNB_generate_s1_setup_request(
   s1ap_eNB_instance_t *instance_p, s1ap_eNB_mme_data_t *s1ap_mme_data_p);
@@ -411,15 +387,10 @@ static
 void s1ap_eNB_handle_sctp_data_ind(sctp_data_ind_t *sctp_data_ind) {
   int result;
   DevAssert(sctp_data_ind != NULL);
-#if defined(TEST_S1C_MME)
-  mme_test_s1_notify_sctp_data_ind(sctp_data_ind->assoc_id, sctp_data_ind->stream,
-                                   sctp_data_ind->buffer, sctp_data_ind->buffer_length);
-#else
   if (s1ap_eNB_handle_message(sctp_data_ind->assoc_id, sctp_data_ind->stream,
                           sctp_data_ind->buffer, sctp_data_ind->buffer_length) == -1) {
     S1AP_ERROR("Failed to handle s1ap eNB message\n");
   }
-#endif
   result = itti_free(TASK_UNKNOWN, sctp_data_ind->buffer);
   AssertFatal (result == EXIT_SUCCESS, "Failed to free memory (%d)!\n", result);
 }

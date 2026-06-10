@@ -1,33 +1,9 @@
 /*
-* Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
-* contributor license agreements.  See the NOTICE file distributed with
-* this work for additional information regarding copyright ownership.
-* The OpenAirInterface Software Alliance licenses this file to You under
-* the OAI Public License, Version 1.1  (the "License"); you may not use this file
-* except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*      http://www.openairinterface.org/?page_id=698
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*-------------------------------------------------------------------------------
-* For more information about the OpenAirInterface (OAI) Software Alliance:
-*      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
 */
 
-/*! \file fapi/oai-integration/fapi_nvIPC.c
+/*!
 * \brief OAI MAC/Aerial L1 interface file using FAPI over shared memory
-* \author Ruben S. Silva
-* \date 2023
-* \version 0.1
-* \company OpenAirInterface Software Alliance
-* \email: contact@openairinterface.org, rsilva@allbesmart.pt
-* \note
-* \warning
 */
 
 #define _GNU_SOURCE
@@ -49,6 +25,7 @@
 #include <sys/epoll.h>
 #include "fapi_nvIPC.h"
 #include <nfapi_vnf.h>
+#include <nr_fapi_p5.h>
 #include <nr_fapi_p7_utils.h>
 #include "nfapi_interface.h"
 #include "nfapi.h"
@@ -66,6 +43,7 @@ nv_ipc_t *ipc;
 static nv_ipc_config_t nv_ipc_config;
 static int cpu_msg_buf_size = 0;
 static int cpu_data_buf_size = 0;
+static int cpu_large_buf_size = 0;
 
 void nvIPC_Stop()
 {
@@ -85,7 +63,7 @@ static uint16_t old_sfn = 0;
 static uint16_t old_slot = 0;
 ////////////////////////////////////////////////////////////////////////
 // Handle an RX message
-static int ipc_handle_rx_msg(nv_ipc_t *ipc, nv_ipc_msg_t *msg)
+static int ipc_handle_rx_msg(nv_ipc_msg_t *msg)
 {
   if (msg == NULL) {
     LOG_E(NFAPI_VNF, "%s: ERROR: buffer is empty\n", __func__);
@@ -143,12 +121,7 @@ static int ipc_handle_rx_msg(nv_ipc_t *ipc, nv_ipc_msg_t *msg)
         int dataBufLen = msg->data_len;
         uint8_t *data_end = msg->data_buf + dataBufLen;
         nfapi_nr_srs_indication_t ind;
-        aerial_unpack_nr_srs_indication(&pReadPackedMessage,
-                                        end,
-                                        &pReadData,
-                                        data_end,
-                                        &ind,
-                                        &vnf_p7_config->_public.codec_config);
+        aerial_unpack_nr_srs_indication(&pReadPackedMessage, end, &pReadData, data_end, &ind);
         if (vnf_p7_config->_public.nr_srs_indication) {
           (vnf_p7_config->_public.nr_srs_indication)(&ind);
         }
@@ -238,10 +211,20 @@ bool aerial_nr_send_p5_message(vnf_t *vnf, uint16_t p5_idx, nfapi_nr_p4_p5_messa
     // Create the message
     nv_ipc_msg_t send_msg = {.msg_id = msg->message_id,
                              .cell_id = 0,
-                             // For P5 we don't need CPU_DATA
+                             // By default, P5 uses only message pool.
                              .data_pool = NV_IPC_MEMPOOL_CPU_MSG,
                              .data_len = 0,
                              .data_buf = NULL};
+
+    bool has_separate_dbt_payload = false;
+    nfapi_nr_config_request_scf_t *config_req = NULL;
+    if (msg->message_id == NFAPI_NR_PHY_MSG_TYPE_CONFIG_REQUEST) {
+      config_req = (nfapi_nr_config_request_scf_t *)msg;
+      has_separate_dbt_payload = config_req->dbt_config.num_dig_beams > 0;
+      if (has_separate_dbt_payload) {
+        send_msg.data_pool = NV_IPC_MEMPOOL_CPU_LARGE;
+      }
+    }
 
     // Allocate the message
     if (!allocate_msg(&send_msg)) {
@@ -263,6 +246,31 @@ bool aerial_nr_send_p5_message(vnf_t *vnf, uint16_t p5_idx, nfapi_nr_p4_p5_messa
     }
     // Set the length
     send_msg.msg_len = packedMessageLengthFAPI + 8; // adding 8 to account for the size of the FAPI header
+
+    if (has_separate_dbt_payload) {
+      AssertFatal(send_msg.data_buf != NULL, "CONFIG.request DBT path: data buffer is NULL\n");
+      AssertFatal(cpu_large_buf_size > 0, "CONFIG.request DBT path: CPU_LARGE buffer size is not set\n");
+      uint8_t *write_ptr = send_msg.data_buf;
+      uint8_t *buffer_end = send_msg.data_buf + cpu_large_buf_size;
+      nfapi_nr_dbt_tlv_ve_t dbt_tlv = {
+        .tl.tag = NFAPI_NR_CONFIG_BEAMFORMING_TABLE_TAG,
+        .value = config_req->dbt_config
+      };
+      bool ok = pack_dbt_table_tlv_value(&dbt_tlv, &write_ptr, buffer_end);
+      if (!ok) {
+        LOG_E(NFAPI_VNF, "Failed to pack CONFIG.request DBT payload into separate buffer\n");
+        release_msg(&send_msg);
+        return false;
+      }
+      send_msg.data_len = (uint32_t)(write_ptr - (uint8_t *)send_msg.data_buf);
+      LOG_I(NFAPI_VNF,
+            "CONFIG.request DBT sent in separate pool: num_beams=%u num_txrus=%u data_len=%d pool=%d\n",
+            config_req->dbt_config.num_dig_beams,
+            config_req->dbt_config.num_txrus,
+            send_msg.data_len,
+            send_msg.data_pool);
+    }
+
     // Send
     return send_nvipc_msg(&send_msg);
   } else {
@@ -272,7 +280,7 @@ bool aerial_nr_send_p5_message(vnf_t *vnf, uint16_t p5_idx, nfapi_nr_p4_p5_messa
 }
 
 // Always allocate message buffer, but allocate data buffer only when data_len > 0
-static int aerial_recv_msg(nv_ipc_t *ipc, nv_ipc_msg_t *recv_msg)
+static int aerial_recv_msg(nv_ipc_msg_t *recv_msg)
 {
   if (ipc == NULL) {
     return -1;
@@ -292,7 +300,7 @@ static int aerial_recv_msg(nv_ipc_t *ipc, nv_ipc_msg_t *recv_msg)
          recv_msg->msg_len,
          recv_msg->data_len,
          recv_msg->data_pool);
-  ipc_handle_rx_msg(ipc, recv_msg);
+  ipc_handle_rx_msg(recv_msg);
 
   // Release buffer of RX message
   int release_retval = ipc->rx_release(ipc, recv_msg);
@@ -305,6 +313,7 @@ static int aerial_recv_msg(nv_ipc_t *ipc, nv_ipc_msg_t *recv_msg)
 
 void *epoll_recv_task(void *arg)
 {
+  UNUSED(arg);
   struct epoll_event ev, events[MAX_EVENTS];
 
   LOG_D(NFAPI_VNF,"Aerial recv task start \n");
@@ -343,7 +352,7 @@ void *epoll_recv_task(void *arg)
       if (events[n].data.fd == ipc_rx_event_fd) {
         ipc->get_value(ipc);
         nv_ipc_msg_t recv_msg;
-        while (aerial_recv_msg(ipc, &recv_msg) == 0);
+        while (aerial_recv_msg(&recv_msg) == 0);
       }
     }
   }
@@ -355,7 +364,7 @@ void *epoll_recv_task(void *arg)
 void create_recv_thread(int8_t affinity)
 {
   pthread_t thread_id;
-  threadCreate(&thread_id, epoll_recv_task, NULL, "vnf_nvipc_aerial", affinity, OAI_PRIORITY_RT);
+  threadCreate(&thread_id, epoll_recv_task, NULL, "vnf_nvipc_aerial", affinity, OAI_PRIORITY_RT_MAX);
 }
 
 int load_hard_code_config(nv_ipc_config_t *config, int module_type, nv_ipc_transport_t _transport)
@@ -386,6 +395,7 @@ int nvIPC_Init(nvipc_params_t nvipc_params_s)
   // save the mempool sizes for later use in packing
   cpu_msg_buf_size = nv_ipc_get_buf_size(&nv_ipc_config, NV_IPC_MEMPOOL_CPU_MSG);
   cpu_data_buf_size = nv_ipc_get_buf_size(&nv_ipc_config, NV_IPC_MEMPOOL_CPU_DATA);
+  cpu_large_buf_size = nv_ipc_get_buf_size(&nv_ipc_config, NV_IPC_MEMPOOL_CPU_LARGE);
 
   // Create nv_ipc_t instance
   LOG_I(NFAPI_VNF, "%s: creating IPC interface with prefix %s\n", __func__, nvipc_params_s.nvipc_shm_prefix);
@@ -468,7 +478,8 @@ int oai_fapi_dl_tti_req(nfapi_nr_dl_tti_request_t *dl_config_req)
   return retval;
 }
 
-int oai_fapi_send_end_request(int cell, uint32_t frame, uint32_t slot){
+int oai_fapi_send_end_request(uint32_t frame, uint32_t slot)
+{
   nfapi_vnf_p7_config_t *p7_config = get_p7_vnf_config();
   nfapi_nr_slot_indication_scf_t nr_slot_resp = {.header.message_id = 0x8F, .sfn = frame, .slot = slot};
 

@@ -1,4 +1,5 @@
 {{/* vim: set filetype=mustache: */}}
+{{/* SPDX-License-Identifier: MIT */}}
 {{/*
 Expand the name of the chart.
 */}}

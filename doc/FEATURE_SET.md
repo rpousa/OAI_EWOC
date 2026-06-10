@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 # Feature Set
 
 **Table of Contents**
@@ -152,7 +154,7 @@ These modes of operation are supported:
   - RedCap SIB1 v17 IEs supported
   - Coexistence of RedCap and Normal UEs
   - Handling of RedCap capability for small PDCP/RLC SN size
-- Scheduling of other SIBs (2, 19)
+- Scheduling of other SIBs (2, 3, 4, 19)
 - NTN
   - Support downlinkHARQ-FeedbackDisabled-r17
   - Support for 32 PDSCH and PUSCH HARQ processes per UE
@@ -192,7 +194,7 @@ These modes of operation are supported:
 
 - NR RRC (38.331) Rel 17 messages using new [asn1c](https://github.com/mouse07410/asn1c)
 - LTE RRC (36.331) also updated to Rel 15
-- Generation of system information (SIB2)
+- Generation of system information (SIB2, SIB3, SIB4)
 - RRC can configure PDCP and SDAP (through E1), and RLC and MAC (through F1)
 - Interface with GTP-U (tunnel creation/handling for S1-U (NSA), N3 (SA), F1 interfaces)
 - Integration of RRC messages and procedures supporting UE 5G SA connection
@@ -378,7 +380,7 @@ These modes of operation are supported:
    - MIB processing
    - Scheduling of system information block 1 (SIB1) reception
 * Other system information
-   - Scheduling of other system information blocks reception
+   - Scheduling of other system information blocks reception (SIB2, SIB3, SIB4)
 * Random access procedure (needs improvement, there is still not a clear separation between MAC and PHY)
    - Mapping SSBs to multiple ROs
    - Scheduling of PRACH
@@ -691,9 +693,6 @@ The NAS layer is based on **3GPP 24.301** and implements the following functions
 
 - EMM attach/detach, authentication, tracking area update, and more
 - ESM default/dedicated bearer, PDN connectivity, and more
-
-
-[OAI wiki home](https://gitlab.eurecom.fr/oai/openairinterface5g/wikis/home)
 
 [OAI softmodem build procedure](BUILD.md)
 

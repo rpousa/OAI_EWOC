@@ -1,7 +1,9 @@
+# SPDX-License-Identifier: MIT
+
 services:
     mysql:
         container_name: "rfsim5g-mysql"
-        image: mysql:8.0
+        image: mysql:9.6
         init: true
         volumes:
             - ../5g_rfsimulator/oai_db.sql:/docker-entrypoint-initdb.d/oai_db.sql
@@ -24,7 +26,7 @@ services:
                 ipv4_address: 192.168.71.131
     oai-amf:
         container_name: "rfsim5g-oai-amf"
-        image: oaisoftwarealliance/oai-amf:v2.1.10
+        image: oaisoftwarealliance/oai-amf:v2.2.1
         environment:
             - TZ=Europe/paris
         volumes:
@@ -36,7 +38,7 @@ services:
                 ipv4_address: 192.168.71.132
     oai-smf:
         container_name: "rfsim5g-oai-smf"
-        image: oaisoftwarealliance/oai-smf:v2.1.10
+        image: oaisoftwarealliance/oai-smf:v2.2.1
         environment:
             - TZ=Europe/Paris
         volumes:
@@ -48,7 +50,7 @@ services:
                 ipv4_address: 192.168.71.133
     oai-upf:
         container_name: "rfsim5g-oai-upf"
-        image: oaisoftwarealliance/oai-upf:v2.1.10
+        image: oaisoftwarealliance/oai-upf:v2.2.1
         init: true
         environment:
             - TZ=Europe/Paris
@@ -95,7 +97,7 @@ services:
         cap_drop:
             - ALL
         environment:
-            USE_ADDITIONAL_OPTIONS: -E --log_config.global_log_options level,nocolor,time --device.name vrtsim --vrtsim.role server --vrtsim.chanmod 1
+            USE_ADDITIONAL_OPTIONS: -E --log_config.global_log_options level,nocolor,time --device.name vrtsim --vrtsim.role server --vrtsim.chanmod 1 --vrtsim.num_ues 1
         depends_on:
             - oai-ext-dn
         networks:
@@ -121,7 +123,7 @@ services:
             - NET_ADMIN  # for interface bringup
             - NET_RAW    # for ping
         environment:
-            USE_ADDITIONAL_OPTIONS: -E -r 106 --numerology 1 --band 78 -C 3619200000 --ssb 516 --uicc0.imsi 208990100001100 --log_config.global_log_options level,nocolor,time --device.name vrtsim
+            USE_ADDITIONAL_OPTIONS: -E -r 106 --numerology 1 --band 78 -C 3619200000 --ssb 516 --uicc0.imsi 208990100001100 --log_config.global_log_options level,nocolor,time --device.name vrtsim --ue-nb-ant-rx 2 --ue-nb-ant-tx 2
         depends_on:
             - oai-gnb
         networks:

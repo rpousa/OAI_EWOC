@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 Implementing a shared library dynamic load using the oai loader  is a two steps task:
 1.  define the `loader_shlibfunc_t` array, describing the list of externally available functions implemented in the library. This is the interface of the module.
 1.  Call the `load_module_shlib` function, passing it the previously defined array and the number of items in this array. The first argument to `load_module_shlib` is the name identifying the module, which is also used to format the corresponding library name, as described [here](loader/rtusage#shared-library-names)

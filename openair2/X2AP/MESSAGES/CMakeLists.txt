@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 set(X2AP_VERSION 15 6 0)
 make_version(X2AP_cc ${X2AP_VERSION})
 #add_definitions(-DX2AP_VERSION=${X2AP_cc})

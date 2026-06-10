@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 import sys
 import logging
 logging.basicConfig(
@@ -16,7 +18,6 @@ import cls_oai_html
 import cls_oaicitest
 import cls_containerize
 from cls_ci_helper import TestCaseCtx
-import ran
 import cls_cmd
 
 class TestDeploymentMethods(unittest.TestCase):
@@ -39,12 +40,10 @@ class TestDeploymentMethods(unittest.TestCase):
 		self.html.testCaseId = "000000"
 		self.ci = cls_oaicitest.OaiCiTest()
 		self.cont = cls_containerize.Containerize()
-		self.ran = ran.RANManagement()
 		self.cont.yamlPath = ''
-		self.cont.ranAllowMerge = True
-		self.cont.ranBranch = ''
-		self.cont.ranCommitID = ''
-		self.cont.eNBSourceCodePath = os.getcwd()
+		self.cont.merge = True
+		self.cont.branch = ''
+		self.cont.workspace = os.getcwd()
 		self.cont.num_attempts = 3
 		self.node = 'localhost'
 		self.ctx = TestCaseCtx.Default(tempfile.mkdtemp())
@@ -56,7 +55,7 @@ class TestDeploymentMethods(unittest.TestCase):
 		self.cont.yamlPath = 'tests/simple-dep/'
 		self.cont.deploymentTag = "noble"
 		deploy = self.cont.DeployObject(self.ctx, self.node, self.html)
-		undeploy = self.cont.UndeployObject(self.ctx, self.node, self.html, self.ran)
+		undeploy = self.cont.UndeployObject(self.ctx, self.node, self.html, [])
 		self.assertTrue(deploy)
 		self.assertTrue(undeploy)
 
@@ -79,7 +78,7 @@ class TestDeploymentMethods(unittest.TestCase):
 		stopB = self.cont.StopObject(self.ctx, self.node, self.html)
 		# should not undeploy anything (everything already stopped)
 		self.cont.services = None
-		undeployAll = self.cont.UndeployObject(self.ctx, self.node, self.html, self.ran)
+		undeployAll = self.cont.UndeployObject(self.ctx, self.node, self.html, [])
 		self.assertTrue(deploy)
 		self.assertFalse(stopC)
 		self.assertTrue(stopA)
@@ -92,7 +91,7 @@ class TestDeploymentMethods(unittest.TestCase):
 		old = self.cont.yamlPath
 		self.cont.yamlPath = 'tests/simple-fail/'
 		deploy = self.cont.DeployObject(self.ctx, self.node, self.html)
-		self.cont.UndeployObject(self.ctx, self.node, self.html, self.ran)
+		self.cont.UndeployObject(self.ctx, self.node, self.html, [])
 		self.assertFalse(deploy)
 		self.cont.yamlPath = old
 
@@ -101,7 +100,7 @@ class TestDeploymentMethods(unittest.TestCase):
 		old = self.cont.yamlPath
 		self.cont.yamlPath = 'tests/simple-fail-2svc/'
 		deploy = self.cont.DeployObject(self.ctx, self.node, self.html)
-		self.cont.UndeployObject(self.ctx, self.node, self.html, self.ran)
+		self.cont.UndeployObject(self.ctx, self.node, self.html, [])
 		self.assertFalse(deploy)
 		self.cont.yamlPath = old
 
@@ -110,7 +109,7 @@ class TestDeploymentMethods(unittest.TestCase):
 		self.cont.services = "oai-gnb"
 		self.cont.deploymentTag = 'develop-12345678'
 		deploy = self.cont.DeployObject(self.ctx, self.node, self.html)
-		undeploy = self.cont.UndeployObject(self.ctx, self.node, self.html, self.ran)
+		undeploy = self.cont.UndeployObject(self.ctx, self.node, self.html, [])
 		self.assertTrue(deploy)
 		self.assertTrue(undeploy)
 
@@ -119,7 +118,7 @@ class TestDeploymentMethods(unittest.TestCase):
 		self.cont.services = "oai-gnb oai-nr-ue"
 		self.cont.deploymentTag = 'develop-12345678'
 		deploy = self.cont.DeployObject(self.ctx, self.node, self.html)
-		undeploy = self.cont.UndeployObject(self.ctx, self.node, self.html, self.ran)
+		undeploy = self.cont.UndeployObject(self.ctx, self.node, self.html, [])
 		self.assertTrue(deploy)
 		self.assertTrue(undeploy)
 
@@ -130,20 +129,51 @@ class TestDeploymentMethods(unittest.TestCase):
 		deploy1 = self.cont.DeployObject(self.ctx, self.node, self.html)
 		self.cont.services = "oai-nr-ue"
 		deploy2 = self.cont.DeployObject(self.ctx, self.node, self.html)
-		undeploy = self.cont.UndeployObject(self.ctx, self.node, self.html, self.ran)
+		undeploy = self.cont.UndeployObject(self.ctx, self.node, self.html, [])
 		self.assertTrue(deploy1)
 		self.assertTrue(deploy2)
 		self.assertTrue(undeploy)
 
 	def test_create_workspace(self):
-		self.cont.eNBSourceCodePath = tempfile.mkdtemp()
-		self.cont.ranRepository = "https://gitlab.eurecom.fr/oai/openairinterface5g.git"
-		self.cont.ranCommitID = "05f9c975eeecbca1bdff5940affad44465f1301f"
-		self.cont.ranBranch = "develop"
+		self.cont.workspace = tempfile.mkdtemp()
+		self.cont.repository = "https://github.com/duranta-project/openairinterface5g.git"
+		self.cont.branch = "develop"
 		ws = self.cont.Create_Workspace(self.node, self.html)
 		with cls_cmd.LocalCmd() as cmd:
-			cmd.run(f"rm -rf {self.cont.eNBSourceCodePath}")
+			cmd.run(f"rm -rf {self.cont.workspace}")
 		self.assertTrue(ws)
+
+	def test_undeploy_loganalysis(self):
+		self.cont.yamlPath = 'yaml_files/5g_rfsimulator_tdd_dora'
+		self.cont.services = "oai-gnb"
+		self.cont.deploymentTag = 'develop-12345678'
+		deploy = self.cont.DeployObject(self.ctx, self.node, self.html)
+		analyze = ["oai-gnb"]
+		undeploy = self.cont.UndeployObject(self.ctx, self.node, self.html, analyze)
+		self.assertTrue(deploy)
+		self.assertTrue(undeploy)
+
+	def test_undeploy_multi_loganalysis(self):
+		self.cont.yamlPath = 'yaml_files/5g_rfsimulator_tdd_dora'
+		self.cont.services = "oai-gnb"
+		self.cont.deploymentTag = 'develop-12345678'
+		deploy = self.cont.DeployObject(self.ctx, self.node, self.html)
+		analyze = ["oai-gnb", "oai-gnb=ContainsString=NOTFOUND"]
+		undeploy = self.cont.UndeployObject(self.ctx, self.node, self.html, analyze)
+		self.assertTrue(deploy)
+		self.assertFalse(undeploy)
+
+	# TODO this does not work: we don't evaluate return codes yet
+	#def test_undeploy_rc_nonnull(self):
+	#	# fails reliably
+	#	old = self.cont.yamlPath
+	#	self.cont.yamlPath = 'tests/simple-fail/'
+	#	deploy = self.cont.DeployObject(self.ctx, self.node, self.html)
+	#	# should be false because wrong exit code
+	#	undeploy = self.cont.UndeployObject(self.ctx, self.node, self.html, ["test"])
+	#	self.assertFalse(deploy)
+	#	self.assertFalse(undeploy)
+	#	self.cont.yamlPath = old
 
 if __name__ == '__main__':
 	unittest.main()

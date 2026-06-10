@@ -1,33 +1,5 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
- */
-
-/*! \file f1ap_du_interface_management.c
- * \brief f1ap interface management for DU
- * \author EURECOM/NTUST
- * \date 2018
- * \version 0.1
- * \company Eurecom
- * \email: navid.nikaein@eurecom.fr, bing-kai.hong@eurecom.fr
- * \note
- * \warning
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
 #include "f1ap_common.h"
@@ -40,8 +12,14 @@
 
 #include "GNB_APP/gnb_paramdef.h"
 
+#include "F1AP_F1AP-PDU.h"
+#include "F1AP_Reset.h"
+#include "F1AP_ProtocolIE-Field.h"
+#include "F1AP_InitiatingMessage.h"
+
 int DU_handle_RESET(instance_t instance, sctp_assoc_t assoc_id, uint32_t stream, F1AP_F1AP_PDU_t *pdu)
 {
+  UNUSED(instance);
   LOG_D(F1AP, "DU_handle_RESET\n");\
   F1AP_Reset_t  *container;
   F1AP_ResetIEs_t *ie;
@@ -161,6 +139,9 @@ int DU_send_F1_SETUP_REQUEST(sctp_assoc_t assoc_id, const f1ap_setup_req_t *setu
 
 int DU_handle_F1_SETUP_RESPONSE(instance_t instance, sctp_assoc_t assoc_id, uint32_t stream, F1AP_F1AP_PDU_t *pdu)
 {
+  UNUSED(instance);
+  UNUSED(assoc_id);
+  UNUSED(stream);
   LOG_D(F1AP, "DU_handle_F1_SETUP_RESPONSE\n");
   /* Decode */
   f1ap_setup_resp_t resp = {0};
@@ -181,6 +162,9 @@ int DU_handle_F1_SETUP_RESPONSE(instance_t instance, sctp_assoc_t assoc_id, uint
  */
 int DU_handle_F1_SETUP_FAILURE(instance_t instance, sctp_assoc_t assoc_id, uint32_t stream, F1AP_F1AP_PDU_t *pdu)
 {
+  UNUSED(instance);
+  UNUSED(assoc_id);
+  UNUSED(stream);
   f1ap_setup_failure_t fail;
   if (!decode_f1ap_setup_failure(pdu, &fail)) {
     LOG_E(F1AP, "Failed to decode F1AP Setup Failure\n");
@@ -217,6 +201,8 @@ int DU_send_gNB_DU_CONFIGURATION_UPDATE(sctp_assoc_t assoc_id, f1ap_gnb_du_confi
  */
 int DU_handle_gNB_CU_CONFIGURATION_UPDATE(instance_t instance, sctp_assoc_t assoc_id, uint32_t stream, F1AP_F1AP_PDU_t *pdu)
 {
+  UNUSED(instance);
+  UNUSED(stream);
   LOG_D(F1AP, "DU_handle_gNB_CU_CONFIGURATION_UPDATE\n");
   f1ap_gnb_cu_configuration_update_t in = {0};
   if (!decode_f1ap_cu_configuration_update(pdu, &in)) {
@@ -240,6 +226,9 @@ int DU_handle_gNB_DU_CONFIGURATION_UPDATE_ACKNOWLEDGE(instance_t instance,
                                                       uint32_t stream,
                                                       F1AP_F1AP_PDU_t *pdu)
 {
+  UNUSED(instance);
+  UNUSED(assoc_id);
+  UNUSED(stream);
   // Decoding
   f1ap_gnb_du_configuration_update_acknowledge_t in = {0};
   if (!decode_f1ap_du_configuration_update_acknowledge(pdu, &in)) {
@@ -253,8 +242,10 @@ int DU_handle_gNB_DU_CONFIGURATION_UPDATE_ACKNOWLEDGE(instance_t instance,
   return 0;
 }
 
-int DU_send_gNB_CU_CONFIGURATION_UPDATE_FAILURE(sctp_assoc_t assoc_id,
-    f1ap_gnb_cu_configuration_update_failure_t *GNBCUConfigurationUpdateFailure) {
+int DU_send_gNB_CU_CONFIGURATION_UPDATE_FAILURE(sctp_assoc_t assoc_id, 
+                                                f1ap_gnb_cu_configuration_update_failure_t *GNBCUConfigurationUpdateFailure)
+{
+  UNUSED(assoc_id);
   AssertFatal(1==0,"received gNB CU CONFIGURATION UPDATE FAILURE with cause %d\n",
               GNBCUConfigurationUpdateFailure->cause);
 }

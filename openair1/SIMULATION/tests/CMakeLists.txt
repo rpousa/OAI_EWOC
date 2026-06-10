@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 # This defines a cmake file with timing thresholds to include (empty by default)
 set(PHYSIM_CHECK_FILES "" CACHE STRING "CMake files ('\;' separated) with timing thresholds to include for timed physim tests")
 
@@ -12,85 +14,6 @@ if(PHYSIM_CHECK_FILES)
     endif()
   endforeach()
 endif()
-
-define_property(TEST PROPERTY TEST_DESCRIPTION
-                BRIEF_DOCS "A human-readable description of this test"
-                FULL_DOCS "A human-readable description of this test")
-
-define_property(TEST PROPERTY CHECK_COUNT
-                BRIEF_DOCS "helper property to enumerate checks in environment"
-                FULL_DOCS "the property counts the number of threshold checks, used to enumerate environment variables given to analyze-timing.sh")
-
-function(add_physim_test test_name test_description test_exec)
-  # catch all the arguments past the last expected arqument and store them in the options_list
-  if (NOT TARGET ${test_exec})
-    message(FATAL_ERROR "test executable ${test_exec} is not an executable")
-  endif()
-  set(test_invocation $<TARGET_FILE:${test_exec}> ${ARGN})
-  add_test(
-    NAME ${test_name}
-    COMMAND ${CMAKE_COMMAND} "-DTEST_CMD=${test_invocation}" "-DCHECK_SCRIPT=${CMAKE_CURRENT_SOURCE_DIR}/analyze-timing.sh" -P ${CMAKE_CURRENT_SOURCE_DIR}/RunTimedTest.cmake
-  )
-  set_tests_properties(${test_name} PROPERTIES
-    LABELS "${test_exec}"
-    TEST_DESCRIPTION "${test_description}"
-    # pass test description also through environment variable: for cmake < 3.30,
-    # in JSON export, we cannot recover the description otherwise
-    # see also https://gitlab.kitware.com/cmake/cmake/-/issues/21490
-    ENVIRONMENT "LD_LIBRARY_PATH=.;TEST_DESCRIPTION=${test_description}"
-  )
-  set_tests_properties(${test_name} PROPERTIES CHECK_COUNT 0)
-endfunction()
-
-function(check_threshold testname threshold condition)
-  # check that threshold and condition don't have a colon (;), because that
-  # would interfere with cmake's list management
-  string(FIND "${threshold}" ";" pos)
-  if (pos GREATER -1)
-    message(FATAL_ERROR "colon not allowed in threshold, but have \"${threshold}\"")
-  endif()
-  string(FIND "${condition}" ";" pos)
-  if (pos GREATER -1)
-    message(FATAL_ERROR "colon not allowed in condition, but have \"${condition}\"")
-  endif()
-  set(THRCOND "${threshold}\;${condition}")
-
-  get_test_property(${testname} CHECK_COUNT count)
-  #message(STATUS "add check ${count} ${THRCOND}")
-  if (${count} GREATER 10)
-    message(FATAL_ERROR "only maximum of 10 checks per test allowed")
-  endif()
-
-  # add a new environment variable CHECK_X with this threshold+condition, then
-  # increase test property regarding check count
-  set_property(TEST ${testname} APPEND PROPERTY ENVIRONMENT "CHECK_${count}=${THRCOND}")
-  MATH(EXPR count "${count}+1")
-  set_tests_properties(${testname} PROPERTIES CHECK_COUNT ${count})
-endfunction()
-
-function(check_threshold_range testname threshold)
-  cmake_parse_arguments(RANGE "" "LOWER;UPPER" "" ${ARGN})
-  if (NOT RANGE_LOWER AND NOT RANGE_UPPER)
-    message(FATAL_ERROR "need at least one LOWER or one UPPER threshold")
-  endif()
-  if (RANGE_LOWER)
-    check_threshold(${testname} ${threshold} "> ${RANGE_LOWER}")
-  endif()
-  if (RANGE_UPPER)
-    check_threshold(${testname} ${threshold} "< ${RANGE_UPPER}")
-  endif()
-endfunction()
-
-function(check_threshold_variance testname threshold)
-  cmake_parse_arguments(VARIANCE "" "AVG;ABS_VAR" "" ${ARGN})
-  if (NOT VARIANCE_AVG AND NOT VARIANCE_ABS_VAR)
-    message(FATAL_ERROR "need both AVG and ABS_VAR")
-  endif()
-  MATH(EXPR upper "${VARIANCE_AVG}+${VARIANCE_ABS_VAR}")
-  MATH(EXPR lower "${VARIANCE_AVG}-${VARIANCE_ABS_VAR}")
-  check_threshold_range(${testname} ${threshold} LOWER ${lower} UPPER ${upper})
-endfunction()
-
 
 ####################################################################################
 ######                           dlsim unit test                              ######
@@ -262,6 +185,24 @@ add_physim_test(physim.5g.nr_pucchsim.test26 "Format 2 12-bit 8/273 PRB" nr_pucc
 add_physim_test(physim.5g.nr_pucchsim.test27 "Format 2 19-bit 8/273 PRB" nr_pucchsim -R 273 -z8 -i 1 -P 2 -q8 -b 19 -s-3 -n3000)
 add_physim_test(physim.5g.nr_pucchsim.test28 "Format 2 64-bit 16/273 PRB" nr_pucchsim -R 273 -z8 -i 1 -P 2 -q16 -b 64 -s-3 -n3000)
 add_physim_test(physim.5g.nr_pucchsim.test29 "Format 2 64-bit 16/273 PRB Delay 2us" nr_pucchsim -R 273 -z8 -i 1 -P 2 -q16 -b 64 -s0 -S7 -d 2 -n3000)
+add_physim_test(physim.5g.nr_pucchsim.test30 "Format 1 NACK number of symbols = 4 273PRB" nr_pucchsim -R 273 -z8 -i 4  -P 1 -b 1 -B 0 -s-8 -n3000)
+add_physim_test(physim.5g.nr_pucchsim.test31 "Format 1 ACK number of symbols = 4 273PRB"  nr_pucchsim -R 273 -z8 -i 4  -P 1 -b 1 -B 1 -s-8 -n3000)
+add_physim_test(physim.5g.nr_pucchsim.test32 "Format 1 (NACK,NACK) number of symbols = 4, 273PRB" nr_pucchsim -R 273 -z8 -i 4  -P 1 -b 2 -B 0 -s-8 -n1000)
+add_physim_test(physim.5g.nr_pucchsim.test33 "Format 1 (ACK,NACK) number of symbols = 4, 273PRB with SR"  nr_pucchsim -R 273 -z8 -i 4  -P 1 -b 2 -B 1 -s-8 -c -n1000)
+add_physim_test(physim.5g.nr_pucchsim.test34 "Format 1 (NACK,ACK) number of symbols = 4, 273PRB"  nr_pucchsim -R 273 -z8 -i 4  -P 1 -b 2 -B 2 -s-8 -n1000)
+add_physim_test(physim.5g.nr_pucchsim.test35 "Format 1 (ACK,ACK) number of symbols = 4, 273PRB"   nr_pucchsim -R 273 -z8 -i 4  -P 1 -b 2 -B 3 -s-8 -n1000)
+add_physim_test(physim.5g.nr_pucchsim.test36 "Format 1 NACK number of symbols = 8, 273PRB" nr_pucchsim -R 273 -z8 -i 8  -P 1 -b 1 -B 0 -s-8 -n1000)
+add_physim_test(physim.5g.nr_pucchsim.test37 "Format 1 ACK number of symbols = 8, 273PRB"  nr_pucchsim -R 273 -z8 -i 8  -P 1 -b 1 -B 1 -s-8 -n1000)
+add_physim_test(physim.5g.nr_pucchsim.test38 "Format 1 (NACK,NACK) number of symbols = 8, 273PRB" nr_pucchsim -R 273 -z8 -i 8  -P 1 -b 2 -B 0 -s-8 -n1000)
+add_physim_test(physim.5g.nr_pucchsim.test39 "Format 1 (ACK,NACK) number of symbols = 8, 273PRB"  nr_pucchsim -R 273 -z8 -i 8  -P 1 -b 2 -B 1 -s-8 -n1000)
+add_physim_test(physim.5g.nr_pucchsim.test40 "Format 1 (NACK,ACK) number of symbols = 8, 273PRB with SR"  nr_pucchsim -R 273 -z8 -i 8  -P 1 -b 2 -B 2 -s-8 -c -n1000)
+add_physim_test(physim.5g.nr_pucchsim.test41 "Format 1 (ACK,ACK) number of symbols = 8, 273PRB"   nr_pucchsim -R 273 -z8 -i 8  -P 1 -b 2 -B 3 -s-8 -n1000)
+add_physim_test(physim.5g.nr_pucchsim.test42 "Format 1 NACK number of symbols = 14, 273PRB" nr_pucchsim -R 273 -z8 -i 14 -P 1 -b 1 -B 0 -s-8 -n1000)
+add_physim_test(physim.5g.nr_pucchsim.test43 "Format 1 ACK number of symbols = 14, 273PRB"  nr_pucchsim -R 273 -z8 -i 14 -P 1 -b 1 -B 1 -s-8 -n1000)
+add_physim_test(physim.5g.nr_pucchsim.test44 "Format 1 (NACK,NACK) number of symbols = 14, 273PRB" nr_pucchsim -R 273 -z8 -i 14 -P 1 -b 2 -B 0 -s-8 -n1000)
+add_physim_test(physim.5g.nr_pucchsim.test45 "Format 1 (ACK,NACK) number of symbols = 14, 273PRB"  nr_pucchsim -R 273 -z8 -i 14 -P 1 -b 2 -B 1 -s-8 -n1000)
+add_physim_test(physim.5g.nr_pucchsim.test46 "Format 1 (NACK,ACK) number of symbols = 14, 273PRB with SR"  nr_pucchsim -R 273 -z8 -i 14 -P 1 -b 2 -B 2 -s-8 -c -n1000)
+add_physim_test(physim.5g.nr_pucchsim.test47 "Format 1 (ACK,ACK) number of symbols = 14, 273PRB"   nr_pucchsim -R 273 -z8 -i 14 -P 1 -b 2 -B 3 -s-8 -n1000)
 
 ####################################################################################
 ######                           nr_ulsim unit test                           ######
@@ -411,6 +352,93 @@ add_physim_test(physim.5g-offload.nr_ulsim.testCPU.8 "CPU: SNR = 30, MCS = 15, 2
 add_physim_test(physim.5g-offload.nr_ulsim.testT2.8  "T2 LDPC offload: SNR = 30, MCS = 15, 273 PRBs, 2 layers" nr_ulsim -n1000 -s30 -S30.2 -m15 -r273 -R273 -C10 -W2 -z2 -y2 -P --loader.ldpc.shlibversion _aal --nrLDPC_coding_aal.dpdk_dev af:00.0 --nrLDPC_coding_aal.dpdk_core_list 11-12 --nrLDPC_coding_aal.is_t2 1)
 add_physim_test(physim.5g-offload.nr_ulsim.testCPU.9 "CPU: SNR = 30, MCS = 25, 273 PRBs, 2 layers"             nr_ulsim -n1000 -s30 -S30.2 -m25 -r273 -R273 -C10 -W2 -z2 -y2 -P)
 add_physim_test(physim.5g-offload.nr_ulsim.testT2.9  "T2 LDPC offload: SNR = 30, MCS = 25, 273 PRBs, 2 layers" nr_ulsim -n1000 -s30 -S30.2 -m25 -r273 -R273 -C10 -W2 -z2 -y2 -P --loader.ldpc.shlibversion _aal --nrLDPC_coding_aal.dpdk_dev af:00.0 --nrLDPC_coding_aal.dpdk_core_list 11-12 --nrLDPC_coding_aal.is_t2 1)
+
+endif()
+
+####################################################################################
+######                           cuda-specific tests                       ######
+####################################################################################
+
+if (ENABLE_CHANNEL_SIM_CUDA)
+
+# --- Test Suite 1: 61440 samples, 2/4/8/32 TX - 2/4/8/32 RX  ---
+add_physim_test(cuda.5g.channelsim.test_channel_scalability.test1  "16 channels 61440 samples 2T2R Batch"  test_channel_scalability -c 16 -t 2 -r 2 -s 61440 -l 32 -m batch  -n 12)
+add_physim_test(cuda.5g.channelsim.test_channel_scalability.test2  "16 channels 61440 samples 2T2R Stream" test_channel_scalability -c 16 -t 2 -r 2 -s 61440 -l 32 -m stream -n 12)
+add_physim_test(cuda.5g.channelsim.test_channel_scalability.test3  "16 channels 61440 samples 2T2R Serial" test_channel_scalability -c 16 -t 2 -r 2 -s 61440 -l 32 -m serial -n 12)
+add_physim_test(cuda.5g.channelsim.test_channel_scalability.test4  "16 channels 61440 samples 4T2R Batch"  test_channel_scalability -c 16 -t 4 -r 2 -s 61440 -l 32 -m batch  -n 12)
+add_physim_test(cuda.5g.channelsim.test_channel_scalability.test5  "16 channels 61440 samples 4T2R Stream" test_channel_scalability -c 16 -t 4 -r 2 -s 61440 -l 32 -m stream -n 12)
+add_physim_test(cuda.5g.channelsim.test_channel_scalability.test6  "16 channels 61440 samples 4T2R Serial" test_channel_scalability -c 16 -t 4 -r 2 -s 61440 -l 32 -m serial -n 12)
+add_physim_test(cuda.5g.channelsim.test_channel_scalability.test7  "16 channels 61440 samples 8T2R Batch"  test_channel_scalability -c 16 -t 8 -r 2 -s 61440 -l 32 -m batch  -n 12)
+add_physim_test(cuda.5g.channelsim.test_channel_scalability.test8  "16 channels 61440 samples 8T2R Stream" test_channel_scalability -c 16 -t 8 -r 2 -s 61440 -l 32 -m stream -n 12)
+add_physim_test(cuda.5g.channelsim.test_channel_scalability.test9  "16 channels 61440 samples 8T2R Serial" test_channel_scalability -c 16 -t 8 -r 2 -s 61440 -l 32 -m serial -n 12)
+add_physim_test(cuda.5g.channelsim.test_channel_scalability.test10  "16 channels 61440 samples 32T2R Batch"  test_channel_scalability -c 16 -t 32 -r 2 -s 61440 -l 32 -m batch  -n 12)
+add_physim_test(cuda.5g.channelsim.test_channel_scalability.test11  "16 channels 61440 samples 32T2R Stream" test_channel_scalability -c 16 -t 32 -r 2 -s 61440 -l 32 -m stream -n 12)
+add_physim_test(cuda.5g.channelsim.test_channel_scalability.test12  "16 channels 61440 samples 32T2R Serial" test_channel_scalability -c 16 -t 32 -r 2 -s 61440 -l 32 -m serial -n 12)
+add_physim_test(cuda.5g.channelsim.test_channel_scalability.test13  "16 channels 61440 samples 2T4R Batch"  test_channel_scalability -c 16 -t 2 -r 4 -s 61440 -l 32 -m batch  -n 12)
+add_physim_test(cuda.5g.channelsim.test_channel_scalability.test14  "16 channels 61440 samples 2T4R Stream" test_channel_scalability -c 16 -t 2 -r 4 -s 61440 -l 32 -m stream -n 12)
+add_physim_test(cuda.5g.channelsim.test_channel_scalability.test15  "16 channels 61440 samples 2T4R Serial" test_channel_scalability -c 16 -t 2 -r 4 -s 61440 -l 32 -m serial -n 12)
+add_physim_test(cuda.5g.channelsim.test_channel_scalability.test16  "16 channels 61440 samples 2T8R Batch"  test_channel_scalability -c 16 -t 2 -r 8 -s 61440 -l 32 -m batch  -n 12)
+add_physim_test(cuda.5g.channelsim.test_channel_scalability.test17  "16 channels 61440 samples 2T8R Stream" test_channel_scalability -c 16 -t 2 -r 8 -s 61440 -l 32 -m stream -n 12)
+add_physim_test(cuda.5g.channelsim.test_channel_scalability.test18  "16 channels 61440 samples 2T8R Serial" test_channel_scalability -c 16 -t 2 -r 8 -s 61440 -l 32 -m serial -n 12)
+add_physim_test(cuda.5g.channelsim.test_channel_scalability.test19  "16 channels 61440 samples 2T32R Batch"  test_channel_scalability -c 16 -t 2 -r 32 -s 61440 -l 32 -m batch  -n 12)
+add_physim_test(cuda.5g.channelsim.test_channel_scalability.test20  "16 channels 61440 samples 2T32R Stream" test_channel_scalability -c 16 -t 2 -r 32 -s 61440 -l 32 -m stream -n 12)
+add_physim_test(cuda.5g.channelsim.test_channel_scalability.test21  "16 channels 61440 samples 2T32R Serial" test_channel_scalability -c 16 -t 2 -r 32 -s 61440 -l 32 -m serial -n 12)
+
+# --- Test Suite 2: 122880 samples, 2/4/8/32 TX - 2/4/8/32 RX  ---
+add_physim_test(cuda.5g.channelsim.test_channel_scalability.test22  "16 channels 122880 samples 2T2R Batch"  test_channel_scalability -c 16 -t 2 -r 2 -s 122880 -l 32 -m batch  -n 12)
+add_physim_test(cuda.5g.channelsim.test_channel_scalability.test23  "16 channels 122880 samples 2T2R Stream" test_channel_scalability -c 16 -t 2 -r 2 -s 122880 -l 32 -m stream -n 12)
+add_physim_test(cuda.5g.channelsim.test_channel_scalability.test24  "16 channels 122880 samples 2T2R Serial" test_channel_scalability -c 16 -t 2 -r 2 -s 122880 -l 32 -m serial -n 12)
+add_physim_test(cuda.5g.channelsim.test_channel_scalability.test25  "16 channels 122880 samples 4T2R Batch"  test_channel_scalability -c 16 -t 4 -r 2 -s 122880 -l 32 -m batch  -n 12)
+add_physim_test(cuda.5g.channelsim.test_channel_scalability.test26  "16 channels 122880 samples 4T2R Stream" test_channel_scalability -c 16 -t 4 -r 2 -s 122880 -l 32 -m stream -n 12)
+add_physim_test(cuda.5g.channelsim.test_channel_scalability.test27  "16 channels 122880 samples 4T2R Serial" test_channel_scalability -c 16 -t 4 -r 2 -s 122880 -l 32 -m serial -n 12)
+add_physim_test(cuda.5g.channelsim.test_channel_scalability.test28  "16 channels 122880 samples 8T2R Batch"  test_channel_scalability -c 16 -t 8 -r 2 -s 122880 -l 32 -m batch  -n 12)
+add_physim_test(cuda.5g.channelsim.test_channel_scalability.test29  "16 channels 122880 samples 8T2R Stream" test_channel_scalability -c 16 -t 8 -r 2 -s 122880 -l 32 -m stream -n 12)
+add_physim_test(cuda.5g.channelsim.test_channel_scalability.test30  "16 channels 122880 samples 8T2R Serial" test_channel_scalability -c 16 -t 8 -r 2 -s 122880 -l 32 -m serial -n 12)
+add_physim_test(cuda.5g.channelsim.test_channel_scalability.test31  "16 channels 122880 samples 32T2R Batch"  test_channel_scalability -c 16 -t 32 -r 2 -s 122880 -l 32 -m batch  -n 12)
+add_physim_test(cuda.5g.channelsim.test_channel_scalability.test32  "16 channels 122880 samples 32T2R Stream" test_channel_scalability -c 16 -t 32 -r 2 -s 122880 -l 32 -m stream -n 12)
+add_physim_test(cuda.5g.channelsim.test_channel_scalability.test33  "16 channels 122880 samples 32T2R Serial" test_channel_scalability -c 16 -t 32 -r 2 -s 122880 -l 32 -m serial -n 12)
+add_physim_test(cuda.5g.channelsim.test_channel_scalability.test34  "16 channels 122880 samples 2T4R Batch"  test_channel_scalability -c 16 -t 2 -r 4 -s 122880 -l 32 -m batch  -n 12)
+add_physim_test(cuda.5g.channelsim.test_channel_scalability.test35  "16 channels 122880 samples 2T4R Stream" test_channel_scalability -c 16 -t 2 -r 4 -s 122880 -l 32 -m stream -n 12)
+add_physim_test(cuda.5g.channelsim.test_channel_scalability.test36  "16 channels 122880 samples 2T4R Serial" test_channel_scalability -c 16 -t 2 -r 4 -s 122880 -l 32 -m serial -n 12)
+add_physim_test(cuda.5g.channelsim.test_channel_scalability.test37  "16 channels 122880 samples 2T8R Batch"  test_channel_scalability -c 16 -t 2 -r 8 -s 122880 -l 32 -m batch  -n 12)
+add_physim_test(cuda.5g.channelsim.test_channel_scalability.test38  "16 channels 122880 samples 2T8R Stream" test_channel_scalability -c 16 -t 2 -r 8 -s 122880 -l 32 -m stream -n 12)
+add_physim_test(cuda.5g.channelsim.test_channel_scalability.test39  "16 channels 122880 samples 2T8R Serial" test_channel_scalability -c 16 -t 2 -r 8 -s 122880 -l 32 -m serial -n 12)
+add_physim_test(cuda.5g.channelsim.test_channel_scalability.test40  "16 channels 122880 samples 2T32R Batch"  test_channel_scalability -c 16 -t 2 -r 32 -s 122880 -l 32 -m batch  -n 12)
+add_physim_test(cuda.5g.channelsim.test_channel_scalability.test41  "16 channels 122880 samples 2T32R Stream" test_channel_scalability -c 16 -t 2 -r 32 -s 122880 -l 32 -m stream -n 12)
+add_physim_test(cuda.5g.channelsim.test_channel_scalability.test42  "16 channels 122880 samples 2T32R Serial" test_channel_scalability -c 16 -t 2 -r 32 -s 122880 -l 32 -m serial -n 12)
+
+# --- Test Suite 3: 61440 samples, 128 channel length, 2/4/8/32 TX - 2/4/8/32 RX --
+add_physim_test(cuda.5g.channelsim.test_channel_scalability.test43  "16 channels 61440 samples long channel 2T2R Batch"  test_channel_scalability -c 16 -t 2 -r 2 -s 61440 -l 128 -m batch  -n 12)
+add_physim_test(cuda.5g.channelsim.test_channel_scalability.test44  "16 channels 61440 samples long channel 2T2R Stream" test_channel_scalability -c 16 -t 2 -r 2 -s 61440 -l 128 -m stream -n 12)
+add_physim_test(cuda.5g.channelsim.test_channel_scalability.test45  "16 channels 61440 samples long channel 2T2R Serial" test_channel_scalability -c 16 -t 2 -r 2 -s 61440 -l 128 -m serial -n 12)
+add_physim_test(cuda.5g.channelsim.test_channel_scalability.test46  "16 channels 61440 samples long channel 4T2R Batch"  test_channel_scalability -c 16 -t 4 -r 2 -s 61440 -l 128 -m batch  -n 12)
+add_physim_test(cuda.5g.channelsim.test_channel_scalability.test47  "16 channels 61440 samples long channel 4T2R Stream" test_channel_scalability -c 16 -t 4 -r 2 -s 61440 -l 128 -m stream -n 12)
+add_physim_test(cuda.5g.channelsim.test_channel_scalability.test48  "16 channels 61440 samples long channel 4T2R Serial" test_channel_scalability -c 16 -t 4 -r 2 -s 61440 -l 128 -m serial -n 12)
+add_physim_test(cuda.5g.channelsim.test_channel_scalability.test49  "16 channels 61440 samples long channel 8T2R Batch"  test_channel_scalability -c 16 -t 8 -r 2 -s 61440 -l 128 -m batch  -n 12)
+add_physim_test(cuda.5g.channelsim.test_channel_scalability.test50  "16 channels 61440 samples long channel 8T2R Stream" test_channel_scalability -c 16 -t 8 -r 2 -s 61440 -l 128 -m stream -n 12)
+add_physim_test(cuda.5g.channelsim.test_channel_scalability.test51  "16 channels 61440 samples long channel 8T2R Serial" test_channel_scalability -c 16 -t 8 -r 2 -s 61440 -l 128 -m serial -n 12)
+add_physim_test(cuda.5g.channelsim.test_channel_scalability.test52  "16 channels 61440 samples long channel 2T4R Batch"  test_channel_scalability -c 16 -t 2 -r 4 -s 61440 -l 128 -m batch  -n 12)
+add_physim_test(cuda.5g.channelsim.test_channel_scalability.test53  "16 channels 61440 samples long channel 2T4R Stream" test_channel_scalability -c 16 -t 2 -r 4 -s 61440 -l 128 -m stream -n 12)
+add_physim_test(cuda.5g.channelsim.test_channel_scalability.test54  "16 channels 61440 samples long channel 2T4R Serial" test_channel_scalability -c 16 -t 2 -r 4 -s 61440 -l 128 -m serial -n 12)
+add_physim_test(cuda.5g.channelsim.test_channel_scalability.test55  "16 channels 61440 samples long channel 2T8R Batch"  test_channel_scalability -c 16 -t 2 -r 8 -s 61440 -l 128 -m batch  -n 12)
+add_physim_test(cuda.5g.channelsim.test_channel_scalability.test56  "16 channels 61440 samples long channel 2T8R Stream" test_channel_scalability -c 16 -t 2 -r 8 -s 61440 -l 128 -m stream -n 12)
+add_physim_test(cuda.5g.channelsim.test_channel_scalability.test57  "16 channels 61440 samples long channel 2T8R Serial" test_channel_scalability -c 16 -t 2 -r 8 -s 61440 -l 128 -m serial -n 12)
+
+add_physim_test(cuda.5g.physims.nr_dlsim.test1 "SNR = 30, MCS = 25, 106 PRBs, 1 layer, TDL-A channel, GPU channel simulation"               nr_dlsim -n500 -s30 -S30.2 -e25 -b106 -R273 -X 8,9,10,11,12 -P -g A -t 85 -f cuda)
+add_physim_test(cuda.5g.physims.nr_dlsim.test2 "SNR = 30, MCS = 25, 106 PRBs, 2 layers, TDL-A channel, GPU channel simulation"              nr_dlsim -n500 -s30 -S30.2 -e25 -b106 -R273 -X 8,9,10,11,12 -P -g A -t 49 -f cuda -x2 -z2 -y2)
+add_physim_test(cuda.5g.physims.nr_dlsim.test3 "SNR = 30, MCS = 25, 106 PRBs, 2 layers, 4 antennas, TDL-A channel, GPU channel simulation"  nr_dlsim -n500 -s30 -S30.2 -e25 -b106 -R273 -X 8,9,10,11,12 -P -g A -t 95 -f cuda -x2 -z4 -y4)
+add_physim_test(cuda.5g.physims.nr_dlsim.test4 "SNR = 30, MCS = 25, 273 PRBs, 2 layers, TDL-A channel, GPU channel simulation"              nr_dlsim -n500 -s30 -S30.2 -e25 -b273 -R273 -X 8,9,10,11,12 -P -g A -t 32 -f cuda -x2 -z2 -y2)
+add_physim_test(cuda.5g.physims.nr_dlsim.test5 "SNR = 30, MCS = 25, 273 PRBs, 2 layers, 4 antennas, TDL-A channel, GPU channel simulation"  nr_dlsim -n500 -s30 -S30.2 -e25 -b273 -R273 -X 8,9,10,11,12 -P -g A -t 93 -f cuda -x2 -z4 -y4)
+add_physim_test(cuda.5g.physims.nr_dlsim.test6 "SNR = 30, MCS = 25, 106 PRBs, 2 layers, TDL-B channel, GPU channel simulation"              nr_dlsim -n500 -s30 -S30.2 -e25 -b106 -R273 -X 8,9,10,11,12 -P -g B -t 43 -f cuda -x2 -z2 -y2)
+add_physim_test(cuda.5g.physims.nr_dlsim.test7 "SNR = 30, MCS = 25, 106 PRBs, 2 layers, 4 antennas, TDL-B channel, GPU channel simulation"  nr_dlsim -n500 -s30 -S30.2 -e25 -b106 -R273 -X 8,9,10,11,12 -P -g B -t 95 -f cuda -x2 -z4 -y4)
+add_physim_test(cuda.5g.physims.nr_dlsim.test8 "SNR = 30, MCS = 25, 273 PRBs, 2 layers, TDL-B channel, GPU channel simulation"              nr_dlsim -n500 -s30 -S30.2 -e25 -b273 -R273 -X 8,9,10,11,12 -P -g B -t 32 -f cuda -x2 -z2 -y2)
+add_physim_test(cuda.5g.physims.nr_dlsim.test9 "SNR = 30, MCS = 25, 273 PRBs, 2 layers, 4 antennas, TDL-B channel, GPU channel simulation"  nr_dlsim -n500 -s30 -S30.2 -e25 -b273 -R273 -X 8,9,10,11,12 -P -g B -t 94 -f cuda -x2 -z4 -y4)
+
+add_physim_test(cuda.5g.physims.nr_ulsim.test1 "SNR = 30, MCS = 25, 106 PRBs, 1 layer, TDL-A channel, GPU channel simulation"              nr_ulsim -n500 -s30 -S30 -m25 -r106 -R106 -C10 -P -g A -t 84 -f cuda)
+add_physim_test(cuda.5g.physims.nr_ulsim.test2 "SNR = 30, MCS = 25, 106 PRBs, 2 layers, TDL-A channel, GPU channel simulation"             nr_ulsim -n500 -s30 -S30 -m25 -r106 -R106 -C10 -P -g A -t 90 -f cuda -W2 -z2 -y2)
+add_physim_test(cuda.5g.physims.nr_ulsim.test3 "SNR = 30, MCS = 25, 273 PRBs, 2 layers, TDL-A channel, GPU channel simulation"             nr_ulsim -n500 -s30 -S30 -m25 -r273 -R273 -C10 -P -g A -t 83 -f cuda -W2 -z2 -y2)
+add_physim_test(cuda.5g.physims.nr_ulsim.test4 "SNR = 30, MCS = 25, 106 PRBs, 2 layers, TDL-B channel, GPU channel simulation"             nr_ulsim -n500 -s30 -S30 -m25 -r106 -R106 -C10 -P -g B -t 78 -f cuda -W2 -z2 -y2)
+add_physim_test(cuda.5g.physims.nr_ulsim.test5 "SNR = 30, MCS = 25, 273 PRBs, 2 layers, TDL-B channel, GPU channel simulation"             nr_ulsim -n500 -s30 -S30 -m25 -r273 -R273 -C10 -P -g B -t 63 -f cuda -W2 -z2 -y2)
 
 endif()
 

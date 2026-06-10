@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: MIT
+ */
+
 #include "../seq_arr.h"
 #include "../../alg/find.h"
 #include "../../alg/foreach.h"

@@ -1,37 +1,14 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file PHY/LTE_UE_TRANSPORT/transport_proto_ue.h
+/*!
  * \brief Function prototypes for PHY physical/transport channel processing and generation V8.6 2009-03
- * \author R. Knopp, F. Kaltenberger
- * \date 2011
- * \version 0.1
- * \company Eurecom
- * \email: knopp@eurecom.fr
- * \note
- * \warning
  */
 #ifndef __LTE_TRANSPORT_PROTO_UE__H__
 #define __LTE_TRANSPORT_PROTO_UE__H__
 #include "PHY/defs_UE.h"
+#include "PHY/defs_eNB.h"
 #include "PHY/LTE_TRANSPORT/transport_common_proto.h"
 #include <math.h>
 #include "nfapi_interface.h"
@@ -77,17 +54,6 @@ int rx_pmch_khz_1dot25(PHY_VARS_UE *ue,
                        uint8_t subframe/*,
             unsigned char symbol*/
                        ,int mcs);
-
-/** \brief Dump OCTAVE/MATLAB files for PMCH debugging
-    @param phy_vars_ue Pointer to UE variables
-    @param eNB_id index of eNB in ue variables
-    @param coded_bits_per_codeword G from 36.211
-    @param subframe Index of subframe
-    @returns 0 on success
-*/
-void dump_mch(PHY_VARS_UE *phy_vars_ue,uint8_t eNB_id,uint16_t coded_bits_per_codeword,int subframe);
-
-
 
 /** \brief This function computes the LLRs for ML (max-logsum approximation) dual-stream QPSK/QPSK reception.
     @param stream0_in Input from channel compensated (MR combined) stream 0
@@ -580,216 +546,6 @@ void dlsch_64qam_llr(LTE_DL_FRAME_PARMS *frame_parms,
                      uint32_t llr_offset,
                      uint8_t beamforming_mode);
 
-
-/** \fn dlsch_siso(LTE_DL_FRAME_PARMS *frame_parms,
-    int32_t **rxdataF_comp,
-    int32_t **rxdataF_comp_i,
-    uint8_t l,
-    uint16_t nb_rb)
-    \brief This function does the first stage of llr computation for SISO, by just extracting the pilots, PBCH and primary/secondary synchronization sequences.
-    @param frame_parms Frame descriptor structure
-    @param rxdataF_comp Compensated channel output
-    @param rxdataF_comp_i Compensated channel output for interference
-    @param l symbol in sub-frame
-    @param nb_rb Number of RBs in this allocation
-*/
-
-void dlsch_siso(LTE_DL_FRAME_PARMS *frame_parms,
-                int32_t **rxdataF_comp,
-                int32_t **rxdataF_comp_i,
-                uint8_t l,
-                uint16_t nb_rb);
-
-/** \fn dlsch_alamouti(LTE_DL_FRAME_PARMS *frame_parms,
-    int32_t **rxdataF_comp,
-    int32_t **dl_ch_mag,
-    int32_t **dl_ch_magb,
-    uint8_t symbol,
-    uint16_t nb_rb)
-    \brief This function does Alamouti combining on RX and prepares LLR inputs by skipping pilots, PBCH and primary/secondary synchronization signals.
-    @param frame_parms Frame descriptor structure
-    @param rxdataF_comp Compensated channel output
-    @param dl_ch_mag First squared-magnitude of channel (16QAM and 64QAM) for LLR computation.  Alamouti combining should be performed on this as well. Result is stored in first antenna position
-    @param dl_ch_magb Second squared-magnitude of channel (64QAM only) for LLR computation.  Alamouti combining should be performed on this as well. Result is stored in first antenna position
-    @param symbol Symbol in sub-frame
-    @param nb_rb Number of RBs in this allocation
-*/
-void dlsch_alamouti(LTE_DL_FRAME_PARMS *frame_parms,
-                    int32_t **rxdataF_comp,
-                    int32_t **dl_ch_mag,
-                    int32_t **dl_ch_magb,
-                    uint8_t symbol,
-                    uint16_t nb_rb);
-
-/** \fn dlsch_antcyc(LTE_DL_FRAME_PARMS *frame_parms,
-    int32_t **rxdataF_comp,
-    int32_t **dl_ch_mag,
-    int32_t **dl_ch_magb,
-    uint8_t symbol,
-    uint16_t nb_rb)
-    \brief This function does antenna selection (based on antenna cycling pattern) on RX and prepares LLR inputs by skipping pilots, PBCH and primary/secondary synchronization signals.  Note that this is not LTE, it is just included for comparison purposes.
-    @param frame_parms Frame descriptor structure
-    @param rxdataF_comp Compensated channel output
-    @param dl_ch_mag First squared-magnitude of channel (16QAM and 64QAM) for LLR computation.  Alamouti combining should be performed on this as well. Result is stored in first antenna position
-    @param dl_ch_magb Second squared-magnitude of channel (64QAM only) for LLR computation.  Alamouti combining should be performed on this as well. Result is stored in first antenna position
-    @param symbol Symbol in sub-frame
-    @param nb_rb Number of RBs in this allocation
-*/
-void dlsch_antcyc(LTE_DL_FRAME_PARMS *frame_parms,
-                  int32_t **rxdataF_comp,
-                  int32_t **dl_ch_mag,
-                  int32_t **dl_ch_magb,
-                  uint8_t symbol,
-                  uint16_t nb_rb);
-
-/** \fn dlsch_detection_mrc(LTE_DL_FRAME_PARMS *frame_parms,
-    int32_t **rxdataF_comp,
-    int32_t **rxdataF_comp_i,
-    int32_t **rho,
-    int32_t **rho_i,
-    int32_t **dl_ch_mag,
-    int32_t **dl_ch_magb,
-    uint8_t symbol,
-    uint16_t nb_rb,
-    uint8_t dual_stream_UE)
-
-    \brief This function does maximal-ratio combining for dual-antenna receivers.
-    @param frame_parms Frame descriptor structure
-    @param rxdataF_comp Compensated channel output
-    @param rxdataF_comp_i Compensated channel output for interference
-    @param rho Cross correlation between spatial channels
-    @param rho_i Cross correlation between signal and inteference channels
-    @param dl_ch_mag First squared-magnitude of channel (16QAM and 64QAM) for LLR computation.  Alamouti combining should be performed on this as well. Result is stored in first antenna position
-    @param dl_ch_magb Second squared-magnitude of channel (64QAM only) for LLR computation.  Alamouti combining should be performed on this as well. Result is stored in first antenna position
-    @param symbol Symbol in sub-frame
-    @param nb_rb Number of RBs in this allocation
-    @param dual_stream_UE Flag to indicate dual-stream detection
-*/
-void dlsch_detection_mrc(LTE_DL_FRAME_PARMS *frame_parms,
-                         int32_t **rxdataF_comp,
-                         int32_t **rxdataF_comp_i,
-                         int32_t **rho,
-                         int32_t **rho_i,
-                         int32_t **dl_ch_mag,
-                         int32_t **dl_ch_magb,
-                         int32_t **dl_ch_mag_i,
-                         int32_t **dl_ch_magb_i,
-                         uint8_t symbol,
-                         uint16_t nb_rb,
-                         uint8_t dual_stream_UE);
-
-void dlsch_detection_mrc_TM34(LTE_DL_FRAME_PARMS *frame_parms,
-                              LTE_UE_PDSCH *lte_ue_pdsch_vars,
-                              int harq_pid,
-                              int round,
-                              unsigned char symbol,
-                              unsigned short nb_rb,
-                              unsigned char dual_stream_UE);
-
-/** \fn dlsch_extract_rbs_single(int32_t **rxdataF,
-    int32_t **dl_ch_estimates,
-    int32_t **rxdataF_ext,
-    int32_t **dl_ch_estimates_ext,
-    uint16_t pmi,
-    uint8_t *pmi_ext,
-    uint32_t *rb_alloc,
-    uint8_t symbol,
-    uint8_t subframe,
-    LTE_DL_FRAME_PARMS *frame_parms)
-    \brief This function extracts the received resource blocks, both channel estimates and data symbols,
-    for the current allocation and for single antenna eNB transmission.
-    @param rxdataF Raw FFT output of received signal
-    @param dl_ch_estimates Channel estimates of current slot
-    @param rxdataF_ext FFT output for RBs in this allocation
-    @param dl_ch_estimates_ext Channel estimates for RBs in this allocation
-    @param pmi subband Precoding matrix indicator
-    @param pmi_ext Extracted PMI for chosen RBs
-    @param rb_alloc RB allocation vector
-    @param symbol Symbol to extract
-    @param subframe Subframe number
-    @param vrb_type Flag to indicate distributed VRB type
-    @param high_speed_flag
-    @param frame_parms Pointer to frame descriptor
-*/
-uint16_t dlsch_extract_rbs_single(int32_t **rxdataF,
-                                  int32_t **dl_ch_estimates,
-                                  int32_t **rxdataF_ext,
-                                  int32_t **dl_ch_estimates_ext,
-                                  uint16_t pmi,
-                                  uint8_t *pmi_ext,
-                                  uint32_t *rb_alloc,
-                                  uint8_t symbol,
-                                  uint8_t subframe,
-                                  uint32_t high_speed_flag,
-                                  LTE_DL_FRAME_PARMS *frame_parms);
-
-/** \fn dlsch_extract_rbs_dual(int32_t **rxdataF,
-    int32_t **dl_ch_estimates,
-    int32_t **rxdataF_ext,
-    int32_t **dl_ch_estimates_ext,
-    uint16_t pmi,
-    uint8_t *pmi_ext,
-    uint32_t *rb_alloc,
-    uint8_t symbol,
-    LTE_DL_FRAME_PARMS *frame_parms)
-    \brief This function extracts the received resource blocks, both channel estimates and data symbols,
-    for the current allocation and for dual antenna eNB transmission.
-    @param rxdataF Raw FFT output of received signal
-    @param dl_ch_estimates Channel estimates of current slot
-    @param rxdataF_ext FFT output for RBs in this allocation
-    @param dl_ch_estimates_ext Channel estimates for RBs in this allocation
-    @param pmi subband Precoding matrix indicator
-    @param pmi_ext Extracted PMI for chosen RBs
-    @param rb_alloc RB allocation vector
-    @param symbol Symbol to extract
-    @param subframe Subframe index
-    @param high_speed_flag
-    @param frame_parms Pointer to frame descriptor
-*/
-uint16_t dlsch_extract_rbs_dual(int32_t **rxdataF,
-                                int32_t **dl_ch_estimates,
-                                int32_t **rxdataF_ext,
-                                int32_t **dl_ch_estimates_ext,
-                                uint16_t pmi,
-                                uint8_t *pmi_ext,
-                                uint32_t *rb_alloc,
-                                uint8_t symbol,
-                                uint8_t subframe,
-                                uint32_t high_speed_flag,
-                                LTE_DL_FRAME_PARMS *frame_parms,
-                                MIMO_mode_t mimo_mode);
-
-/** \fn dlsch_extract_rbs_TM7(int32_t **rxdataF,
-    int32_t **dl_bf_ch_estimates,
-    int32_t **rxdataF_ext,
-    int32_t **dl_bf_ch_estimates_ext,
-    uint32_t *rb_alloc,
-    uint8_t symbol,
-    uint8_t subframe,
-    uint32_t high_speed_flag,
-    LTE_DL_FRAME_PARMS *frame_parms)
-    \brief This function extracts the received resource blocks, both channel estimates and data symbols,
-    for the current allocation and for single antenna eNB transmission.
-    @param rxdataF Raw FFT output of received signal
-    @param dl_bf_ch_estimates Beamforming channel estimates of current slot
-    @param rxdataF_ext FFT output for RBs in this allocation
-    @param dl_bf_ch_estimates_ext Beamforming channel estimates for RBs in this allocation
-    @param rb_alloc RB allocation vector
-    @param symbol Symbol to extract
-    @param subframe Subframe number
-    @param high_speed_flag
-    @param frame_parms Pointer to frame descriptor
-*/
-uint16_t dlsch_extract_rbs_TM7(int32_t **rxdataF,
-                               int32_t **dl_bf_ch_estimates,
-                               int32_t **rxdataF_ext,
-                               int32_t **dl_bf_ch_estimates_ext,
-                               uint32_t *rb_alloc,
-                               uint8_t symbol,
-                               uint8_t subframe,
-                               uint32_t high_speed_flag,
-                               LTE_DL_FRAME_PARMS *frame_parms);
-
 /** \brief This function performs channel compensation (matched filtering) on the received RBs for this allocation.  In addition, it computes the squared-magnitude of the channel with weightings for 16QAM/64QAM detection as well as dual-stream detection (cross-correlation)
     @param rxdataF_ext Frequency-domain received signal in RBs to be demodulated
     @param dl_ch_estimates_ext Frequency-domain channel estimates in RBs to be demodulated
@@ -819,35 +575,6 @@ void dlsch_channel_compensation(int32_t **rxdataF_ext,
                                 uint8_t output_shift,
                                 PHY_MEASUREMENTS *phy_measurements);
 
-void dlsch_channel_compensation_core(int **rxdataF_ext,
-                                     int **dl_ch_estimates_ext,
-                                     int **dl_ch_mag,
-                                     int **dl_ch_magb,
-                                     int **rxdataF_comp,
-                                     int **rho,
-                                     unsigned char n_tx,
-                                     unsigned char n_rx,
-                                     unsigned char mod_order,
-                                     unsigned char output_shift,
-                                     int length,
-                                     int start_point);
-
-void dlsch_dual_stream_correlation(LTE_DL_FRAME_PARMS *frame_parms,
-                                   unsigned char symbol,
-                                   unsigned short nb_rb,
-                                   int **dl_ch_estimates_ext,
-                                   int **dl_ch_estimates_ext_i,
-                                   int **dl_ch_rho_ext,
-                                   unsigned char output_shift);
-
-void dlsch_dual_stream_correlationTM34(LTE_DL_FRAME_PARMS *frame_parms,
-                                       unsigned char symbol,
-                                       unsigned short nb_rb,
-                                       int **dl_ch_estimates_ext,
-                                       int **dl_ch_estimates_ext_i,
-                                       int **dl_ch_rho_ext,
-                                       unsigned char output_shift0,
-                                       unsigned char output_shift1);
 //This function is used to compute multiplications in Hhermitian * H matrix
 void conjch0_mult_ch1(int *ch0,
                       int *ch1,
@@ -867,10 +594,6 @@ void construct_HhH_elements(int *ch0conj_ch0,
                             int32_t *after_mf_01,
                             int32_t *after_mf_10,
                             int32_t *after_mf_11,
-                            unsigned short nb_rb);
-
-void squared_matrix_element(int32_t *Hh_h_00,
-                            int32_t *Hh_h_00_sq,
                             unsigned short nb_rb);
 
 void dlsch_channel_level_TM34_meas(int *ch00,
@@ -900,38 +623,6 @@ uint8_t rank_estimation_tm3_tm4(int *dl_ch_estimates_00,
                                 int *dl_ch_estimates_10,
                                 int *dl_ch_estimates_11,
                                 unsigned short nb_rb);
-
-void dlsch_channel_compensation_TM56(int **rxdataF_ext,
-                                     int **dl_ch_estimates_ext,
-                                     int **dl_ch_mag,
-                                     int **dl_ch_magb,
-                                     int **rxdataF_comp,
-                                     unsigned char *pmi_ext,
-                                     LTE_DL_FRAME_PARMS *frame_parms,
-                                     PHY_MEASUREMENTS *phy_measurements,
-                                     int eNB_id,
-                                     unsigned char symbol,
-                                     unsigned char mod_order,
-                                     unsigned short nb_rb,
-                                     unsigned char output_shift,
-                                     unsigned char dl_power_off);
-
-
-void dlsch_channel_compensation_TM34(LTE_DL_FRAME_PARMS *frame_parms,
-                                     LTE_UE_PDSCH *lte_ue_pdsch_vars,
-                                     PHY_MEASUREMENTS *phy_measurements,
-                                     int eNB_id,
-                                     unsigned char symbol,
-                                     unsigned char mod_order0,
-                                     unsigned char mod_order1,
-                                     int harq_pid,
-                                     int round,
-                                     MIMO_mode_t mimo_mode,
-                                     unsigned short nb_rb,
-                                     unsigned short mmse_flag,
-                                     unsigned char output_shift0,
-                                     unsigned char output_shift1);
-
 
 /** \brief This function computes the average channel level over all allocated RBs and antennas (TX/RX) in order to compute output shift for compensated signal
     @param dl_ch_estimates_ext Channel estimates in allocated RBs
@@ -1253,13 +944,6 @@ uint32_t get_TBS_DL(uint8_t mcs, uint16_t nb_rb);
     @param nb_rb
     @return Transport block size */
 uint32_t get_TBS_UL(uint8_t mcs, uint16_t nb_rb);
-
-/* \brief Return prb for a given vrb index
-   @param vrb_type VRB type (0=localized,1=distributed)
-   @param rb_alloc_dci rballoc field from DCI
-*/
-uint32_t get_rballoc(vrb_t vrb_type,uint16_t rb_alloc_dci);
-
 
 /* \brief Return bit-map of resource allocation for a given DCI rballoc (RIV format) and vrb type
    @returns Transmission mode (1-7)
@@ -1668,12 +1352,6 @@ int is_pmch_subframe(frame_t frame, int subframe, LTE_DL_FRAME_PARMS *frame_parm
 uint8_t is_not_pilot(uint8_t pilots, uint8_t re, uint8_t nushift, uint8_t use2ndpilots);
 
 uint8_t is_not_UEspecRS(int8_t lprime, uint8_t re, uint8_t nushift, uint8_t Ncp, uint8_t beamforming_mode);
-
-uint32_t dlsch_decoding_abstraction(double *dlsch_MIPB,
-                                    LTE_DL_FRAME_PARMS *lte_frame_parms,
-                                    LTE_UE_DLSCH_t *dlsch,
-                                    uint8_t subframe,
-                                    uint8_t num_pdcch_symbols);
 
 // DL power control functions
 double get_pa_dB(uint8_t pa);

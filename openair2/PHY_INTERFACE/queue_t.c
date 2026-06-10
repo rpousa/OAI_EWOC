@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
+ */
+
 #include "queue_t.h"
 #include <string.h>
 #include <assert.h>

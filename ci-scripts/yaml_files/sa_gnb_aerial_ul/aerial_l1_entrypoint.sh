@@ -1,4 +1,5 @@
 #!/bin/bash
+# SPDX-License-Identifier: MIT
 
 # Check if cuBB_SDK is defined, if not, use default path
 cuBB_Path="${cuBB_SDK:-/opt/nvidia/cuBB}"

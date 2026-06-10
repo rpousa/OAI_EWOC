@@ -1,33 +1,9 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file nr_prach_procedures.c
+/*!
  * \brief Implementation of gNB prach procedures from 38.213 LTE specifications
- * \author R. Knopp, 
- * \date 2019
- * \version 0.1
- * \company Eurecom
- * \email: knopp@eurecom.fr
- * \note
- * \warning
  */
 
 #include "PHY/defs_gNB.h"
@@ -35,7 +11,6 @@
 #include "nfapi_nr_interface_scf.h"
 #include "nfapi_pnf.h"
 #include "common/utils/LOG/log.h"
-#include "common/utils/LOG/vcd_signal_dumper.h"
 #include "assertions.h"
 #include <time.h>
 
@@ -46,21 +21,14 @@ int get_nr_prach_duration(uint8_t prach_format)
   return val[prach_format];
 }
 
-void L1_nr_prach_procedures(PHY_VARS_gNB *gNB, int frame, int slot, nfapi_nr_rach_indication_t *rach_ind)
+void L1_nr_prach_procedures(PHY_VARS_gNB *gNB, prach_item_t *prach_id, nfapi_nr_rach_indication_t *rach_ind)
 {
-  VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME(VCD_SIGNAL_DUMPER_FUNCTIONS_PHY_ENB_PRACH_RX,1);
+  const frame_t frame = prach_id->frame;
+  const slot_t slot = prach_id->slot;
   rach_ind->sfn = frame;
   rach_ind->slot = slot;
-  rach_ind->number_of_pdus = 0;
-
-  prach_item_t *prach_id = find_nr_prach(&gNB->prach_list, frame, slot, SEARCH_EXIST);
-  if (!prach_id) {
-    return;
-  }
-
   nfapi_nr_prach_pdu_t *prach_pdu = &prach_id->pdu;
   LOG_D(NR_PHY_RACH, "%d.%d, prachstart slot %d prach entry occas %d\n", frame, slot, prach_id->slot, prach_pdu->num_prach_ocas);
-  const int prach_start_slot = prach_id->slot;
   int N_dur = get_nr_prach_duration(prach_pdu->prach_format);
 
   for (int prach_oc = 0; prach_oc < prach_pdu->num_prach_ocas; prach_oc++) {
@@ -89,7 +57,7 @@ void L1_nr_prach_procedures(PHY_VARS_gNB *gNB, int frame, int slot, nfapi_nr_rac
             "[RAPROC] %d.%d Initiating RA procedure with preamble %d, energy %d.%d dB (I0 %d, thres %d), delay %d start symbol "
             "%u freq index %u\n",
             frame,
-            prach_start_slot,
+            slot,
             res.max_preamble,
             res.max_preamble_energy / 10,
             res.max_preamble_energy % 10,
@@ -126,8 +94,6 @@ void L1_nr_prach_procedures(PHY_VARS_gNB *gNB, int frame, int slot, nfapi_nr_rac
     if (gNB->prach_energy_counter < NUM_PRACH_RX_FOR_NOISE_ESTIMATE)
       gNB->prach_energy_counter++;
   } // if prach_id>0
-  rach_ind->slot = prach_start_slot;
   LOG_D(NR_PHY_RACH, "Freeing PRACH entry\n");
-  free_nr_prach_entry(&gNB->prach_list, prach_id);
-  VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME(VCD_SIGNAL_DUMPER_FUNCTIONS_PHY_ENB_PRACH_RX,0);
+  free_nr_prach_entry(prach_id);
 }

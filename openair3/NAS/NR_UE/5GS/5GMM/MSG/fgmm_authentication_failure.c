@@ -1,22 +1,5 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
 #include "fgmm_authentication_failure.h"
@@ -25,6 +8,7 @@
 #include <stdlib.h> // For malloc and free
 #include "fgmm_lib.h"
 #include "common/utils/ds/byte_array.h"
+#include "common/utils/eq_check.h"
 #include "common/utils/utils.h"
 
 #define MIN_AUTH_FAILURE_LEN 1
@@ -35,7 +19,7 @@
 int encode_fgmm_auth_failure(byte_array_t *buffer, const fgmm_auth_failure_t *msg)
 {
   if (buffer->len < MIN_AUTH_FAILURE_LEN) {
-    PRINT_NAS_ERROR("Missing mandatory IE in Authentication Failure");
+    PRINT_ERROR("Missing mandatory IE in Authentication Failure");
     return -1; // missing mandatory IE
   }
   // 5GMM cause (Mandatory)
@@ -44,11 +28,11 @@ int encode_fgmm_auth_failure(byte_array_t *buffer, const fgmm_auth_failure_t *ms
   if (msg->cause == Synch_failure) {
     // Authentication failure parameter shall be present with cause Synch Failure
     if (msg->authentication_failure_param.len == 0) {
-      PRINT_NAS_ERROR("Authentication Failure Cause is synch failure but Authentication Failure Parameter is not available");
+      PRINT_ERROR("Authentication Failure Cause is synch failure but Authentication Failure Parameter is not available");
       return -1;
     }
     if (buffer->len - encoded < msg->authentication_failure_param.len + 2) {
-      PRINT_NAS_ERROR("Invalid buffer for encoding of Authentication Failure Parameter");
+      PRINT_ERROR("Invalid buffer for encoding of Authentication Failure Parameter");
       return -1;
     }
     // Encode the IEI
@@ -76,7 +60,7 @@ int decode_fgmm_auth_failure(fgmm_auth_failure_t *msg, const byte_array_t *buffe
     if (iei == AUTH_FAIL_PARAM_IEI) {
       msg->authentication_failure_param.len = ba.buf[decoded++];
       if (msg->authentication_failure_param.len > AUTH_FAILURE_PARAM_LEN - 2) { // maximum length of contents is 14 octets
-        PRINT_NAS_ERROR("Length of Authentication Failure Parameter contents is too large");
+        PRINT_ERROR("Length of Authentication Failure Parameter contents is too large");
         return -1;
       }
       msg->authentication_failure_param.buf = malloc_or_fail(msg->authentication_failure_param.len);
@@ -90,7 +74,7 @@ int decode_fgmm_auth_failure(fgmm_auth_failure_t *msg, const byte_array_t *buffe
 
 bool eq_fgmm_auth_failure(const fgmm_auth_failure_t *a, const fgmm_auth_failure_t *b)
 {
-  _NAS_EQ_CHECK_INT(a->cause, b->cause);
+  _EQ_CHECK_INT(a->cause, b->cause);
   eq_byte_array(&a->authentication_failure_param, &b->authentication_failure_param);
   return true;
 }

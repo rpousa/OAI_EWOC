@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 ### logging facility developer usage
 The logging facility objectives are
 1. provide a common console tracing mechanism

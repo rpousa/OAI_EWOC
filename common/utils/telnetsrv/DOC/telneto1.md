@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 [[_TOC_]]
 
 The telnet O1 module (`telnetsrv_o1.c`) can be used to perform some O1-related

@@ -1,38 +1,10 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
- */
-
-/*! \file nr_polar_init.c
- * \brief
- * \author Turker Yilmaz, Raymond Knopp
- * \date 2018
- * \version 0.1
- * \company EURECOM
- * \email turker.yilmaz@eurecom.fr, raymond.knopp@eurecom.fr
- * \note
- * \warning
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
 #include "nr_polar_defs.h"
 #include "nr_polar_psbch_defs.h"
-#include "PHY/NR_TRANSPORT/nr_dci.h"
+#include "common/utils/LOG/log.h"
 
 #define PolarKey ((messageType << 24) | (messageLength << 8) | aggregation_level)
 static t_nrPolar_params *PolarList = NULL;
@@ -97,7 +69,7 @@ t_nrPolar_params *nr_polar_params(int8_t messageType, uint16_t messageLength, ui
 
   //  printf("currentPtr %p (polarParams %p)\n",currentPtr,polarParams);
   // Else, initialize and add node to the end of the linked list.
-  t_nrPolar_params *newPolarInitNode = malloc(sizeof(t_nrPolar_params));
+  t_nrPolar_params *newPolarInitNode = memalign(32, sizeof(t_nrPolar_params));
 
   AssertFatal(newPolarInitNode, "[nr_polar_init] New t_nrPolar_params * could not be created");
   *newPolarInitNode = (t_nrPolar_params){.busy = true, .nextPtr = PolarList, .tree_linearization.is_initialized = false};

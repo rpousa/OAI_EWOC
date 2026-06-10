@@ -1,22 +1,5 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
 #define _GNU_SOURCE
@@ -231,6 +214,7 @@ void *pnf_p7_thread_start(void *ptr) {
 
 int pnf_nr_param_request(nfapi_pnf_config_t *config, nfapi_nr_pnf_param_request_t *req)
 {
+  UNUSED(req)
   printf("[PNF] pnf param request\n");
   nfapi_nr_pnf_param_response_t resp;
   memset(&resp, 0, sizeof(resp));
@@ -281,6 +265,7 @@ int pnf_nr_param_request(nfapi_pnf_config_t *config, nfapi_nr_pnf_param_request_
 }
 
 int pnf_param_request(nfapi_pnf_config_t *config, nfapi_pnf_param_request_t *req) {
+  UNUSED(req)
   printf("[PNF] pnf param request\n");
   nfapi_pnf_param_response_t resp;
   memset(&resp, 0, sizeof(resp));
@@ -481,6 +466,7 @@ void nfapi_nr_send_pnf_start_resp(nfapi_pnf_config_t *config, uint16_t phy_id) {
 }
 
 int pnf_start_request(nfapi_pnf_config_t *config, nfapi_pnf_start_request_t *req) {
+  UNUSED(req)
   printf("Received NFAPI_PNF_START_REQUEST\n");
   pnf_info *pnf = (pnf_info *)(config->user_data);
   // start all phys that have been configured
@@ -499,6 +485,7 @@ int pnf_start_request(nfapi_pnf_config_t *config, nfapi_pnf_start_request_t *req
 }
 
 int pnf_nr_start_request(nfapi_pnf_config_t *config, nfapi_nr_pnf_start_request_t *req) {
+  UNUSED(req)
   printf("Received NFAPI_PNF_START_REQUEST\n");
   pnf_info *pnf = (pnf_info *)(config->user_data);
   // start all phys that have been configured
@@ -517,6 +504,7 @@ int pnf_nr_start_request(nfapi_pnf_config_t *config, nfapi_nr_pnf_start_request_
 }
 
 int pnf_stop_request(nfapi_pnf_config_t *config, nfapi_pnf_stop_request_t *req) {
+  UNUSED(req)
   printf("[PNF] Received NFAPI_PNF_STOP_REQ\n");
   nfapi_pnf_stop_response_t resp;
   memset(&resp, 0, sizeof(resp));
@@ -528,6 +516,7 @@ int pnf_stop_request(nfapi_pnf_config_t *config, nfapi_pnf_stop_request_t *req) 
 }
 
 int param_request(nfapi_pnf_config_t *config, nfapi_pnf_phy_config_t *phy, nfapi_param_request_t *req) {
+  UNUSED(phy)
   printf("[PNF] Received NFAPI_PARAM_REQUEST phy_id:%d\n", req->header.phy_id);
   nfapi_param_response_t nfapi_resp;
   pnf_info *pnf = (pnf_info *)(config->user_data);
@@ -550,6 +539,7 @@ int param_request(nfapi_pnf_config_t *config, nfapi_pnf_phy_config_t *phy, nfapi
 }
 
 int nr_param_request(nfapi_pnf_config_t *config, nfapi_pnf_phy_config_t *phy, nfapi_nr_param_request_scf_t *req) {
+  UNUSED(phy)
   printf("[PNF] Received NFAPI_PARAM_REQUEST phy_id:%d\n", req->header.phy_id);
   nfapi_nr_param_response_scf_t nfapi_resp;
   pnf_info *pnf = (pnf_info *)(config->user_data);
@@ -769,6 +759,7 @@ int nr_param_request(nfapi_pnf_config_t *config, nfapi_pnf_phy_config_t *phy, nf
 
 int config_request(nfapi_pnf_config_t *config, nfapi_pnf_phy_config_t *phy, nfapi_config_request_t *req) 
 {
+  UNUSED(phy)
   printf("[PNF] Received NFAPI_CONFIG_REQ phy_id:%d\n", req->header.phy_id);
   pnf_info *pnf = (pnf_info *)(config->user_data);
   uint8_t num_tlv = 0;
@@ -970,6 +961,7 @@ int config_request(nfapi_pnf_config_t *config, nfapi_pnf_phy_config_t *phy, nfap
 
 int nr_config_request(nfapi_pnf_config_t *config, nfapi_pnf_phy_config_t *phy, nfapi_nr_config_request_scf_t *req)
 {
+  UNUSED(phy)
   printf("[PNF] Received NFAPI_CONFIG_REQ phy_id:%d\n", req->header.phy_id);
   pnf_info *pnf = (pnf_info *)(config->user_data);
   uint8_t num_tlv = 0;
@@ -1107,14 +1099,14 @@ void pnf_nr_phy_deallocate_p7_vendor_ext(void *header)
 }
 
 
-int pnf_phy_hi_dci0_req(L1_rxtx_proc_t *proc, nfapi_pnf_p7_config_t *pnf_p7, nfapi_hi_dci0_request_t *req) {
+int pnf_phy_hi_dci0_req(nfapi_pnf_p7_config_t *pnf_p7, nfapi_hi_dci0_request_t *req) {
+  UNUSED(pnf_p7)
   if (req->hi_dci0_request_body.number_of_dci == 0 && req->hi_dci0_request_body.number_of_hi == 0)
     LOG_D(PHY,"[PNF] HI_DCI0_REQUEST SFN/SF:%05d dci:%d hi:%d\n", NFAPI_SFNSF2DEC(req->sfn_sf), req->hi_dci0_request_body.number_of_dci, req->hi_dci0_request_body.number_of_hi);
 
   //phy_info* phy = (phy_info*)(pnf_p7->user_data);
   struct PHY_VARS_eNB_s *eNB = RC.eNB[0][0];
-  if (proc ==NULL) 
-    proc = &eNB->proc.L1_proc;
+  L1_rxtx_proc_t *proc = &eNB->proc.L1_proc;
 
   for (int i=0; i<req->hi_dci0_request_body.number_of_dci + req->hi_dci0_request_body.number_of_hi; i++) {
     //LOG_D(PHY,"[PNF] HI_DCI0_REQ sfn_sf:%d PDU[%d]\n", NFAPI_SFNSF2DEC(req->sfn_sf), i);
@@ -1136,8 +1128,8 @@ int pnf_phy_hi_dci0_req(L1_rxtx_proc_t *proc, nfapi_pnf_p7_config_t *pnf_p7, nfa
 }
 
 
-int pnf_phy_dl_config_req(L1_rxtx_proc_t *proc, nfapi_pnf_p7_config_t *pnf_p7, nfapi_dl_config_request_t *req) {
-
+int pnf_phy_dl_config_req(nfapi_pnf_p7_config_t *pnf_p7, nfapi_dl_config_request_t *req) {
+  UNUSED(pnf_p7)
   if (RC.eNB == 0) {
     return -2;
   }
@@ -1154,8 +1146,7 @@ int pnf_phy_dl_config_req(L1_rxtx_proc_t *proc, nfapi_pnf_p7_config_t *pnf_p7, n
   int sfn = NFAPI_SFNSF2SFN(req->sfn_sf);
   int sf = NFAPI_SFNSF2SF(req->sfn_sf);
   struct PHY_VARS_eNB_s *eNB = RC.eNB[0][0];
-  if (proc==NULL)
-     proc = &eNB->proc.L1_proc;
+  L1_rxtx_proc_t *proc = &eNB->proc.L1_proc;
   nfapi_dl_config_request_pdu_t *dl_config_pdu_list = req->dl_config_request_body.dl_config_pdu_list;
   LTE_eNB_PDCCH *pdcch_vars = &eNB->pdcch_vars[sf&1];
   pdcch_vars->num_pdcch_symbols = req->dl_config_request_body.number_pdcch_ofdm_symbols;
@@ -1229,6 +1220,7 @@ int pnf_phy_dl_config_req(L1_rxtx_proc_t *proc, nfapi_pnf_p7_config_t *pnf_p7, n
 
 
 int pnf_phy_tx_req(nfapi_pnf_p7_config_t *pnf_p7, nfapi_tx_request_t *req) {
+  UNUSED(pnf_p7)
   uint16_t sfn = NFAPI_SFNSF2SFN(req->sfn_sf);
   uint16_t sf = NFAPI_SFNSF2SF(req->sfn_sf);
 
@@ -1253,7 +1245,8 @@ int pnf_phy_tx_req(nfapi_pnf_p7_config_t *pnf_p7, nfapi_tx_request_t *req) {
   return 0;
 }
 
-int pnf_phy_ul_config_req(L1_rxtx_proc_t *proc, nfapi_pnf_p7_config_t *pnf_p7, nfapi_ul_config_request_t *req) {
+int pnf_phy_ul_config_req(nfapi_pnf_p7_config_t *pnf_p7, nfapi_ul_config_request_t *req) {
+  UNUSED(pnf_p7)
   if (0)LOG_D(PHY,"[PNF] UL_CONFIG_REQ %s() sfn_sf:%d pdu:%d rach_prach_frequency_resources:%d srs_present:%u\n",
                 __FUNCTION__,
                 NFAPI_SFNSF2DEC(req->sfn_sf),
@@ -1279,8 +1272,7 @@ int pnf_phy_ul_config_req(L1_rxtx_proc_t *proc, nfapi_pnf_p7_config_t *pnf_p7, n
   uint16_t curr_sfn = NFAPI_SFNSF2SFN(req->sfn_sf);
   uint16_t curr_sf = NFAPI_SFNSF2SF(req->sfn_sf);
   struct PHY_VARS_eNB_s *eNB = RC.eNB[0][0];
-  if (proc==NULL)
-     proc = &eNB->proc.L1_proc;
+  L1_rxtx_proc_t *proc = &eNB->proc.L1_proc;
   nfapi_ul_config_request_pdu_t *ul_config_pdu_list = req->ul_config_request_body.ul_config_pdu_list;
 
   for (int i=0; i<req->ul_config_request_body.number_of_pdus; i++) {
@@ -1305,11 +1297,14 @@ int pnf_phy_ul_config_req(L1_rxtx_proc_t *proc, nfapi_pnf_p7_config_t *pnf_p7, n
 }
 
 int pnf_phy_lbt_dl_config_req(nfapi_pnf_p7_config_t *config, nfapi_lbt_dl_config_request_t *req) {
+  UNUSED(config)
+  UNUSED(req)
   //printf("[PNF] lbt dl config request\n");
   return 0;
 }
 
 int pnf_phy_ue_release_req(nfapi_pnf_p7_config_t* config, nfapi_ue_release_request_t* req) {
+  UNUSED(config)
   if (req->ue_release_request_body.number_of_TLVs==0)
     return -1;
 
@@ -1320,6 +1315,7 @@ int pnf_phy_ue_release_req(nfapi_pnf_p7_config_t* config, nfapi_ue_release_reque
 
 int pnf_phy_vendor_ext(nfapi_pnf_p7_config_t *config, void *msg)
 {
+  UNUSED(config)
   if (((nfapi_p7_message_header_t *)msg)->message_id == P7_VENDOR_EXT_REQ) {
     // vendor_ext_p7_req* req = (vendor_ext_p7_req*)msg;
     // printf("[PNF] vendor request (1:%d 2:%d)\n", req->dummy1, req->dummy2);
@@ -1332,6 +1328,7 @@ int pnf_phy_vendor_ext(nfapi_pnf_p7_config_t *config, void *msg)
 
 int pnf_nr_phy_vendor_ext(nfapi_pnf_p7_config_t *config, void *msg)
 {
+  UNUSED(config)
   if (((nfapi_nr_p7_message_header_t *)msg)->message_id == P7_VENDOR_EXT_REQ) {
     // vendor_ext_p7_req* req = (vendor_ext_p7_req*)msg;
     // printf("[PNF] vendor request (1:%d 2:%d)\n", req->dummy1, req->dummy2);
@@ -1343,6 +1340,7 @@ int pnf_nr_phy_vendor_ext(nfapi_pnf_p7_config_t *config, void *msg)
 }
 
 int pnf_phy_pack_p7_vendor_extension(void *header, uint8_t **ppWritePackedMsg, uint8_t *end, nfapi_p7_codec_config_t *codex) {
+  UNUSED(codex)
   //NFAPI_TRACE(NFAPI_TRACE_INFO, "%s\n", __FUNCTION__);
   if(((nfapi_p7_message_header_t*)header)->message_id == P7_VENDOR_EXT_IND) {
     vendor_ext_p7_ind *ind = (vendor_ext_p7_ind *)(header);
@@ -1358,6 +1356,7 @@ int pnf_phy_pack_p7_vendor_extension(void *header, uint8_t **ppWritePackedMsg, u
 
 int pnf_phy_unpack_p7_vendor_extension(void *header, uint8_t **ppReadPackedMessage, uint8_t *end, nfapi_p7_codec_config_t *codec)
 {
+  UNUSED(codec)
   if (((nfapi_p7_message_header_t *)header)->message_id == P7_VENDOR_EXT_REQ) {
     // NFAPI_TRACE(NFAPI_TRACE_INFO, "%s\n", __FUNCTION__);
     vendor_ext_p7_req *req = (vendor_ext_p7_req *)(header);
@@ -1373,6 +1372,7 @@ int pnf_phy_unpack_p7_vendor_extension(void *header, uint8_t **ppReadPackedMessa
 
 int pnf_nr_phy_pack_p7_vendor_extension(void *header, uint8_t **ppWritePackedMsg, uint8_t *end, nfapi_p7_codec_config_t *codex)
 {
+  UNUSED(codex)
   // NFAPI_TRACE(NFAPI_TRACE_INFO, "%s\n", __FUNCTION__);
   if (((nfapi_nr_p7_message_header_t *)header)->message_id == P7_VENDOR_EXT_IND) {
     vendor_ext_p7_ind *ind = (vendor_ext_p7_ind *)(header);
@@ -1388,6 +1388,7 @@ int pnf_nr_phy_pack_p7_vendor_extension(void *header, uint8_t **ppWritePackedMsg
 
 int pnf_nr_phy_unpack_p7_vendor_extension(void *header, uint8_t **ppReadPackedMessage, uint8_t *end, nfapi_p7_codec_config_t *codec)
 {
+  UNUSED(codec)
   if (((nfapi_nr_p7_message_header_t *)header)->message_id == P7_VENDOR_EXT_REQ) {
     // NFAPI_TRACE(NFAPI_TRACE_INFO, "%s\n", __FUNCTION__);
     vendor_ext_p7_req *req = (vendor_ext_p7_req *)(header);
@@ -1402,6 +1403,7 @@ int pnf_nr_phy_unpack_p7_vendor_extension(void *header, uint8_t **ppReadPackedMe
 }
 
 int pnf_phy_unpack_vendor_extension_tlv(nfapi_tl_t *tl, uint8_t **ppReadPackedMessage, uint8_t *end, void **ve, nfapi_p7_codec_config_t *config) {
+  UNUSED(config)
   //NFAPI_TRACE(NFAPI_TRACE_INFO, "pnf_phy_unpack_vendor_extension_tlv\n");
   switch(tl->tag) {
     case VENDOR_EXT_TLV_1_TAG:
@@ -1419,8 +1421,10 @@ int pnf_phy_unpack_vendor_extension_tlv(nfapi_tl_t *tl, uint8_t **ppReadPackedMe
 
 int pnf_phy_pack_vendor_extention_tlv(void *ve, uint8_t **ppWritePackedMsg, uint8_t *end, nfapi_p7_codec_config_t *config) {
   //printf("%s\n", __FUNCTION__);
-  (void)ve;
-  (void)ppWritePackedMsg;
+  UNUSED(ve)
+  UNUSED(ppWritePackedMsg)
+  UNUSED(end)
+  UNUSED(config)
   return -1;
 }
 
@@ -1430,6 +1434,7 @@ int pnf_nr_phy_unpack_vendor_extension_tlv(nfapi_tl_t *tl,
                                            void **ve,
                                            nfapi_p7_codec_config_t *config)
 {
+  UNUSED(config)
   // NFAPI_TRACE(NFAPI_TRACE_INFO, "pnf_phy_unpack_vendor_extension_tlv\n");
   switch (tl->tag) {
     case VENDOR_EXT_TLV_1_TAG:
@@ -1448,11 +1453,14 @@ int pnf_nr_phy_unpack_vendor_extension_tlv(nfapi_tl_t *tl,
 int pnf_nr_phy_pack_vendor_extention_tlv(void *ve, uint8_t **ppWritePackedMsg, uint8_t *end, nfapi_p7_codec_config_t *config)
 {
   // printf("%s\n", __FUNCTION__);
-  (void)ve;
-  (void)ppWritePackedMsg;
+  UNUSED(ve)
+  UNUSED(ppWritePackedMsg)
+  UNUSED(end)
+  UNUSED(config)
   return -1;
 }
 int pnf_sim_unpack_vendor_extension_tlv(nfapi_tl_t *tl, uint8_t **ppReadPackedMessage, uint8_t *end, void **ve, nfapi_p4_p5_codec_config_t *config) {
+  UNUSED(config)
   //NFAPI_TRACE(NFAPI_TRACE_INFO, "pnf_sim_unpack_vendor_extension_tlv\n");
   switch(tl->tag) {
     case VENDOR_EXT_TLV_2_TAG:
@@ -1474,6 +1482,7 @@ int pnf_nr_sim_unpack_vendor_extension_tlv(nfapi_tl_t *tl,
                                            void **ve,
                                            nfapi_p4_p5_codec_config_t *config)
 {
+  UNUSED(config)
   // NFAPI_TRACE(NFAPI_TRACE_INFO, "pnf_sim_unpack_vendor_extension_tlv\n");
   switch (tl->tag) {
     case VENDOR_EXT_TLV_2_TAG:
@@ -1491,8 +1500,10 @@ int pnf_nr_sim_unpack_vendor_extension_tlv(nfapi_tl_t *tl,
 
 int pnf_sim_pack_vendor_extention_tlv(void *ve, uint8_t **ppWritePackedMsg, uint8_t *end, nfapi_p4_p5_codec_config_t *config) {
   //printf("%s\n", __FUNCTION__);
-  (void)ve;
-  (void)ppWritePackedMsg;
+  UNUSED(ve)
+  UNUSED(ppWritePackedMsg)
+  UNUSED(end)
+  UNUSED(config)
 
   return -1;
 }
@@ -1500,8 +1511,10 @@ int pnf_sim_pack_vendor_extention_tlv(void *ve, uint8_t **ppWritePackedMsg, uint
 int pnf_nr_sim_pack_vendor_extention_tlv(void *ve, uint8_t **ppWritePackedMsg, uint8_t *end, nfapi_p4_p5_codec_config_t *config)
 {
   // printf("%s\n", __FUNCTION__);
-  (void)ve;
-  (void)ppWritePackedMsg;
+  UNUSED(ve)
+  UNUSED(ppWritePackedMsg)
+  UNUSED(end)
+  UNUSED(config)
 
   return -1;
 }
@@ -1791,6 +1804,7 @@ void stop_nr_nfapi_pnf()
 static bool has_sent_stop_ind = false;
 int nr_stop_request(nfapi_pnf_config_t *config, nfapi_pnf_phy_config_t *phy, nfapi_nr_stop_request_scf_t *req)
 {
+  UNUSED(phy)
   if (has_sent_stop_ind) {
     // STOP.indication already sent, nothing to do
     return 0;
@@ -1812,6 +1826,7 @@ int nr_stop_request(nfapi_pnf_config_t *config, nfapi_pnf_phy_config_t *phy, nfa
 }
 
 int measurement_request(nfapi_pnf_config_t *config, nfapi_pnf_phy_config_t *phy, nfapi_measurement_request_t *req) {
+  UNUSED(phy)
   nfapi_measurement_response_t resp;
   memset(&resp, 0, sizeof(resp));
   resp.header.message_id = NFAPI_MEASUREMENT_RESPONSE;
@@ -1822,6 +1837,7 @@ int measurement_request(nfapi_pnf_config_t *config, nfapi_pnf_phy_config_t *phy,
 }
 
 int rssi_request(nfapi_pnf_config_t *config, nfapi_pnf_phy_config_t *phy, nfapi_rssi_request_t *req) {
+  UNUSED(phy)
   nfapi_rssi_response_t resp;
   memset(&resp, 0, sizeof(resp));
   resp.header.message_id = NFAPI_RSSI_RESPONSE;
@@ -1841,6 +1857,7 @@ int rssi_request(nfapi_pnf_config_t *config, nfapi_pnf_phy_config_t *phy, nfapi_
 }
 
 int cell_search_request(nfapi_pnf_config_t *config, nfapi_pnf_phy_config_t *phy, nfapi_cell_search_request_t *req) {
+  UNUSED(phy)
   nfapi_cell_search_response_t resp;
   memset(&resp, 0, sizeof(resp));
   resp.header.message_id = NFAPI_CELL_SEARCH_RESPONSE;
@@ -1892,6 +1909,7 @@ int cell_search_request(nfapi_pnf_config_t *config, nfapi_pnf_phy_config_t *phy,
 }
 
 int broadcast_detect_request(nfapi_pnf_config_t *config, nfapi_pnf_phy_config_t *phy, nfapi_broadcast_detect_request_t *req) {
+  UNUSED(phy)
   nfapi_broadcast_detect_response_t resp;
   memset(&resp, 0, sizeof(resp));
   resp.header.message_id = NFAPI_BROADCAST_DETECT_RESPONSE;
@@ -1928,6 +1946,7 @@ int broadcast_detect_request(nfapi_pnf_config_t *config, nfapi_pnf_phy_config_t 
 }
 
 int system_information_schedule_request(nfapi_pnf_config_t *config, nfapi_pnf_phy_config_t *phy, nfapi_system_information_schedule_request_t *req) {
+  UNUSED(phy)
   nfapi_system_information_schedule_response_t resp;
   memset(&resp, 0, sizeof(resp));
   resp.header.message_id = NFAPI_SYSTEM_INFORMATION_SCHEDULE_RESPONSE;
@@ -1948,6 +1967,7 @@ int system_information_schedule_request(nfapi_pnf_config_t *config, nfapi_pnf_ph
 }
 
 int system_information_request(nfapi_pnf_config_t *config, nfapi_pnf_phy_config_t *phy, nfapi_system_information_request_t *req) {
+  UNUSED(phy)
   nfapi_system_information_response_t resp;
   memset(&resp, 0, sizeof(resp));
   resp.header.message_id = NFAPI_SYSTEM_INFORMATION_RESPONSE;
@@ -1989,6 +2009,7 @@ int system_information_request(nfapi_pnf_config_t *config, nfapi_pnf_phy_config_
 }
 
 int nmm_stop_request(nfapi_pnf_config_t *config, nfapi_pnf_phy_config_t *phy, nfapi_nmm_stop_request_t *req) {
+  UNUSED(phy)
   nfapi_nmm_stop_response_t resp;
   memset(&resp, 0, sizeof(resp));
   resp.header.message_id = NFAPI_NMM_STOP_RESPONSE;
@@ -2070,6 +2091,7 @@ void pnf_nr_sim_deallocate_p4_p5_vendor_ext(void *header)
 
 int pnf_sim_pack_p4_p5_vendor_extension(void *header, uint8_t **ppWritePackedMsg, uint8_t *end, nfapi_p4_p5_codec_config_t *config)
 {
+  UNUSED(config)
   // NFAPI_TRACE(NFAPI_TRACE_INFO, "%s\n", __FUNCTION__);
   if (((nfapi_p4_p5_message_header_t *)header)->message_id == P5_VENDOR_EXT_RSP) {
     vendor_ext_p5_rsp *rsp = (vendor_ext_p5_rsp *)(header);
@@ -2084,6 +2106,7 @@ int pnf_nr_sim_pack_p4_p5_vendor_extension(void *header,
                                            uint8_t *end,
                                            nfapi_p4_p5_codec_config_t *config)
 {
+  UNUSED(config)
   // NFAPI_TRACE(NFAPI_TRACE_INFO, "%s\n", __FUNCTION__);
   if (((nfapi_nr_p4_p5_message_header_t *)header)->message_id == P5_VENDOR_EXT_RSP) {
     vendor_ext_p5_rsp *rsp = (vendor_ext_p5_rsp *)(header);
@@ -2098,6 +2121,7 @@ int pnf_sim_unpack_p4_p5_vendor_extension(void *header,
                                           uint8_t *end,
                                           nfapi_p4_p5_codec_config_t *codec)
 {
+  UNUSED(codec)
   // NFAPI_TRACE(NFAPI_TRACE_INFO, "%s\n", __FUNCTION__);
   if (((nfapi_p4_p5_message_header_t *)header)->message_id == P5_VENDOR_EXT_REQ) {
     vendor_ext_p5_req *req = (vendor_ext_p5_req *)(header);
@@ -2113,6 +2137,7 @@ int pnf_nr_sim_unpack_p4_p5_vendor_extension(void *header,
                                              uint8_t *end,
                                              nfapi_p4_p5_codec_config_t *codec)
 {
+  UNUSED(codec)
   // NFAPI_TRACE(NFAPI_TRACE_INFO, "%s\n", __FUNCTION__);
   if (((nfapi_nr_p4_p5_message_header_t *)header)->message_id == P5_VENDOR_EXT_REQ) {
     vendor_ext_p5_req *req = (vendor_ext_p5_req *)(header);

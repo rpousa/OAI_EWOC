@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 if (CROSS_COMPILE)
   find_package(bnProc_gen_128)
   find_package(bnProc_gen_avx2)

@@ -1,34 +1,11 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file common/config/config_load_configmodule.c
+/*!
  * \brief configuration module, load the shared library implementing the configuration module
- * \author Francois TABURET
- * \date 2017
- * \version 0.1
- * \company NOKIA BellLabs France
- * \email: francois.taburet@nokia-bell-labs.com
- * \note
- * \warning
  */
+
 #define _GNU_SOURCE
 #include <string.h>
 #include <stdlib.h>
@@ -63,7 +40,8 @@ static paramdef_t Config_Params[] = {
 };
 // clang-format on
 
-int load_config_sharedlib(configmodule_interface_t *cfgptr) {
+static int load_config_sharedlib(configmodule_interface_t *cfgptr)
+{
   void *lib_handle;
   char fname[128];
   char libname[FILENAME_MAX];
@@ -145,6 +123,10 @@ int config_cmdlineonly_getlist(configmodule_interface_t *cfg,
                                int numparams,
                                const char *prefix)
 {
+  UNUSED(cfg);
+  UNUSED(params);
+  UNUSED(numparams);
+  UNUSED(prefix);
   ParamList->numelt = 0;
   return 0;
 }
@@ -184,15 +166,15 @@ int config_cmdlineonly_get(configmodule_interface_t *cfg, paramdef_t *cfgoptions
 
       case TYPE_UINTARRAY:
       case TYPE_INTARRAY:
-        defval = config_setdefault_intlist(cfg, &cfgoptions[i], prefix);
+        defval = config_setdefault_intlist(cfg, &cfgoptions[i]);
         break;
 
       case TYPE_DOUBLE:
-        defval = config_setdefault_double(cfg, &cfgoptions[i], prefix);
+        defval = config_setdefault_double(cfg, &cfgoptions[i]);
         break;
 
       case TYPE_IPV4ADDR:
-        defval = config_setdefault_ipv4addr(cfg, &cfgoptions[i], prefix);
+        defval = config_setdefault_ipv4addr(cfg, &cfgoptions[i]);
         break;
 
       default:
@@ -300,12 +282,9 @@ configmodule_interface_t *load_configmodule(int argc,
       cfgmode = strdup(CONFIG_LIBCONFIGFILE);
     }
   }
-  static configmodule_interface_t *cfgptr = NULL;
-  if (cfgptr)
-    fprintf(stderr, "ERROR: Call load_configmodule more than one time\n");
 
   // The macros are not thread safe print_params and similar
-  cfgptr = calloc(sizeof(configmodule_interface_t), 1);
+  configmodule_interface_t *cfgptr = calloc(sizeof(configmodule_interface_t), 1);
   if (!cfgptr) {
     fprintf(stderr, "ERROR: cannot allocate a memory for configuration\n");
     return NULL;
@@ -380,7 +359,7 @@ configmodule_interface_t *load_configmodule(int argc,
       Config_Params[idx].strptr = &(cfgptr->tmpdir);
       config_get(cfgptr, Config_Params, sizeofArray(Config_Params), CONFIG_SECTIONNAME);
     } else {
-      fprintf(stderr,"[CONFIG] %s %d config module \"%s\" couldn't be loaded\n", __FILE__, __LINE__,cfgmode);
+      fprintf(stderr, "[CONFIG] config module \"%s\" couldn't be loaded\n", cfgmode);
       cfgptr->rtflags = cfgptr->rtflags | CONFIG_HELP | CONFIG_ABORT;
     }
   } else {
@@ -395,11 +374,6 @@ configmodule_interface_t *load_configmodule(int argc,
   if (modeparams != NULL) free(modeparams);
 
   if (cfgmode != NULL) free(cfgmode);
-
-  if (CONFIG_ISFLAGSET(CONFIG_ABORT)) {
-    config_printhelp(Config_Params, sizeofArray(Config_Params), CONFIG_SECTIONNAME);
-    //       exit(-1);
-  }
 
   return cfgptr;
 }
@@ -443,12 +417,31 @@ void end_configmodule(configmodule_interface_t *cfgptr)
     
     cfgptr->numptrs=0;
     pthread_mutex_unlock(&cfgptr->memBlocks_mutex);
+    for (int i = 0; i < cfgptr->num_cfgP; i++) {
+      if (cfgptr->cfgP[i] != NULL) {
+        free(cfgptr->cfgP[i]);
+      }
+    }
     if (cfgptr->cfgmode)
       free(cfgptr->cfgmode);
 
     if (cfgptr->argv_info)
       free(cfgptr->argv_info);
 
+    if (cfgptr->tmpdir)
+      free(cfgptr->tmpdir);
+
+    if (cfgptr->status) {
+      if (cfgptr->status->debug_cfgname)
+        free(cfgptr->status->debug_cfgname);
+      free(cfgptr->status);
+    }
+
     free(cfgptr);
+    for (int i = 0; i < sizeofArray(Config_Params); i++) {
+      Config_Params[i].voidptr = NULL;
+      Config_Params[i].numelt = 0;
+      Config_Params[i].paramflags &= ~PARAMFLAG_PARAMSETDEF;
+    }
   }
 }

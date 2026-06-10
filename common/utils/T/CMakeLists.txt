@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 if (CROSS_COMPILE)
   find_package(genids)
 else()
@@ -53,7 +55,7 @@ add_dependencies(T_headers T_IDs.h generate_T)
 target_include_directories(T_headers INTERFACE ${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_CURRENT_SOURCE_DIR})
 
 if(T_TRACER)
-  add_library(T STATIC T.c local_tracer.c T_IDs.h T_messages.txt.h)
+  add_library(T STATIC T.c local_tracer.c T_messages_creator.c T_IDs.h T_messages.txt.h)
   target_link_libraries(T PUBLIC rt)
   target_link_libraries(T PRIVATE CONFIG_LIB T_headers)
 
