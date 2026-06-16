@@ -324,6 +324,12 @@ void nr_HO_F1_trigger_telnet(gNB_RRC_INST *rrc, uint32_t rrc_ue_id, uint64_t tar
     return;
   }
   
+  nr_rrc_cell_container_t *source_cell = rrc_get_pcell_for_ue(rrc, ue);
+  if (source_cell == NULL) {
+    LOG_E(NR_RRC, "cannot get source cell for UE %u\n", ue->rrc_ue_id);
+    return;
+  }
+
   nr_rrc_du_container_t *target_du = NULL;
   if (target_du_id == 0) {
   
