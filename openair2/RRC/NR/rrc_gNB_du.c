@@ -1133,7 +1133,7 @@ nr_rrc_du_container_t *get_du_by_cell_id(gNB_RRC_INST *rrc, uint64_t cell_id)
 {
   nr_rrc_du_container_t *du = NULL;
   RB_FOREACH(du, rrc_du_tree, &rrc->dus) {
-    if (cell_id == du->setup_req->cell[0].info.nr_cellid)
+    if (cell_id == du->cells[0].info.nr_cellid)
       return du;
   }
   return NULL;
