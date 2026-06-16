@@ -1133,8 +1133,11 @@ nr_rrc_du_container_t *get_du_by_cell_id(gNB_RRC_INST *rrc, uint64_t cell_id)
 {
   nr_rrc_du_container_t *du = NULL;
   RB_FOREACH(du, rrc_du_tree, &rrc->dus) {
-    if (cell_id == du->cells[0].info.nr_cellid)
-      return du;
+    FOR_EACH_SEQ_ARR(nr_rrc_cell_container_t **, cell_ptr, &du->cells) {
+      const nr_rrc_cell_container_t *cell = *cell_ptr;
+      if (cell->info.cell_id == cell_id)
+        return du;
+    }
   }
   return NULL;
 }
