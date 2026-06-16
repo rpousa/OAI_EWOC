@@ -1111,11 +1111,11 @@ nr_rrc_du_container_t *get_du_for_ue(gNB_RRC_INST *rrc, uint32_t ue_id)
   return get_du_by_assoc_id(rrc, ue_data.du_assoc_id);
 }
 
-nr_rrc_du_container_t *get_du_by_assoc_id(gNB_RRC_INST *rrc, sctp_assoc_t assoc_id)
-{
-  nr_rrc_du_container_t e = {.assoc_id = assoc_id};
-  return RB_FIND(rrc_du_tree, &rrc->dus, &e);
-}
+//nr_rrc_du_container_t *get_du_by_assoc_id(gNB_RRC_INST *rrc, sctp_assoc_t assoc_id)
+//{
+//  nr_rrc_du_container_t e = {.assoc_id = assoc_id};
+//  return RB_FIND(rrc_du_tree, &rrc->dus, &e);
+//}
 
 nr_rrc_du_container_t *get_du_by_du_id(gNB_RRC_INST *rrc, uint64_t du_id)
 {
