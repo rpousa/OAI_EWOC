@@ -1121,7 +1121,7 @@ nr_rrc_du_container_t *get_du_by_du_id(gNB_RRC_INST *rrc, uint64_t du_id)
 {
   nr_rrc_du_container_t *du = NULL;
   RB_FOREACH(du, rrc_du_tree, &rrc->dus) {
-    if (du_id == du->setup_req->gNB_DU_id)
+    if (du_id == du->gNB_DU_id)
       return du;
   }
   return NULL;
