@@ -334,7 +334,7 @@ void nr_HO_F1_trigger_telnet(gNB_RRC_INST *rrc, uint32_t rrc_ue_id, uint64_t tar
   if (target_du_id == 0) {
   
     target_du = find_target_du(rrc, source_du->assoc_id);
-    LOG_I(NR_RRC, "Target DU ID is not specified, using the next available DU with assoc_id %d and du id %ld for UE %u \n", target_du->assoc_id, target_du->setup_req->gNB_DU_id, ue->rrc_ue_id);
+    LOG_I(NR_RRC, "Target DU ID is not specified, using the next available DU with assoc_id %d and du id %ld for UE %u \n", target_du->assoc_id, target_du->gNB_DU_id, ue->rrc_ue_id);
     if (target_du == NULL) {
       LOG_E(NR_RRC, "No target gNB-DU found. Handover for UE %u aborted.\n", ue->rrc_ue_id);
       return;
@@ -347,7 +347,7 @@ void nr_HO_F1_trigger_telnet(gNB_RRC_INST *rrc, uint32_t rrc_ue_id, uint64_t tar
       LOG_E(NR_RRC, "No target gNB-DU found with DU ID %ld. Handover for UE %u aborted.\n", target_du_id, ue->rrc_ue_id);
       return;
     }
-    LOG_I(NR_RRC, "Triggering F1 handover for UE %u from source DU %ld to target DU %ld\n", ue->rrc_ue_id, source_du->setup_req->gNB_DU_id, target_du->setup_req->gNB_DU_id);
+    LOG_I(NR_RRC, "Triggering F1 handover for UE %u from source DU %ld to target DU %ld\n", ue->rrc_ue_id, source_du->gNB_DU_id, target_du->gNB_DU_id);
   }
 
   // For target cell, get the first cell from target DU
