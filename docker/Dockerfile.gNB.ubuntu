@@ -107,8 +107,8 @@ RUN /bin/bash -c "ln -s /usr/local/lib/liboai_usrpdevif.so /usr/local/lib/liboai
         /usr/local/lib/libldpc*.so \
         /usr/local/lib/libtelnetsrv.so \
         /usr/local/lib/libtelnetsrv_ci.so \
-        /usr/local/lib/libuhd.so.4.8.0 \
-        /usr/local/lib/liboai_zmqdevif.so
+        /usr/local/lib/libuhd.so.4.8.0 
+#        /usr/local/lib/liboai_zmqdevif.so
 
 WORKDIR /opt/oai-gnb
 #EXPOSE 2152/udp  # S1U, GTP/UDP
