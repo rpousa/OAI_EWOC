@@ -207,6 +207,7 @@ channelmod:
      forgetfact: 0
      offset: 0
      ds_tdl: 0
+     
 vrtsim:
   role: server
   # Channel mode: exactly one of the three modes below should be active.

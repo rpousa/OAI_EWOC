@@ -32,7 +32,6 @@ RUN \
       -w USRP -t Ethernet -w BLADERF \
       --build-e2 --cmake-opt -DKPM_VERSION=$KPM_VERSION --cmake-opt -DE2AP_VERSION=$E2AP_VERSION \
       --cmake-opt -DOAI_VRTSIM_TAPS_CLIENT=ON \
-      -w ZMQ \
       --noavx512 \
       --build-tool-opt -k10 \
       --cmake-opt -DT_RECORD_DB=ON \
