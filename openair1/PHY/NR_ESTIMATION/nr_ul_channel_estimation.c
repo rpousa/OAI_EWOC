@@ -734,7 +734,7 @@ void nr_pusch_ptrs_processing(PHY_VARS_gNB *gNB,
           printf("[PHY][UL][PTRS]: Rotate Symbol %2d with  %d + j* %d\n", i, phase_per_symbol[i].r, phase_per_symbol[i].i);
 #endif
           rotate_cpx_vector(&pusch_vars->rxdataF_comp[aarx][i * nb_re_pusch],
-                            &phase_per_symbol[i],
+                            phase_per_symbol[i],
                             &pusch_vars->rxdataF_comp[aarx][i * nb_re_pusch],
                             (nb_rb * NR_NB_SC_PER_RB),
                             15);

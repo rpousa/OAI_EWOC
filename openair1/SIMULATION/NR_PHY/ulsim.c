@@ -1639,9 +1639,9 @@ int main(int argc, char *argv[])
                   1,
                   1 | log_format);
 
-            LOG_M("rxsigF2_comp.m",
-                  "rxsF2_comp",
-                  &pusch_vars->rxdataF_comp[2][start_symbol * (off + (NR_NB_SC_PER_RB * pusch_pdu->rb_size))],
+            LOG_M("rxsigF1_comp.m",
+                  "rxsF1_comp",
+                  &pusch_vars->rxdataF_comp[1][start_symbol * (off + (NR_NB_SC_PER_RB * pusch_pdu->rb_size))],
                   nb_symb_sch * (off + (NR_NB_SC_PER_RB * pusch_pdu->rb_size)),
                   1,
                   1 | log_format);
@@ -1667,21 +1667,15 @@ int main(int argc, char *argv[])
                   1,
                   1 | log_format);
 
-            LOG_M("rxsigF4_comp.m",
-                  "rxsF4_comp",
-                  &pusch_vars->rxdataF_comp[4][start_symbol * (off + (NR_NB_SC_PER_RB * pusch_pdu->rb_size))],
+            LOG_M("rxsigF2_comp.m",
+                  "rxsF2_comp",
+                  &pusch_vars->rxdataF_comp[2][start_symbol * (off + (NR_NB_SC_PER_RB * pusch_pdu->rb_size))],
                   nb_symb_sch * (off + (NR_NB_SC_PER_RB * pusch_pdu->rb_size)),
                   1,
                   1 | log_format);
-            LOG_M("rxsigF8_comp.m",
-                  "rxsF8_comp",
-                  &pusch_vars->rxdataF_comp[8][start_symbol * (off + (NR_NB_SC_PER_RB * pusch_pdu->rb_size))],
-                  nb_symb_sch * (off + (NR_NB_SC_PER_RB * pusch_pdu->rb_size)),
-                  1,
-                  1 | log_format);
-            LOG_M("rxsigF12_comp.m",
-                  "rxsF12_comp",
-                  &pusch_vars->rxdataF_comp[12][start_symbol * (off + (NR_NB_SC_PER_RB * pusch_pdu->rb_size))],
+            LOG_M("rxsigF3_comp.m",
+                  "rxsF3_comp",
+                  &pusch_vars->rxdataF_comp[3][start_symbol * (off + (NR_NB_SC_PER_RB * pusch_pdu->rb_size))],
                   nb_symb_sch * (off + (NR_NB_SC_PER_RB * pusch_pdu->rb_size)),
                   1,
                   1 | log_format);

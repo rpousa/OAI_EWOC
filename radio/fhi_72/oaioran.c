@@ -72,6 +72,17 @@ void print_fhi_counters(ru_info_t *ru, const int frame, const int slot)
             x_counters[o_xu_id].tx_counter - old_tx_counter[o_xu_id],
             x_counters[o_xu_id].tx_bytes_per_sec * 8 / 1000L,
             x_counters[o_xu_id].Total_msgs_rcvd);
+#if defined K_RELEASE
+      LOG_I(HW,
+            "[%s%d][RX Timing][on time: %7lu, early %7lu late %7lu corrupt %7lu, duplicated %7lu]\n",
+            "o_du",
+            o_xu_id,
+            x_counters[o_xu_id].Rx_on_time,
+            x_counters[o_xu_id].Rx_early,
+            x_counters[o_xu_id].Rx_late,
+            x_counters[o_xu_id].Rx_corrupt,
+            x_counters[o_xu_id].Rx_pkt_dupl);
+#endif
       for (int rxant = 0; rxant < ru->nb_rx / fh_init->xran_ports; rxant++)
         LOG_I(HW,
               "[%s%d][pusch%d %7ld prach%d %7ld]\n",

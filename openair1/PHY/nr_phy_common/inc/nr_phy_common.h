@@ -376,4 +376,7 @@ int nr_get_ssb_start_sc(int scs,
                         int ssb_offset_point_a,
                         int ssb_sco,
                         frequency_range_t freq_range);
+
+#include "nr_channel_compensation.h"
+#include "nr_compute_llr.h"
 #endif

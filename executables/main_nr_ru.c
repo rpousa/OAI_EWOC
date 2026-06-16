@@ -107,11 +107,14 @@ struct timespec timespec_sub(struct timespec, struct timespec)
   return t;
 };
 
-void perform_symbol_rotation(NR_DL_FRAME_PARMS *fp, double f0, c16_t *symbol_rotation)
+void perform_symbol_rotation(const int nsymb, const int numerology_index, double f0, c16_t *symbol_rotation)
 {
   return;
 }
-void init_timeshift_rotation(NR_DL_FRAME_PARMS *fp)
+void init_timeshift_rotation(const int ofdm_symbol_size,
+                             const int nb_prefix_samples,
+                             const uint ofdm_offset_divisor,
+                             c16_t *timeshift_symbol_rotation)
 {
   return;
 };

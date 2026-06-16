@@ -1345,7 +1345,7 @@ void nr_pdsch_ptrs_processing(int nbRx,
                               int32_t ptrs_re_per_slot[][14],
                               uint32_t rx_size_symbol,
                               int nl,
-                              c16_t rxdataF_comp[][nl][nbRx][rx_size_symbol],
+                              c16_t rxdataF_comp[][nl][rx_size_symbol],
                               NR_DL_FRAME_PARMS *frame_parms,
                               fapi_nr_dl_config_dlsch_pdu_rel15_t *dlsch_config,
                               uint8_t nr_slot_rx,
@@ -1369,7 +1369,7 @@ void nr_pdsch_ptrs_processing(int nbRx,
   int nscid = dlsch_config->nscid;
 
   /* loop over antennas */
-  for (int aarx = 0; aarx < frame_parms->nb_antennas_rx; aarx++) {
+  for (int aarx = 0; aarx < nbRx; aarx++) {
     c16_t *phase_per_symbol = (c16_t*)ptrs_phase_per_slot[aarx];
     ptrs_re_symbol = (int32_t*)ptrs_re_per_slot[aarx];
     ptrs_re_symbol[symbol] = 0;
@@ -1404,7 +1404,7 @@ void nr_pdsch_ptrs_processing(int nbRx,
                              nb_rb,
                              rnti,
                              frame_parms->ofdm_symbol_size,
-                             rxdataF_comp[symbol][0][aarx],
+                             rxdataF_comp[symbol][aarx],
                              gold,
                              (int16_t *)&phase_per_symbol[symbol],
                              &ptrs_re_symbol[symbol]);
@@ -1436,9 +1436,9 @@ void nr_pdsch_ptrs_processing(int nbRx,
 #ifdef DEBUG_DL_PTRS
           printf("[PHY][DL][PTRS]: Rotate Symbol %2d with  %d + j* %d\n", i, phase_per_symbol[i].r, phase_per_symbol[i].i);
 #endif
-          rotate_cpx_vector(rxdataF_comp[i][0][aarx], &phase_per_symbol[i], rxdataF_comp[i][0][aarx], nb_rb * NR_NB_SC_PER_RB, 15);
+          rotate_cpx_vector(rxdataF_comp[i][aarx], phase_per_symbol[i], rxdataF_comp[i][aarx], nb_rb * NR_NB_SC_PER_RB, 15);
         }// if not DMRS Symbol
       }// symbol loop
     }// last symbol check
-  }//Antenna loop
+  } // Antenna loop
 }//main function

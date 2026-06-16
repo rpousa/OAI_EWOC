@@ -283,15 +283,15 @@ void apply_nr_rotation_TX(const NR_DL_FRAME_PARMS *fp,
   symbol_rotation += symb_offset;
 
   for (int sidx = first_symbol; sidx < first_symbol + nsymb; sidx++) {
-    const c16_t *this_rotation = symbol_rotation + sidx;
-    c16_t *this_symbol = (txdataF) + sidx * fp->ofdm_symbol_size;
+    const c16_t this_rotation = symbol_rotation[sidx];
+    c16_t *this_symbol = txdataF + sidx * fp->ofdm_symbol_size;
 
     LOG_D(PHY,"Rotating symbol %d, slot %d, symbol_subframe_index %d (%d,%d)\n",
       sidx,
       slot,
       sidx + symb_offset,
-      this_rotation->r,
-      this_rotation->i);
+      this_rotation.r,
+      this_rotation.i);
 
     if (is_flat_buff)
       rotate_cpx_vector(this_symbol, this_rotation, this_symbol, nb_rb * NR_NB_SC_PER_RB, 15);

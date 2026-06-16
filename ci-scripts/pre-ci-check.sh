@@ -55,8 +55,17 @@ done
 # ----------------------------
 # Merged commits
 # ----------------------------
-mergeCommits=$(git rev-list --merges --abbrev-commit "$TARGET_BRANCH".."$SOURCE_BRANCH")
-if [[ ! "$SOURCE_BRANCH" =~ ^(origin/)?integration_[0-9]{4}_w[0-9]{2}$ ]]; then
+if [[ "$SOURCE_BRANCH" =~ ^[0-9a-f]{40}$ ]]; then
+  # note: if no branch could be found, it will result in "" and git rev-list
+  # will use the commit ID. Exclude "HEAD detached at", then use first branch
+  # name.
+  BRANCH_NAME=$(git branch -a --points-at $SOURCE_BRANCH --format='%(refname:short)' | grep -v detached | head -n1)
+  echo "SHA recognized in $SOURCE_BRANCH, using \"$BRANCH_NAME\" as branch name"
+else
+  BRANCH_NAME="$SOURCE_BRANCH"
+fi
+if [[ ! "$BRANCH_NAME" =~ ^(origin/)?integration_[0-9]{4}_w[0-9]{2}$ ]]; then
+    mergeCommits=$(git rev-list --merges --abbrev-commit "$TARGET_BRANCH".."$SOURCE_BRANCH")
     if [[ -n "$mergeCommits" ]]; then
         message="Error: Following merge commits are found in the source branch history. Please rebase your branch.\n\n"
         message+="$(echo "$mergeCommits" | paste -sd ',' | sed 's/,/, /g')\n"

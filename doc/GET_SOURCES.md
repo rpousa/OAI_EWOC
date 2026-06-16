@@ -13,7 +13,7 @@ sudo apt-get update
 sudo apt-get install git
 ```
 
-## Clone the Git repository (for OAI Users without login to gitlab server)
+## Clone the Git repository (for OAI Users without login to github server)
 
 The [openairinterface5g repository](https://github.com/duranta-project/openairinterface5g.git)
 holds the source code for the RAN (4G and 5G).

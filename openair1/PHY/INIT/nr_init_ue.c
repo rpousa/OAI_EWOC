@@ -255,7 +255,7 @@ int init_nr_ue_signal(PHY_VARS_NR_UE *ue, int nb_connected_gNB)
 
   ue->init_averaging = 1;
   init_symbol_rotation(fp);
-  init_timeshift_rotation(fp);
+  init_timeshift_rotation(fp->ofdm_symbol_size, fp->nb_prefix_samples, fp->ofdm_offset_divisor, fp->timeshift_symbol_rotation);
 
   // initialize to false only for SA since in do-ra and phy-test it is already set to true before getting here
   if (IS_SA_MODE(get_softmodem_params()))
@@ -460,7 +460,6 @@ void phy_init_nr_top(PHY_VARS_NR_UE *ue) {
   crcTableInit();
   init_byte2m128i();
   load_dftslib();
-  init_context_synchro_nr(frame_parms);
   generate_ul_reference_signal_sequences(SHRT_MAX);
 }
 

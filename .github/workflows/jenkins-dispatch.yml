@@ -40,6 +40,11 @@ jobs:
               - 'ci-scripts/**'
               - '.github/workflows/**'
               - '.github/actions/**'
+              - 'docker/**'
+              - 'charts/**'
+              - 'openshift/**'
+              - 'cmake_targets/build_oai'
+              - 'cmake_targets/tools/build_helper'
 
   require-maintainer-approval:
     needs: detect-changes

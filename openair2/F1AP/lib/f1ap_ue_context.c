@@ -703,7 +703,7 @@ static F1AP_DRBs_ToBeSetup_List_t encode_drbs_to_setup(int n, const f1ap_drb_to_
     F1AP_QoSInformation_ExtIEs_t *qos_ext_ie = calloc_or_fail(1, sizeof(*qos_ext_ie));
     it->qoSInformation.choice.choice_extension = (struct F1AP_ProtocolIE_SingleContainer *)qos_ext_ie;
     qos_ext_ie->id = F1AP_ProtocolIE_ID_id_DRB_Information;
-    qos_ext_ie->criticality = F1AP_Criticality_reject;
+    qos_ext_ie->criticality = F1AP_Criticality_ignore;
     qos_ext_ie->value.present = F1AP_QoSInformation_ExtIEs__value_PR_DRB_Information;
     qos_ext_ie->value.choice.DRB_Information = encode_drb_info_nr(&drb->nr);
 

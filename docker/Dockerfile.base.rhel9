@@ -9,7 +9,7 @@
 
 
 FROM registry.redhat.io/ubi9/ubi:latest AS ran-base
-LABEL MAINTAINER OpenAirInterface <contact@openairinterface.org>
+LABEL MAINTAINER OpenAirInterface <oaicicdteam@openairinterface.org>
 ARG NEEDED_GIT_PROXY
 ARG TARGETARCH
 ENV TZ=Europe/Paris
