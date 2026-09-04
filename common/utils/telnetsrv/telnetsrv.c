@@ -45,6 +45,11 @@
 static char *telnet_defstatmod[] = {"softmodem","phy","loader","measur"};
 static telnetsrv_params_t telnetparams;
 
+#define TELNET_CMDQ_TIMEOUT_MS 200
+
+/* Response queue for telnet commands posted to queue. */
+static notifiedFIFO_t telnet_cmdrespq;
+
 #define TELNETSRV_OPTNAME_STATICMOD   "staticmod"
 #define TELNETSRV_OPTNAME_SHRMOD      "shrmod"
 
@@ -494,16 +499,62 @@ char *get_time(char *buff,int bufflen) {
   strftime (buff, bufflen, "%Y-%m-%d %H:%M:%S.000", localtime_r(&now,&tmstruct));
   return buff;
 }
-void telnet_pushcmd(telnetshell_cmddef_t *cmd, char *cmdbuff, telnet_printfunc_t prnt)
+static void telnet_pushcmd_key(telnetshell_cmddef_t *cmd, char *cmdbuff, telnet_printfunc_t prnt, notifiedFIFO_t *respq, uint64_t key)
 {
-  notifiedFIFO_elt_t *msg = newNotifiedFIFO_elt(sizeof(telnetsrv_qmsg_t), 0, NULL, NULL);
+  notifiedFIFO_elt_t *msg = newNotifiedFIFO_elt(sizeof(telnetsrv_qmsg_t), key, respq, NULL);
   telnetsrv_qmsg_t *cmddata = NotifiedFifoData(msg);
   cmddata->cmdfunc = (qcmdfunc_t)cmd->cmdfunc;
   cmddata->prnt = prnt;
   cmddata->debug = telnetparams.telnetdbg;
-  if (cmdbuff != NULL)
-    cmddata->cmdbuff = strdup(cmdbuff);
+  cmddata->cmdbuff = cmdbuff != NULL ? strdup(cmdbuff) : NULL;
   pushNotifiedFIFO(cmd->qptr, msg);
+}
+
+void telnet_pushcmd(telnetshell_cmddef_t *cmd, char *cmdbuff, telnet_printfunc_t prnt)
+{
+  telnet_pushcmd_key(cmd, cmdbuff, prnt, NULL, 0);
+}
+
+/* \brief Push a command into the queue, and wait for the
+ * module thread to execute it. Unrelated, late messages from previous jobs are
+ * discarded. */
+static void telnet_pushcmd_wait(telnetshell_cmddef_t *cmd, char *cmdbuff, telnet_printfunc_t prnt)
+{
+  static uint64_t cmdkey = 0;
+  uint64_t key = ++cmdkey;
+
+  struct timespec deadline;
+  int rc = clock_gettime(CLOCK_REALTIME, &deadline);
+  AssertFatal(rc == 0, "clock_gettime() failed: errno %d, %s\n", errno, strerror(errno));
+  deadline.tv_sec += TELNET_CMDQ_TIMEOUT_MS / 1000;
+  deadline.tv_nsec += (TELNET_CMDQ_TIMEOUT_MS % 1000) * 1000000L;
+  if (deadline.tv_nsec >= 1000000000L) {
+    deadline.tv_sec += 1;
+    deadline.tv_nsec -= 1000000000L;
+  }
+
+  telnet_pushcmd_key(cmd, cmdbuff, prnt, &telnet_cmdrespq, key);
+
+  while (true) {
+    notifiedFIFO_elt_t *resp = pullNotifiedFIFO_timeout(&telnet_cmdrespq, &deadline);
+
+    if (resp == NULL) {
+      /* There was no answer to message with "key" on time. Inform the user of
+       * missing answer. */
+      TELNET_LOG("command \"%s\" not completed within %d ms, answer might be lost\n", cmd->cmdname, TELNET_CMDQ_TIMEOUT_MS);
+      prnt("Error: command \"%s\" not completed within %d ms\n", cmd->cmdname, TELNET_CMDQ_TIMEOUT_MS);
+      return;
+    }
+
+    uint64_t respkey = resp->key;
+    delNotifiedFIFO_elt(resp);
+
+    /* response message was what we waited for */
+    if (respkey == key)
+      return;
+
+    /* received answer must be late, keep waiting for ours */
+  }
 }
 
 int process_command(char *buf)
@@ -563,7 +614,7 @@ int process_command(char *buf)
             if (telnetparams.CmdParsers[i].cmd[k].cmdflags & TELNETSRV_CMDFLAG_WEBSRVONLY)
               continue;
             if (telnetparams.CmdParsers[i].cmd[k].qptr != NULL) {
-              telnet_pushcmd(&(telnetparams.CmdParsers[i].cmd[k]), (cmdb != NULL) ? strdup(cmdb) : NULL, client_printf);
+              telnet_pushcmd_wait(&telnetparams.CmdParsers[i].cmd[k], cmdb, client_printf);
             } else {
               telnetparams.CmdParsers[i].cmd[k].cmdfunc(cmdb, telnetparams.telnetdbg, client_printf);
             }
@@ -737,6 +788,10 @@ void run_telnetsrv(void) {
     write_history(telnetparams.histfile);
     clear_history();
     close(telnetparams.new_socket);
+    /* invalidate the socket: a command that timed out in telnet_pushcmd_wait()
+     * will print its answer later on. Then, client_printf() falls back to
+     * stdout. */
+    telnetparams.new_socket = -1;
     TELNET_LOG("Telnet server waiting for connection...\n");
   }
 
@@ -815,15 +870,23 @@ void run_telnetclt(void) {
   return;
 } /* run_telnetclt */
 
-void poll_telnetcmdq(void *qid, void *arg) {
-	notifiedFIFO_elt_t *msg = pollNotifiedFIFO((notifiedFIFO_t *)qid);
-	
-	if (msg != NULL) {
-	  telnetsrv_qmsg_t *msgdata=NotifiedFifoData(msg);
-	  msgdata->cmdfunc(msgdata->cmdbuff,msgdata->debug,msgdata->prnt,arg);
-	  free(msgdata->cmdbuff);
-	  delNotifiedFIFO_elt(msg);
-	}
+void poll_telnetcmdq(void *qid, void *arg)
+{
+  notifiedFIFO_elt_t *msg = pollNotifiedFIFO((notifiedFIFO_t *)qid);
+
+  if (msg == NULL)
+    return;
+
+  telnetsrv_qmsg_t *msgdata = NotifiedFifoData(msg);
+  msgdata->cmdfunc(msgdata->cmdbuff, msgdata->debug, msgdata->prnt, arg);
+  free(msgdata->cmdbuff);
+
+  if (msg->reponseFifo != NULL) {
+    /* post response so telnet_pushcmd_wait() can unblock */
+    pushNotifiedFIFO(msg->reponseFifo, msg);
+  } else {
+    delNotifiedFIFO_elt(msg);
+  }
 }
 /*------------------------------------------------------------------------------------------------*/
 /* load the commands delivered with the telnet server
@@ -891,6 +954,7 @@ int telnetsrv_autoinit(void) {
   char libname[64];
   sprintf(libname,"telnetsrv_%s",execfunc);
   load_module_shlib(libname,NULL,0,NULL);
+  initNotifiedFIFO(&telnet_cmdrespq);
   if(pthread_create(&telnetparams.telnet_pthread,NULL, (void *(*)(void *))run_telnetsrv, NULL) != 0) {
     fprintf(stderr,"[TELNETSRV] Error %s on pthread_create call\n",strerror(errno));
     return -1;

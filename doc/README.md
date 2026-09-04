@@ -54,6 +54,7 @@ There is some general information in the [OpenAirInterface Gitlab Wiki](https://
 - [How to run the physical simulators](./physical-simulators.md)
 - [How to setup OAI with Nvidia Aerial and Foxconn](./Aerial_FAPI_Split_Tutorial.md)
 - [How to setup OAI with LDPC accelerators (Xilinx T2/Intel ACCs)](./LDPC_OFFLOAD_SETUP.md)
+- [How to run the UE with LDPC CUDA accelerator](./NR_SA_Tutorial_OAI_nrUE_GPU_offload.md)
 - [How to setup OAI with the XDMA FPGA LDPC accelerator](./LDPC_XDMA_offload_setup.md)
 - [How to do a handover](./handover-tutorial.md)
 - [How to setup gNB frequency](./gNB_frequency_setup.md)
@@ -77,6 +78,7 @@ Legacy unmaintained files:
 - [Information on analog beamforming implementation](./analog_beamforming.md)
 - [Information on the UE 5G NAS implementation](./5Gnas.md)
 - [Information on UL-MIMO](./UL_MIMO.md): UL-MIMO specific notes
+- [Information on NRPPA](./NRPPA/NRPPA-call-flow.md)
 
 ## Building and running from images
 
@@ -133,6 +135,9 @@ The other SDRs (AW2S, LimeSDR, ...) have no READMEs.
 ## Developer tools
 
 - [code-style-contrib.md](./code-style-contrib.md): overall working practices, code style, and review process
+- [git-guide.md](./git-guide.md): Git how-tos — commit signing setup, branch
+  management, submodules, recovering from mistakes, reusing conflict
+  resolutions (rerere)
 - [cross-compile.md](./cross-compile.md): how to cross-compile OAI for ARM
 - [clang-format.md](./clang-format.md): how to format the code. See also the
   next entry for an error detection tool.
@@ -141,5 +146,5 @@ The other SDRs (AW2S, LimeSDR, ...) have no READMEs.
 - [sanitizers.md](./dev_tools/sanitizers.md): how to run with ASan/UBSan/MemSAN/TSan
 - [iwyu](../tools/iwyu/README.md) is a tool to detect `#include` errors
 - [docker-dev-env](../tools/docker-dev-env/README.md) is a ubuntu24 docker development environment
-- [performance analysis with tracy](./dev_tools/tracy.md)
+- [performance monitoring](./dev_tools/performance_monitoring.md): a collection of tools to monitor the computing performance of OAI
 - [doc_best_practices.md](./doc_best_practices.md): overall best practices for writing documentations

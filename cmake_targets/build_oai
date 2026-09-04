@@ -18,7 +18,7 @@ HWs=""
 BUILD_DIR=ran_build
 CMAKE_BUILD_TYPE="RelWithDebInfo"
 CMAKE_CMD="$CMAKE"
-OPTIONAL_LIBRARIES="telnetsrv enbscope uescope nrscope ldpc_aal websrv oai_iqplayer imscope imscope_record"
+OPTIONAL_LIBRARIES="telnetsrv enbscope uescope nrscope ldpc_aal ldpc_cuda websrv oai_iqplayer imscope imscope_record"
 TARGET_LIST=""
 BUILD_TOOL_OPT="-j$(nproc)"
 
@@ -43,6 +43,8 @@ Options:
    Sets build directory (will be <oai-root>/cmake_targets/<build-dir>/build)
 --build-e2
    Enable the the E2 Agent
+--build-e3
+   Enable the the E3 Agent
 -I | --install-external-packages
    Installs required packages such as LibXML, asn1.1 compiler, ...
    This option will require root password
@@ -143,6 +145,10 @@ function main() {
              CMAKE_CMD="$CMAKE_CMD -DE2_AGENT=ON"
              shift
              ;;
+       --build-e3 )
+             CMAKE_CMD="$CMAKE_CMD -DE3_AGENT=ON"
+             shift
+             ;;
        -I | --install-external-packages)
             INSTALL_EXTERNAL=1
             echo_info "Will install external packages"
@@ -201,6 +207,7 @@ function main() {
             shift;;
        --nrRU)
             NRRU=1
+            CMAKE_CMD="$CMAKE_CMD -DOAI_RU_FRONTHAUL=ON"
             TARGET_LIST="$TARGET_LIST nr-oru"
             echo_info "Will compile NR O-RU"
             shift;;
@@ -277,7 +284,7 @@ function main() {
             SIMUS_PHY=1
             CMAKE_CMD="$CMAKE_CMD -DENABLE_PHYSIM_TESTS=ON"
             # TODO: fix: dlsim_tm4 pucchsim prachsim pdcchsim pbchsim mbmssim
-            TARGET_LIST="$TARGET_LIST dlsim ulsim ldpctest polartest smallblocktest nr_pbchsim nr_dlschsim nr_ulschsim nr_dlsim nr_ulsim nr_pucchsim nr_prachsim nr_psbchsim nr_srssim"
+            TARGET_LIST="$TARGET_LIST dlsim ulsim ldpctest polartest smallblocktest nr_pbchsim nr_dlschsim nr_ulschsim nr_dlsim nr_ulsim nr_pucchsim nr_prachsim nr_psbchsim nr_srssim nr_ulsim_mu_mimo"
             echo_info "Will compile dlsim, ulsim, ..."
             shift;;
        -V | --vcd)

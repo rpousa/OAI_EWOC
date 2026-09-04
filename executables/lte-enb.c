@@ -18,7 +18,6 @@
 #include "SCHED/sched_eNB.h"
 #include "PHY/LTE_TRANSPORT/transport_proto.h"
 #include "nfapi/oai_integration/vendor_ext.h"
-#include "radio/COMMON/common_lib.h"
 
 #include "PHY/if4_tools.h"
 #include "PHY/LTE_ESTIMATION/lte_estimation.h"

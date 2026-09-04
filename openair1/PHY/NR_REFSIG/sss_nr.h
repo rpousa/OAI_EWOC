@@ -50,6 +50,8 @@ typedef struct {
   int first_carrier_offset;
   int ssb_start_subcarrier;
   int subcarrier_spacing;
+  const uint16_t *exclude_nid_cells;
+  int num_exclude_nid_cells;
 } nr_sss_params_t;
 sss_detection_result_t rx_sss_nr(nr_sss_params_t *params,
                                  pss_detection_result_t *pss,

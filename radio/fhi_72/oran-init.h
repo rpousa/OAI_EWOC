@@ -41,11 +41,7 @@ typedef struct oran_port_instance_t {
 } oran_port_instance_t;
 
 extern struct xran_fh_config gxran_fh_config[XRAN_PORTS_NUM];
-#if defined F_RELEASE
-extern void *gxran_handle;
-#elif defined K_RELEASE
 extern void *gxran_handle[XRAN_PORTS_NUM];
-#endif
 
 void *oai_oran_initialize(struct xran_fh_init *fh_init, struct xran_fh_config *fh_config);
 

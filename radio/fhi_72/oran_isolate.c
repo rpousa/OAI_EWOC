@@ -27,9 +27,6 @@
 #endif
 
 typedef struct {
-  eth_state_t e;
-  rru_config_msg_type_t last_msg;
-  int capabilities_sent;
   void *oran_priv;
   void *mplane_priv;
   uint32_t nCC;
@@ -37,9 +34,7 @@ typedef struct {
 } oran_eth_state_t;
 
 notifiedFIFO_t oran_sync_fifo;
-#if defined K_RELEASE
 notifiedFIFO_t oran_sync_fifo_prach;
-#endif
 
 int trx_oran_start(openair0_device_t *device)
 {
@@ -48,7 +43,6 @@ int trx_oran_start(openair0_device_t *device)
   oran_eth_state_t *s = device->priv;
 
   // Start ORAN
-#if defined K_RELEASE
   if (xran_timingsource_start() != 0) {
     printf("%s:%d:%s: Start timing source failed ... Exit\n", __FILE__, __LINE__, __FUNCTION__);
     exit(1);
@@ -64,25 +58,16 @@ int trx_oran_start(openair0_device_t *device)
   }
 
   xran_mem_mgr_leak_detector_display(0);
-#endif
 
-#if defined F_RELEASE
-  if (xran_start(s->oran_priv) != 0) {
-    printf("%s:%d:%s: Start ORAN failed ... Exit\n", __FILE__, __LINE__, __FUNCTION__);
-    exit(1);
-  }
-#elif defined K_RELEASE
   for (int32_t port_id = 0; port_id < s->num_ports; port_id++) {
     if (xran_start(((void **)s->oran_priv)[port_id]) != 0) {
       printf("%s:%d:%s: Start ORAN port ID %d failed ... Exit\n", __FILE__, __LINE__, __FUNCTION__, port_id);
       exit(1);
     }
   }
-#endif
 
   printf("Start ORAN. Done\n");
 
-#if defined K_RELEASE
   for (int32_t cc_id = 0; cc_id < s->nCC; cc_id++) {
     for (int32_t port_id = 0; port_id < s->num_ports; port_id++) {
       if (xran_activate_cc(port_id, cc_id) != 0) {
@@ -93,7 +78,6 @@ int trx_oran_start(openair0_device_t *device)
       }
     }
   }
-#endif
 
   return 0;
 }
@@ -102,14 +86,12 @@ void trx_oran_end(openair0_device_t *device)
 {
   printf("ORAN: %s\n", __FUNCTION__);
   oran_eth_state_t *s = device->priv;
-#if defined K_RELEASE
   xran_shutdown(s->oran_priv);
-#endif
-  xran_close(s->oran_priv);
-#if defined K_RELEASE
+  for (int32_t port_id = 0; port_id < s->num_ports; port_id++) {
+    xran_close(((void **)s->oran_priv)[port_id]);
+  }
   xran_cleanup();
   xran_mem_mgr_leak_detector_destroy();
-#endif
 }
 
 int trx_oran_stop(openair0_device_t *device)
@@ -117,7 +99,6 @@ int trx_oran_stop(openair0_device_t *device)
   printf("ORAN: %s\n", __FUNCTION__);
   oran_eth_state_t *s = device->priv;
 
-#if defined K_RELEASE
   for (int32_t cc_id = 0; cc_id < s->nCC; cc_id++) {
     for (int32_t port_id = 0; port_id < s->num_ports; port_id++) {
       xran_deactivate_cc(port_id, cc_id);
@@ -125,33 +106,16 @@ int trx_oran_stop(openair0_device_t *device)
   }
 
   xran_timingsource_stop();
-#endif
 
-#if defined F_RELEASE
-  xran_stop(s->oran_priv);
-#elif defined K_RELEASE
   for (int32_t port_id = 0; port_id < s->num_ports; port_id++) {
     xran_stop(((void **)s->oran_priv)[port_id]);
   }
-#endif
 
 #ifdef OAI_MPLANE
   printf("[MPLANE] Stopping M-plane.\n");
   disconnect_mplane(s->mplane_priv);
   free(s->mplane_priv);
 #endif
-  return (0);
-}
-
-int trx_oran_set_freq(openair0_device_t *device, openair0_config_t *openair0_cfg)
-{
-  printf("ORAN: %s\n", __FUNCTION__);
-  return (0);
-}
-
-int trx_oran_set_gains(openair0_device_t *device, openair0_config_t *openair0_cfg)
-{
-  printf("ORAN: %s\n", __FUNCTION__);
   return (0);
 }
 
@@ -164,104 +128,6 @@ int trx_oran_get_stats(openair0_device_t *device)
     LOG_I(HW, "xran_get_time_stats(): total thread time %ld, total time essential tasks %ld, num cores used %d\n", total_time, used_time, num_core_used);
   printf("ORAN: %s\n", __FUNCTION__);
   return (0);
-}
-
-int trx_oran_reset_stats(openair0_device_t *device)
-{
-  printf("ORAN: %s\n", __FUNCTION__);
-  return (0);
-}
-
-int ethernet_tune(openair0_device_t *device, unsigned int option, int value)
-{
-  printf("ORAN: %s\n", __FUNCTION__);
-  return 0;
-}
-
-int trx_oran_write_raw(openair0_device_t *device, openair0_timestamp_t timestamp, void **buff, int nsamps, int cc, int flags)
-{
-  printf("ORAN: %s\n", __FUNCTION__);
-  return 0;
-}
-
-int trx_oran_read_raw(openair0_device_t *device, openair0_timestamp_t *timestamp, void **buff, int nsamps, int cc)
-{
-  printf("ORAN: %s\n", __FUNCTION__);
-  return 0;
-}
-
-char *msg_type(int t)
-{
-  static char *s[12] = {
-      "RAU_tick",
-      "RRU_capabilities",
-      "RRU_config",
-      "RRU_config_ok",
-      "RRU_start",
-      "RRU_stop",
-      "RRU_sync_ok",
-      "RRU_frame_resynch",
-      "RRU_MSG_max_num",
-      "RRU_check_sync",
-      "RRU_config_update",
-      "RRU_config_update_ok",
-  };
-
-  if (t < 0 || t > 11)
-    return "UNKNOWN";
-  return s[t];
-}
-
-int trx_oran_ctlsend(openair0_device_t *device, void *msg, ssize_t msg_len)
-{
-  RRU_CONFIG_msg_t *rru_config_msg = msg;
-  oran_eth_state_t *s = device->priv;
-
-  printf("ORAN: %s\n", __FUNCTION__);
-
-  printf("    rru_config_msg->type %d [%s]\n", rru_config_msg->type, msg_type(rru_config_msg->type));
-
-  s->last_msg = rru_config_msg->type;
-
-  return msg_len;
-}
-
-int trx_oran_ctlrecv(openair0_device_t *device, void *msg, ssize_t msg_len)
-{
-  RRU_CONFIG_msg_t *rru_config_msg = msg;
-  oran_eth_state_t *s = device->priv;
-
-  printf("ORAN: %s\n", __FUNCTION__);
-
-  if (s->last_msg == RAU_tick && s->capabilities_sent == 0) {
-    printf("ORAN ctrlrcv RRU_tick received and send capabilities hard coded\n");
-    RRU_capabilities_t *cap;
-    rru_config_msg->type = RRU_capabilities;
-    rru_config_msg->len = sizeof(RRU_CONFIG_msg_t) - MAX_RRU_CONFIG_SIZE + sizeof(RRU_capabilities_t);
-    // Fill RRU capabilities (see openair1/PHY/defs_RU.h)
-    // For now they are hard coded - try to retreive the params from openari device
-
-    cap = (RRU_capabilities_t *)&rru_config_msg->msg[0];
-    cap->FH_fmt = OAI_IF4p5_only;
-    cap->num_bands = 1;
-    cap->band_list[0] = 78;
-    // cap->num_concurrent_bands             = 1; component carriers
-    cap->nb_rx[0] = 1; // device->openair0_cfg->rx_num_channels;
-    cap->nb_tx[0] = 1; // device->openair0_cfg->tx_num_channels;
-    cap->max_pdschReferenceSignalPower[0] = -27;
-    cap->max_rxgain[0] = 90;
-    cap->N_RB_DL[0] = 106;
-    cap->N_RB_UL[0] = 106;
-
-    s->capabilities_sent = 1;
-
-    return rru_config_msg->len;
-  }
-  if (s->last_msg == RRU_config) {
-    printf("Oran RRU_config\n");
-    rru_config_msg->type = RRU_config_ok;
-  }
-  return 0;
 }
 
 void oran_fh_if4p5_south_in(RU_t *ru, int *frame, int *slot)
@@ -290,17 +156,12 @@ void oran_fh_if4p5_south_in(RU_t *ru, int *frame, int *slot)
 
   /* Secondly, process PRACH packets */
   int f_prach, sl_prach;
-#if defined F_RELEASE
-  // no PRACH callback (no queue) in F release so use the expected combination
-  f_prach = *frame;
-  sl_prach = *slot;
-#endif
   ret = xran_fh_rx_prach_read_slot(ru->gNB_list[0], &ru_info, &f_prach, &sl_prach);
   if (ret != 0) {
     printf("ORAN: %d.%d ORAN_fh_if4p5_south_in ERROR in RX PRACH function \n", f_prach, sl_prach);
   }
 
-  int slots_per_frame = 10 << (ru->openair0_cfg.nr_scs_for_raster);
+  int slots_per_frame = 10 << (ru->openair0_cfg.split7.mu);
   proc->tti_rx = sl;
   proc->frame_rx = f;
   proc->tti_tx = (sl + ru->sl_ahead) % slots_per_frame;
@@ -368,8 +229,7 @@ void *get_internal_parameter(char *name)
 }
 
 __attribute__((__visibility__("default"))) int transport_init(openair0_device_t *device,
-                                                              openair0_config_t *openair0_cfg,
-                                                              eth_params_t *eth_params)
+                                                              openair0_config_t *openair0_cfg)
 {
   oran_eth_state_t *eth = calloc_or_fail(1, sizeof(*eth));
 
@@ -446,29 +306,17 @@ __attribute__((__visibility__("default"))) int transport_init(openair0_device_t 
   // create message queues for ORAN sync
 
   initNotifiedFIFO(&oran_sync_fifo);
-#if defined K_RELEASE
   initNotifiedFIFO(&oran_sync_fifo_prach);
-#endif
 
-  eth->e.flags = ETH_RAW_IF4p5_MODE;
-  eth->e.compression = NO_COMPRESS;
-  eth->e.if_name = eth_params->local_if_name;
-  eth->last_msg = (rru_config_msg_type_t)-1;
   eth->nCC = fh_config->nCC;
   eth->num_ports = fh_init.xran_ports;
 
+  device->host_type = RAU_HOST;
   device->transp_type = ETHERNET_TP;
   device->trx_start_func = trx_oran_start;
   device->trx_get_stats_func = trx_oran_get_stats;
-  device->trx_reset_stats_func = trx_oran_reset_stats;
   device->trx_end_func = trx_oran_end;
   device->trx_stop_func = trx_oran_stop;
-  device->trx_set_freq_func = trx_oran_set_freq;
-  device->trx_set_gains_func = trx_oran_set_gains;
-  device->trx_write_func = trx_oran_write_raw;
-  device->trx_read_func = trx_oran_read_raw;
-  device->trx_ctlsend_func = trx_oran_ctlsend;
-  device->trx_ctlrecv_func = trx_oran_ctlrecv;
   device->get_internal_parameter = get_internal_parameter;
   device->priv = eth;
   device->openair0_cfg = &openair0_cfg[0];

@@ -18,7 +18,6 @@
 #include "common/ran_context.h"
 #include "common/config/config_userapi.h"
 #include "common/utils/load_module_shlib.h"
-#include "radio/COMMON/common_lib.h"
 #include "radio/ETHERNET/if_defs.h"
 
 #include <openair1/PHY/phy_extern_ue.h>
@@ -162,6 +161,18 @@ void handle_nr_srs_measurements(const module_id_t module_id,
                                 const frame_t frame,
                                 const sub_frame_t slot,
                                 nfapi_nr_srs_indication_pdu_t *srs_ind)
+{
+  return;
+}
+
+/* hack: nfapi code is common for 4G/5G, so some function calls are hardcoded.
+ * Provide body for 5G function not used in 4G code */
+void handle_nr_srs_toa_vendor_ext_measurements(const module_id_t module_id,
+                                               const frame_t frame,
+                                               const slot_t slot,
+                                               const uint8_t num_ta,
+                                               const int16_t *ta_offset_nsec,
+                                               const rnti_t rnti)
 {
   return;
 }

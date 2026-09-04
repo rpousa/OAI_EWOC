@@ -38,6 +38,19 @@ typedef struct {
   notifiedFIFO_t *resp;
 } udp_ctx_t;
 
+typedef struct fhstate_s {
+  openair0_timestamp_t TS[8];
+  openair0_timestamp_t TS0;
+  openair0_timestamp_t olddeltaTS[8];
+  openair0_timestamp_t oldTS[8];
+  openair0_timestamp_t TS_read;
+  int first_read;
+  uint32_t *buff[8];
+  uint32_t buff_size;
+  int r[8];
+  int active;
+} fhstate_t;
+
 /*!\brief opaque ethernet data structure */
 typedef struct {
   
@@ -52,7 +65,7 @@ typedef struct {
   /*!\brief buffer size */ 
   unsigned int buffer_size;
   /*!\brief Fronthaul state */
-  fhstate_t *fhstate;
+  fhstate_t fhstate;
   /*!\brief destination address (control) for UDP socket*/
   struct sockaddr_in dest_addrc;
   /*!\brief local address (control) for UDP socket*/
@@ -95,6 +108,13 @@ typedef struct {
   int num_rx_errors;
   /*!\brief number of errors in interface's transmitter */ 
   int num_tx_errors;
+
+  /*!brief numerator of sampling rate ratio*/
+  int sampling_rate_ratio_n;
+  /*!brief denominator of sampling rate ratio*/
+  int sampling_rate_ratio_d;
+  /*!brief the TX/RX timing offset*/
+  int txrx_offset;
 
   /*!\brief current TX timestamp */
   openair0_timestamp_t tx_current_ts;

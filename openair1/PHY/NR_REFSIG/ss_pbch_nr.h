@@ -30,7 +30,9 @@
 #define  INVALID_PSS_SEQUENCE         (NUMBER_PSS_SEQUENCE)
 #define  LENGTH_PSS_NR                (127)
 #define  N_SC_RB                      (12)     /* Resource block size in frequency domain expressed as a number if subcarriers */
-#define  SCALING_PSS_NR               (3)
+// We scale down the reference PSS signal in freq to not saturate inside the idft when we generate the corresponding time domain
+// signal
+#define SCALING_PSS_NR (12)
 #define  SCALING_CE_PSS_NR            (13)     /* scaling channel estimation based on ps */
 #define  PSS_IFFT_SIZE                (256)
 

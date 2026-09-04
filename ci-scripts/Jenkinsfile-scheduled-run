@@ -9,9 +9,6 @@ def mainPythonAllXmlFiles = ""
 def buildStageStatus = true
 def JOB_TIMESTAMP
 
-// Choose test stage name or fallback default
-def testStageName = params.pipelineTestStageName != null ? params.pipelineTestStageName : 'Template Test Stage'
-
 // Name of the resource
 def lockResources = []
 if (params.LockResources != null && params.LockResources.trim().length() > 0)
@@ -112,7 +109,6 @@ pipeline {
       steps {
         script {
           dir ('ci-scripts') {
-            echo "\u2705 \u001B[94m Deploy and Test: ${testStageName}\u001B[0m"
             String[] myXmlTestSuite = testXMLFile.split("\\r?\\n")
             for (xmlFile in myXmlTestSuite) {
               if (fileExists(xmlFile)) {
@@ -198,7 +194,7 @@ pipeline {
                        -e 's#TEMPLATE_JOB_NAME#${JOB_NAME}#' \
 		       -e 's@build #TEMPLATE_BUILD_ID@build #${BUILD_ID}@' \
                        -e 's#Build-ID: TEMPLATE_BUILD_ID#Build-ID: <a href=\"${BUILD_URL}\">${BUILD_ID}</a>#' \
-                       -e 's#TEMPLATE_STAGE_NAME#${testStageName}#' ${reportName}
+                       ${reportName}
 	      """
               archiveArtifacts artifacts: "${reportName}"
             }

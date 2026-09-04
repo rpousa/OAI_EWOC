@@ -13,13 +13,13 @@ Minimum hardware requirements:
 
 - Laptop/Desktop/Server for OAI CN5G and OAI gNB
 
-    - Operating System: [Ubuntu 24.04 LTS](https://releases.ubuntu.com/24.04/ubuntu-24.04.2-desktop-amd64.iso)
+    - Operating System: [Ubuntu Desktop 24.04.4 LTS, Intel or AMD 64-bit architecture](https://releases.ubuntu.com/24.04/ubuntu-24.04.4-desktop-amd64.iso)
     - CPU: 8 cores x86_64 @ 3.5 GHz
     - RAM: 32 GB
 
 - Laptop for UE
 
-    - Operating System: [Ubuntu 24.04 LTS](https://releases.ubuntu.com/24.04/ubuntu-24.04.2-desktop-amd64.iso)
+    - Operating System: [Ubuntu Desktop 24.04.4 LTS, Intel or AMD 64-bit architecture](https://releases.ubuntu.com/24.04/ubuntu-24.04.4-desktop-amd64.iso)
     - CPU: 8 cores x86_64 @ 3.5 GHz
     - RAM: 8 GB
 

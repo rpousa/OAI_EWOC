@@ -153,6 +153,81 @@ TEST_F(ZMQTest, TxRxSamples)
   t2.join();
 }
 
+TEST_F(ZMQTest, TxRxSamplesSIMD)
+{
+  const int size = 100;
+  std::thread t1([this, size]() {
+    c16_t rx_samples[size];
+    openair0_timestamp_t rx_timestamp;
+    void *samples[1] = {rx_samples};
+    ASSERT_EQ(device1.trx_read_func(&device1, &rx_timestamp, samples, size, 1), size);
+    for (int i = 0; i < size; i++) {
+      ASSERT_EQ(rx_samples[i].r, 0);
+      ASSERT_EQ(rx_samples[i].i, 0);
+    }
+    c16_t tx_samples[size];
+    openair0_timestamp_t tx_timestamp = rx_timestamp + size;
+    for (int i = 0; i < size; i++) {
+      tx_samples[i].r = (int16_t)i;
+      tx_samples[i].i = (int16_t)(i + 1);
+    }
+    samples[0] = tx_samples;
+    ASSERT_EQ(device1.trx_write_func(&device1, tx_timestamp, samples, size, 1, 0), size);
+  });
+  std::thread t2([this, size]() {
+    c16_t rx_samples[size];
+    openair0_timestamp_t rx_timestamp;
+    void *samples[1] = {rx_samples};
+    ASSERT_EQ(device2.trx_read_func(&device2, &rx_timestamp, samples, size, 1), size);
+    for (int i = 0; i < size; i++) {
+      ASSERT_EQ(rx_samples[i].r, 0);
+      ASSERT_EQ(rx_samples[i].i, 0);
+    }
+    openair0_timestamp_t rx_timestamp2;
+    ASSERT_EQ(device2.trx_read_func(&device2, &rx_timestamp2, samples, size, 1), size);
+    for (int i = 0; i < size; i++) {
+      ASSERT_EQ(rx_samples[i].r, (int16_t)i);
+      ASSERT_EQ(rx_samples[i].i, (int16_t)(i + 1));
+    }
+    ASSERT_EQ(rx_timestamp + size, rx_timestamp2);
+  });
+  t1.join();
+  t2.join();
+}
+
+TEST_F(ZMQTest, BenchmarkThroughput)
+{
+  int level = g_log->log_component[HW].level;
+  g_log->log_component[HW].level = OAILOG_ERR;
+  const size_t nsamps = 10000;
+  const size_t num_iters = 100000;
+  c16_t tx_samples[nsamps];
+  for (size_t i = 0; i < nsamps; i++) {
+    tx_samples[i].r = i;
+    tx_samples[i].i = i + 1;
+  }
+
+  void *samples[1] = {tx_samples};
+  openair0_timestamp_t tx_timestamp = 0;
+
+  auto start = std::chrono::high_resolution_clock::now();
+
+  for (size_t i = 0; i < num_iters; i++) {
+    ASSERT_EQ(device1.trx_write_func(&device1, tx_timestamp, samples, nsamps, 1, 0), nsamps);
+    tx_timestamp += nsamps;
+  }
+
+  auto end = std::chrono::high_resolution_clock::now();
+  std::chrono::duration<double> diff = end - start;
+
+  std::cout << "Benchmark:" << std::endl;
+  std::cout << "Time taken: " << diff.count() << " s\n";
+  std::cout << "Throughput: " << (nsamps * num_iters) / diff.count() / 1e6 << " MSamples/s\n";
+
+  // No need to drain messages as device shutdown handles cleanup
+  g_log->log_component[HW].level = level;
+}
+
 int main(int argc, char **argv)
 {
   logInit();

@@ -294,9 +294,7 @@ bool generate_srs_nr(const NR_DL_FRAME_PARMS *frame_parms,
       LOG_I(NR_PHY,"k_0_p = %i\n", k_0_p);
 #endif
 
-      uint16_t subcarrier = subcarrier_offset + k_0_p;
-      if (subcarrier >= frame_parms->ofdm_symbol_size)
-        subcarrier -= frame_parms->ofdm_symbol_size;
+      int subcarrier = CIRCULAR_INC(subcarrier_offset, k_0_p, frame_parms->ofdm_symbol_size);
       uint16_t l_line_offset = l_line * frame_parms->ofdm_symbol_size;
       // For each port, and for each OFDM symbol, here it is computed and mapped an SRS sequence with M_sc_b_SRS symbols
       for (int k = 0; k < M_sc_b_SRS; k++) {
@@ -325,10 +323,7 @@ bool generate_srs_nr(const NR_DL_FRAME_PARMS *frame_parms,
         txdataF[p_index][symbol_offset + l_line_offset + subcarrier] = r_amp;
 
         // Subcarrier increment
-        subcarrier += K_TC;
-        if (subcarrier >= frame_parms->ofdm_symbol_size)
-          subcarrier -= frame_parms->ofdm_symbol_size;
-
+        subcarrier = CIRCULAR_INC(subcarrier, K_TC, frame_parms->ofdm_symbol_size);
       } // for (int k = 0; k < M_sc_b_SRS; k++)
     } // for (int l_line = 0; l_line < N_symb_SRS; l_line++)
   } // for (int p_index = 0; p_index < N_ap; p_index++)

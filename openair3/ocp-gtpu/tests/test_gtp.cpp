@@ -14,6 +14,8 @@
 #include "gtp_itf.h"
 
 extern "C" {
+#include "gtpu_extensions.h"
+
 configmodule_interface_t *uniqCfg;
 
 void exit_function(const char *file, const char *function, const int line, const char *s, const int assert)
@@ -27,8 +29,7 @@ int nr_rlc_get_available_tx_space(const rnti_t rntiP, const logical_chan_id_t ch
 {
   UNUSED(rntiP);
   UNUSED(channel_idP);
-  abort();
-  return 0;
+  return 4096;
 }
 void *get_softmodem_params(void)
 {
@@ -62,6 +63,20 @@ static transport_layer_addr_t get_tl_addr(int ai_family, const char *ip)
   transport_layer_addr_t tl_addr = {.length = 32};
   memcpy(tl_addr.buffer, &addr, 4);
   return tl_addr;
+}
+
+typedef union {
+  struct sockaddr sa;
+  struct sockaddr_in sin;
+} test_sockaddr_t;
+
+static test_sockaddr_t get_sock_addr(const char *ip, uint16_t port)
+{
+  test_sockaddr_t a = {};
+  a.sin.sin_family = AF_INET;
+  a.sin.sin_port = htons(port);
+  a.sin.sin_addr.s_addr = get_addr(AF_INET, ip);
+  return a;
 }
 
 static void run_basic_test(uint32_t ue_id,
@@ -303,6 +318,79 @@ TEST(gtp, basic_conn)
   long noqfi = -1;
   int num_send = 12;
   run_basic_test(ue_id, pdu_id, noqfi, num_send, &recv_count, recv_basic_conn, NULL);
+}
+
+static int build_gtpu_nrup(uint8_t *out, int out_len, uint32_t teid, gtpu_extension_header_t *ext)
+{
+  /* TS 29.281: 8-octet GTP-U header + 4 octets (seq / N-PDU / next ext) because E=1 */
+  const int gtpu_hdr_len = 12;
+  if (out_len < gtpu_hdr_len)
+    return -1;
+  memset(out, 0, gtpu_hdr_len);
+  out[0] = 0x34; /* Version=1, Protocol Type=GTP, Extension Header=1 */
+  out[1] = 255; /* G-PDU */
+  out[4] = teid >> 24; /* TEID, octets 5-8 */
+  out[5] = teid >> 16;
+  out[6] = teid >> 8;
+  out[7] = teid;
+  out[11] = serialize_gtpu_extension_type(ext->type);
+  const int ext_len = serialize_extension(ext, GTPU_EXT_NONE, &out[gtpu_hdr_len], out_len - gtpu_hdr_len);
+  if (ext_len < 0)
+    return -1;
+  const int pkt_len = gtpu_hdr_len + ext_len;
+  const uint16_t gtp_len = pkt_len - 8; /* Length: octets after the mandatory 8-octet header */
+  out[2] = gtp_len >> 8;
+  out[3] = gtp_len;
+  return pkt_len;
+}
+
+/* CU TX (gtpv1uSendDirectWithNRUSeqNum) does not set Report Delivered yet, so this test
+ * injects GTP-U + NR-UP DL USER DATA with that IE. The receiver then sends DL DATA DELIVERY STATUS. */
+TEST(gtp, nrup_ddds)
+{
+  const char *ip1 = "127.0.0.1";
+  const char *ip2 = "127.0.0.2";
+  uint16_t port = 4567;
+  uint32_t ue_id = 20;
+  long pdu_id = 1;
+
+  instance_t ep1 = init_gtp(ip1, port);
+  ASSERT_GE(ep1, 1);
+  instance_t ep2 = init_gtp(ip2, port);
+  ASSERT_GE(ep2, 1);
+
+  transport_layer_addr_t null_addr = {.length = 32};
+  teid_t t1 = newGtpuCreateTunnel(ep1, ue_id, pdu_id, pdu_id, -1, null_addr, NULL, NULL);
+  transport_layer_addr_t tl_addr1 = get_tl_addr(AF_INET, ip1);
+  teid_t t2 = newGtpuCreateTunnel(ep2, ue_id, pdu_id, pdu_id, t1, tl_addr1, NULL, NULL);
+  in_addr_t addr2 = get_addr(AF_INET, ip2);
+  GtpuUpdateTunnelOutgoingAddressAndTeid(ep1, ue_id, pdu_id, addr2, t2);
+
+  const int fd = socket(AF_INET, SOCK_DGRAM, 0);
+  ASSERT_GE(fd, 0);
+  test_sockaddr_t src = get_sock_addr(ip2, 0);
+  ASSERT_EQ(bind(fd, &src.sa, sizeof(src.sin)), 0);
+  test_sockaddr_t dst = get_sock_addr(ip1, port);
+
+  gtpu_extension_header_t ext = {
+      .type = GTPU_EXT_DL_USER_DATA,
+      .dl_user_data = {.nru_sequence_number = 1, .report_delivered = true, .nr_pdcp_pdu_sn = 5},
+  };
+  uint8_t pkt[256];
+  const int pkt_len = build_gtpu_nrup(pkt, sizeof(pkt), t1, &ext);
+  ASSERT_GT(pkt_len, 0);
+  ASSERT_EQ(sendto(fd, pkt, pkt_len, 0, &dst.sa, sizeof(dst.sin)), pkt_len);
+
+  usleep(100 * 1000);
+  uint8_t ddds[256];
+  const ssize_t n = recv(fd, ddds, sizeof(ddds), MSG_DONTWAIT);
+  EXPECT_GT(n, 0) << "expected DDDS from receiver";
+
+  close(fd);
+  EXPECT_EQ(newGtpuDeleteAllTunnels(ep1, ue_id), 0);
+  EXPECT_EQ(newGtpuDeleteAllTunnels(ep2, ue_id), 0);
+  EXPECT_EQ(gtpv1Term(ep1), 0);
+  EXPECT_EQ(gtpv1Term(ep2), 0);
 }
 
 /* ideas for tests:

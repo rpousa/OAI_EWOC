@@ -216,15 +216,13 @@ void rrc_gNB_send_NGAP_NAS_FIRST_REQ(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE, NR_RRC
 {
   MessageDef *message_p = itti_alloc_new_message(TASK_RRC_GNB, rrc->module_id, NGAP_NAS_FIRST_REQ);
   ngap_nas_first_req_t *req = &NGAP_NAS_FIRST_REQ(message_p);
-  memset(req, 0, sizeof(*req));
 
   // RAN UE NGAP ID
   req->gNB_ue_ngap_id = UE->rrc_ue_id;
 
   // RRC Establishment Cause
-  /* Assume that cause is coded in the same way in RRC and NGap, just check that the value is in NGap range */
-  AssertFatal(UE->establishment_cause < NGAP_RRC_CAUSE_LAST, "Establishment cause invalid (%jd/%d)!", UE->establishment_cause, NGAP_RRC_CAUSE_LAST);
-  req->establishment_cause = UE->establishment_cause;
+  req->establishment_cause =
+      UE->establishment_cause <= NGAP_RRC_CAUSE_MCS_PRIORITY_ACCESS ? UE->establishment_cause : NGAP_RRC_CAUSE_NOTAVAILABLE;
 
   // NAS-PDU
   req->nas_pdu = create_byte_array(rrcSetupComplete->dedicatedNAS_Message.size, rrcSetupComplete->dedicatedNAS_Message.buf);
@@ -346,8 +344,8 @@ static DRB_nGRAN_to_setup_t fill_e1_drb_to_setup(const drb_t *rrc_drb,
   drb_ngran.id = rrc_drb->drb_id;
 
   drb_ngran.sdap_config.defaultDRB = (session->sdap_config.default_drb == drb_ngran.id);
-  drb_ngran.sdap_config.sDAP_Header_UL = session->sdap_config.header_ul_absent ? false : true;
-  drb_ngran.sdap_config.sDAP_Header_DL = session->sdap_config.header_dl_absent ? false : true;
+  drb_ngran.sdap_config.sDAP_Header_UL = !session->sdap_config.header_ul_absent;
+  drb_ngran.sdap_config.sDAP_Header_DL = !session->sdap_config.header_dl_absent;
 
   drb_ngran.pdcp_config = set_bearer_context_pdcp_config(rrc_drb->pdcp_config, um_on_default_drb, redcap_cap);
 
@@ -655,7 +653,6 @@ void rrc_gNB_send_NGAP_INITIAL_CONTEXT_SETUP_FAIL(uint32_t gnb, const ngap_cause
 {
   MessageDef *msg_p = itti_alloc_new_message(TASK_RRC_GNB, 0, NGAP_INITIAL_CONTEXT_SETUP_FAIL);
   ngap_initial_context_setup_fail_t *fail = &NGAP_INITIAL_CONTEXT_SETUP_FAIL(msg_p);
-  memset(fail, 0, sizeof(*fail));
   fail->gNB_ue_ngap_id = gnb;
   fail->cause = causeP;
   itti_send_msg_to_task(TASK_NGAP, 0, msg_p);
@@ -1080,6 +1077,7 @@ static void nr_rrc_apply_qos_add_modify(gNB_RRC_INST *rrc,
     const non_dynamic_5qi_t *in_non_dynamic = &q_in->qos_characteristics.non_dynamic;
     const dynamic_5qi_t *in_dynamic = &q_in->qos_characteristics.dynamic;
     if (q_in->fiveQI_type == NON_DYNAMIC && !is_5qi_standardized(in_non_dynamic->fiveQI)) {
+      // This is a pre-configured 5QI, not a standardized non-dynamic value: not implemented
       LOG_W(NR_RRC,
             "QoS flow QFI=%d: 5QI %u is not a standardized value (1-9, 65-90). Skipping QoS flow.\n",
             q_in->qfi,
@@ -1417,7 +1415,6 @@ void rrc_gNB_send_NGAP_UE_CONTEXT_RELEASE_REQ(const module_id_t gnb_mod_idP,
     const gNB_RRC_UE_t *UE = &ue_context_pP->ue_context;
     MessageDef *msg = itti_alloc_new_message(TASK_RRC_GNB, 0, NGAP_UE_CONTEXT_RELEASE_REQ);
     ngap_ue_release_req_t *req = &NGAP_UE_CONTEXT_RELEASE_REQ(msg);
-    memset(req, 0, sizeof(*req));
     req->gNB_ue_ngap_id = UE->rrc_ue_id;
     req->cause.type = causeP.type;
     req->cause.value = causeP.value;
@@ -1443,17 +1440,29 @@ void rrc_gNB_send_NGAP_HANDOVER_FAILURE(gNB_RRC_INST *rrc, ngap_handover_failure
 /** @brief Process NG Handover Request message (8.4.2.2 3GPP TS 38.413) */
 int rrc_gNB_process_Handover_Request(gNB_RRC_INST *rrc, ngap_handover_request_t *msg)
 {
-  // Check if UE context already exists for this AMF UE NGAP ID
   rrc_gNB_ue_context_t *existing_ue_context = rrc_gNB_get_ue_context_by_amf_ue_ngap_id(rrc, msg->amf_ue_ngap_id);
   if (existing_ue_context != NULL) {
-    LOG_E(RRC, "UE context already exists for AMF UE NGAP ID %ld, cannot process handover request\n", msg->amf_ue_ngap_id);
-    ngap_handover_failure_t fail = {
-        .amf_ue_ngap_id = msg->amf_ue_ngap_id,
-        .cause.type = NGAP_CAUSE_RADIO_NETWORK,
-        .cause.value = NGAP_CAUSE_RADIO_NETWORK_HO_FAILURE_IN_TARGET_5GC_NGRAN_NODE_OR_TARGET_SYSTEM,
-    };
-    rrc_gNB_send_NGAP_HANDOVER_FAILURE(rrc, &fail);
-    return -1;
+    gNB_RRC_UE_t *ue = &existing_ue_context->ue_context;
+    /* A UE with this AMF-UE-NGAP-ID is already present on this node as an N2
+     * source. This can happen when source and target NG-RAN node are the same or
+     * when the UE is already in a N2 HO procedure. Allow the request only while that
+     * UE is still in N2 source preparation (target not yet allocated), otherwise reject
+     * to prevent duplicate target contexts. */
+    const bool n2_source_only = ue->ho_context && ue->ho_context->source && !ue->ho_context->target;
+    if (!n2_source_only) {
+      LOG_E(NR_RRC,
+            "Reject Handover Request: ongoing procedure for UE %u (AMF UE NGAP ID %ld)\n",
+            ue->rrc_ue_id,
+            msg->amf_ue_ngap_id);
+      ngap_handover_failure_t fail = {
+          .amf_ue_ngap_id = msg->amf_ue_ngap_id,
+          .cause.type = NGAP_CAUSE_RADIO_NETWORK,
+          .cause.value = NGAP_CAUSE_RADIO_NETWORK_INTERACTION_WITH_OTHER_PROCEDURE,
+      };
+      rrc_gNB_send_NGAP_HANDOVER_FAILURE(rrc, &fail);
+      return -1;
+    }
+    LOG_I(NR_RRC, "N2 HO to self (AMF UE NGAP ID %ld): creating target context for UE %u\n", msg->amf_ue_ngap_id, ue->rrc_ue_id);
   }
 
   // Get cell by cell_id
@@ -1495,13 +1504,22 @@ int rrc_gNB_process_Handover_Request(gNB_RRC_INST *rrc, ngap_handover_request_t 
     return -1;
   }
 
+  // Create UE context
+  rrc_gNB_ue_context_t *ue_context_p = rrc_gNB_create_ue_context(du->assoc_id, UINT16_MAX, rrc, UINT64_MAX, UINT32_MAX);
+  if (!ue_context_p) {
+    ngap_handover_failure_t fail = {
+        .amf_ue_ngap_id = msg->amf_ue_ngap_id,
+        .cause.type = NGAP_CAUSE_RADIO_NETWORK,
+        .cause.value = NGAP_CAUSE_RADIO_NETWORK_HO_FAILURE_IN_TARGET_5GC_NGRAN_NODE_OR_TARGET_SYSTEM,
+    };
+    rrc_gNB_send_NGAP_HANDOVER_FAILURE(rrc, &fail);
+    return -1;
+  }
+
   uint16_t pci = cell->info.pci;
   LOG_I(NR_RRC, "Received Handover Request (on NR Cell ID=%lu, PCI=%u) \n", msg->nr_cell_id, pci);
 
-  // Create UE context
-  rrc_gNB_ue_context_t *ue_context_p = rrc_gNB_create_ue_context(du->assoc_id, UINT16_MAX, rrc, UINT64_MAX, UINT32_MAX);
   gNB_RRC_UE_t *UE = &ue_context_p->ue_context;
-
   // allocate context for target
   UE->ho_context = alloc_ho_ctx(HO_CTX_TARGET);
   UE->ho_context->target->cell = cell;
@@ -1541,7 +1559,7 @@ int rrc_gNB_process_Handover_Request(gNB_RRC_INST *rrc, ngap_handover_request_t 
 
   // Process all PDU Session Resource Setup items from handover request
   DevAssert(msg->nb_of_pdusessions <= NR_MAX_NB_PDU_SESSIONS);
-  pdusession_t to_setup[NR_MAX_NB_PDU_SESSIONS];
+  pdusession_t to_setup[NR_MAX_NB_PDU_SESSIONS] = {0};
   for (int i = 0; i < msg->nb_of_pdusessions; i++) {
     ho_request_pdusession_t *ho_pdu = &msg->pduSessionResourceSetupList[i];
     pdusession_t *pdu = &to_setup[i];
@@ -1769,7 +1787,6 @@ void rrc_gNB_send_NGAP_UE_CAPABILITIES_IND(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE, 
     MessageDef *msg_p;
     msg_p = itti_alloc_new_message (TASK_RRC_GNB, rrc->module_id, NGAP_UE_CAPABILITIES_IND);
     ngap_ue_cap_info_ind_t *ind = &NGAP_UE_CAPABILITIES_IND(msg_p);
-    memset(ind, 0, sizeof(*ind));
     ind->gNB_ue_ngap_id = UE->rrc_ue_id;
     ind->ue_radio_cap.len = encoded;
     ind->ue_radio_cap.buf = buf2;
@@ -1783,7 +1800,6 @@ void rrc_gNB_send_NGAP_HANDOVER_REQUEST_ACKNOWLEDGE(gNB_RRC_INST *rrc, gNB_RRC_U
 
   MessageDef *msg_p = itti_alloc_new_message(TASK_RRC_GNB, 0, NGAP_HANDOVER_REQUEST_ACKNOWLEDGE);
   ngap_handover_request_ack_t *msg = &NGAP_HANDOVER_REQUEST_ACKNOWLEDGE(msg_p);
-  memset(msg, 0, sizeof(*msg));
 
   // RAN UE NGAP ID
   msg->gNB_ue_ngap_id = UE->rrc_ue_id;
@@ -1830,7 +1846,6 @@ void rrc_gNB_send_NGAP_HANDOVER_NOTIFY(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE)
   }
   MessageDef *msg_p = itti_alloc_new_message(TASK_RRC_GNB, 0, NGAP_HANDOVER_NOTIFY);
   ngap_handover_notify_t *ho_notify = &NGAP_HANDOVER_NOTIFY(msg_p);
-  memset(ho_notify, 0, sizeof(*ho_notify));
 
   ho_notify->gNB_ue_ngap_id = UE->rrc_ue_id;
   ho_notify->amf_ue_ngap_id = UE->amf_ue_ngap_id;
@@ -1858,7 +1873,6 @@ void rrc_gNB_send_NGAP_HANDOVER_CANCEL(int module_id, gNB_RRC_UE_t *UE, ngap_cau
 
   MessageDef *msg_p = itti_alloc_new_message(TASK_RRC_GNB, 0, NGAP_HANDOVER_CANCEL);
   ngap_handover_cancel_t *ho_cancel = &NGAP_HANDOVER_CANCEL(msg_p);
-  memset(ho_cancel, 0, sizeof(*ho_cancel));
 
   /* Mandatory IEs (38.413 §9.2.3.11) */
   ho_cancel->gNB_ue_ngap_id = UE->rrc_ue_id;
@@ -1868,12 +1882,38 @@ void rrc_gNB_send_NGAP_HANDOVER_CANCEL(int module_id, gNB_RRC_UE_t *UE, ngap_cau
   itti_send_msg_to_task(TASK_NGAP, module_id, msg_p);
 }
 
+/**
+ * @brief Enforce TS 38.331 §5.3.1.1 after the last DRB of a PDU session release.
+ * A UE is not allowed to have a configuration with SRB2 but no DRB, and vice versa.
+ * @note Per TS 23.502 section 4.3.4.2 step 5, NG-RAN releases PDU-session AN resources
+ * via RRCReconfiguration. If that leaves no DRB with SRB2 still up, request UE context
+ * release (TS 38.413 section 8.3.2.2). AMF UE Context Release Command triggers RRCRelease
+ * on the existing CU-CP path. */
+static void rrc_gNB_cleanup_srb2_only_connected(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE)
+{
+  DevAssert(seq_arr_size(&UE->drbs) == 0);
+  DevAssert(UE->Srb[SRB2].Active);
+
+  rrc_gNB_ue_context_t *ue_context_p = rrc_gNB_get_ue_context(rrc, UE->rrc_ue_id);
+  if (!ue_context_p) {
+    LOG_W(NR_RRC, "UE %u: no RRC context for connection release after last DRB\n", UE->rrc_ue_id);
+    return;
+  }
+
+  LOG_I(NR_RRC, "UE %u: last DRB released with SRB2 still active: requesting RRC connection release\n", UE->rrc_ue_id);
+
+  ngap_cause_t cause = {
+      .type = NGAP_CAUSE_RADIO_NETWORK,
+      .value = NGAP_CAUSE_RADIO_NETWORK_RELEASE_DUE_TO_NGRAN_GENERATED_REASON,
+  };
+  rrc_gNB_send_NGAP_UE_CONTEXT_RELEASE_REQ(rrc->module_id, ue_context_p, cause);
+}
+
 void rrc_gNB_send_NGAP_PDUSESSION_RELEASE_RESPONSE(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE, uint8_t xid)
 {
   MessageDef   *msg_p;
   msg_p = itti_alloc_new_message (TASK_RRC_GNB, rrc->module_id, NGAP_PDUSESSION_RELEASE_RESPONSE);
   ngap_pdusession_release_resp_t *resp = &NGAP_PDUSESSION_RELEASE_RESPONSE(msg_p);
-  memset(resp, 0, sizeof(*resp));
   resp->gNB_ue_ngap_id = UE->rrc_ue_id;
 
   FOR_EACH_SEQ_ARR(rrc_pdu_session_param_t *, session, &UE->pduSessions) {
@@ -1892,6 +1932,10 @@ void rrc_gNB_send_NGAP_PDUSESSION_RELEASE_RESPONSE(gNB_RRC_INST *rrc, gNB_RRC_UE
 
   LOG_I(NR_RRC, "NGAP PDUSESSION RELEASE RESPONSE: rrc_ue_id %u release_pdu_sessions %d\n", resp->gNB_ue_ngap_id, resp->nb_of_pdusessions_released);
   itti_send_msg_to_task (TASK_NGAP, rrc->module_id, msg_p);
+
+  /* TS 38.331 §5.3.1.1: cannot keep SRB2 in RRC_CONNECTED after all DRBs are gone. */
+  if (seq_arr_size(&UE->drbs) == 0 && UE->Srb[SRB2].Active)
+    rrc_gNB_cleanup_srb2_only_connected(rrc, UE);
 }
 
 /** @brief Process NG PDU Session Resource Release command (8.2.2 of 3GPP TS 38.413)

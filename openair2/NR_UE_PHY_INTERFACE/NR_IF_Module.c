@@ -51,15 +51,38 @@ void print_ue_mac_stats(const module_id_t mod, const int frame_rx, const int slo
                   slot_rx,
                   mac->stats.bad_dci);
 
+  const NR_SSB_meas_t *ssb = &mac->ssb_measurements[mac->mib_ssb];
+  const NR_CSIRS_meas_t *csi = &mac->csirs_measurements;
+  cur += snprintf(cur,
+                  end - cur,
+                  "    DL Chan: SSB %d SINR %.01f dB RSRP %d dBm, RI %d ",
+                  mac->mib_ssb,
+                  ssb->ssb_sinr_dB,
+                  ssb->ssb_rsrp_dBm,
+                  csi->ri + 1);
+  if (csi->rsrp_dBm != 0)
+    cur += snprintf(cur, end - cur, "CQI %d CSI-RS RSRP %d dBm\n", csi->cqi, csi->rsrp_dBm);
+  else
+    cur += snprintf(cur, end - cur, "CQI: N/A\n");
+
   cur += snprintf(cur, end - cur, "    DL harq: %lu", mac->stats.dl.rounds[0]);
   int nb;
   for (nb = NR_MAX_HARQ_ROUNDS_FOR_STATS - 1; nb > 1; nb--)
-    if (mac->stats.ul.rounds[nb])
+    if (mac->stats.dl.rounds[nb])
       break;
   for (int i = 1; i < nb + 1; i++)
     cur += snprintf(cur, end - cur, "/%lu", mac->stats.dl.rounds[i]);
+  cur += snprintf(cur,
+                  end - cur,
+                  " avg code rate %.01f, avg bit/symbol %.01f, avg per TB: "
+                  "(nb RBs %.01f, nb symbols %.01f)\n",
+                  mac->stats.dl.total_bits ? (double)mac->stats.dl.target_code_rate / (mac->stats.dl.total_bits * 1024 * 10)
+                                           : 0.0, // See const Table_51311 definition
+                  mac->stats.dl.total_symbols ? (double)mac->stats.dl.total_bits / mac->stats.dl.total_symbols : 0.0,
+                  mac->stats.dl.rb_size / nbdl,
+                  mac->stats.dl.nr_of_symbols / nbdl);
 
-  cur += snprintf(cur, end - cur, "\n    UL harq: %lu", mac->stats.ul.rounds[0]);
+  cur += snprintf(cur, end - cur, "    UL harq: %lu", mac->stats.ul.rounds[0]);
   for (nb = NR_MAX_HARQ_ROUNDS_FOR_STATS - 1; nb > 1; nb--)
     if (mac->stats.ul.rounds[nb])
       break;
@@ -69,8 +92,9 @@ void print_ue_mac_stats(const module_id_t mod, const int frame_rx, const int slo
            end - cur,
            " avg code rate %.01f, avg bit/symbol %.01f, avg per TB: "
            "(nb RBs %.01f, nb symbols %.01f)\n",
-           (double)mac->stats.ul.target_code_rate / (mac->stats.ul.total_bits * 1024 * 10), // See const Table_51311 definition
-           (double)mac->stats.ul.total_bits / mac->stats.ul.total_symbols,
+           mac->stats.ul.total_bits ? (double)mac->stats.ul.target_code_rate / (mac->stats.ul.total_bits * 1024 * 10)
+                                    : 0.0, // See const Table_51311 definition
+           mac->stats.ul.total_symbols ? (double)mac->stats.ul.total_bits / mac->stats.ul.total_symbols : 0.0,
            mac->stats.ul.rb_size / nbul,
            mac->stats.ul.nr_of_symbols / nbul);
   LOG_I(NR_MAC, "%s", txt);
@@ -136,6 +160,32 @@ static nr_dci_format_t handle_dci(NR_UE_MAC_INST_t *mac, frame_t frame, int slot
     nr_timer_suspension(&mac->ra.response_window_timer);
 
   return nr_ue_process_dci_indication_pdu(mac, frame, slot, dci);
+}
+
+/** @brief Handle PCCH reception on P-RNTI. */
+static int8_t handle_pcch(NR_UE_MAC_INST_t *mac, nr_downlink_indication_t *dl_info, int pdu_id)
+{
+  const fapi_nr_pdsch_pdu_t *pdsch_pdu = &dl_info->rx_ind->rx_indication_body[pdu_id].pdsch_pdu;
+
+  if (!pdsch_pdu->ack_nack || !pdsch_pdu->pdu || pdsch_pdu->pdu_length == 0) {
+    LOG_W(NR_MAC,
+          "[%04d.%02d][UE %d] PCCH RX fail: ack=%d len=%d\n",
+          dl_info->frame,
+          dl_info->slot,
+          mac->ue_id,
+          pdsch_pdu->ack_nack,
+          pdsch_pdu->pdu_length);
+    return 0;
+  }
+
+  LOG_D(NR_MAC,
+        "[%04d.%02d][UE %d] Received PCCH on P-RNTI, forwarding %d bytes to RRC\n",
+        dl_info->frame,
+        dl_info->slot,
+        mac->ue_id,
+        pdsch_pdu->pdu_length);
+  send_pcch_rrc(mac->ue_id, pdsch_pdu->pdu, pdsch_pdu->pdu_length, NULL);
+  return 0;
 }
 
 // L2 Abstraction Layer
@@ -278,6 +328,9 @@ static uint32_t nr_ue_dl_processing(NR_UE_MAC_INST_t *mac, nr_downlink_indicatio
         case FAPI_NR_RX_PDU_TYPE_DLSCH:
           ret_mask |= (handle_dlsch(mac, dl_info, i)) << FAPI_NR_RX_PDU_TYPE_DLSCH;
           break;
+        case FAPI_NR_RX_PDU_TYPE_PCCH:
+          ret_mask |= (handle_pcch(mac, dl_info, i)) << FAPI_NR_RX_PDU_TYPE_PCCH;
+          break;
         case FAPI_NR_RX_PDU_TYPE_RAR:
           if (!dl_info->rx_ind->rx_indication_body[i].pdsch_pdu.ack_nack) {
             LOG_W(PHY, "Received a RAR-Msg2 but LDPC decode failed\n");
@@ -352,6 +405,7 @@ nr_ue_if_module_t *nr_ue_if_module_init(uint32_t module_id)
     nr_ue_if_module_inst[module_id]->dl_indication = nr_ue_dl_indication;
     nr_ue_if_module_inst[module_id]->ul_indication = nr_ue_ul_indication;
     nr_ue_if_module_inst[module_id]->slot_indication = nr_ue_slot_indication;
+    nr_ue_if_module_inst[module_id]->meas_ind = nr_mac_rrc_meas_ind_ue;
   }
   return nr_ue_if_module_inst[module_id];
 }

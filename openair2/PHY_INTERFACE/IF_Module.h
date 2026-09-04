@@ -11,10 +11,10 @@
 
 #include <stdint.h>
 #include <sched.h>
+#include <pthread.h>
 //#include "openair1/PHY/LTE_TRANSPORT/transport_eNB.h"
 #include "nfapi_interface.h"
 #include "common/platform_types.h"
-#include <radio/COMMON/common_lib.h>
 
 #define MAX_NUM_DL_PDU 100
 #define MAX_NUM_UL_PDU 100

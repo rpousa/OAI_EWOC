@@ -68,7 +68,8 @@ static void timer_cb(uint64_t s_abs, void *user_data)
 
 void *oru_fh_init(oru_fh_config_t *cfg)
 {
-  AssertFatal(cfg->enable_compression == false, "IQ compression not supported\n");
+  AssertFatal(cfg->comp_type < FH_COMP_NUM_METHODS,
+              "comp_type %d out of range [0..%d]\n", cfg->comp_type, FH_COMP_NUM_METHODS - 1);
 
   char *argv[64];
   int argc = 0;
@@ -152,6 +153,7 @@ void *oru_fh_init(oru_fh_config_t *cfg)
   memset(fh, 0, sizeof(oru_fh_t));
   fh->cfg = *cfg;
   fh->io_config.numerology = cfg->numerology;
+  fh->io_config.clock_timebase = cfg->clock_timebase;
   fh->io_config.num_ports = cfg->dpdk_conf.num_dpdk_devices;
   for (int i = 0; i < cfg->dpdk_conf.num_dpdk_devices; i++) {
     if (rte_eth_dev_get_port_by_name(cfg->dpdk_conf.dpdk_devices[i], &fh->io_config.port_ids[i]) < 0) {
@@ -180,7 +182,11 @@ void *oru_fh_init(oru_fh_config_t *cfg)
   uint16_t payload_size = cfg->num_prbs * 12 * 4; // 16-bit IQ (4 bytes per sample)
   uint16_t required_mtu = header_size + payload_size;
 
-  printf("ORU_FH: PRBs %u -> Required MTU %u (Limit %u)\n", cfg->num_prbs, required_mtu, cfg->mtu);
+  printf("ORU_FH: PRBs %u -> Required MTU %u (Limit %u); clock_timebase=%s\n",
+         cfg->num_prbs,
+         required_mtu,
+         cfg->mtu,
+         cfg->clock_timebase == FH_CLOCK_TAI ? "tai" : "utc");
 
   fh->io_config.mbuf_data_room = required_mtu + RTE_ETHER_HDR_LEN + RTE_ETHER_CRC_LEN + RTE_PKTMBUF_HEADROOM;
   fh->io_config.mbuf_count = 8192; // Default pool size
@@ -206,7 +212,9 @@ void *oru_fh_init(oru_fh_config_t *cfg)
                                                (send_func_t)oru_io_send_uplane,
                                                &fh->io,
                                                cfg->mtu,
-                                               cfg->prach_eaxc_offset);
+                                               cfg->prach_eaxc_offset,
+                                               cfg->comp_type,
+                                               cfg->prach_kbar);
 
   return fh;
 }
@@ -223,12 +231,12 @@ void oru_fh_cleanup(void *handle)
   free(fh);
 }
 
-int oru_fh_tx_read_symbol(void *handle, uint32_t **txdataF, int nb_tx, int *frame, int *slot, int *symbol)
+int oru_fh_tx_read_symbol(void *handle, uint32_t **txdataF, int nb_tx, uint64_t *hyper_frame, int *frame, int *slot, int *symbol)
 {
   if (!handle)
     return -1;
   oru_fh_t *fh = (oru_fh_t *)handle;
-  read_dl_iq(fh->packet_processor, txdataF, nb_tx, frame, slot, symbol);
+  read_dl_iq(fh->packet_processor, txdataF, nb_tx, hyper_frame, frame, slot, symbol);
   return 0;
 }
 
@@ -240,7 +248,7 @@ int oru_fh_get_ready_jobs(void *handle)
   return get_ready_job_count(fh->packet_processor);
 }
 
-int oru_fh_get_utc_anchor_point(void *handle, uint32_t *frame, uint32_t *slot, struct timespec *ts)
+int oru_fh_get_utc_anchor_point(void *handle, uint64_t *hyper_frame, uint32_t *frame, uint32_t *slot, struct timespec *ts)
 {
   if (!handle || !frame || !slot || !ts)
     return -1;
@@ -249,13 +257,18 @@ int oru_fh_get_utc_anchor_point(void *handle, uint32_t *frame, uint32_t *slot, s
   absolute_gps_symbol -= absolute_gps_symbol % NR_SYMBOLS_PER_SLOT; // Round down to start of current slot
   uint64_t absolute_slot = absolute_gps_symbol / NR_SYMBOLS_PER_SLOT;
   uint32_t slots_per_frame = 10 << fh->cfg.numerology;
+  *hyper_frame = (absolute_slot / slots_per_frame) / 1024;
   *frame = (absolute_slot / slots_per_frame) % 1024;
   *slot = absolute_slot % slots_per_frame;
 
   uint64_t total_syms_per_sec = (NR_SYMBOLS_PER_SLOT * 1000) << fh->cfg.numerology;
   uint64_t ns_per_symbol = 1000000000 / total_syms_per_sec;
   uint64_t leftover_syms = absolute_gps_symbol % total_syms_per_sec;
-  ts->tv_sec = (absolute_gps_symbol / total_syms_per_sec) + GPS_EPOCH_OFFSET_UNIX;
+  /* Invert get_gps_ns(): system_sec = gps_sec + epoch - clock_to_gps */
+  int64_t clock_to_gps = (fh->io.timer.timebase == FH_CLOCK_TAI)
+                             ? -(int64_t)GPS_TAI_LAG_SECONDS
+                             : (int64_t)GPS_UTC_LEAP_SECONDS;
+  ts->tv_sec = (absolute_gps_symbol / total_syms_per_sec) + GPS_EPOCH_OFFSET_UNIX - clock_to_gps;
   ts->tv_nsec = leftover_syms * ns_per_symbol;
   return 0;
 }
@@ -267,11 +280,24 @@ void oru_fh_rx_send_prach(void *handle, uint32_t **prachF, int nb_rx, int frame,
   write_prach_iq(fh->packet_processor, prachF, nb_rx, frame, slot, symbol);
 }
 
-void oru_fh_rx_send_pusch(void *handle, uint32_t **puschF, int nb_rx, int frame, int slot, int symbol)
+int oru_fh_poll_ul_job(void *handle, ul_job_t *job) {
+  oru_fh_t *fh = (oru_fh_t *)handle;
+  AssertFatal(fh, "Invalid handle\n");
+  return poll_ul_job(fh->packet_processor, job);
+}
+
+void oru_fh_get_dl_symbol_bitmask(void *handle, const uint8_t **bitmask, uint16_t *bit_length)
 {
   oru_fh_t *fh = (oru_fh_t *)handle;
   AssertFatal(fh, "Invalid handle\n");
-  write_ul_iq(fh->packet_processor, puschF, nb_rx, frame, slot, symbol);
+  get_dl_symbol_bitmask(fh->packet_processor, bitmask, bit_length);
+}
+
+void oru_fh_rx_send_pusch(void *handle, uint32_t *puschF, int symbol_index, const ul_job_t *job)
+{
+  oru_fh_t *fh = (oru_fh_t *)handle;
+  AssertFatal(fh, "Invalid handle\n");
+  write_ul_iq(fh->packet_processor, puschF, symbol_index, job);
 }
 
 int oru_fh_start(void *handle)

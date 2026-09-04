@@ -70,3 +70,8 @@ void nr_pdcp_ms_tick(void)
   if (pthread_cond_broadcast(&timer_thread_cond)) abort();
   if (pthread_mutex_unlock(&timer_thread_mutex)) abort();
 }
+
+uint64_t nr_pdcp_current_time(void)
+{
+  return timer_thread_curtime;
+}

@@ -18,10 +18,7 @@
 #include "common/utils/fsn.h"
 #include "common/ran_context.h"
 
-#include "radio/COMMON/common_lib.h"
 #include "radio/ETHERNET/ethernet_lib.h"
-
-#include "PHY/if4_tools.h"
 
 #include "PHY/defs_nr_common.h"
 #include "PHY/phy_extern.h"
@@ -74,15 +71,6 @@ void fh_if5_south_out(RU_t *ru, int frame, int slot, uint64_t timestamp)
         10 * log10((double)signal_energy(buffs[0], get_samples_per_slot(slot, ru->nr_frame_parms))),
         (int)txmeas.tv_nsec);
   ru->ifdevice.trx_write_func2(&ru->ifdevice, timestamp, buffs, 0, get_samples_per_slot(slot, ru->nr_frame_parms), 0, ru->nb_tx);
-}
-
-// southbound IF4p5 fronthaul
-void fh_if4p5_south_out(RU_t *ru, int frame, int slot, uint64_t timestamp)
-{
-  LOG_D(PHY,"Sending IF4p5 for frame %d subframe %d\n",ru->proc.frame_tx,ru->proc.tti_tx);
-
-  if ((nr_slot_select(&ru->config, ru->proc.frame_tx, ru->proc.tti_tx) & NR_DOWNLINK_SLOT) > 0)
-    send_IF4p5(ru,frame, slot, IF4p5_PDLFFT);
 }
 
 /*************************************************************/
@@ -146,196 +134,6 @@ void fh_if5_south_in(RU_t *ru, int *frame, int *tti)
           proc->first_rx,
           ru->rx_fhaul.p_time / (cpu_freq_GHz * 1000.0),
           rxmeas.tv_nsec);
-}
-
-// Synchronous if4p5 from south
-void fh_if4p5_south_in(RU_t *ru,
-                       int *frame,
-                       int *slot) {
-  NR_DL_FRAME_PARMS *fp = ru->nr_frame_parms;
-  RU_proc_t *proc = &ru->proc;
-  int f,sl;
-  uint16_t packet_type;
-  uint32_t symbol_number=0;
-  uint32_t symbol_mask_full=0;
-
-  do {   // Blocking, we need a timeout on this !!!!!!!!!!!!!!!!!!!!!!!
-    recv_IF4p5(ru, &f, &sl, &packet_type, &symbol_number);
-
-    if (packet_type == IF4p5_PULFFT) proc->symbol_mask[sl] = proc->symbol_mask[sl] | (1<<symbol_number);
-    else if (packet_type == IF4p5_PULTICK) {
-      if ((proc->first_rx == 0) && (f != *frame))
-        LOG_E(PHY, "rx_fh_if4p5: PULTICK received frame %d != expected %d\n", f, *frame);
-
-      if ((proc->first_rx == 0) && (sl != *slot))
-        LOG_E(PHY, "rx_fh_if4p5: PULTICK received subframe %d != expected %d (first_rx %d)\n", sl, *slot, proc->first_rx);
-
-      break;
-    } else if (packet_type == IF4p5_PRACH) {
-      // nothing in RU for RAU
-    }
-
-    LOG_D(PHY,"rx_fh_if4p5: subframe %d symbol mask %x\n",*slot,proc->symbol_mask[sl]);
-  } while(proc->symbol_mask[sl] != symbol_mask_full);
-
-  //caculate timestamp_rx, timestamp_tx based on frame and subframe
-  proc->tti_rx   = sl;
-  proc->frame_rx = f;
-  proc->timestamp_rx = (proc->frame_rx * fp->samples_per_subframe * 10) + get_samples_slot_timestamp(fp, proc->tti_rx);
-  //  proc->timestamp_tx = proc->timestamp_rx +  (4*fp->samples_per_subframe);
-  proc->tti_tx   = (sl+ru->sl_ahead)%fp->slots_per_frame;
-  proc->frame_tx = (sl > (fp->slots_per_frame - 1 - (ru->sl_ahead))) ? (f + 1) & 1023 : f;
-
-  if (proc->first_rx == 0) {
-    if (proc->tti_rx != *slot) {
-      LOG_E(PHY,"Received Timestamp (IF4p5) doesn't correspond to the time we think it is (proc->tti_rx %d, subframe %d)\n",proc->tti_rx,*slot);
-      exit_fun("Exiting");
-    }
-
-    if (proc->frame_rx != *frame) {
-      LOG_E(PHY,"Received Timestamp (IF4p5) doesn't correspond to the time we think it is (proc->frame_rx %d frame %d)\n",proc->frame_rx,*frame);
-      exit_fun("Exiting");
-    }
-  } else {
-    proc->first_rx = 0;
-    *frame = proc->frame_rx;
-    *slot = proc->tti_rx;
-  }
-
-  proc->symbol_mask[proc->tti_rx] = 0;
-  LOG_D(PHY,"RU %d: fh_if4p5_south_in sleeping ...\n",ru->idx);
-}
-
-// asynchronous inbound if4p5 fronthaul from south
-void fh_if4p5_south_asynch_in(RU_t *ru,int *frame,int *slot) {
-  NR_DL_FRAME_PARMS *fp = ru->nr_frame_parms;
-  RU_proc_t *proc       = &ru->proc;
-  uint16_t packet_type;
-  uint32_t symbol_number = 0;
-  uint32_t symbol_mask = (1 << fp->symbols_per_slot) - 1;
-  uint32_t prach_rx = 0;
-
-  do {   // Blocking, we need a timeout on this !!!!!!!!!!!!!!!!!!!!!!!
-    recv_IF4p5(ru, &proc->frame_rx, &proc->tti_rx, &packet_type, &symbol_number);
-    if (proc->first_rx != 0) {
-      *frame = proc->frame_rx;
-      *slot = proc->tti_rx;
-      proc->first_rx = 0;
-    } else {
-      if (proc->frame_rx != *frame) {
-        LOG_E(PHY,"frame_rx %d is not what we expect %d\n",proc->frame_rx,*frame);
-        exit_fun("Exiting");
-      }
-      if (proc->tti_rx != *slot) {
-        LOG_E(PHY,"tti_rx %d is not what we expect %d\n",proc->tti_rx,*slot);
-        exit_fun("Exiting");
-      }
-    }
-
-    if (packet_type == IF4p5_PULFFT)
-      symbol_mask &= ~(1 << symbol_number);
-    else if (packet_type == IF4p5_PRACH)
-      prach_rx &= ~0x1;
-  } while (symbol_mask > 0 || prach_rx > 0); // haven't received all PUSCH symbols and PRACH information
-}
-
-/*************************************************************/
-/* Input Fronthaul from North RRU                            */
-
-// RRU IF4p5 TX fronthaul receiver. Assumes an if_device on input and if or rf device on output
-// receives one subframe's worth of IF4p5 OFDM symbols and OFDM modulates
-void fh_if4p5_north_in(RU_t *ru,int *frame,int *slot)
-{
-  uint32_t symbol_number=0;
-  uint32_t symbol_mask, symbol_mask_full;
-  uint16_t packet_type;
-  /// **** incoming IF4p5 from remote RCC/RAU **** ///
-  symbol_number = 0;
-  symbol_mask = 0;
-  symbol_mask_full = (1<<(ru->nr_frame_parms->symbols_per_slot))-1;
-
-  do {
-    recv_IF4p5(ru, frame, slot, &packet_type, &symbol_number);
-    symbol_mask = symbol_mask | (1<<symbol_number);
-  } while (symbol_mask != symbol_mask_full);
-}
-
-void fh_if5_north_asynch_in(RU_t *ru, int *frame, int *slot)
-{
-  AssertFatal(1 == 0, "Shouldn't get here\n");
-}
-
-void fh_if4p5_north_asynch_in(RU_t *ru,int *frame,int *slot) {
-  NR_DL_FRAME_PARMS *fp = ru->nr_frame_parms;
-  nfapi_nr_config_request_scf_t *cfg = &ru->config;
-  RU_proc_t *proc        = &ru->proc;
-  uint16_t packet_type;
-  uint32_t symbol_mask_full = 0;
-  int slot_tx,frame_tx;
-  LOG_D(PHY, "%s(ru:%p frame, subframe)\n", __FUNCTION__, ru);
-  uint32_t symbol_number = 0;
-  uint32_t symbol_mask = 0;
-
-  //  symbol_mask_full = ((subframe_select(fp,*slot) == SF_S) ? (1<<fp->dl_symbols_in_S_subframe) : (1<<fp->symbols_per_slot))-1;
-  do {
-    recv_IF4p5(ru, &frame_tx, &slot_tx, &packet_type, &symbol_number);
-
-    if (((nr_slot_select(cfg, frame_tx, slot_tx) & NR_DOWNLINK_SLOT) > 0) && (symbol_number == 0))
-      start_meas(&ru->rx_fhaul);
-
-    LOG_D(PHY,"slot %d (%d): frame %d, slot %d, symbol %d\n",
-          *slot,nr_slot_select(cfg,frame_tx,*slot),frame_tx,slot_tx,symbol_number);
-
-    if (proc->first_tx != 0) {
-      *frame         = frame_tx;
-      *slot          = slot_tx;
-      proc->first_tx = 0;
-    } else {
-      AssertFatal(frame_tx == *frame,
-                  "frame_tx %d is not what we expect %d\n",frame_tx,*frame);
-      AssertFatal(slot_tx == *slot,
-                  "slot_tx %d is not what we expect %d\n",slot_tx,*slot);
-    }
-
-    if (packet_type == IF4p5_PDLFFT) {
-      symbol_mask = symbol_mask | (1<<symbol_number);
-    } else
-      AssertFatal(false, "Illegal IF4p5 packet type (should only be IF4p5_PDLFFT%d\n", packet_type);
-  } while (symbol_mask != symbol_mask_full);
-
-  if ((nr_slot_select(cfg, frame_tx, slot_tx) & NR_DOWNLINK_SLOT) > 0)
-    stop_meas(&ru->rx_fhaul);
-
-  proc->tti_tx = slot_tx;
-  proc->frame_tx = frame_tx;
-
-  if (frame_tx == 0 && slot_tx == 0)
-    proc->frame_tx_unwrap += 1024;
-
-  proc->timestamp_tx =
-      ((uint64_t)frame_tx + proc->frame_tx_unwrap) * fp->samples_per_subframe * 10 + get_samples_slot_timestamp(fp, slot_tx);
-  LOG_D(PHY, "RU %d/%d TST %lu, frame %d, subframe %d\n", ru->idx, 0, proc->timestamp_tx, frame_tx, slot_tx);
-
-  if (ru->feptx_ofdm)
-    ru->feptx_ofdm(ru, frame_tx, slot_tx);
-
-  if (ru->fh_south_out)
-    ru->fh_south_out(ru, frame_tx, slot_tx, proc->timestamp_tx);
-}
-
-void fh_if5_north_out(RU_t *ru)
-{
-  /// **** send_IF5 of rxdata to BBU **** ///
-  AssertFatal(1 == 0, "Shouldn't get here\n");
-}
-
-// RRU IF4p5 northbound interface (RX)
-void fh_if4p5_north_out(RU_t *ru)
-{
-  RU_proc_t *proc=&ru->proc;
-  start_meas(&ru->tx_fhaul);
-  send_IF4p5(ru, proc->frame_rx, proc->tti_rx, IF4p5_PULFFT);
-  stop_meas(&ru->tx_fhaul);
 }
 
 static void rx_rf(RU_t *ru, int *frame, int *slot)
@@ -494,7 +292,7 @@ static radio_tx_gpio_flag_t get_gpio_flags(RU_t *ru, int slot)
   return flags_gpio;
 }
 
-void tx_rf(RU_t *ru, int frame,int slot, uint64_t timestamp)
+int tx_rf_symbols(RU_t *ru, int frame, int slot, uint64_t timestamp, int start_symbol, int num_symbols)
 {
   RU_proc_t *proc = &ru->proc;
   NR_DL_FRAME_PARMS *fp = ru->nr_frame_parms;
@@ -510,6 +308,7 @@ void tx_rf(RU_t *ru, int frame,int slot, uint64_t timestamp)
   int siglen = get_samples_per_slot(slot, fp);
   radio_tx_burst_flag_t flags_burst = TX_BURST_INVALID;
   radio_tx_gpio_flag_t flags_gpio = 0;
+  int transmitted_symbols = num_symbols;
 
   if (cfg->cell_config.frame_duplex_type.value == TDD && !get_softmodem_params()->continuous_tx && !IS_SOFTMODEM_RFSIM) {
     int slot_type = nr_slot_select(cfg,frame,slot%fp->slots_per_frame);
@@ -521,22 +320,24 @@ void tx_rf(RU_t *ru, int frame,int slot, uint64_t timestamp)
           txsymb++;
       }
 
-      AssertFatal(txsymb>0,"illegal txsymb %d\n",txsymb);
+      AssertFatal(txsymb > 0, "illegal txsymb %d\n", txsymb);
 
-      if (fp->slots_per_subframe == 1) {
-        if (txsymb <= 7)
-          siglen = (fp->ofdm_symbol_size + fp->nb_prefix_samples0) + (txsymb - 1) * (fp->ofdm_symbol_size + fp->nb_prefix_samples);
-        else
-          siglen = 2 * (fp->ofdm_symbol_size + fp->nb_prefix_samples0) + (txsymb - 2) * (fp->ofdm_symbol_size + fp->nb_prefix_samples);
-      } else {
-        if(slot%(fp->slots_per_subframe/2))
-          siglen = txsymb * (fp->ofdm_symbol_size + fp->nb_prefix_samples);
-        else
-          siglen = (fp->ofdm_symbol_size + fp->nb_prefix_samples0) + (txsymb - 1) * (fp->ofdm_symbol_size + fp->nb_prefix_samples);
+      if (txsymb < start_symbol) {
+        // No DL symbols in this transmission
+        return 0;
       }
 
-      //+ ru->end_of_burst_delay;
-      flags_burst = TX_BURST_END;
+      int end_symbol = start_symbol + num_symbols - 1;
+      if (end_symbol >= txsymb) {
+        flags_burst = TX_BURST_END;
+      } else {
+        flags_burst = TX_BURST_MIDDLE;
+      }
+
+      int num_symbols_this_transmission = min(txsymb, end_symbol) - start_symbol + 1;
+      transmitted_symbols = num_symbols_this_transmission;
+
+      siglen = get_samples_symbol_duration(fp, slot, start_symbol, num_symbols_this_transmission);
     } else if (slot_type == NR_DOWNLINK_SLOT) {
       int prevslot_type = nr_slot_select(cfg,frame,(slot+(fp->slots_per_frame-1))%fp->slots_per_frame);
       int nextslot_type = nr_slot_select(cfg,frame,(slot+1)%fp->slots_per_frame);
@@ -548,9 +349,14 @@ void tx_rf(RU_t *ru, int frame,int slot, uint64_t timestamp)
       } else {
         flags_burst = proc->first_tx == 1 ? TX_BURST_START : TX_BURST_MIDDLE;
       }
+      siglen = get_samples_symbol_duration(fp, slot, start_symbol, num_symbols);
+    } else if (slot_type == NR_UPLINK_SLOT) {
+      // Do not transmit during uplink slots
+      return 0;
     }
   } else { // FDD
     flags_burst = proc->first_tx == 1 ? TX_BURST_START : TX_BURST_MIDDLE;
+    siglen = get_samples_symbol_duration(fp, slot, start_symbol, num_symbols);
   }
 
   if (ru->openair0_cfg.gpio_controller != RU_GPIO_CONTROL_NONE)
@@ -561,8 +367,9 @@ void tx_rf(RU_t *ru, int frame,int slot, uint64_t timestamp)
 
   int nt = ru->nb_tx;
   void *txp[nt];
+  uint32_t time_offset = get_samples_slot_timestamp(fp, slot) + get_samples_symbol_timestamp(fp, slot, start_symbol);
   for (int i = 0; i < nt; i++)
-    txp[i] = (void *)&ru->common.txdata[i][get_samples_slot_timestamp(fp, slot)] - sf_extension * sizeof(int32_t);
+    txp[i] = (void *)&ru->common.txdata[i][time_offset] - sf_extension * sizeof(int32_t);
 
   // prepare tx buffer pointers
   uint32_t txs = ru->rfdevice.trx_write_func(&ru->rfdevice,
@@ -584,9 +391,55 @@ void tx_rf(RU_t *ru, int frame,int slot, uint64_t timestamp)
         siglen + sf_extension,
         txs,
         10 * log10((double)signal_energy(txp[0], siglen + sf_extension)));
+
+  return transmitted_symbols;
 }
 
-static void fill_rf_config(RU_t *ru, char *rf_config_file)
+// Pushes the per-antenna analog beam IDs assigned to this slot's symbols (ru->common.beam_id,
+// filled in from the gNB's precoding step) down to the RF device, one trx_set_beams() call per
+// symbol at which the beam vector changes. Only relevant for devices that need to be told about
+// beams explicitly (e.g. rfsimulator); USRP GPIO-controlled beam switching is handled separately
+// via get_gpio_flags(), embedded directly in the TX burst flags.
+//
+// Must run after nr_feptx_tp()/nr_feptx_prec() have copied this slot's beam_id from the gNB's
+// common_vars (done from ru_tx_func(), called below in tx_rf()) -- calling this any earlier reads
+// last frame's leftover beam_id instead of the one the MAC scheduler just picked for this slot.
+//
+// Only calls trx_set_beams() when the beam vector actually changes between symbols, to avoid
+// issuing redundant beam-switch commands to real hardware.
+static void ctrl_rf(RU_t *ru, int frame, int slot, uint64_t timestamp)
+{
+  if (!ru->rfdevice.trx_set_beams || !ru->gNB_list[0]->common_vars.analog_bf)
+    return;
+
+  NR_DL_FRAME_PARMS *fp = ru->nr_frame_parms;
+  int nb_tx = ru->nb_tx;
+  uint16_t **beam_id = ru->common.beam_id;
+
+  uint16_t last_beams[nb_tx];
+  memcpy(last_beams, beam_id[slot * fp->symbols_per_slot], nb_tx * sizeof(uint16_t));
+  uint64_t event_ts = timestamp + ru->ts_offset;
+  LOG_D(NR_PHY, "RU Control [%d.%d]: set beams at symbol 0, ts %lu\n", frame, slot, event_ts);
+  ru->rfdevice.trx_set_beams(&ru->rfdevice, last_beams, nb_tx, event_ts);
+
+  for (int j = 1; j < fp->symbols_per_slot; j++) {
+    uint16_t *cur_beams = beam_id[slot * fp->symbols_per_slot + j];
+    if (memcmp(cur_beams, last_beams, nb_tx * sizeof(uint16_t)) == 0)
+      continue;
+    memcpy(last_beams, cur_beams, nb_tx * sizeof(uint16_t));
+    event_ts = timestamp + ru->ts_offset + get_samples_symbol_duration(fp, slot, 0, j);
+    LOG_D(NR_PHY, "RU Control [%d.%d]: beam switch at symbol %d, ts %lu\n", frame, slot, j, event_ts);
+    ru->rfdevice.trx_set_beams(&ru->rfdevice, last_beams, nb_tx, event_ts);
+  }
+}
+
+void tx_rf(RU_t *ru, int frame, int slot, uint64_t timestamp)
+{
+  ctrl_rf(ru, frame, slot, timestamp);
+  tx_rf_symbols(ru, frame, slot, timestamp, 0, 14);
+}
+
+void fill_rf_config(RU_t *ru, char *rf_config_file)
 {
   NR_DL_FRAME_PARMS *fp   = ru->nr_frame_parms;
   nfapi_nr_config_request_scf_t *config = &ru->config; //tmp index
@@ -617,6 +470,7 @@ static void fill_rf_config(RU_t *ru, char *rf_config_file)
   cfg->num_distributed_ru = 1;
   LOG_I(PHY,"Setting RF config for N_RB %d, NB_RX %d, NB_TX %d\n",cfg->num_rb_dl,cfg->rx_num_channels,cfg->tx_num_channels);
   LOG_I(PHY,"tune_offset %.0f Hz, sample_rate %.0f Hz\n",cfg->tune_offset,cfg->sample_rate);
+  cfg->nr_flag = 1;
 
   for (int i = 0; i < ru->nb_tx; i++) {
     if (ru->if_frequency == 0) {
@@ -649,13 +503,14 @@ static void fill_rf_config(RU_t *ru, char *rf_config_file)
   }
 }
 
-static void fill_split7_2_config(split7_config_t *split7, const nfapi_nr_config_request_scf_t *config, const NR_DL_FRAME_PARMS *fp)
+void fill_split7_2_config(split7_config_t *split7, const nfapi_nr_config_request_scf_t *config, const NR_DL_FRAME_PARMS *fp)
 {
   const nfapi_nr_prach_config_t *prach_config = &config->prach_config;
   const nfapi_nr_tdd_table_t *tdd_table = &config->tdd_table;
   const nfapi_nr_cell_config_t *cell_config = &config->cell_config;
   const nfapi_nr_carrier_config_t *carrier_config = &config->carrier_config;
 
+  split7->mu = config->ssb_config.scs_common.value;
   DevAssert(prach_config->prach_ConfigurationIndex.tl.tag == NFAPI_NR_CONFIG_PRACH_CONFIG_INDEX_TAG);
   split7->prach_index = prach_config->prach_ConfigurationIndex.value;
   AssertFatal(prach_config->num_prach_fd_occasions.value >= 1, "must have at least one PRACH occasion\n");
@@ -749,13 +604,11 @@ void ru_tx_func(void *param)
     ru->feptx_prec(ru,frame_tx,slot_tx);
 
   // do OFDM with/without TX front-end processing  if needed
-  if (ru->fh_north_asynch_in == NULL && ru->feptx_ofdm)
+  if (ru->feptx_ofdm)
     ru->feptx_ofdm(ru, frame_tx, slot_tx);
 
-  if (ru->fh_north_asynch_in == NULL && ru->fh_south_out)
+  if (ru->fh_south_out)
     ru->fh_south_out(ru, frame_tx, slot_tx, info->timestamp_tx);
-  if (ru->fh_north_out)
-    ru->fh_north_out(ru);
 }
 
 /* @brief wait for the next RX TTI to be free
@@ -830,10 +683,10 @@ void *ru_thread(void *param)
   // Start IF device if any
   if (ru->nr_start_if) {
     LOG_I(PHY, "starting transport\n");
-    ret = openair0_transport_load(&ru->ifdevice, &ru->openair0_cfg, &ru->eth_params);
+    ret = openair0_transport_load(&ru->ifdevice, &ru->openair0_cfg);
     AssertFatal(ret == 0, "RU %u: openair0_transport_init() ret %d: cannot initialize transport protocol\n", ru->idx, ret);
 
-    if (ru->ifdevice.get_internal_parameter != NULL) {
+    if (ru->ifdevice.get_internal_parameter) {
       /* it seems the device can "overwrite" (request?) to set the callbacks
        * for fh_south_in()/fh_south_out() differently */
       void *t = ru->ifdevice.get_internal_parameter("fh_if4p5_south_in");
@@ -842,8 +695,6 @@ void *ru_thread(void *param)
       t = ru->ifdevice.get_internal_parameter("fh_if4p5_south_out");
       if (t != NULL)
         ru->fh_south_out = t;
-    } else {
-      malloc_IF4p5_buffer(ru);
     }
 
     int cpu = sched_getcpu();
@@ -880,10 +731,9 @@ void *ru_thread(void *param)
 
   // Start RF device if any
   if (ru->start_rf) {
-    if (ru->start_rf(ru) != 0)
-      LOG_E(HW, "Could not start the RF device\n");
-    else
-      LOG_I(PHY, "RU %d rf device ready\n", ru->idx);
+    ret = ru->start_rf(ru);
+    AssertFatal(ret == 0, "RU %u: start_rf() ret %d: cannot start RF device\n", ru->idx, ret);
+    LOG_I(PHY, "RU %d rf device ready\n", ru->idx);
   } else
     LOG_I(PHY, "RU %d no rf device\n", ru->idx);
 
@@ -1038,27 +888,9 @@ int start_write_thread(RU_t *ru) {
   return ru->rfdevice.trx_write_init(&ru->rfdevice);
 }
 
-void init_RU_proc(RU_t *ru)
-{
-  ru->proc = (RU_proc_t){.ru = ru, .first_rx = 1, .first_tx = 1};
-  LOG_I(PHY, "Initialized RU proc %d (%s,%s),\n", ru->idx, NB_functions[ru->function], NB_timing[ru->if_timing]);
-}
-
-void start_RU_proc(RU_t *ru)
-{
-  threadCreate(&ru->proc.pthread_FH, ru_thread, (void *)ru, "ru_thread", ru->ru_thread_core, OAI_PRIORITY_RT_MAX);
-}
-
-
 void kill_NR_RU_proc(int inst) {
   RU_t *ru = RC.ru[inst];
   RU_proc_t *proc = &ru->proc;
-
-  if (ru->if_south != REMOTE_IF4p5) {
-    abortTpool(ru->threadPool);
-    abortNotifiedFIFO(ru->respfeprx);
-    abortNotifiedFIFO(ru->respfeptx);
-  }
 
   /* Note: it seems pthread_FH and and FEP thread below both use
    * mutex_fep/cond_fep. Thus, we unlocked above for pthread_FH above and do
@@ -1068,7 +900,20 @@ void kill_NR_RU_proc(int inst) {
   proc->instance_cnt_fep[0] = 0;
   pthread_cond_broadcast(proc->cond_fep);
   pthread_mutex_unlock(proc->mutex_fep);
+
+  /* Join the RU thread BEFORE aborting the RU thread pool: ru_thread() is a
+   * producer of that pool (nr_fep_tp()/feptx push tasks on every UL/DL slot).
+   * abortTpool() frees the pool's queues, so a push from ru_thread() after
+   * that point races a destroyed mutex (EINVAL) and asserts. oai_exit is
+   * already set at this point and the RF reads are non-blocking, so the join
+   * returns promptly. */
   pthread_join(proc->pthread_FH, NULL);
+
+  if (ru->if_south != REMOTE_IF4p5) {
+    abortTpool(ru->threadPool);
+    abortNotifiedFIFO(ru->respfeprx);
+    abortNotifiedFIFO(ru->respfeptx);
+  }
 
   // everything should be stopped now, we can safely stop the RF device
   if (ru->stop_rf == NULL) {
@@ -1088,94 +933,44 @@ void set_function_spec_param(RU_t *ru)
   switch (ru->if_south) {
     case LOCAL_RF:   // this is an RU with integrated RF (RRU, gNB)
       reset_meas(&ru->rx_fhaul);
-      if (ru->function ==  NGFI_RRU_IF5) {                 // IF5 RRU
-        ru->do_prach              = 0;                      // no prach processing in RU
-        ru->fh_north_in           = NULL;                   // no shynchronous incoming fronthaul from north
-        ru->fh_north_out          = fh_if5_north_out;       // need only to do send_IF5  reception
-        ru->fh_south_out          = tx_rf;                  // send output to RF
-        ru->fh_north_asynch_in    = fh_if5_north_asynch_in; // TX packets come asynchronously
-        ru->feprx                 = NULL;                   // nothing (this is a time-domain signal)
-        ru->feptx_ofdm            = NULL;                   // nothing (this is a time-domain signal)
-        ru->feptx_prec            = NULL;                   // nothing (this is a time-domain signal)
-        ru->nr_start_if           = nr_start_if;            // need to start the if interface for if5
-        ru->ifdevice.host_type    = RRU_HOST;
-        ru->rfdevice.host_type    = RRU_HOST;
-        ru->ifdevice.eth_params   = &ru->eth_params;
-        reset_meas(&ru->rx_fhaul);
-        reset_meas(&ru->tx_fhaul);
-        reset_meas(&ru->compression);
-        reset_meas(&ru->transport);
-      } else if (ru->function == NGFI_RRU_IF4p5) {
-        ru->do_prach              = 1;                        // do part of prach processing in RU
-        ru->fh_north_in           = NULL;                     // no synchronous incoming fronthaul from north
-        ru->fh_north_out          = fh_if4p5_north_out;       // send_IF4p5 on reception
-        ru->fh_south_out          = tx_rf;                    // send output to RF
-        ru->fh_north_asynch_in    = fh_if4p5_north_asynch_in; // TX packets come asynchronously
-        ru->feprx                 = nr_fep_tp;     // this is frequency-shift + DFTs
-        ru->feptx_ofdm            = nr_feptx_tp; // this is fep with idft only (no precoding in RRU)
-        ru->feptx_prec            = NULL;
-        ru->nr_start_if           = nr_start_if;              // need to start the if interface for if4p5
-        ru->ifdevice.host_type    = RRU_HOST;
-        ru->rfdevice.host_type    = RRU_HOST;
-        ru->ifdevice.eth_params   = &ru->eth_params;
-        reset_meas(&ru->tx_fhaul);
-        reset_meas(&ru->compression);
-        reset_meas(&ru->transport);
-      } else if (ru->function == gNodeB_3GPP) {
-        ru->do_prach             = 0;                       // no prach processing in RU
-        ru->feprx                = nr_fep_tp;     // this is frequency-shift + DFTs
-        ru->feptx_ofdm           = nr_feptx_tp;             // this is fep with idft and precoding
-        ru->feptx_prec           = NULL;                    
-        ru->fh_north_in          = NULL;                    // no incoming fronthaul from north
-        ru->fh_north_out         = NULL;                    // no outgoing fronthaul to north
-        ru->nr_start_if          = NULL;                    // no if interface
-        ru->rfdevice.host_type   = RAU_HOST;
-        ru->fh_south_in            = rx_rf;                 // local synchronous RF RX
-        ru->fh_south_out           = tx_rf;                 // local synchronous RF TX
-        ru->start_rf               = start_rf;              // need to start the local RF interface
-        ru->stop_rf                = stop_rf;
-        ru->start_write_thread     = start_write_thread;                  // starting RF TX in different thread
-      }
+      AssertFatal(ru->function == gNodeB_3GPP, "ru->function %d not supported for LOCAL_RF\n", ru->function);
+      ru->feprx = nr_fep_tp; // this is frequency-shift + DFTs
+      ru->feptx_ofdm = nr_feptx_tp; // this is fep with idft and precoding
+      ru->feptx_prec = NULL;
+      ru->nr_start_if = NULL; // no if interface
+      ru->fh_south_in = rx_rf; // local synchronous RF RX
+      ru->fh_south_out = tx_rf; // local synchronous RF TX
+      ru->start_rf = start_rf; // need to start the local RF interface
+      ru->stop_rf = stop_rf;
+      ru->start_write_thread = start_write_thread; // starting RF TX in different thread
       break;
 
     case REMOTE_IF5: // the remote unit is IF5 RRU
-      ru->do_prach               = 0;
-      ru->txfh_in_fep            = 0;
-      ru->feprx                  = nr_fep_tp;     // this is frequency-shift + DFTs
-      ru->feptx_prec             = NULL;          // need to do transmit Precoding + IDFTs
-      ru->feptx_ofdm             = nr_feptx_tp; // need to do transmit Precoding + IDFTs
-      ru->fh_south_in            = fh_if5_south_in;     // synchronous IF5 reception
-      ru->fh_south_out           = (ru->txfh_in_fep>0) ? NULL : fh_if5_south_out;    // synchronous IF5 transmission
-      ru->fh_south_asynch_in     = NULL;                // no asynchronous UL
-      ru->start_rf               = ru->eth_params.transp_preference == ETH_UDP_IF5_ECPRI_MODE ? start_streaming : NULL;
-      ru->stop_rf                = NULL;
-      ru->start_write_thread     = NULL;
-      ru->nr_start_if            = nr_start_if;         // need to start if interface for IF5
-      ru->ifdevice.host_type     = RAU_HOST;
-      ru->ifdevice.eth_params    = &ru->eth_params;
-
+      ru->feprx = nr_fep_tp; // this is frequency-shift + DFTs
+      ru->feptx_prec = NULL; // need to do transmit Precoding + IDFTs
+      ru->feptx_ofdm = nr_feptx_tp; // need to do transmit Precoding + IDFTs
+      ru->fh_south_in = fh_if5_south_in; // synchronous IF5 reception
+      ru->fh_south_out = fh_if5_south_out; // synchronous IF5 transmission
+      ru->start_rf = ru->ifdevice.eth_params.transp_preference == ETH_UDP_IF5_ECPRI_MODE ? start_streaming : NULL;
+      ru->stop_rf = NULL;
+      ru->start_write_thread = NULL;
+      ru->nr_start_if = nr_start_if; // need to start if interface for IF5
       break;
 
     case REMOTE_IF4p5:
-      ru->do_prach               = 0;
-      ru->feprx                  = NULL;                // DFTs
-      ru->feptx_prec             = nr_feptx_prec;       // Precoding operation
-      ru->feptx_ofdm             = NULL;                // no OFDM mod
-      ru->fh_south_in            = fh_if4p5_south_in;   // synchronous IF4p5 reception
-      ru->fh_south_out           = fh_if4p5_south_out;  // synchronous IF4p5 transmission
-      ru->fh_south_asynch_in     = (ru->if_timing == synch_to_other) ? fh_if4p5_south_in : NULL;                // asynchronous UL if synch_to_other
-      ru->fh_north_out           = NULL;
-      ru->fh_north_asynch_in     = NULL;
-      ru->start_rf               = NULL;                // no local RF
-      ru->stop_rf                = NULL;
-      ru->start_write_thread     = NULL;
-      ru->nr_start_if            = nr_start_if;         // need to start if interface for IF4p5
-      ru->ifdevice.host_type     = RAU_HOST;
-      ru->ifdevice.eth_params    = &ru->eth_params;
+      ru->feprx = NULL; // DFTs
+      ru->feptx_prec = nr_feptx_prec; // Precoding operation
+      ru->feptx_ofdm = NULL; // no OFDM mod
+      ru->fh_south_in = NULL;
+      ru->fh_south_out = NULL;
+      ru->start_rf = NULL; // no local RF
+      ru->stop_rf = NULL;
+      ru->start_write_thread = NULL;
+      ru->nr_start_if = nr_start_if; // need to start if interface for IF4p5
       break;
 
     default:
-      LOG_E(PHY,"RU with invalid or unknown southbound interface type %d\n",ru->if_south);
+      LOG_E(PHY, "RU with invalid or unknown southbound interface type %d\n", ru->if_south);
       break;
   } // switch on interface type
 }
@@ -1232,8 +1027,12 @@ void init_NR_RU(configmodule_interface_t *cfg, char *rf_config_file)
         }
       }
     }
+
     set_function_spec_param(ru);
-    init_RU_proc(ru);
+
+    // init RU_proc -> needed for timing alignment
+    ru->proc = (RU_proc_t){.ru = ru, .first_rx = 1, .first_tx = 1};
+
     if (ru->if_south != REMOTE_IF4p5) {
       int threadCnt = ru->num_tpcores;
       if (threadCnt < 2)
@@ -1261,7 +1060,7 @@ void init_NR_RU(configmodule_interface_t *cfg, char *rf_config_file)
 void start_NR_RU()
 {
   RU_t *ru = RC.ru[0];
-  start_RU_proc(ru);
+  threadCreate(&ru->proc.pthread_FH, ru_thread, ru, "ru_thread", ru->ru_thread_core, OAI_PRIORITY_RT_MAX);
 }
 
 void stop_RU(int nb_ru) {
@@ -1289,8 +1088,6 @@ static void NRRCconfig_RU(configmodule_interface_t *cfg)
     RU_t *ru = RC.ru[j] = calloc(1, sizeof(*RC.ru[j]));
     ru->idx = j;
     ru->nr_frame_parms = calloc(1, sizeof(*ru->nr_frame_parms));
-    ru->frame_parms = calloc(1, sizeof(*ru->frame_parms));
-    ru->if_timing = synch_to_ext_device;
     paramdef_t *param = RUParamList.paramarray[j];
     if (RC.nb_nr_L1_inst > 0)
       ru->num_gNB = param[RU_ENB_LIST_IDX].numelt;
@@ -1369,79 +1166,41 @@ static void NRRCconfig_RU(configmodule_interface_t *cfg)
     ru->openair0_cfg.tune_offset = get_softmodem_params()->tune_offset;
 
     if (strcmp(*param[RU_LOCAL_RF_IDX].strptr, "yes") == 0) {
-      if (!config_isparamset(param, RU_LOCAL_IF_NAME_IDX)) {
-        ru->if_south = LOCAL_RF;
-        ru->function = gNodeB_3GPP;
-        LOG_D(PHY, "Setting function for RU %d to gNodeB_3GPP\n", j);
-      } else {
-        ru->eth_params.local_if_name = strdup(*param[RU_LOCAL_IF_NAME_IDX].strptr);
-        ru->eth_params.my_addr = strdup(*param[RU_LOCAL_ADDRESS_IDX].strptr);
-        ru->eth_params.remote_addr = strdup(*param[RU_REMOTE_ADDRESS_IDX].strptr);
-        ru->eth_params.my_portc = *param[RU_LOCAL_PORTC_IDX].uptr;
-        ru->eth_params.remote_portc = *param[RU_REMOTE_PORTC_IDX].uptr;
-        ru->eth_params.my_portd = *param[RU_LOCAL_PORTD_IDX].uptr;
-        ru->eth_params.remote_portd = *param[RU_REMOTE_PORTD_IDX].uptr;
-        char *str = *param[RU_TRANSPORT_PREFERENCE_IDX].strptr;
-        if (strcmp(str, "udp") == 0) {
-          ru->if_south = LOCAL_RF;
-          ru->function = NGFI_RRU_IF5;
-          ru->eth_params.transp_preference = ETH_UDP_MODE;
-          LOG_D(PHY, "Setting function for RU %d to NGFI_RRU_IF5 (udp)\n", j);
-        } else if (strcmp(str, "raw") == 0) {
-          ru->if_south = LOCAL_RF;
-          ru->function = NGFI_RRU_IF5;
-          ru->eth_params.transp_preference = ETH_RAW_MODE;
-          LOG_D(PHY, "Setting function for RU %d to NGFI_RRU_IF5 (raw)\n", j);
-        } else if (strcmp(str, "udp_if4p5") == 0) {
-          ru->if_south = LOCAL_RF;
-          ru->function = NGFI_RRU_IF4p5;
-          ru->eth_params.transp_preference = ETH_UDP_IF4p5_MODE;
-          LOG_D(PHY, "Setting function for RU %d to NGFI_RRU_IF4p5 (udp)\n", j);
-        } else if (strcmp(str, "raw_if4p5") == 0) {
-          ru->if_south = LOCAL_RF;
-          ru->function = NGFI_RRU_IF4p5;
-          ru->eth_params.transp_preference = ETH_RAW_IF4p5_MODE;
-          LOG_D(PHY, "Setting function for RU %d to NGFI_RRU_IF4p5 (raw)\n", j);
-        }
-      }
-
+      AssertFatal(!config_isparamset(param, RU_LOCAL_IF_NAME_IDX), "RU_TRANSPORT_PREFERENCE not supported for local RF\n");
+      ru->if_south = LOCAL_RF;
+      ru->function = gNodeB_3GPP;
+      LOG_D(PHY, "Setting function for RU %d to gNodeB_3GPP\n", j);
       ru->max_pdschReferenceSignalPower = *param[RU_MAX_RS_EPRE_IDX].uptr;
       ru->max_rxgain = *param[RU_MAX_RXGAIN_IDX].uptr;
       ru->sf_extension = *param[RU_SF_EXTENSION_IDX].uptr;
-    } // strcmp(local_rf, "yes") == 0
-    else {
+    } else {
       char *str = *param[RU_TRANSPORT_PREFERENCE_IDX].strptr;
       LOG_D(PHY, "RU %d: Transport %s\n", j, str);
-      ru->eth_params.local_if_name = strdup(*param[RU_LOCAL_IF_NAME_IDX].strptr);
-      ru->eth_params.my_addr = strdup(*param[RU_LOCAL_ADDRESS_IDX].strptr);
-      ru->eth_params.remote_addr = strdup(*param[RU_REMOTE_ADDRESS_IDX].strptr);
-      ru->eth_params.my_portc = *param[RU_LOCAL_PORTC_IDX].uptr;
-      ru->eth_params.remote_portc = *param[RU_REMOTE_PORTC_IDX].uptr;
-      ru->eth_params.my_portd = *param[RU_LOCAL_PORTD_IDX].uptr;
-      ru->eth_params.remote_portd = *param[RU_REMOTE_PORTD_IDX].uptr;
+      ru->ifdevice.eth_params.local_if_name = strdup(*param[RU_LOCAL_IF_NAME_IDX].strptr);
+      ru->ifdevice.eth_params.my_addr = strdup(*param[RU_LOCAL_ADDRESS_IDX].strptr);
+      ru->ifdevice.eth_params.remote_addr = strdup(*param[RU_REMOTE_ADDRESS_IDX].strptr);
+      ru->ifdevice.eth_params.my_portc = *param[RU_LOCAL_PORTC_IDX].uptr;
+      ru->ifdevice.eth_params.remote_portc = *param[RU_REMOTE_PORTC_IDX].uptr;
+      ru->ifdevice.eth_params.my_portd = *param[RU_LOCAL_PORTD_IDX].uptr;
+      ru->ifdevice.eth_params.remote_portd = *param[RU_REMOTE_PORTD_IDX].uptr;
 
       if (strcmp(str, "udp") == 0) {
         ru->if_south = REMOTE_IF5;
         ru->function = NGFI_RAU_IF5;
-        ru->eth_params.transp_preference = ETH_UDP_MODE;
+        ru->ifdevice.eth_params.transp_preference = ETH_UDP_MODE;
       } else if (strcmp(str, "udp_ecpri_if5") == 0) {
         ru->if_south = REMOTE_IF5;
         ru->function = NGFI_RAU_IF5;
-        ru->eth_params.transp_preference = ETH_UDP_IF5_ECPRI_MODE;
+        ru->ifdevice.eth_params.transp_preference = ETH_UDP_IF5_ECPRI_MODE;
       } else if (strcmp(str, "raw") == 0) {
         ru->if_south = REMOTE_IF5;
         ru->function = NGFI_RAU_IF5;
-        ru->eth_params.transp_preference = ETH_RAW_MODE;
-      } else if (strcmp(str, "udp_if4p5") == 0) {
-        ru->if_south = REMOTE_IF4p5;
-        ru->function = NGFI_RAU_IF4p5;
-        ru->eth_params.transp_preference = ETH_UDP_IF4p5_MODE;
+        ru->ifdevice.eth_params.transp_preference = ETH_RAW_MODE;
       } else if (strcmp(str, "raw_if4p5") == 0) {
         ru->if_south = REMOTE_IF4p5;
         ru->function = NGFI_RAU_IF4p5;
-        ru->eth_params.transp_preference = ETH_RAW_IF4p5_MODE;
       }
-    } /* strcmp(local_rf, "yes") != 0 */
+    }
 
     ru->nb_tx = *param[RU_NB_TX_IDX].uptr;
     ru->nb_rx = *param[RU_NB_RX_IDX].uptr;
@@ -1453,14 +1212,7 @@ static void NRRCconfig_RU(configmodule_interface_t *cfg)
     ru->num_bands = param[RU_BAND_LIST_IDX].numelt;
     for (int i = 0; i < ru->num_bands; i++)
       ru->band[i] = param[RU_BAND_LIST_IDX].iptr[i];
-    ru->openair0_cfg.nr_flag = *param[RU_NR_FLAG].iptr;
     // TODO remove band from RU?
-    ru->openair0_cfg.nr_scs_for_raster = *param[RU_NR_SCS_FOR_RASTER].iptr;
-    LOG_D(PHY,
-          "[RU %d] Setting nr_flag %d, nr_scs_for_raster %d\n",
-          j,
-          ru->openair0_cfg.nr_flag,
-          ru->openair0_cfg.nr_scs_for_raster);
     ru->openair0_cfg.rxfh_cores[0] = *param[RU_RXFH_CORE_ID].iptr;
     ru->openair0_cfg.txfh_cores[0] = *param[RU_TXFH_CORE_ID].iptr;
     ru->num_tpcores = *param[RU_NUM_TP_CORES].iptr;

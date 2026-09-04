@@ -20,7 +20,9 @@
 #include "common/utils/ds/seq_arr.h"
 #include "common/utils/nr/nr_common.h"
 #include "common/utils/ds/byte_array.h"
+#include "common/utils/ds/spsc_q.h"
 #include "openair2/LAYER2/nr_rlc/nr_rlc_configuration.h"
+#include "openair2/LAYER2/NR_MAC_gNB/nr_pos_ue_context.h"
 
 #define NR_SCHED_LOCK(lock)                                        \
   do {                                                             \
@@ -34,14 +36,8 @@
     AssertFatal(rc == 0, "error while locking scheduler mutex, pthread_mutex_unlock() returned %d\n", rc); \
   } while (0)
 
-#define NR_SCHED_ENSURE_LOCKED(lock)\
-  do {\
-    int rc = pthread_mutex_trylock(lock); \
-    AssertFatal(rc == EBUSY, "this function should be called with the scheduler mutex locked, pthread_mutex_trylock() returned %d\n", rc);\
-  } while (0)
-
 /* Commmon */
-#include "radio/COMMON/common_lib.h"
+#include "COMMON/f1ap_messages_types.h"
 #include "common/platform_constants.h"
 #include "common/ran_context.h"
 #include "collection/linear_alloc.h"
@@ -70,7 +66,7 @@
 #define MAX_NUM_BWP 5
 #define MAX_NUM_CORESET 12
 /*!\brief Maximum number of random access process */
-#define NR_NB_RA_PROC_MAX 4
+#define NR_NB_RA_PROC_MAX 16 // set to 16 for multiple CFRA at the same time
 #define MAX_NUM_OF_SSB 64
 #define MAX_NUM_NR_PRACH_PREAMBLES 64
 #define NR_MAX_SIB_LENGTH 2976 // 3GPP TS 38.331 section 5.2.1
@@ -104,6 +100,14 @@ typedef struct {
   int idx;
   bool new_beam;
 } NR_beam_alloc_t;
+
+/** Pending CN paging record */
+typedef struct {
+  /// UE_ID for PF/PO computation (TS 38.304 §7.1)
+  uint16_t ue_id;
+  /// ng-5G-S-TMSI (48 bits)
+  uint64_t fiveg_s_tmsi;
+} nr_mac_pcch_record_t;
 
 typedef struct nr_pdsch_AntennaPorts_t {
   int N1;
@@ -329,6 +333,8 @@ typedef struct {
   /// Max prach length in slots
   int prach_len;
   nr_prach_info_t prach_info;
+  /// PCCH SDU queue (one spsc_q per common-channel context)
+  spsc_q_t pcch_queue;
 } NR_COMMON_channels_t;
 
 // SP ZP CSI-RS Resource Set Activation/Deactivation MAC CE
@@ -427,6 +433,7 @@ typedef struct NR_pusch_dmrs {
   uint8_t num_dmrs_symb;
   uint16_t ul_dmrs_symb_pos;
   uint8_t num_dmrs_cdm_grps_no_data;
+  uint16_t dmrs_ports;
   nfapi_nr_dmrs_type_e dmrs_config_type;
   int dmrs_scrambling_id;
   int pusch_identity;
@@ -484,12 +491,20 @@ typedef struct NR_pdsch_dmrs {
 } NR_pdsch_dmrs_t;
 
 struct NR_UE_info;
-struct gNB_MAC_INST_s;
-typedef void (*feedback_action_t)(struct gNB_MAC_INST_s *mac, struct NR_UE_info *ue);
+struct nr_cell_sched_s;
+typedef void (*feedback_action_t)(struct nr_cell_sched_s *cell, struct NR_UE_info *ue);
+
+typedef enum {
+  PDSCH_TYPE0 = 0,
+  PDSCH_TYPE1 = 1
+} nr_pdsch_allocation_type_t;
+
 typedef struct NR_sched_pdsch {
   /// RB allocation within active BWP
+  nr_pdsch_allocation_type_t alloc_type;
   uint16_t rbSize;
   uint16_t rbStart;
+  uint8_t rbBitmap[36];
 
   /// MCS-related infos
   uint8_t mcs;
@@ -743,9 +758,9 @@ typedef struct NR_mac_stats {
   uint64_t ulsch_total_bytes_scheduled;
   uint32_t pucch0_DTX;
   int cumul_rsrp;
-  uint8_t num_rsrp_meas;
+  uint32_t num_rsrp_meas;
   int cumul_sinrx10;
-  uint8_t num_sinr_meas;
+  uint32_t num_sinr_meas;
   char srs_stats[50]; // Statistics may differ depending on SRS usage
   int deltaMCS;
   int NPRB;
@@ -770,6 +785,12 @@ typedef struct nr_mac_rrc_ul_if_s {
   ue_context_release_request_func_t ue_context_release_request;
   ue_context_release_complete_func_t ue_context_release_complete;
   initial_ul_rrc_message_transfer_func_t initial_ul_rrc_message_transfer;
+  trp_information_response_func_t trp_information_response;
+  trp_information_failure_func_t trp_information_failure;
+  positioning_information_response_func_t positioning_information_response;
+  positioning_activation_response_func_t positioning_activation_response;
+  positioning_measurement_response_func_t positioning_measurement_response;
+  positioning_measurement_failure_func_t positioning_measurement_failure;
 } nr_mac_rrc_ul_if_t;
 
 typedef struct measgap_config {
@@ -784,6 +805,18 @@ typedef struct measgap_config {
   long mgl;
   int mgl_slots;
 } measgap_config_t;
+
+typedef enum {
+  NO_TRIGGER,
+  MSG3_CRNTI,
+  BWP_SWITCH,
+  BEAM_SWITCH
+} reconfig_trigger_state_t;
+
+typedef struct {
+  int new_state;
+  reconfig_trigger_state_t trigger_info;
+} context_modification_info_t;
 
 /*! \brief UE list used by gNB to order UEs/CC for scheduling*/
 typedef struct NR_UE_info {
@@ -822,6 +855,8 @@ typedef struct NR_UE_info {
   // dedicated BWP is always 1 from the UE's point of view, even if the gNB has multiple BWPs.
   // The below ID is the "true" (non-consecutive) BWP ID from the gNB's point of view
   NR_BWP_Id_t local_bwp_id;
+  context_modification_info_t cm_info;
+  struct nr_cell_sched_s *pcell; ///< primary serving cell for this UE; used to filter candidates per cell
 } NR_UE_info_t;
 
 typedef struct {
@@ -884,7 +919,7 @@ typedef struct nr_dl_candidate nr_dl_candidate_t;
 typedef struct nr_dl_sched_params nr_dl_sched_params_t;
 struct nr_dl_sched_params {
   struct gNB_MAC_INST_s *mac; ///< MAC instance (for CCE/PUCCH validation)
-  int CC_id;
+  struct nr_cell_sched_s *cell;
   frame_t frame;
   slot_t slot;
   int num_beams; ///< number of beams
@@ -947,20 +982,21 @@ struct nr_dl_candidate {
 /* forward declaration to use in nr_pp_impl_dl */
 struct gNB_MAC_INST_s;
 typedef struct gNB_MAC_INST_s gNB_MAC_INST;
+typedef struct nr_cell_sched_s nr_cell_sched_t;
 
-typedef void (*nr_pp_impl_dl)(gNB_MAC_INST *nr_mac, post_process_pdsch_t *pp_pdsch);
-typedef void (*nr_pp_impl_ul)(gNB_MAC_INST *nr_mac, post_process_pusch_t *pp_pusch);
+typedef void (*nr_pp_impl_dl)(gNB_MAC_INST *nr_mac, nr_cell_sched_t *cell, post_process_pdsch_t *pp_pdsch);
+typedef void (*nr_pp_impl_ul)(gNB_MAC_INST *nr_mac, nr_cell_sched_t *cell, post_process_pusch_t *pp_pusch);
 
 /// RI/PMI selection: sets nrOfLayers and pm_index per candidate from CSI feedback.
 /// For retransmissions, nrOfLayers must match the original transmission.
 /// Custom implementations may use SRS reciprocity to override the UE's reported RI/PMI.
-typedef void (*nr_dl_ri_pmi_select_fn)(const gNB_MAC_INST *mac, nr_dl_candidate_t *candidates, int n_candidates);
+typedef void (*nr_dl_ri_pmi_select_fn)(const nr_cell_sched_t *cell, nr_dl_candidate_t *candidates, int n_candidates);
 
 /// MCS adaptation: sets sched_pdsch.mcs from BLER state for every candidate.
 /// Called for all candidates (including those that won't get scheduled) so
 /// BLER-based MCS ramps even for UEs that fail CCE. Also persists the
 /// decision to dl_bler_stats.mcs for continuity across slots.
-typedef void (*nr_dl_mcs_select_fn)(const gNB_MAC_INST *mac, nr_dl_candidate_t *candidates, int n_candidates);
+typedef void (*nr_dl_mcs_select_fn)(const nr_cell_sched_t *cell, nr_dl_candidate_t *candidates, int n_candidates);
 
 /// Beam allocation: assigns beam structure index to each candidate.
 /// beam_index_list maps SSB id -> beam index (same as mac->beam_index_list);
@@ -976,7 +1012,7 @@ typedef int (*nr_dl_beam_select_fn)(NR_beam_info_t *beam_info,
 /// TDA selection: assigns tda/tda_info/slbitmap per candidate.
 /// Returns the number of candidates with a valid TDA (compacts invalids out).
 typedef int (
-    *nr_dl_tda_select_fn)(const gNB_MAC_INST *mac, nr_dl_candidate_t *candidates, int n_candidates, frame_t frame, slot_t slot);
+    *nr_dl_tda_select_fn)(const gNB_MAC_INST *mac, const nr_cell_sched_t *cell, nr_dl_candidate_t *candidates, int n_candidates, frame_t frame, slot_t slot);
 
 /// Scheduling policy: decides PRB + MCS for candidates across all beams.
 /// The beam loop is inside the policy so it can do cross-beam scheduling (e.g. MU-MIMO).
@@ -999,7 +1035,7 @@ typedef struct nr_ul_candidate nr_ul_candidate_t;
 
 typedef struct nr_ul_sched_params {
   struct gNB_MAC_INST_s *mac;
-  int CC_id;
+  struct nr_cell_sched_s *cell;
   frame_t dci_frame; ///< DCI slot frame (current DL slot)
   slot_t dci_slot; ///< DCI slot (current DL slot)
   frame_t frame; ///< scheduled PUSCH frame (future UL slot)
@@ -1102,12 +1138,12 @@ typedef void (*nr_ul_ri_tpmi_select_fn)(gNB_MAC_INST *mac, nr_ul_candidate_t *ca
 /// Each surviving cand has sched_pusch.time_domain_allocation/tda_info and alloc_slbitmap populated. Retx cands have retx_rbSize
 /// set.
 typedef int (
-    *nr_ul_tda_select_fn)(gNB_MAC_INST *mac, nr_ul_candidate_t *cands, int n_cand, frame_t sched_frame, slot_t sched_slot, int k2);
+    *nr_ul_tda_select_fn)(gNB_MAC_INST *mac, nr_cell_sched_t *cell, nr_ul_candidate_t *cands, int n_cand, frame_t sched_frame, slot_t sched_slot, int k2);
 
 /// MCS selection: sets sched_pusch.mcs from BLER/SINR state for every candidate.
 /// Runs after beam_select so sched_pusch.nrOfLayers (for SINR lookup) and beam info are available.
 /// Also persists the decision to ul_bler_stats.mcs for continuity across slots.
-typedef void (*nr_ul_mcs_select_fn)(const gNB_MAC_INST *mac, nr_ul_candidate_t *candidates, int n_candidates);
+typedef void (*nr_ul_mcs_select_fn)(const nr_cell_sched_t *cell, nr_ul_candidate_t *candidates, int n_candidates);
 
 /// UL scheduling policy: beam loop is inside the policy for cross-beam scheduling.
 /// Sets candidate->scheduled = true for each accepted UE; returns the count.
@@ -1122,6 +1158,7 @@ typedef struct f1_config_t {
 typedef struct {
   char *nvipc_shm_prefix;
   int8_t nvipc_poll_core;
+  uint8_t num_phys;
 } nvipc_params_t;
 
 typedef struct {
@@ -1139,6 +1176,16 @@ typedef struct {
   NR_ControlResourceSet_t coreset;
 } NR_sched_ctrl_sib1_t;
 
+/* Dimensions of the per-cell MCS distribution histograms (3GPP TS 28.552 §5.1.1.12). */
+#define NR_KPM_MAX_LAYERS       8  /* RI: 1..8                  */
+#define NR_KPM_NB_MCS_TABLE_DL  3  /* PDSCH MCS tables: 1..3    */
+#define NR_KPM_NB_MCS_TABLE_UL  4  /* PUSCH MCS tables: 0, 1, 3  */
+#define NR_KPM_NB_MCS           32 /* MCS index: 0..31          */
+
+/* Dimensions of the L1M.SS-RSRP histogram (3GPP TS 28.552 §5.1.1.22.1). */
+#define NR_KPM_NB_SSB            64  /* SS/PBCH block index: 0..63              */
+#define NR_KPM_SS_RSRP_NB_LEVELS 128 /* SS-RSRP report level: 0..127, TS 38.133 */
+
 typedef struct NR_du_stats {
   /// cell-wide wide-band CQI distribution, see 28.552 5.1.1.11.1;
   /// 0-15 CQI, 1-8 RI, 1-3 CQI table
@@ -1146,19 +1193,128 @@ typedef struct NR_du_stats {
 
   /// cell-wide MCS distribution in PDSCH, see 28.552 5.1.1.12.1
   /// 1-8 RI, 1-3 MCS table, 0-31 MCS value
-  uint32_t pdsch_mcs_dist[8][3][32];
+  uint32_t pdsch_mcs_dist[NR_KPM_MAX_LAYERS][NR_KPM_NB_MCS_TABLE_DL][NR_KPM_NB_MCS];
 
   /// cell-wide MCS distribution in PUSCH, see 28.552 5.1.1.12.1
-  /// 1-8 RI, 1-2 MCS table, 0-31 MCS value
-  uint32_t pusch_mcs_dist[8][2][32];
+  /// 1-8 RI, MCS table (0, 1, 3), 0-31 MCS value
+  uint32_t pusch_mcs_dist[NR_KPM_MAX_LAYERS][NR_KPM_NB_MCS_TABLE_UL][NR_KPM_NB_MCS];
+
+  /// cell-wide L1 SS-RSRP distribution per SSB beam, see 28.552 5.1.1.22.1
+  /// 0-63 SSB index, 0-127 SS-RSRP report level (TS 38.133)
+  uint32_t ss_rsrp_ssb_dist[NR_KPM_NB_SSB][NR_KPM_SS_RSRP_NB_LEVELS];
 } NR_du_stats_t;
 
-/*! \brief top level eNB MAC structure */
+typedef struct {
+  bool active;
+  f1ap_positioning_measurement_req_t meas_req;
+} positioning_measurement_info_t;
+
+/// Maximum number of cells (component carriers) per gNB MAC instance.
+#define NR_MAX_CELLS 4
+
+/*! \brief Per-cell scheduling context.
+ *
+ * One instance lives inside gNB_MAC_INST::cells[] for each active cell.
+ * All fields here are logically owned by a single cell; shared state such as
+ * the UE list and scheduling-policy function pointers lives on gNB_MAC_INST.
+ */
+typedef struct nr_cell_sched_s {
+
+  /// Cell identity: Index in MAC->cell array matches FAPI header->phy_id; CGI used for F1 lookups
+  /// TS 38.473 §9.3.1.12 NR CGI defined by PLMN Identity and NR Cell Identity
+  uint64_t nr_cellid;
+  plmn_id_t plmn;
+
+  /// SSB placement offsets (derived from NFAPI config at init)
+  int ssb_SubcarrierOffset;
+  int ssb_OffsetPointA;
+
+  /// Physical cell description: ServingCellConfigCommon, VRB maps, MIB/SIB1, PRACH
+  NR_COMMON_channels_t common_channels;
+
+  /// Running PDU index for BCH/DLSCH building within one slot
+  uint16_t pdu_index;
+  /// UL PRB blacklist (SNR-based)
+  uint16_t ulprbbl[MAX_BWP_SIZE];
+  /// NFAPI SCF config request sent to the DU/L1
+  nfapi_nr_config_request_scf_t config;
+  /// Pointers into the current DL_req PDCCH PDU, indexed by CORESET
+  nfapi_nr_dl_tti_pdcch_pdu_rel15_t *pdcch_pdu_idx[MAX_NUM_CORESET];
+  /// Ring buffer of future UL TTI requests (dynamically allocated; size = UL_tti_req_ahead_size)
+  nfapi_nr_ul_tti_request_t *UL_tti_req_ahead;
+  int UL_tti_req_ahead_size;
+  /// Length of the UL VRB map in slots (derived from frame_structure at init)
+  int vrb_map_UL_size;
+
+  /// Beam management state for this cell
+  NR_beam_info_t beam_info;
+  /// SSB index → beam index mapping
+  int16_t beam_index_list[MAX_NUM_OF_SSB];
+
+  /// TDD/FDD frame structure (slot patterns, numerology)
+  frame_structure_t frame_structure;
+
+  /// Slots of UL inactivity before an autonomous UL grant is issued to a UE
+  uint32_t ulsch_max_frame_inactivity;
+
+  /// Cell-level radio config (antennas, BWPs, timing, SRS/CSI-RS, precoding tables)
+  nr_mac_config_t radio_config;
+
+  /// BLER control thresholds for the default MCS-adaptation policy
+  NR_bler_options_t dl_bler;
+  NR_bler_options_t ul_bler;
+
+  /// Minimum grant size in PRBs
+  uint16_t min_grant_prb;
+  /// Force identity precoding matrix (single-port or debug mode)
+  bool identity_pm;
+  /// Precoding matrix column counts per layer
+  int precoding_matrix_size[NR_MAX_NB_LAYERS];
+
+  /// SIB1 and initial PDCCH scheduling state
+  NR_sched_ctrl_sib1_t *sched_ctrlSIB1;
+  NR_sched_pdcch_t *sched_pdcch_otherSI;
+  uint16_t cset0_bwp_start;
+  uint16_t cset0_bwp_size;
+  NR_Type0_PDCCH_CSS_config_t type0_PDCCH_CSS_config[MAX_NUM_OF_SSB];
+  bool first_MIB;
+  NR_sched_pdsch_t sib1_pdsch[MAX_NUM_OF_SSB];
+
+  /// Dedicated UL TDA list, built from frame_structure at config time
+  seq_arr_t ul_tda;
+  /// Next UL slot targeted by the UL preprocessor look-ahead
+  fsn_t ul_next;
+
+  /// Optional opaque state for stateful custom scheduling policies
+  void *sched_stateful_data;
+
+  /// Per-cell KPI statistics
+  NR_du_stats_t du_stats;
+  uint64_t num_scheduled_prach_rx;
+
+  // Per-cell MAC function execution performance profiler
+  /// processing time of gNB scheduler
+  time_stats_t gNB_scheduler;
+  /// processing time of gNB scheduler for Random access
+  time_stats_t schedule_ra;
+  /// processing time of gNB ULSCH scheduler, including preprocessor
+  time_stats_t schedule_ulsch;
+  /// processing time of gNB DLSCH scheduler, including rlc_data_req + MAC header + preprocessor
+  time_stats_t schedule_dlsch;
+  /// processing time of rlc_data_req
+  time_stats_t rlc_data_req;
+  /// processing time of nr_srs_ri_computation
+  time_stats_t nr_srs_ri_computation_timer;
+  /// processing time of nr_srs_tpmi_estimation
+  time_stats_t nr_srs_tpmi_computation_timer;
+  /// processing time of gNB ULSCH reception, including rlc_data_ind
+  time_stats_t rx_ulsch_sdu;
+} nr_cell_sched_t;
+
+/*! \brief top level gNB MAC structure */
 typedef struct gNB_MAC_INST_s {
-  /// Ethernet parameters for northbound midhaul interface
-  eth_params_t                    eth_params_n;
-  /// address for F1U to bind, ports in eth_params_n
-  char *f1u_addr;
+  /// F1-C/U network configuration (addresses and ports)
+  f1ap_net_config_t net_config;
   /// Nvipc parameters for FAPI interface with Aerial
   nvipc_params_t nvipc_params_s;
   /// Module
@@ -1168,54 +1324,11 @@ typedef struct gNB_MAC_INST_s {
   /// Pointer to IF module instance for PHY
   NR_IF_Module_t                  *if_inst;
   pthread_t                       stats_thread;
-  /// Subcarrier Offset
-  int                             ssb_SubcarrierOffset;
-  int                             ssb_OffsetPointA;
 
-  /// Common cell resources
-  NR_COMMON_channels_t common_channels[NFAPI_CC_MAX];
-  /// current PDU index (BCH,DLSCH)
-  uint16_t pdu_index[NFAPI_CC_MAX];
-  /// UL PRBs blacklist
-  uint16_t ulprbbl[MAX_BWP_SIZE];
-  /// NFAPI Config Request Structure
-  nfapi_nr_config_request_scf_t     config[NFAPI_CC_MAX];
-  /// a PDCCH PDU groups DCIs per BWP and CORESET. The following structure
-  /// keeps pointers to PDCCH PDUs within DL_req so that we can easily track
-  /// PDCCH PDUs per CC/BWP/CORESET
-  nfapi_nr_dl_tti_pdcch_pdu_rel15_t *pdcch_pdu_idx[NFAPI_CC_MAX][MAX_NUM_CORESET];
-  /// NFAPI UL TTI Request Structure for future TTIs, dynamically allocated
-  /// because length depends on number of slots
-  nfapi_nr_ul_tti_request_t        *UL_tti_req_ahead[NFAPI_CC_MAX];
-  int UL_tti_req_ahead_size;
-  int vrb_map_UL_size;
+  /// Per-cell scheduling contexts
+  nr_cell_sched_t cells[NR_MAX_CELLS];
 
   NR_UEs_t UE_info;
-
-  // MAC function execution peformance profiler
-  /// processing time of gNB scheduler
-  time_stats_t gNB_scheduler;
-  /// processing time of gNB scheduler for Random access
-  time_stats_t schedule_ra;
-  /// processing time of gNB DLSCH scheduler
-  time_stats_t schedule_ulsch;  // include preprocessor
-  /// processing time of gNB DLSCH scheduler
-  time_stats_t schedule_dlsch;  // include rlc_data_req + MAC header + preprocessor
-  /// processing time of rlc_data_req
-  time_stats_t rlc_data_req;
-  /// processing time of nr_srs_ri_computation
-  time_stats_t nr_srs_ri_computation_timer;
-  /// processing time of nr_srs_tpmi_estimation
-  time_stats_t nr_srs_tpmi_computation_timer;
-  /// processing time of gNB ULSCH reception
-  time_stats_t rx_ulsch_sdu;  // include rlc_data_ind
-
-  NR_beam_info_t beam_info;
-
-  /// maximum number of slots before a UE will be scheduled ULSCH automatically
-  uint32_t ulsch_max_frame_inactivity;
-  /// instance of the frame structure configuration
-  frame_structure_t frame_structure;
 
   /// DL preprocessor for differentiated scheduling
   nr_pp_impl_dl pre_processor_dl;
@@ -1237,31 +1350,7 @@ typedef struct gNB_MAC_INST_s {
   nr_ul_mcs_select_fn ul_mcs_select;
   nr_ul_rb_alloc_fn ul_rb_alloc;
 
-  /// Optional state persistence for scheduling policies.
-  void *sched_stateful_data;
-
-  nr_mac_config_t radio_config;
   nr_rlc_configuration_t rlc_config;
-
-  NR_sched_ctrl_sib1_t *sched_ctrlSIB1;
-  NR_sched_pdcch_t *sched_pdcch_otherSI;
-  uint16_t cset0_bwp_start;
-  uint16_t cset0_bwp_size;
-  NR_Type0_PDCCH_CSS_config_t type0_PDCCH_CSS_config[MAX_NUM_OF_SSB];
-
-  bool first_MIB;
-  NR_bler_options_t dl_bler;
-  NR_bler_options_t ul_bler;
-  uint16_t min_grant_prb;
-  bool identity_pm;
-  int precoding_matrix_size[NR_MAX_NB_LAYERS];
-  int16_t beam_index_list[MAX_NUM_OF_SSB];
-  NR_sched_pdsch_t sib1_pdsch[MAX_NUM_OF_SSB];
-
-  /// dedicate UL TDA, common for all UEs
-  seq_arr_t ul_tda;
-  /// next UL slot to schedule
-  fsn_t ul_next;
 
   nr_mac_rrc_ul_if_t mac_rrc;
   f1_config_t f1_config;
@@ -1275,10 +1364,10 @@ typedef struct gNB_MAC_INST_s {
   pthread_mutex_t sched_lock;
 
   dlul_mac_stats_t mac_stats;
-  uint64_t num_scheduled_prach_rx;
 
-  NR_du_stats_t du_stats;
-
+  seq_arr_t pos_act_ue_arr;
+  positioning_measurement_info_t pos_meas_info;
+  positioning_config_t *positioning_config;
 } gNB_MAC_INST;
 
 #endif /*__LAYER2_NR_MAC_GNB_H__ */

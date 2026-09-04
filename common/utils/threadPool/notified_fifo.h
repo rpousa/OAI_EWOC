@@ -5,6 +5,7 @@
 #ifndef NOTIFIED_FIFO_H
 #define NOTIFIED_FIFO_H
 #include "pthread_utils.h"
+#include <errno.h>
 #include <stdint.h>
 #include <malloc.h>
 #include <pthread.h>
@@ -149,6 +150,27 @@ static inline notifiedFIFO_elt_t *pullNotifiedFIFO(notifiedFIFO_t *nf)
 
   while ((ret = pullNotifiedFIFO_nothreadSafe(nf)) == NULL && !nf->abortFIFO)
     condwait(nf->notifF, nf->lockF);
+
+  mutexunlock(nf->lockF);
+  return ret;
+}
+
+/// @brief Pull an element, blocking until one is available or timeout, or FIFO
+/// is aborted.
+/// @param nf the FIFO
+/// @param abstime absolute deadline
+/// @return the element, or NULL on timeout or abort
+static inline notifiedFIFO_elt_t *pullNotifiedFIFO_timeout(notifiedFIFO_t *nf, const struct timespec *abstime)
+{
+  mutexlock(nf->lockF);
+  notifiedFIFO_elt_t *ret = NULL;
+
+  while ((ret = pullNotifiedFIFO_nothreadSafe(nf)) == NULL && !nf->abortFIFO) {
+    int rc = pthread_cond_timedwait(&nf->notifF, &nf->lockF, abstime);
+    if (rc == ETIMEDOUT)
+      break;
+    AssertFatal(rc == 0, "pthread_cond_timedwait() failed: %d\n", rc);
+  }
 
   mutexunlock(nf->lockF);
   return ret;

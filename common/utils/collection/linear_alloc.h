@@ -44,7 +44,7 @@ static inline uid_t uid_linear_allocator_new(uid_allocator_t *uia) {
 static inline void uid_linear_allocator_free(uid_allocator_t *uia, uid_t uid) {
   const unsigned int i = uid/sizeof(unsigned int)/8;
   const unsigned int bit = uid % (sizeof(unsigned int) * 8);
-  const unsigned int value = ~(1 << bit);
+  const unsigned int value = ~(1U << bit);
 
   if (i < UID_LINEAR_ALLOCATOR_BITMAP_SIZE) {
     uia->bitmap[i] &= value;

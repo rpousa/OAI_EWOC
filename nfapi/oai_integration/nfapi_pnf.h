@@ -19,6 +19,7 @@ int oai_nfapi_nr_slot_indication(nfapi_nr_slot_indication_scf_t *ind);
 int oai_nfapi_nr_rx_data_indication(nfapi_nr_rx_data_indication_t *ind);
 int oai_nfapi_nr_crc_indication(nfapi_nr_crc_indication_t *ind);
 int oai_nfapi_nr_srs_indication(nfapi_nr_srs_indication_t *ind);
+int oai_nfapi_nr_srs_toa_vendor_ext_indication(nfapi_nr_srs_toa_vendor_ext_indication_t *ind);
 int oai_nfapi_nr_uci_indication(nfapi_nr_uci_indication_t *ind);
 int oai_nfapi_nr_rach_indication(nfapi_nr_rach_indication_t *ind);
 void stop_nr_nfapi_pnf();

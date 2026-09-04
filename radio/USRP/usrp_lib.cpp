@@ -14,6 +14,7 @@
 #else
   #include <uhd/utils/thread.hpp>
 #endif
+#include <uhd/convert.hpp>
 #include <uhd/usrp/multi_usrp.hpp>
 #include <uhd/version.hpp>
 #include <boost/lexical_cast.hpp>
@@ -35,6 +36,8 @@
 #include <sys/resource.h>
 
 #include "openair1/PHY/sse_intrin.h"
+#include "usrp_converters.hpp"
+
 
 /** @addtogroup _USRP_PHY_RF_INTERFACE_
  * @{
@@ -415,7 +418,6 @@ static int trx_usrp_write(openair0_device_t *device,
   int ret=0;
   usrp_state_t *s = (usrp_state_t *)device->priv;
   timestamp -= device->openair0_cfg->command_line_sample_advance + device->openair0_cfg->tx_sample_advance;
-  int nsamps2;  // aligned to upper 32 or 16 byte boundary
 
   radio_tx_burst_flag_t flags_burst = (radio_tx_burst_flag_t) (flags & 0xf);
   radio_tx_gpio_flag_t flags_gpio = (radio_tx_gpio_flag_t) ((flags >> 4) & 0x1fff);
@@ -458,22 +460,6 @@ static int trx_usrp_write(openair0_device_t *device,
     }
 
     if (usrp_tx_thread == 0) {
-      nsamps2 = (nsamps+7)>>3;
-      simde__m256i buff_tx[cc < 2 ? 2 : cc][nsamps2];
-
-      // bring TX data into 16 MSBs, assuming it is on the 12 LSB  after OAI computation
-      const int shift = 4;
-      for (int i = 0; i < cc; i++) {
-        for (int j = 0; j < nsamps2; j++) {
-          if ((((uintptr_t)buff[i]) & 0x1F) == 0) {
-            buff_tx[i][j] = simde_mm256_slli_epi16(((simde__m256i *)buff[i])[j], shift);
-          } else {
-            simde__m256i tmp = simde_mm256_loadu_si256(((simde__m256i *)buff[i]) + j);
-            buff_tx[i][j] = simde_mm256_slli_epi16(tmp, shift);
-          }
-        }
-      }
-
       s->tx_md.has_time_spec = true;
       s->tx_md.start_of_burst = (s->tx_count == 0) ? true : first_packet_state;
       s->tx_md.end_of_burst = last_packet_state;
@@ -494,11 +480,11 @@ static int trx_usrp_write(openair0_device_t *device,
         std::vector<void *> buff_ptrs;
 
         for (int i = 0; i < cc; i++)
-          buff_ptrs.push_back(&(((int16_t *)buff_tx[i])[0]));
+          buff_ptrs.push_back(buff[i]);
 
         ret = (int)s->tx_stream->send(buff_ptrs, nsamps, s->tx_md);
       } else {
-        ret = (int)s->tx_stream->send(&(((int16_t *)buff_tx[0])[0]), nsamps, s->tx_md);
+        ret = (int)s->tx_stream->send(buff[0], nsamps, s->tx_md);
       }
 
       if (ret != nsamps) {
@@ -553,7 +539,6 @@ void *trx_usrp_write_thread(void * arg)
   openair0_write_package_t *write_package = write_thread->write_package;
 
   usrp_state_t *s;
-  int nsamps2;  // aligned to upper 32 or 16 byte boundary
   int start;
   openair0_timestamp_t timestamp;
   void        **buff;
@@ -588,23 +573,6 @@ void *trx_usrp_write_thread(void * arg)
       LOG_W(HW,"count write = %d, start = %d, end = %d\n", write_thread->count_write, write_thread->start, write_thread->end);
     }*/
 
-        nsamps2 = (nsamps+7)>>3;
-        simde__m256i buff_tx[cc < 2 ? 2 : cc][nsamps2];
-        // bring TX data into 16 MSBs, assuming it is on the 12 LSB  after OAI computation
-        const int shift = 4;
-        for (int i = 0; i < cc; i++) {
-          for (int j = 0; j < nsamps2; j++) {
-            if ((((uintptr_t) buff[i])&0x1F)==0) {
-              buff_tx[i][j] = simde_mm256_slli_epi16(((simde__m256i *)buff[i])[j], shift);
-            }
-            else
-            {
-              simde__m256i tmp = simde_mm256_loadu_si256(((simde__m256i *)buff[i]) + j);
-              buff_tx[i][j] = simde_mm256_slli_epi16(tmp, shift);
-            }
-          }
-        }
-
     s->tx_md.has_time_spec  = true;
     s->tx_md.start_of_burst = (s->tx_count==0) ? true : first_packet;
     s->tx_md.end_of_burst   = last_packet;
@@ -624,15 +592,15 @@ void *trx_usrp_write_thread(void * arg)
       std::vector<void *> buff_ptrs;
 
       for (int i=0; i<cc; i++)
-        buff_ptrs.push_back(&(((int16_t *)buff_tx[i])[0]));
+        buff_ptrs.push_back(buff[i]);
 
       ret = (int)s->tx_stream->send(buff_ptrs, nsamps, s->tx_md);
     }
     else {
-      ret = (int)s->tx_stream->send(&(((int16_t *)buff_tx[0])[0]), nsamps, s->tx_md);
+      ret = (int)s->tx_stream->send(buff[0], nsamps, s->tx_md);
     }
 
-    T(T_USRP_TX_ANT0, T_INT(timestamp), T_BUFFER(buff_tx[0], nsamps*4));
+    T(T_USRP_TX_ANT0, T_INT(timestamp), T_BUFFER(buff[0], nsamps*4));
 
     if (ret != nsamps) LOG_E(HW,"[xmit] tx samples %d != %d\n",ret,nsamps);
     VCD_SIGNAL_DUMPER_DUMP_VARIABLE_BY_NAME( VCD_SIGNAL_DUMPER_VARIABLES_USRP_SEND_RETURN, ret );
@@ -693,23 +661,7 @@ static int trx_usrp_read(openair0_device_t *device, openair0_timestamp_t *ptimes
 {
   usrp_state_t *s = (usrp_state_t *)device->priv;
   int samples_received=0;
-  int nsamps2; // aligned to upper 32 or 16 byte boundary
-  nsamps2 = (nsamps+7)>>3;
-  simde__m256i buff_tmp[cc < 2 ? 2 : cc][nsamps2];
   static int read_count = 0;
-  int rxshift;
-  switch (device->type) {
-     case USRP_B200_DEV:
-        rxshift=4;
-        break;
-     case USRP_X300_DEV:
-     case USRP_N300_DEV:
-     case USRP_X400_DEV:
-        rxshift=2;
-        break;
-     default:
-       AssertFatal(1==0,"Shouldn't be here\n");
-  }
 
   samples_received=0;
   while (samples_received != nsamps) {
@@ -718,12 +670,12 @@ static int trx_usrp_read(openair0_device_t *device, openair0_timestamp_t *ptimes
       // receive multiple channels (e.g. RF A and RF B)
       std::vector<void *> buff_ptrs;
 
-      for (int i=0; i<cc; i++) buff_ptrs.push_back(buff_tmp[i]+samples_received);
+      for (int i=0; i<cc; i++) buff_ptrs.push_back((void*)((int32_t*)buff[i]+samples_received));
       samples_received += s->rx_stream->recv(buff_ptrs, nsamps-samples_received, s->rx_md);
     } else {
       // receive a single channel (e.g. from connector RF A)
 
-      samples_received += s->rx_stream->recv((void*)((int32_t*)buff_tmp[0]+samples_received),
+      samples_received += s->rx_stream->recv((void*)((int32_t*)buff[0]+samples_received),
                                              nsamps-samples_received, s->rx_md);
     }
     if  ((s->wait_for_first_pps == 0) && (s->rx_md.error_code!=uhd::rx_metadata_t::ERROR_CODE_NONE))
@@ -734,22 +686,6 @@ static int trx_usrp_read(openair0_device_t *device, openair0_timestamp_t *ptimes
     }
   }
   if (samples_received == nsamps) s->wait_for_first_pps=0;
-
-  // bring RX data into 12 LSBs for softmodem RX
-  for (int i=0; i<cc; i++) {
-    for (int j = 0; j < nsamps2; j++) {
-      // bring RX data into 12 LSBs for softmodem RX,
-      // this keeps the significant bits of B210 and may loose better ADC results,
-      // but it makes free bits in MSB for signal processing on int16
-      if ((((uintptr_t) buff[i])&0x1F)==0) {
-        ((simde__m256i *)buff[i])[j] = simde_mm256_srai_epi16(buff_tmp[i][j], rxshift);
-      } else {
-        // FK: in some cases the buffer might not be 32 byte aligned, so we cannot use avx2
-        simde__m256i tmp = simde_mm256_srai_epi16(buff_tmp[i][j], rxshift);
-        simde_mm256_storeu_si256(((simde__m256i *)buff[i]) + j, tmp);
-      }
-    }
-  }
 
   if (samples_received < nsamps) {
     LOG_E(HW,"[recv] received %d samples out of %d\n",samples_received,nsamps);
@@ -1056,6 +992,7 @@ extern "C" {
       return 0;
     }
 
+    device->host_type = RAU_HOST;
     device->openair0_cfg = openair0_cfg;
     device->trx_start_func = trx_usrp_start;
     device->trx_get_stats_func = trx_usrp_get_stats;
@@ -1458,8 +1395,29 @@ extern "C" {
   LOG_I(HW,"Actual clock source %s...\n",s->usrp->get_clock_source(0).c_str());
   LOG_I(HW,"Actual time source %s...\n",s->usrp->get_time_source(0).c_str());
 
+  // register custom OAI converters
+  int rxshift;
+  switch (device->type) {
+    case USRP_B200_DEV:
+      // AD9361: 12-bit ADC
+      rxshift = 4;
+      break;
+    case USRP_X400_DEV:
+      // X410/X440 (Xilinx RFSoC ZU28DR): 12-bit ADC
+      rxshift = 4;
+      break;
+    case USRP_X300_DEV:
+    case USRP_N300_DEV:
+      // X3xx (ADS62P48): 14-bit ADC
+      rxshift = 2;
+      break;
+    default:
+      AssertFatal(1 == 0, "Shouldn't be here\n");
+  }
+  register_oai_converters(rxshift);
+
   // create tx & rx streamer
-  uhd::stream_args_t stream_args_rx("sc16", "sc16");
+  uhd::stream_args_t stream_args_rx("sc16_oai", "sc16");
   for (int i = 0; i<openair0_cfg[0].rx_num_channels; i++) {
     LOG_I(HW,"setting rx channel %d\n",i+choffset);
     stream_args_rx.channels.push_back(i+choffset);
@@ -1478,7 +1436,7 @@ extern "C" {
   LOG_I(HW,"rx_max_num_samps %zu\n",
         s->rx_stream->get_max_num_samps());
 
-  uhd::stream_args_t stream_args_tx("sc16", "sc16");
+  uhd::stream_args_t stream_args_tx("sc16_oai", "sc16");
 
   for (int i = 0; i<openair0_cfg[0].tx_num_channels; i++)
     stream_args_tx.channels.push_back(i+choffset);

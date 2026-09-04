@@ -281,6 +281,56 @@ void ngap_gNB_handle_sctp_data_ind(sctp_data_ind_t *sctp_data_ind) {
   AssertFatal (result == EXIT_SUCCESS, "Failed to free memory (%d)!\n", result);
 }
 
+static int ngap_gNB_path_switch_request(instance_t instance, ngap_path_switch_req_t *msg)
+{
+  DevAssert(msg != NULL);
+  NGAP_DEBUG("Triggered Pathswitch Request\n");
+
+  /*Retrieve the NGAP gNB instance associated with Mod_id */
+  ngap_gNB_instance_t *ngap_gNB_instance_p = ngap_gNB_get_instance(instance);
+  DevAssert(ngap_gNB_instance_p != NULL);
+
+  NGAP_NGAP_PDU_t *pdu = encode_ng_path_switch_request(msg);
+  DevAssert(pdu != NULL);
+
+  if (LOG_DEBUGFLAG(DEBUG_ASN1))
+    xer_fprint(stdout, &asn_DEF_NGAP_NGAP_PDU, pdu);
+
+  byte_array_t out = { .buf = NULL, .len = 0 };
+  if (ngap_gNB_encode_pdu(pdu, &out.buf, (uint32_t *)&out.len) < 0) {
+    NGAP_ERROR("Failed to encode Path Switch Request message\n");
+    ASN_STRUCT_FREE(asn_DEF_NGAP_NGAP_PDU, pdu);
+    return -1;
+  }
+
+  ngap_gNB_amf_data_t *amf_ref = ngap_gNB_get_AMF_from_instance(ngap_gNB_instance_p);
+  if (!amf_ref) {
+    NGAP_ERROR("Failed to fetch AMF for current NGAP instance\n");
+    ASN_STRUCT_FREE(asn_DEF_NGAP_NGAP_PDU, pdu);
+    return -1;
+  }
+
+  // Create and then store the NGAP UE context
+  ngap_gNB_ue_context_t ue_context_p = {
+    .amf_ref = amf_ref,
+    .gNB_ue_ngap_id = msg->gNB_ue_ngap_id,
+    .amf_ue_ngap_id = msg->amf_ue_ngap_id,
+    .gNB_instance = ngap_gNB_instance_p,
+    .ue_state = NGAP_UE_CONNECTED,
+  };
+  ngap_store_ue_context(&ue_context_p);
+
+  /* UE associated signalling -> use the allocated stream */
+  ngap_gNB_itti_send_sctp_data_req(ngap_gNB_instance_p->instance,
+                                   ue_context_p.amf_ref->assoc_id,
+                                   out.buf,
+                                   out.len,
+                                   ue_context_p.tx_stream);
+  NGAP_INFO("Sent Path Switch Request to AMF\n");
+  ASN_STRUCT_FREE(asn_DEF_NGAP_NGAP_PDU, pdu);
+  return 0;
+}
+
  /** @brief UE Mobility Management: callback for Handover Required */
 int ngap_handover_required(instance_t instance, ngap_handover_required_t *msg)
 {
@@ -611,6 +661,10 @@ void *ngap_gNB_process_itti_msg(void *notUsed)
 
       case NGAP_PDUSESSION_RELEASE_RESPONSE:
         ngap_gNB_pdusession_release_resp(instance, &NGAP_PDUSESSION_RELEASE_RESPONSE(received_msg));
+        break;
+
+      case NGAP_PATH_SWITCH_REQ:
+        ngap_gNB_path_switch_request(instance, &NGAP_PATH_SWITCH_REQ(received_msg));
         break;
 
       case NGAP_HANDOVER_REQUIRED:

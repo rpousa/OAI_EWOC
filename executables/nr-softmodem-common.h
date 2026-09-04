@@ -28,12 +28,13 @@
 #include <unistd.h>
 
 #include <sys/sysinfo.h>
-#include "radio/COMMON/common_lib.h"
 #include "assertions.h"
 
 /* help strings definition for command line options, used in CMDLINE_XXX_DESC macros and printed when -h option is used */
 #define CONFIG_HLP_DLMCS_PHYTEST  "Set the downlink MCS for PHYTEST mode\n"
+#define CONFIG_HLP_DLMCST_PHYTEST "Set the downlink MCS table index for PHYTEST mode\n"
 #define CONFIG_HLP_DLNL_PHYTEST   "Set the downlink nrOfLayers for PHYTEST mode\n"
+#define CONFIG_HLP_DLPMI_PHYTEST  "Set the downlink Precoding Matrix Index for PHYTEST mode\n"
 #define CONFIG_HLP_ULNL_PHYTEST   "Set the uplink nrOfLayers for PHYTEST mode\n"
 #define CONFIG_HLP_DLBW_PHYTEST   "Set the number of PRBs used for DLSCH in PHYTEST mode\n"
 #define CONFIG_HLP_ULBW_PHYTEST   "Set the number of PRBs used for ULSCH in PHYTEST mode\n"
@@ -53,7 +54,8 @@
 #define CONFIG_HLP_PRB_SA         "Set the number of PRBs for SA\n"
 #define CONFIG_HLP_SSC            "Set the start subcarrier \n"
 #define CONFIG_HLP_DISABLETIMECORR "disable UE timing correction\n"
-#define CONFIG_HLP_ULMCS_PHYTEST "Set the uplink MCS for PHYTEST mode\n"
+#define CONFIG_HLP_ULMCS_PHYTEST  "Set the uplink MCS for PHYTEST mode\n"
+#define CONFIG_HLP_ULMCST_PHYTEST "Set the uplink MCS table index for PHYTEST mode\n"
 #define CONFIG_HLP_DLBW_PHYTEST  "Set the number of PRBs used for DLSCH in PHYTEST mode\n"
 #define CONFIG_HLP_ULBW_PHYTEST  "Set the number of PRBs used for ULSCH in PHYTEST mode\n"
 #define CONFIG_HLP_DLBM_PHYTEST  "Bitmap for DLSCH slots in period (slot 0 starts at LSB)\n"

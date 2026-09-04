@@ -17,23 +17,49 @@ Key 5GS NAS messages:
 
 ## OAI Implementation Status
 
-The following tables lists implemented NAS messages and whether there is an encoder or decoder function, and if a corresponding unit test exists.
+The following table lists NAS messages with dedicated `encode_*` / `decode_*` codecs under
+`openair3/NAS/NR_UE/5GS/` (`5GMM/MSG`, `5GSM/MSG`). Unit test entries refer to
+[`nas_lib_test.c`](../openair3/NAS/NR_UE/5GS/tests/nas_lib_test.c), most are encode/decode round-trips.
 
 | Type  | Message                                   | Encoding | Decoding | Unit test |
 |-------|-------------------------------------------|----------|----------|------------|
 | 5GMM  | Service Request                           | yes      | yes      | yes        |
 | 5GMM  | Service Accept                            | yes      | yes      | yes        |
 | 5GMM  | Service Reject                            | yes      | yes      | yes        |
+| 5GMM  | Authentication Failure                    | yes      | yes      | yes        |
+| 5GMM  | Authentication Reject                     | yes      | yes      | yes        |
+| 5GMM  | Security Mode Reject                      | yes      | yes      | yes        |
+| 5GMM  | Identity Request                          | no       | yes      | no         |
 | 5GMM  | Authentication Response                   | yes      | no       | no         |
 | 5GMM  | Identity Response                         | yes      | no       | no         |
 | 5GMM  | Security Mode Complete                    | yes      | no       | no         |
 | 5GMM  | Uplink NAS Transport                      | yes      | no       | no         |
+| 5GMM  | Authentication Failure                    | yes      | yes      | yes        |
+| 5GMM  | Authentication Reject                     | yes      | yes      | yes        |
+| 5GMM  | Security Mode Reject                      | yes      | yes      | yes        |
 | 5GMM  | Registration Request                      | yes      | yes      | no         |
 | 5GMM  | Registration Accept                       | yes      | yes      | yes        |
 | 5GMM  | Registration Complete                     | yes      | yes      | no         |
 | 5GMM  | Deregistration Request (UE originating)   | yes      | no       | no         |
 | 5GSM  | PDU Session Establishment Request         | yes      | no       | no         |
 | 5GSM  | PDU Session Establishment Accept          | no       | yes      | no         |
+
+### Runtime-handled messages
+
+These network-originated messages are handled in [`nr_nas_msg.c`](../openair3/NAS/NR_UE/nr_nas_msg.c):
+
+* Authentication Request
+* Security Mode Command
+* Downlink NAS Transport
+* Deregistration Accept (UE originating)
+* Registration Reject
+* PDU Session Establishment Reject
+
+## Integration testing
+
+End-to-end attach can be tested with the [NR UE NAS simulator](../tests/nr-ue-nas-simulator/README.md),
+which runs the OAI UE NAS stack and gNB NGAP against the AMF, forwarding NAS PDUs without PHY/MAC/RLC.
+Use `nas_lib_test` for isolated codec round-trips.
 
 ### Code Structure
 
@@ -45,10 +71,14 @@ The following tables lists implemented NAS messages and whether there is an enco
 
 [openair3/NAS/NR_UE/5GS/fgs_nas_lib.c](../openair3/NAS/NR_UE/5GS/fgs_nas_lib.c):
 
+* top-level encode/decode dispatch for NAS 5GMM/5GSM payloads
+* delegates message-specific encoding/decoding to `5GMM/MSG` and `5GSM/MSG`
+
 [openair3/NAS/NR_UE/5GS/NR_NAS_defs.h](../openair3/NAS/NR_UE/5GS/NR_NAS_defs.h):
 
-* encoding and decoding functions for 5G NAS message headers and payloads
-* relies on 5GMM/5GSM messages libs for payload encoding
+* 5GS NAS message types and security header definitions
+* shared NAS structures used by UE NAS handlers and encoders
+* prototypes for 5GMM header and security-header encode/decode, implementations in `fgs_nas_lib.c`
 
 [openair3/NAS/NR_UE/5GS/fgs_nas_utils.h](../openair3/NAS/NR_UE/5GS/fgs_nas_utils.h):
 

@@ -222,17 +222,6 @@ bool pdcp_data_req(protocol_ctxt_t  *ctxt_pP,
                    const uint32_t * sourceL2Id,
                    const uint32_t * destinationL2Id);
 
-bool cu_f1u_data_req(protocol_ctxt_t  *ctxt_pP,
-                     const srb_flag_t srb_flagP,
-                     const rb_id_t rb_id,
-                     const mui_t muiP,
-                     const confirm_t confirmP,
-                     const sdu_size_t sdu_buffer_size,
-                     unsigned char *const sdu_buffer,
-                     const pdcp_transmission_mode_t mode,
-                     const uint32_t *const sourceL2Id,
-                     const uint32_t *const destinationL2Id);
-
 /*! \fn bool pdcp_data_ind(const protocol_ctxt_t* const, srb_flag_t, MBMS_flag_t, rb_id_t, sdu_size_t, uint8_t*, uint32_t, uint32_t)
  * \brief This functions handles data transfer indications coming from RLC
  * \param[in] ctxt_pP        Running context.

@@ -241,6 +241,14 @@ static void nr_pusch_antenna_processing(void *arg)
         }
       }
 
+      // Align the channel estimates for the delta shift
+      if (delta != 0) {
+        c16_t *ul_ch_base = &ul_ch_estimates[nl * num_sp_streams + antenna][symbol_offset];
+        memmove(&ul_ch_base[delta], ul_ch_base, (nb_rb_pusch * 12 - delta) * sizeof(c16_t));
+        for (int d = 0; d < delta; d++)
+          ul_ch_base[d] = ul_ch_base[delta];
+      }
+
     } else if (pusch_pdu->dmrs_config_type == pusch_dmrs_type2
                && chest_freq == 0) { // pusch_dmrs_type2  |p_r,p_l,d,d,d,d,p_r,p_l,d,d,d,d|
       LOG_D(PHY, "PUSCH estimation DMRS type 2, Freq-domain interpolation\n");
@@ -606,9 +614,8 @@ int nr_pusch_channel_estimation(PHY_VARS_gNB *gNB,
     nest_count += nest_count_arr[aarx];
   }
   // get the maximum delay
-  *delay = delay_arr[0];
-  for (int aarx = 1; aarx < nb_antennas_rx; aarx++) {
-    if (delay_arr[aarx].est_delay >= delay->est_delay) {
+  for (int aarx = 0; aarx < nb_antennas_rx; aarx++) {
+    if (delay_arr[aarx].valid && delay_arr[aarx].delay_max_val > delay->delay_max_val) {
       *delay = delay_arr[aarx];
     }
   }

@@ -102,7 +102,7 @@ typedef enum {
 #define GNB_CONFIG_STRING_1ST_ACTIVE_BWP                "first_active_bwp"
 #define GNB_CONFIG_STRING_LIMIT_RSRP_REPORT             "max_num_RSRP_reported"
 
-#define GNB_CONFIG_HLP_STRING_ENABLE_SDAP               "enable the SDAP layer\n"
+#define GNB_CONFIG_HLP_STRING_ENABLE_SDAP               "set sdap-HeaderUL/DL present in RRC SDAP-Config (false = both absent)\n"
 #define GNB_CONFIG_HLP_FORCE256QAMOFF                   "suppress activation of 256 QAM despite UE support"
 #define GNB_CONFIG_HLP_MAXMIMOLAYERS                    "limit on maxMIMO-layers for DL"
 #define GNB_CONFIG_HLP_DISABLE_HARQ                     "disable feedback for all HARQ processes (REL17 feature)"

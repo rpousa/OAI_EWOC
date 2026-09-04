@@ -44,7 +44,8 @@ PTP enabled switches and Grandmaster clock we have tested with:
 |Fibrolan Falcon-RX/812/G|
 |Qulsar Qg2 (Grandmaster)|
 
-**S-Plane synchronization is mandatory.** S-plane support is done via `ptp4l` and `phc2sys`. Make sure your version matches. 
+**S-Plane synchronization is mandatory.** S-plane support is done via 
+`ptp4l` and `phc2sys`. Make sure your version matches. 
 
 | Software  | Software Version|
 |-----------|-----------------|
@@ -73,11 +74,10 @@ Supported libxran releases:
 
 | Vendor                                  |
 |-----------------------------------------|
-| `oran_f_release_v1.0`                   |
 | `oran_k_release_v1.0`                   |
 
-**Note**: The libxran driver of OAI identifies the above F release version as
-"6.1.0" (F is the sixth letter, then 1.0), and the above K release as "11.1.0".
+**Note**: The libxran driver of OAI identifies the above K release as "11.1.0".
+E/F releases not supported starting from tags `2026.w08`/`2026.w29`, respectively.
 
 ### Configure your server
 
@@ -228,19 +228,19 @@ Once installed you can use this configuration file for ptp4l (`/etc/ptp4l.conf`)
 ```
 [global]
 domainNumber            24
-slaveOnly               1
+clientOnly              1
 time_stamping           hardware
-tx_timestamp_timeout    1
+tx_timestamp_timeout    50
 logging_level           6
 summary_interval        0
 #priority1               127
 
-[your_PTP_ENABLED_NIC]
+[PTP_ENABLED_NIC_INTERFACE]
 network_transport       L2
 hybrid_e2e              0
 ```
 
-You need to increase `tx_timestamp_timeout` to 50 or 100 for Intel E-810. You will see that in the logs of ptp.
+You need to increase `tx_timestamp_timeout` to 100 if needed. You will see that in the logs of ptp.
 
 Create the configuration file for ptp4l (`/etc/sysconfig/ptp4l`)
 
@@ -251,7 +251,7 @@ OPTIONS="-f /etc/ptp4l.conf"
 Create the configuration file for phc2sys (`/etc/sysconfig/phc2sys`)
 
 ```
-OPTIONS="-a -r -r -n 24"
+OPTIONS="-s PTP_ENABLED_NIC_INTERFACE -w -n 24 -r -r -m -R 8"
 ```
 
 The service of ptp4l (`/usr/lib/systemd/system/ptp4l.service`) should be configured as below:
@@ -295,8 +295,7 @@ Beware that PTP issues may show up only when running OAI and XRAN. If you are us
 1. Make sure that you have `skew_tick=1` in `/proc/cmdline`
 2. For Intel E-810 cards set `tx_timestamp_timeout` to 50 or 100 if there are errors in ptp4l logs
 3. Other time sources than PTP, such as NTP or chrony timesources, should be disabled. Make sure they are enabled as further below.
-4. Make sure you set `kthread_cpus=<cpu_list>` in `/proc/cmdline`.
-5. If `rms` or `delay` in `ptp4l` or `offset` in `phc2sys` logs remain high then you can try pinning the `ptp4l` and `phc2sys` processes to an isolated CPU.
+4. If `rms` or `delay` in `ptp4l` or `offset` in `phc2sys` logs remain high then you can try pinning the `ptp4l` and `phc2sys` processes to an isolated CPU.
 
 ```bash
 #to check there is NTP enabled or not
@@ -307,7 +306,11 @@ timedatectl set-ntp false
 
 ### DPDK (Data Plane Development Kit)
 
-Download DPDK version 20.11.9 (F release) or 24.11.4 (K release).
+> [!NOTE]
+> DPDK version 20.11 or superior is required  
+> We recommend using DPDK 22.11.11 while possible
+
+Download DPDK version 22.11.11 (K release).
 
 ```bash
 # on debian
@@ -315,15 +318,13 @@ sudo apt install wget xz-utils libnuma-dev libibverbs-dev rdma-core python3-pyel
 # on Fedora/RHEL
 sudo dnf install wget xz numactl-devel rdma-core-devel libibverbs-devel python3-pyelftools meson
 cd
-wget http://fast.dpdk.org/rel/dpdk-20.11.9.tar.xz # F release
-wget http://fast.dpdk.org/rel/dpdk-24.11.4.tar.xz # K release
+wget http://fast.dpdk.org/rel/dpdk-22.11.11.tar.xz # K release
 ```
 
 #### DPDK Compilation and Installation
 
 ```bash
-tar xvf dpdk-20.11.9.tar.xz && cd dpdk-stable-20.11.9 # F release
-tar xvf dpdk-24.11.4.tar.xz && cd dpdk-stable-24.11.4 # K release
+tar xvf dpdk-22.11.11.tar.xz && cd dpdk-stable-22.11.11 # K release
 
 meson build
 ninja -C build
@@ -390,8 +391,7 @@ pkg-config --libs libdpdk --static
 Go back to the version folder you used to build and install
 
 ```
-cd ~/dpdk-stable-20.11.9 # F release
-cd ~/dpdk-stable-24.11.4 # K release
+cd ~/dpdk-stable-22.11.11 # K release
 sudo ninja deinstall -C build
 ```
 
@@ -406,37 +406,25 @@ cd ~/openairinterface5g/
 
 ### Build ORAN Fronthaul Interface Library
 
-Download ORAN FHI DU library, checkout the correct version, and apply the correct patch (available in `oai_folder/cmake_targets/tools/oran_fhi_integration_patches`).
-
-#### F release
-
-```bash
-git clone https://github.com/openairinterface/o-du-phy.git ~/phy
-cd ~/phy
-git checkout oran_f_release_v1.0
-git apply ~/openairinterface5g/cmake_targets/tools/oran_fhi_integration_patches/F/oaioran_F.patch
-```
-
 #### K release
 ```bash
 git clone https://github.com/openairinterface/o-du-phy.git ~/phy
 cd ~/phy
-git checkout <desired-tag> # shall match a variable `K_VERSION`
+git checkout 11.1.6 # the tag points to the `main` branch which has all patches applied that are relevant for OAI integration; the tag matches the value of cmake variable `K_VERSION`
 ```
+or use `xran_DOWNLOAD` option when compiling OAI gNB.
 
 Compile the fronthaul interface library by calling `make` and the option
 `XRAN_LIB_SO=1` to have it build a shared object. Note that we provide two
 environment variables `RTE_SDK` for the path to the source tree of DPDK, and
-`XRAN_DIR` to set the path to the fronthaul library. For building for a Arm
-target, set as well the environment variable `TARGET=armv8`.
+`XRAN_DIR` to set the path to the fronthaul library.
 
 **Note**: you need at least gcc-11 and g++-11.
 
 ```bash
 cd ~/phy/fhi_lib/lib
 make clean
-WIRELESS_SDK_TOOLCHAIN=gcc RTE_SDK=~/dpdk-stable-20.11.9/ XRAN_DIR=~/phy/fhi_lib make XRAN_LIB_SO=1 # F release
-WIRELESS_SDK_TOOLCHAIN=gcc RTE_SDK=~/dpdk-stable-24.11.4/ XRAN_DIR=~/phy/fhi_lib make XRAN_LIB_SO=1 # K release
+WIRELESS_SDK_TOOLCHAIN=gcc RTE_SDK=~/dpdk-stable-22.11.11/ XRAN_DIR=~/phy/fhi_lib make XRAN_LIB_SO=1 # K release
 ...
 [AR] build/libxran.so
 ./build/libxran.so
@@ -522,7 +510,7 @@ Note that you might also call cmake directly instead of using `build_oai`:
 ```
 cd ~/openairinterface5g
 mkdir build && cd build
-# build RAN after manually building xran F or K release
+# build RAN after manually building xran K release
 cmake .. -GNinja -DOAI_FHI72=ON -Dxran_LOCATION=$HOME/phy/fhi_lib/lib
 # build RAN and xran K release automatically
 cmake .. -GNinja -DOAI_FHI72=ON -Dxran_DOWNLOAD=ON
@@ -660,6 +648,14 @@ eAXC_id 0 1 # set PRACH eAxC IDs
 
 #### Microamp FR2
 
+Two OAI configuration files are provided for this RU, both with TDD pattern
+`DDDSU` (0.625ms) and 2x2 on band n257:
+- 200MHz: [`gnb.sa.band257.132prb.fhi72.2x2-microamp.conf`](../targets/PROJECTS/GENERIC-NR-5GC/CONF/gnb.sa.band257.132prb.fhi72.2x2-microamp.conf)
+- 100MHz: [`gnb.sa.band257.66prb.fhi72.2x2-microamp.conf`](../ci-scripts/conf_files/gnb.sa.band257.66prb.fhi72.2x2-microamp.conf)
+
+Both use the same carrier frequency (28.04928GHz), so switching between them
+only requires to change the bandwidth of the RU (see below).
+
 #### Firmware starting from 0.1.174
 
 Requirements:
@@ -711,12 +707,9 @@ You can use the following command to display the current RU configuration:
 sshpass -p microampcfg ssh remctl@<RU_IP_ADDR> get-cfg
 ```
 
-<details>
-  <summary>
-  The OAI configuration file [`gnb.sa.band257.132prb.fhi72.2x2-microamp.conf`](../targets/PROJECTS/GENERIC-NR-5GC/CONF/gnb.sa.band257.132prb.fhi72.2x2-microamp.conf) corresponds to the following RU configuration:
-  </summary>
+The OAI configuration file [`gnb.sa.band257.132prb.fhi72.2x2-microamp.conf`](../targets/PROJECTS/GENERIC-NR-5GC/CONF/gnb.sa.band257.132prb.fhi72.2x2-microamp.conf) corresponds to the following RU configuration:
 
-  ```
+```
   PRACH0 CC ID: 0
   PRACH0 RU port ID: 0
   PRACH1 CC ID: 1
@@ -736,9 +729,8 @@ sshpass -p microampcfg ssh remctl@<RU_IP_ADDR> get-cfg
     RU MAC: 10-70-FD-B8-86-02
     DU MAC: 50-7C-6F-31-00-61
   RF Power level: -5 dB - relative to maximum
-  ```
+```
 
-</details>
 
 Execute the following command to check how to configure the RU:
 
@@ -941,12 +933,10 @@ To check PTP status, you can use `rucfg ptp`.
 
 You can use `rucfg show` command to display the current RU configuration. 
 
-<details>
-  <summary>
-  The OAI configuration file [`gnb.sa.band257.132prb.fhi72.2x2-microamp.conf`](../targets/PROJECTS/GENERIC-NR-5GC/CONF/gnb.sa.band257.132prb.fhi72.2x2-microamp.conf) corresponds to the following RU configuration:
-  </summary>
 
-  ```
+The OAI configuration file [`gnb.sa.band257.132prb.fhi72.2x2-microamp.conf`](../targets/PROJECTS/GENERIC-NR-5GC/CONF/gnb.sa.band257.132prb.fhi72.2x2-microamp.conf) corresponds to the following RU configuration:
+
+```
   [INFO] Check if RU is available
   [INFO] RU available
   [INFO] Check SSH to RU available
@@ -972,10 +962,7 @@ You can use `rucfg show` command to display the current RU configuration.
     VLAN MGMT: False
     Beamforming: dynamic-mirrored-beam
   }
-  ```
-
-</details>
-
+```
 
 Execute `rucfg config -h` to check how to configure the RU.
 
@@ -1258,7 +1245,7 @@ The OAI configuration file [`gnb.sa.band78.106prb.fhi72.1x1-proto-ru.conf`](../t
 First, compile the RU as outlined in the [building ProtO-RU tutorial](https://github.com/NUS-CIR/ProtO-RU/tree/proto-ru?tab=readme-ov-file#building-proto-ru).
 Then, ensure that both your DU and ProtO-RU host are PTP synchronized.
 
-Next, use the RU config, [protoru-OAI-B210-TDD-n78-40MHz-1x1-30kHz.yml](https://github.com/NUS-CIR/ProtO-RU/blob/proto-ru/proto-ru/conf-files/protoru-OAI-B210-TDD-n78-40MHz-1x1-30kHz.yml), which corresponds to the above mentioned DU config file. 
+Next, use the RU config, [protoru-OAI-B210-TDD-n78-40MHz-1x1-30kHz.yml](https://github.com/NUS-CIR/ProtO-RU/blob/proto-ru/proto-ru/conf-files/protoru-OAI-B210-TDD-n78-40MHz-1x1-30kHz.yml), which corresponds to the above mentioned DU config file. Please note that the RU delay profile might need to be adjusted according to the setup. The E2E test with xran K release required `T2a_max_cp_ul: 2985`.
 In addition, please adapt the DU MAC address and VLAN tag to your needs.
 
 ProtO-RU was successfully tested with USRP B210.

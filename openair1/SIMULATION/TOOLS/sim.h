@@ -5,6 +5,7 @@
 #ifndef __SIMULATION_TOOLS_DEFS_H__
 #define __SIMULATION_TOOLS_DEFS_H__
 #include "PHY/defs_common.h"
+#include "common_lib.h"
 #include <pthread.h>
 /** @defgroup _numerical_ Useful Numerical Functions
  *@{
@@ -427,6 +428,8 @@ void add_noise_float(c16_t **rxdata,
                      const int delay,
                      bool apply_phase_noise,
                      const uint8_t nb_antennas_rx);
+
+void add_rx_signals(float **y_re, float **y_im, float **x_re, float **x_im, int n_rx, int length);
 
 /*
 \fn double compute_pbch_sinr(channel_desc_t *desc,

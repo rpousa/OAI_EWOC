@@ -29,7 +29,6 @@
 #include <malloc.h>
 #include <string.h>
 #include <math.h>
-#include "common_lib.h"
 #include <common/utils/LOG/log.h>
 #include "assertions.h"
 

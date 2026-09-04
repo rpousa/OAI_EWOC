@@ -931,7 +931,6 @@ void get_samplerate_and_bw(int mu,
         break;
 
       case 66:
-      case 64:
         if (threequarter_fs) {
           *sample_rate=92.16e6;
           *tx_bw = 100e6;

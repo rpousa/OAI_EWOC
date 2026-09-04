@@ -273,6 +273,43 @@ OAI supports RF front-ends operating on arbitrary frequencies outside standard
 - `if_freq`: DL frequency in Hz (suffix with `L` in libconfig, e.g. `2169080000L`)
 - `if_offset`: UL frequency offset in Hz
 
+## RedCap UEs
+
+OAI supports connecting RedCap (5G Release 17 Reduced Capability) UEs.  This
+ability was tested with the Quectel RG255C-GL RedCap module with firmware
+version `RG255CGLABR01A04M4G`.
+
+RedCap support requires some modifications to the gNB configuration.  For
+instance, this repository contains a reference [configuration file for a SISO
+40MHz numerology 1 gNB supporting RedCap UEs](../targets/PROJECTS/GENERIC-NR-5GC/CONF/gnb.sa.band78.fr1.106PRB.usrpb210.redcap.yaml).
+To support both RedCap and other UEs, we configure an initial bandwidth part of
+20MHz and an optional bandwidth part of 40MHz.  Every UE first connects with
+the initial 20MHz bandwidth part. RedCap UEs remain using this initial
+bandwidth part while other UEs escalate to use the 40MHz bandwidth part.
+
+Any gNB configuration file can be extended to support RedCap UEs:
+1. Copy the `first_active_bwp`, `bwp_list`, `RedCap` and `TIMERS` sections from
+   the gNBs list of the reference configuration to the target configuration
+   file.
+2. Modify the `bwpSize` in the `bwp_list` to match the bandwidth of the target
+   gNB. If necessary, in the same section, modify `scs` to match the numerology
+   of the target gNB.
+3. Modify the initial bandwidth part location and bandwidth: set
+   `initialDLBWPlocationAndBandwidth` and `initialULBWPlocationAndBandwidth` to
+   13750 (or 13750 + RBstart to offset the initial bandwidth part, not tested).
+4. Checkout the [gNB frequency setup documentation](gNB_frequency_setup.md) and
+   follow the instructions with the online calculator to find the
+   `absoluteFrequencySSB` for the new initial bandwidth part.  The chosen
+   `absoluteFrequencySSB` is the `Arfcn GSCN` encountered in the line where
+   CRBstart is equal to 0 (or to the RBstart offset you chose previously, not
+   tested).
+
+For example, connecting RedCap UEs on a 4x4 100MHz numerology 1 gNB with a 7.2
+split Radio Unit could be achieved by following this process.  For gNBs with
+total bandwidth of 20MHz or below, it is not necessary to modify the bandwidth
+part configuration.  Then, only copy the `RedCap` and `TIMERS` sections from
+the reference configuration to the target configuration file.
+
 ## Related documentation
 
 Further documentation not referenced above:

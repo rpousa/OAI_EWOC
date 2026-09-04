@@ -27,6 +27,8 @@ extern "C" {
 
 #include "gtp_itf.h"
 #include "gtpu_extensions.h"
+#include "nrup_common.h"
+#include "nrup_dl_data_delivery_status.h"
 
 #pragma pack(1)
 
@@ -41,22 +43,6 @@ typedef struct Gtpv1uMsgHeader {
   uint16_t msgLength;
   teid_t teid;
 } __attribute__((packed)) Gtpv1uMsgHeaderT;
-
-// TS 38.425, Figure 5.5.2.2-1
-typedef struct DlDataDeliveryStatus_flags {
-  uint8_t LPR: 1; // Lost packet report
-  uint8_t FFI: 1; // Final Frame Ind
-  uint8_t deliveredPdcpSn: 1; // Highest Delivered NR PDCP SN Ind
-  uint8_t transmittedPdcpSn: 1; // Highest Transmitted NR PDCP SN Ind
-  uint8_t pduType: 4; // PDU type
-  uint8_t CR: 1; // Cause Report
-  uint8_t deliveredReTxPdcpSn: 1; // Delivered retransmitted NR PDCP SN Ind
-  uint8_t reTxPdcpSn: 1; // Retransmitted NR PDCP SN Ind
-  uint8_t DRI: 1; // Data Rate Indication
-  uint8_t deliveredPdcpSnRange: 1; // Delivered NR PDCP SN Range Ind
-  uint8_t spare: 3;
-  uint32_t drbBufferSize; // Desired buffer size for the data radio bearer
-} __attribute__((packed)) DlDataDeliveryStatus_flagsT;
 
 typedef struct Gtpv1uMsgHeaderOptFields {
   uint8_t seqNum1Oct;
@@ -99,6 +85,9 @@ typedef struct Gtpv1uExtHeader {
 // TS 29.281, 5.2.1
 #define EXT_HDR_LNTH_OCTET_UNITS (4)
 #define NO_MORE_EXT_HDRS (0)
+/* TS 29.281 clause 5.2.1 Figure 5.2.1-1: Extension Header Length in 4 octets units.
+ * Extension Header Content excludes octet 1 (length field) and octet m+1 (Next Extension Header Type). */
+#define GTPU_EXT_HDR_CONTENT_LEN(ext_len_field) ((ext_len_field)*EXT_HDR_LNTH_OCTET_UNITS - 2)
 
 // TS 29.060, table 7.1 defines the possible message types
 // here are all the possible messages (3GPP R16)
@@ -112,6 +101,11 @@ typedef struct Gtpv1uExtHeader {
 /** NO_QFI: indicates no QFI marking (F1-U tunnel or N3-U tunnel with no SDAP header)
  * Used when there is no UL PDU Session Information (SDAP header) present */
 #define NO_QFI (-1)
+
+/** number of packets to receive at once in recvmmsg() */
+#define VLEN 8
+/** buffer size for each packet */
+#define BUFSIZE 65536
 
 /** GTP bearer context: for sending data */
 typedef struct gtpv1u_bearer_s {
@@ -249,10 +243,8 @@ static int gtpv1uCreateAndSendMsg(gtpv1u_bearer_t *bearer,
                                   gtpu_extension_header_t *extensions,
                                   int extensions_count)
 {
-  DevAssert(msgLen + HDR_MAX < 65536); // maximum size of UDP packet
-  uint8_t buffer[msgLen + HDR_MAX];
-  uint8_t *curPtr = buffer;
-  Gtpv1uMsgHeaderT *msgHdr = (Gtpv1uMsgHeaderT *)buffer;
+  uint8_t header[HDR_MAX];
+  Gtpv1uMsgHeaderT *msgHdr = (Gtpv1uMsgHeaderT *)header;
   // N should be 0 for us (it was used only in 2G and 3G)
   msgHdr->PN = npduNumFlag;
   msgHdr->S = seqNumFlag;
@@ -264,8 +256,7 @@ static int gtpv1uCreateAndSendMsg(gtpv1u_bearer_t *bearer,
   msgHdr->msgType = msgType;
   msgHdr->teid = htonl(bearer->teid_outgoing);
 
-  curPtr += sizeof(Gtpv1uMsgHeaderT);
-
+  uint8_t *curPtr = header + sizeof(Gtpv1uMsgHeaderT);
   if (msgHdr->PN || msgHdr->S || msgHdr->E) {
     *(uint16_t *)curPtr = seqNumFlag ? bearer->seqNum : 0x0000;
     curPtr += sizeof(uint16_t);
@@ -276,7 +267,7 @@ static int gtpv1uCreateAndSendMsg(gtpv1u_bearer_t *bearer,
   }
 
   for (int i = 0; i < extensions_count; i++) {
-    int available_size = sizeof(buffer) - (curPtr - buffer);
+    int available_size = sizeof(header) - (curPtr - header);
     gtpu_extension_header_type_t next = i == extensions_count - 1 ? GTPU_EXT_NONE : extensions[i + 1].type;
     int len = serialize_extension(&extensions[i], next, curPtr, available_size);
     if (len == -1) {
@@ -286,18 +277,8 @@ static int gtpv1uCreateAndSendMsg(gtpv1u_bearer_t *bearer,
     curPtr += len;
   }
 
-  if (Msg != NULL) {
-    int available_size = sizeof(buffer) - (curPtr - buffer);
-    if (msgLen > available_size) {
-      LOG_E(GTPU, "GTP message creation: buffer too small\n");
-      return GTPNOK;
-    }
-    memcpy(curPtr, Msg, msgLen);
-    curPtr += msgLen;
-  }
-
-  msgHdr->msgLength = htons(curPtr - (buffer + sizeof(Gtpv1uMsgHeaderT)));
-  AssertFatal(curPtr - (buffer + msgLen) < HDR_MAX, "fixed max size of all headers too short");
+  size_t hdr_len = curPtr - header;
+  msgHdr->msgLength = htons(hdr_len - sizeof(Gtpv1uMsgHeaderT) + msgLen);
 
   // Fix me: add IPv6 support
   DevAssert(bearer->ip.ss_family == AF_INET);
@@ -307,14 +288,20 @@ static int gtpv1uCreateAndSendMsg(gtpv1u_bearer_t *bearer,
         IPV4_ADDR_FORMAT(to->sin_addr.s_addr),
         htons(to->sin_port),
         bearer->teid_outgoing);
-  int ret = sendto(bearer->sock_fd, buffer, curPtr - buffer, 0, (struct sockaddr *)to, sizeof(*to));
-  if (ret != curPtr - buffer) {
-    LOG_E(GTPU,
-          "[SD %d] Failed to send data buffer size %lu, ret: %d, errno: %d\n",
-          bearer->sock_fd,
-          curPtr - buffer,
-          ret,
-          errno);
+
+  struct iovec iov[2] = {
+      { .iov_base = msgHdr, .iov_len = hdr_len, },
+      { .iov_base = Msg, .iov_len = (size_t) msgLen, },
+  };
+  struct msghdr m = {
+    .msg_name = to,
+    .msg_namelen = sizeof(*to),
+    .msg_iov = iov,
+    .msg_iovlen = Msg ? 2U : 1U,
+  };
+  ssize_t ret = sendmsg(bearer->sock_fd, &m, 0);
+  if (ret != (ssize_t) (hdr_len + msgLen)) {
+    LOG_E(GTPU, "[SD %d] Failed to send data, ret: %ld, errno: %d\n", bearer->sock_fd, ret, errno);
     return GTPNOK;
   }
 
@@ -397,17 +384,10 @@ static void _gtpv1uSendDirect(instance_t instance,
     ext[extension_count] = {
       .type = GTPU_EXT_DL_USER_DATA,
       .dl_user_data = {
-        .dl_discard_blocks = false,
-        .dl_flush = false,
-        .report_polling = false,
-        .request_out_of_seq_report = false,
-        .report_delivered = false,
-        .user_data_existence_flag = false,
-        .assistance_info_report_polling_flag = false,
-        .retransmission_flag = false,
-        .nru_sequence_number = (uint32_t)nru_seqnum
+        .nru_sequence_number = (uint32_t)nru_seqnum,
       }
     };
+    LOG_D(GTPU, "DL USER DATA TX: ue %ld bearer %d nru_sn %u\n", ue_id, bearer_id, (uint32_t)nru_seqnum);
     extension_count++;
   }
 
@@ -474,24 +454,16 @@ void gtpv1uSendDirectWithNRUSeqNum(instance_t instance,
   _gtpv1uSendDirect(instance, ue_id, bearer_id, NO_QFI, buf, len, false, false, nru_seqnum);
 }
 
-static void fillDlDeliveryStatusReport(gtpu_extension_header_t *ext, uint32_t RLC_buffer_availability, uint32_t NR_PDCP_PDU_SN)
+static void fillDlDeliveryStatusReport(gtpu_extension_header_t *ext,
+                                       uint32_t RLC_buffer_availability,
+                                       uint32_t nr_pdcp_pdu_sn)
 {
   *ext = {
     .type = GTPU_EXT_DL_DATA_DELIVERY_STATUS,
     .dl_data_delivery_status = {
-      /* previous version of the code was sending highest_transmitted_nr_pdcp_sn if
-       * it is != 0, let's do the same for the moment */
-      .highest_transmitted_nr_pdcp_sn_ind = NR_PDCP_PDU_SN != 0,
-      .highest_delivered_nr_pdcp_sn_ind = false,
-      .final_frame_ind = false,
-      .lost_packet_report = false,
-      .delivered_nr_pdcp_sn_range_ind = false,
-      .data_rate_ind = false,
-      .retransmitted_nr_pdcp_sn_ind = false,
-      .delivered_retransmitted_nr_pdcp_ind = false,
-      .cause_report = false,
       .desired_buffer_size = RLC_buffer_availability,
-      .highest_transmitted_nr_pdcp_sn = NR_PDCP_PDU_SN
+      .highest_transmitted_nr_pdcp_sn_present = true,
+      .highest_transmitted_nr_pdcp_sn = nr_pdcp_pdu_sn,
     }
   };
 }
@@ -604,7 +576,7 @@ static int udpServerSocket(openAddr_s addr)
   }
 
   int sendbuff = 1000 * 1000 * 10;
-  AssertFatal(0 == setsockopt(sockfd, SOL_SOCKET, SO_SNDBUF, &sendbuff, sizeof(sendbuff)), "");
+  AssertFatal(0 == setsockopt(sockfd, SOL_SOCKET, SO_SNDBUF, &sendbuff, sizeof(sendbuff)), "%s", strerror(errno));
   LOG_D(GTPU,
         "[%d] Created listener for paquets to: %s:%s, send buffer size: %d\n",
         sockfd,
@@ -1192,23 +1164,50 @@ static int Gtpv1uHandleGpdu(int h, uint8_t *msgBuf, uint32_t msgBufLen, const st
           }
           uint8_t PDU_type = (msgBuf[offset + 1] >> 4) & 0x0f;
           if (PDU_type == 0) { // DL USER Data Format
-            int additional_offset = 6; // Additional offset capturing the first non-mandatory octet (TS 38.425, Figure 5.5.2.1-1)
-            if (msgBuf[offset + 1] >> 2 & 0x1) { // DL Discard Blocks flag is present
-              LOG_I(GTPU, "DL User Data: DL Discard Blocks handling not enabled\n");
-              additional_offset = additional_offset + 9; // For the moment ignore
+            /* TS 38.425 Figure 5.5.2.1-1: NR-UP payload in NR RAN Container (29.281) */
+            const int container_len = GTPU_EXT_HDR_CONTENT_LEN(extension_header_length);
+
+            /* TS 29.281 Figure 5.2.1-1: offset is the Length octet, NR-UP starts at offset+1 */
+            if (offset + 1 + container_len > msgBufLen) {
+              LOG_E(GTPU, "gtp-u received header is malformed, ignore gtp packet\n");
+              return GTPNOK;
             }
-            if (msgBuf[offset + 1] >> 1 & 0x1) { // DL Flush flag is present
-              LOG_I(GTPU, "DL User Data: DL Flush handling not enabled\n");
-              additional_offset = additional_offset + 3; // For the moment ignore
+            nrup_dl_user_data_t dl_user_data = {0};
+            if (!decode_nrup_dl_user_data(msgBuf + offset + 1, container_len, &dl_user_data)) {
+              LOG_E(GTPU, "gtp-u received header is malformed, ignore gtp packet\n");
+              return GTPNOK;
             }
-            if ((msgBuf[offset + 2] >> 3) & 0x1) { //"Report delivered" enabled (TS 38.425, 5.4)
-              /*Store the NR PDCP PDU SN for which a delivery status report shall be generated once the
-               *PDU gets forwarded to the lower layers*/
-              // NR_PDCP_PDU_SN = msgBuf[offset+6] << 16 | msgBuf[offset+7] << 8 | msgBuf[offset+8];
-              NR_PDCP_PDU_SN = msgBuf[offset + additional_offset] << 16 | msgBuf[offset + additional_offset + 1] << 8
-                               | msgBuf[offset + additional_offset + 2];
-              LOG_D(GTPU, " NR_PDCP_PDU_SN: %u \n", NR_PDCP_PDU_SN);
+            LOG_D(GTPU,
+                  "DL USER DATA RX: ue %lx drb %u nru_sn %u pdcp_sn %u\n",
+                  uedata.ue_id,
+                  uedata.incoming_rb_id,
+                  dl_user_data.nru_sequence_number,
+                  dl_user_data.report_delivered ? dl_user_data.nr_pdcp_pdu_sn : 0u);
+            if (dl_user_data.report_delivered) {
+              /* TS 38.425 clause 5.4: store the NR PDCP PDU SN for which a delivery status report
+               * shall be generated when the PDU reaches the lower layers */
+              NR_PDCP_PDU_SN = dl_user_data.nr_pdcp_pdu_sn;
             }
+          } else if (PDU_type == NRUP_PDU_DL_DATA_DELIVERY_STATUS) {
+            /* TS 38.425 Figure 5.5.2.2-1: NR-UP payload in NR RAN Container (29.281) */
+            const int container_len = GTPU_EXT_HDR_CONTENT_LEN(extension_header_length);
+
+            /* TS 29.281 Figure 5.2.1-1: offset is the Length octet, NR-UP starts at offset+1 */
+            if (offset + 1 + container_len > msgBufLen) {
+              LOG_E(GTPU, "gtp-u received header is malformed, ignore gtp packet\n");
+              return GTPNOK;
+            }
+            nrup_dl_data_delivery_status_t ddds = {0};
+            if (!decode_nrup_dl_data_delivery_status(msgBuf + offset + 1, container_len, &ddds)) {
+              LOG_W(GTPU, "DL DATA DELIVERY STATUS: malformed NR-RAN container\n");
+              break;
+            }
+            LOG_D(GTPU,
+                  "DL DATA DELIVERY STATUS RX: ue %lx drb %u desired_buffer_size %u highest_tx_sn %u\n",
+                  uedata.ue_id,
+                  uedata.incoming_rb_id,
+                  ddds.desired_buffer_size,
+                  ddds.highest_transmitted_nr_pdcp_sn_present ? ddds.highest_transmitted_nr_pdcp_sn : 0u);
           } else {
             LOG_W(GTPU, "NR-RAN container type: %d not supported \n", PDU_type);
           }
@@ -1243,7 +1242,11 @@ static int Gtpv1uHandleGpdu(int h, uint8_t *msgBuf, uint32_t msgBufLen, const st
   const uint32_t destinationL2Id = 0;
 
   if (sdu_buffer_size > 0) {
-    if (qfi != NO_QFI && uedata.callBackSDAP) {
+    // TS 29.281 5.2.2.7 / TS 38.415 require a QFI (PDU Session Container) on every N3 G-PDU,
+    // so a DL PDU with no QFI (e.g. a UPF-generated Router Advertisement) is out-of-spec.
+    // We still forward it through SDAP, by following the TS 37.324 5.2.1, where defined that
+    // an unmapped QoS flow shall map the SDAP SDU to the default DRB.
+    if (uedata.callBackSDAP) {
       if (!uedata.callBackSDAP(&ctxt,
                                        uedata.ue_id,
                                        srb_flag,
@@ -1272,14 +1275,21 @@ static int Gtpv1uHandleGpdu(int h, uint8_t *msgBuf, uint32_t msgBufLen, const st
     }
   }
 
-  /* Delivery status report path uses DRB-based RLC state: keep it on non-SDAP path only. */
+  /* DU TX: DL DATA DELIVERY STATUS when CU set Report Delivered on DL USER DATA (TS 38.425 clause 5.4).
+   * Note: uses DRB-based RLC state, keep it on non-SDAP path only. SN%5 is a temporary rate limit until
+   * F1 congestion control policy is implemented.*/
   if (!uedata.callBackSDAP && NR_PDCP_PDU_SN > 0 && NR_PDCP_PDU_SN % 5 == 0) {
-    LOG_D(GTPU, "Create and send DL DATA Delivery status for the previously received PDU, NR_PDCP_PDU_SN: %u \n", NR_PDCP_PDU_SN);
     int rlc_tx_buffer_space = nr_rlc_get_available_tx_space(ctxt.rntiMaybeUEid, rb_id + 3);
-    LOG_D(GTPU, "Available buffer size in RLC for Tx: %d \n", rlc_tx_buffer_space);
+    uint32_t teid = globGtp.te2ue_mapping[ntohl(msgHdr->teid)].outgoing_teid;
+    LOG_D(GTPU,
+          "DL DATA DELIVERY STATUS TX: ue %lx drb %u nr_pdcp_pdu_sn %u desired_buffer_size %u teid 0x%x\n",
+          uedata.ue_id,
+          rb_id,
+          NR_PDCP_PDU_SN,
+          rlc_tx_buffer_space,
+          teid);
     gtpu_extension_header_t ext;
     fillDlDeliveryStatusReport(&ext, rlc_tx_buffer_space, NR_PDCP_PDU_SN);
-    uint32_t teid = globGtp.te2ue_mapping[ntohl(msgHdr->teid)].outgoing_teid;
     gtpv1u_bearer_t bearer = create_bearer(h, addr, teid, 0);
     gtpv1uCreateAndSendMsg(&bearer,
                            GTP_GPDU,
@@ -1295,21 +1305,30 @@ static int Gtpv1uHandleGpdu(int h, uint8_t *msgBuf, uint32_t msgBufLen, const st
   return !GTPNOK;
 }
 
-static bool gtpv1uReceiveHandleMessage(int h)
+static bool gtpv1uReceiveHandleMessage(int h, uint8_t buf[VLEN][BUFSIZE])
 {
-  uint8_t udpData[65536];
-  int udpDataLen;
-  socklen_t from_len;
-  struct sockaddr_in addr;
-  from_len = (socklen_t)sizeof(struct sockaddr_in);
+  struct iovec iovecs[VLEN];
+  struct mmsghdr msgs[VLEN];
+  struct sockaddr_in addr[VLEN];
 
-  if ((udpDataLen = recvfrom(h, udpData, sizeof(udpData), 0, (struct sockaddr *)&addr, &from_len)) < 0) {
+  for (size_t i = 0; i < VLEN; ++i) {
+    iovecs[i].iov_base = buf[i];
+    iovecs[i].iov_len = BUFSIZE;
+    msgs[i].msg_hdr.msg_iov = &iovecs[i];
+    msgs[i].msg_hdr.msg_iovlen = 1;
+    msgs[i].msg_hdr.msg_name = &addr[i];
+    msgs[i].msg_hdr.msg_namelen = (socklen_t)sizeof(struct sockaddr_in);
+  };
+
+  int ret = recvmmsg(h, msgs, VLEN, MSG_WAITFORONE, NULL);
+  if (ret < 0) {
     LOG_E(GTPU, "[%d] Recvfrom failed (%s)\n", h, strerror(errno));
     return false;
-  } else if (udpDataLen == 0) {
-    LOG_W(GTPU, "[%d] Recvfrom returned 0\n", h);
-    return true;
-  } else {
+  }
+
+  for (int i = 0; i < ret; ++i) {
+    int udpDataLen = msgs[i].msg_len;
+    uint8_t *udpData = buf[i];
     if (udpDataLen < (int)sizeof(Gtpv1uMsgHeaderT)) {
       LOG_W(GTPU, "[%d] received malformed gtp packet \n", h);
       return true;
@@ -1325,7 +1344,7 @@ static bool gtpv1uReceiveHandleMessage(int h)
         break;
 
       case GTP_ECHO_REQ:
-        Gtpv1uHandleEchoReq(h, udpData, &addr);
+        Gtpv1uHandleEchoReq(h, udpData, &addr[i]);
         break;
 
       case GTP_ERROR_INDICATION:
@@ -1341,7 +1360,7 @@ static bool gtpv1uReceiveHandleMessage(int h)
         break;
 
       case GTP_GPDU:
-        Gtpv1uHandleGpdu(h, udpData, udpDataLen, &addr);
+        Gtpv1uHandleGpdu(h, udpData, udpDataLen, &addr[i]);
         break;
 
       default:
@@ -1355,7 +1374,9 @@ static bool gtpv1uReceiveHandleMessage(int h)
 static void* gtpv1uReceiver(void *thr)
 {
   gtpThread_t *gt = (gtpThread_t *)thr;
-  while (gtpv1uReceiveHandleMessage(gt->h)) {
+  /* this buffer is 1MB large, ok because at the bottom of the stack */
+  uint8_t buf[VLEN][BUFSIZE];
+  while (gtpv1uReceiveHandleMessage(gt->h, buf)) {
   }
   LOG_W(GTPU, "exiting thread\n");
   return NULL;

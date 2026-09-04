@@ -24,6 +24,7 @@ typedef struct {
   struct rte_ether_addr du_macs[MAX_DU_MACS];
   uint16_t num_macs;
   int numerology;
+  fh_clock_timebase_t clock_timebase;
   fh_recv_cb rx_cb;
   void *rx_user_data;
   fh_timer_cb timer_cb;

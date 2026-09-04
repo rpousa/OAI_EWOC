@@ -184,6 +184,18 @@ static bool set_if_flags(int sock_fd, const char *ifn, short flags)
   return true;
 }
 
+short tuntap_set_up(const char *ifname, int sock_fd)
+{
+  short flags = 0;
+  if (!get_if_flags(sock_fd, ifname, &flags))
+    return -1;
+
+  flags |= IFF_UP;
+  if (!set_if_flags(sock_fd, ifname, flags))
+    return -1;
+
+  return flags;
+}
 
 bool tun_config(const char* ifname, const char *ipv4, const char *ipv6)
 {
@@ -215,11 +227,14 @@ bool tun_config(const char* ifname, const char *ipv4, const char *ipv6)
     close(sock_fd);
   }
 
-  // if successfully set IP addresses: set iterface up, disable ARP, no
-  // multicast, point-to-point
-  if (success)
-    success = set_if_flags(sock_fd, ifname, (IFF_UP | IFF_NOARP | IFF_POINTOPOINT) & ~IFF_MULTICAST);
+  if (success) {
+    const short flags = tuntap_set_up(ifname, sock_fd);
+    success = flags >= 0 && set_if_flags(sock_fd, ifname, (flags | IFF_NOARP | IFF_POINTOPOINT) & ~IFF_MULTICAST);
+  }
 
+  // Note: only the link-local IPv6 address is available at this point.
+  // The global IPv6 address is assigned after receiving a Router Advertisement, which triggers SLAAC
+  // (3GPP TS 23.501, Section 5.8.2.2.3; IETF RFC 4862).
   if (success)
     LOG_A(OIP, "TUN Interface %s successfully configured, IPv4 %s, IPv6 %s\n", ifname, ipv4, ipv6);
   else
@@ -233,11 +248,11 @@ bool tap_config(const char* ifname)
 {
   int sock_fd = socket(AF_INET, SOCK_DGRAM, 0);
   if (sock_fd < 0) {
-    LOG_E(UTIL, "Failed creating socket for interface management: %d, %s\n", errno, strerror(errno));
+    LOG_E(UTIL, "tap_config: failed creating socket %d, %s\n", errno, strerror(errno));
     return false;
   }
 
-  bool success = set_if_flags(sock_fd, ifname, IFF_UP);
+  const bool success = tuntap_set_up(ifname, sock_fd) >= 0;
 
   if (success)
     LOG_A(OIP, "TAP interface %s successfully configured\n", ifname);
@@ -248,9 +263,11 @@ bool tap_config(const char* ifname)
   return success;
 }
 
-void setup_ue_ipv4_route(const char* ifname, int instance_id, const char *ipv4)
+void setup_ue_ipv4_route(const char* ifname, int instance_id, int pdu_session_id, const char *ipv4)
 {
-  int table_id = instance_id - 1 + 10000;
+  /* This needs to be unique per (instance_id, pdu_session_id) */
+  // UE0, PDU1 = 10001, UE1, PDU1 = 10101, UE15, PDU15 = 11515 ...
+  int table_id = 10000 + instance_id * 100 + pdu_session_id;
 
   char command_line[500];
   int res = sprintf(command_line,
@@ -282,6 +299,7 @@ int tuntap_generate_ue_ifname(char *ifname, int flag, int instance_id, int pdu_s
   char pdu_session_string[10];
   snprintf(pdu_session_string, sizeof(pdu_session_string), "p%d", pdu_session_id);
   const char *basename = flag == IFF_TUN ? "oaitun_ue" : "oaitap_ue";
+  // ifname: oaitun_ue<ue_id+1>[p<pdu_session_id>] when not default
   return snprintf(ifname, IFNAMSIZ, "%s%d%s", basename, instance_id + 1, pdu_session_id == -1 ? "" : pdu_session_string);
 }
 
@@ -295,7 +313,7 @@ void tuntap_destroy(const char *dev)
   }
 
   // interface not up => down
-  short flags;
+  short flags = 0;
   bool success = get_if_flags(fd, dev, &flags);
   success = success && set_if_flags(fd, dev, flags & ~IFF_UP);
   if (success) {

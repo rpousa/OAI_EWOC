@@ -50,8 +50,8 @@ int xran_fh_rx_read_slot(ru_info_t *ru, int *frame, int *slot);
 /** @brief Reads RX data PRACH of next slot.
  *
  * @param ru pointer to structure keeping pointers to OAI data.
- * @param frame input for F_RELEASE, output for K_RELEASE.
- * @param slot input for F_RELEASE, output for K_RELEASE. */
+ * @param frame output of the frame which has been read.
+ * @param slot output of the slot which has been read. */
 int xran_fh_rx_prach_read_slot(PHY_VARS_gNB *gNB, ru_info_t *ru, int *frame, int *slot);
 /** @brief Writes TX data (PDSCH) of given slot. */
 int xran_fh_tx_send_slot(ru_info_t *ru, int frame, int slot, uint64_t timestamp);

@@ -9,6 +9,12 @@
 #include "common/utils/LOG/log.h"
 #include "ds/byte_array.h"
 #include "nrppa_includes.h"
+#include "NRPPA_NRPPA-PDU.h"
+#include "NRPPA_TRPInformationItem.h"
+#include "NRPPA_SRSCarrier-List.h"
+#include "NRPPA_SRSType.h"
+#include "common/5g_platform_types.h"
+#include "openair2/COMMON/nrppa_messages_types.h"
 
 #define NRPPA_FIND_PROTOCOLIE_BY_ID(IE_TYPE, ie, container, IE_ID, mandatory)                                                  \
   do {                                                                                                                         \
@@ -41,5 +47,6 @@ typedef struct nrppa_gnb_ue_info_s {
 } nrppa_gnb_ue_info_t;
 
 typedef int (*nrppa_message_decoded_callback)(nrppa_gnb_ue_info_t *nrppa_msg_info, const NRPPA_NRPPA_PDU_t *pdu);
+NRPPA_Cause_t encode_nrppa_cause(nrppa_cause_t cause);
 
 #endif /* NRPPA_COMMON_H_ */

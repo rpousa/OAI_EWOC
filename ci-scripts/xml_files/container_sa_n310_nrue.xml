@@ -81,8 +81,8 @@
 
   <testCase>
     <class>Iperf</class>
-    <desc>iperf (DL/60Mbps/UDP)(30 sec)</desc>
-    <iperf_args>-u -b 60M -t 30 -i 1 -R</iperf_args>
+    <desc>iperf (DL/90Mbps/UDP)(30 sec)</desc>
+    <iperf_args>-u -b 90M -t 30 -i 1 -R</iperf_args>
     <id>oai_ue_caracal</id>
     <svr_id>oc-cn5g</svr_id>
     <iperf_packetloss_threshold>25</iperf_packetloss_threshold>

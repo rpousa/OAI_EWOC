@@ -59,8 +59,9 @@ void nvIPC_send_stop_request()
 }
 
 
-static uint16_t old_sfn = 0;
-static uint16_t old_slot = 0;
+static uint16_t old_sfn[NFAPI_PHY_MAX];
+static uint16_t old_slot[NFAPI_PHY_MAX];
+static nvipc_params_t aerial_params;
 ////////////////////////////////////////////////////////////////////////
 // Handle an RX message
 static int ipc_handle_rx_msg(nv_ipc_msg_t *msg)
@@ -85,10 +86,16 @@ static int ipc_handle_rx_msg(nv_ipc_msg_t *msg)
       return -1;
     }
 
+    // use transport-level cell_id (0-based) from the nvIPC header —
+    // the opaque handle (phy_id) is not reliably populated by cuBB in incoming messages;
+    // stamp it into the packed header so downstream unpackers can rely on it
+    uint8_t phy_id = msg->cell_id;
+    AssertFatal(phy_id < NFAPI_PHY_MAX, "phy_id %d exceeds NFAPI_PHY_MAX %d\n", phy_id, NFAPI_PHY_MAX);
+    ((uint8_t *)msg->msg_buf)[1] = phy_id;
    vnf_p7_t *vnf_p7_config = (vnf_p7_t *)((vnf_info *)vnf_config->user_data)->p7_vnfs->config;
     switch (fapi_msg.message_id) {
       case NFAPI_NR_PHY_MSG_TYPE_PARAM_RESPONSE ... NFAPI_NR_PHY_MSG_TYPE_ERROR_INDICATION:
-        vnf_nr_handle_p4_p5_message(msg->msg_buf, msg->msg_len, 1, vnf_config);
+        vnf_nr_handle_p4_p5_message(msg->msg_buf, msg->msg_len, msg->cell_id, vnf_config);
         break;
       // P7 Messages
       case NFAPI_NR_PHY_MSG_TYPE_RX_DATA_INDICATION: {
@@ -96,6 +103,7 @@ static int ipc_handle_rx_msg(nv_ipc_msg_t *msg)
         int dataBufLen = msg->data_len;
         uint8_t *data_end = msg->data_buf + dataBufLen;
         nfapi_nr_rx_data_indication_t ind;
+        ind.header.phy_id = phy_id;
         ind.header.message_id = fapi_msg.message_id;
         ind.header.message_length = fapi_msg.message_length;
         aerial_unpack_nr_rx_data_indication(
@@ -121,6 +129,7 @@ static int ipc_handle_rx_msg(nv_ipc_msg_t *msg)
         int dataBufLen = msg->data_len;
         uint8_t *data_end = msg->data_buf + dataBufLen;
         nfapi_nr_srs_indication_t ind;
+        ind.header.phy_id = phy_id;
         aerial_unpack_nr_srs_indication(&pReadPackedMessage, end, &pReadData, data_end, &ind);
         if (vnf_p7_config->_public.nr_srs_indication) {
           (vnf_p7_config->_public.nr_srs_indication)(&ind);
@@ -134,22 +143,23 @@ static int ipc_handle_rx_msg(nv_ipc_msg_t *msg)
           NFAPI_TRACE(NFAPI_TRACE_ERROR, "%s: Failed to unpack message\n", __FUNCTION__);
         } else {
           NFAPI_TRACE(NFAPI_TRACE_DEBUG, "%s: Handling NR SLOT Indication\n", __FUNCTION__);
+          ind.header.phy_id = phy_id;
           // check if the sfn/slot unpacked come wrong at any time, should be old + 1 (slot 0 -- 19, sfn 0 -- 1023)
-          // add 1 to current sfn number
-          uint16_t old_slot_plus = ((old_slot + 1) % 20);
-          uint16_t old_sfn_plus = old_slot_plus == 0 ? ((old_sfn + 1) % 1024) : old_sfn;
+          uint16_t old_slot_plus = ((old_slot[phy_id] + 1) % 20);
+          uint16_t old_sfn_plus = old_slot_plus == 0 ? ((old_sfn[phy_id] + 1) % 1024) : old_sfn[phy_id];
           if (old_slot_plus != ind.slot || old_sfn_plus != ind.sfn) {
             LOG_E(NFAPI_VNF,
                   "\n============================================================================\n"
-                  "sfn slot doesn't match unpacked one! L2->L1 %d.%d  vs L1->L2 %d.%d  \n"
+                  "sfn slot doesn't match unpacked one! PHY %d L2->L1 %d.%d  vs L1->L2 %d.%d  \n"
                   "============================================================================\n",
-                  old_sfn,
-                  old_slot,
+                  phy_id,
+                  old_sfn[phy_id],
+                  old_slot[phy_id],
                   ind.sfn,
                   ind.slot);
           }
-          old_sfn = ind.sfn;
-          old_slot = ind.slot;
+          old_sfn[phy_id] = ind.sfn;
+          old_slot[phy_id] = ind.slot;
           if (vnf_p7_config->_public.nr_slot_indication) {
             (vnf_p7_config->_public.nr_slot_indication)(&ind);
           }
@@ -210,7 +220,7 @@ bool aerial_nr_send_p5_message(vnf_t *vnf, uint16_t p5_idx, nfapi_nr_p4_p5_messa
   if (pnf) {
     // Create the message
     nv_ipc_msg_t send_msg = {.msg_id = msg->message_id,
-                             .cell_id = 0,
+                             .cell_id = msg->phy_id,
                              // By default, P5 uses only message pool.
                              .data_pool = NV_IPC_MEMPOOL_CPU_MSG,
                              .data_len = 0,
@@ -329,11 +339,15 @@ void *epoll_recv_task(void *arg)
   if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, ev.data.fd, &ev) == -1) {
     LOG_E(NFAPI_VNF, "%s epoll_ctl failed\n", __func__);
   }
-  // From here on out the thread is ready to receive data, simulate the reception
-  // of a PARAM.response to get the VNF to send a CONFIG.request
-  nfapi_nr_param_response_scf_t resp_msg = {.header.message_id = NFAPI_NR_PHY_MSG_TYPE_PARAM_RESPONSE};
-  nfapi_vnf_config_t * vnf_config = get_config();
-  vnf_config->nr_param_resp(vnf_config, 1, &resp_msg);
+  // Simulate one PARAM.response per configured PHY to trigger a CONFIG.request
+  // for each cell.  aerial_params is populated by nvIPC_Init before this thread starts.
+  // TODO receive the phy_id, maybe receive this PARAM.response dummy as an argument
+  nfapi_vnf_config_t *vnf_config = get_config();
+  for (int i = 0; i < aerial_params.num_phys; i++) {
+    nfapi_nr_param_response_scf_t resp_msg = {.header.message_id = NFAPI_NR_PHY_MSG_TYPE_PARAM_RESPONSE,
+                                             .header.phy_id = i};
+    vnf_config->nr_param_resp(vnf_config, i, &resp_msg);
+  }
   while (((vnf_t *)vnf_config)->terminate == false) {
     LOG_D(NFAPI_VNF, "%s: epoll_wait fd_rx=%d ...\n", __func__, ipc_rx_event_fd);
 
@@ -405,6 +419,7 @@ int nvIPC_Init(nvipc_params_t nvipc_params_s)
     return -1;
   }
   LOG_I(NFAPI_VNF, "%s: create IPC interface successful\n", __func__);
+  aerial_params = nvipc_params_s;
   sleep(1);
   create_recv_thread(nvipc_params_s.nvipc_poll_core);
   return 0;
@@ -414,7 +429,6 @@ int oai_fapi_ul_tti_req(nfapi_nr_ul_tti_request_t *ul_tti_req)
 {
   nfapi_vnf_p7_config_t *p7_config = get_p7_vnf_config();
 
-  ul_tti_req->header.phy_id = 1; // DJP HACK TODO FIXME - need to pass this around!!!!
   ul_tti_req->header.message_id = NFAPI_NR_PHY_MSG_TYPE_UL_TTI_REQUEST;
 
   bool retval = p7_config->send_p7_msg(get_p7_vnf(), &ul_tti_req->header);
@@ -434,7 +448,6 @@ int oai_fapi_ul_tti_req(nfapi_nr_ul_tti_request_t *ul_tti_req)
 int oai_fapi_ul_dci_req(nfapi_nr_ul_dci_request_t *ul_dci_req)
 {
   nfapi_vnf_p7_config_t *p7_config = get_p7_vnf_config();
-  ul_dci_req->header.phy_id = 1; // DJP HACK TODO FIXME - need to pass this around!!!!
   ul_dci_req->header.message_id = NFAPI_NR_PHY_MSG_TYPE_UL_DCI_REQUEST;
 
   bool retval = p7_config->send_p7_msg(get_p7_vnf(), &ul_dci_req->header);
@@ -449,7 +462,6 @@ int oai_fapi_ul_dci_req(nfapi_nr_ul_dci_request_t *ul_dci_req)
 int oai_fapi_tx_data_req(nfapi_nr_tx_data_request_t *tx_data_req)
 {
   nfapi_vnf_p7_config_t *p7_config = get_p7_vnf_config();
-  tx_data_req->header.phy_id = 1; // DJP HACK TODO FIXME - need to pass this around!!!!
   tx_data_req->header.message_id = NFAPI_NR_PHY_MSG_TYPE_TX_DATA_REQUEST;
 
   bool retval = p7_config->send_p7_msg(get_p7_vnf(), &tx_data_req->header);
@@ -466,7 +478,6 @@ int oai_fapi_dl_tti_req(nfapi_nr_dl_tti_request_t *dl_config_req)
 {
   nfapi_vnf_p7_config_t *p7_config = get_p7_vnf_config();
   dl_config_req->header.message_id = NFAPI_NR_PHY_MSG_TYPE_DL_TTI_REQUEST;
-  dl_config_req->header.phy_id = 1; // DJP HACK TODO FIXME - need to pass this around!!!!
 
   bool retval = p7_config->send_p7_msg(get_p7_vnf(), &dl_config_req->header);
   dl_config_req->dl_tti_request_body.nPDUs = 0;
@@ -478,10 +489,11 @@ int oai_fapi_dl_tti_req(nfapi_nr_dl_tti_request_t *dl_config_req)
   return retval;
 }
 
-int oai_fapi_send_end_request(uint32_t frame, uint32_t slot)
+int oai_fapi_send_end_request(uint32_t frame, uint32_t slot, uint8_t phy_id)
 {
   nfapi_vnf_p7_config_t *p7_config = get_p7_vnf_config();
-  nfapi_nr_slot_indication_scf_t nr_slot_resp = {.header.message_id = 0x8F, .sfn = frame, .slot = slot};
+  nfapi_nr_slot_indication_scf_t nr_slot_resp = {
+      .header.message_id = 0x8F, .header.phy_id = phy_id, .sfn = frame, .slot = slot};
 
   bool retval = p7_config->send_p7_msg(get_p7_vnf(), &nr_slot_resp.header);
   if (!retval) {

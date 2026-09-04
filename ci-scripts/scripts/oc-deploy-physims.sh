@@ -9,7 +9,7 @@ OC_RELEASE=${2}
 IMG_TAG=${3}
 OAI_DIR=${4}
 
-cat /opt/oc-password | oc login -u oaicicd --server https://api.oai.cs.eurecom.fr:6443 > /dev/null
+cat /opt/oc-password | oc login -u oaicicd --server https://api.oai.cs.eurecom.fr:6443 --insecure-skip-tls-verify > /dev/null
 set -x
 oc project ${OC_NS} > /dev/null
 oc tag oaicicd-ran/oai-physim:${IMG_TAG} ${OC_NS}/oai-physim:${IMG_TAG}

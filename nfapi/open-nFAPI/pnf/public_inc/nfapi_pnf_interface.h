@@ -926,6 +926,13 @@ int nfapi_pnf_p7_rach_ind(nfapi_pnf_p7_config_t* config, nfapi_rach_indication_t
 int nfapi_pnf_p7_srs_ind(nfapi_pnf_p7_config_t* config, nfapi_srs_indication_t* ind);
 int nfapi_pnf_p7_nr_srs_ind(nfapi_pnf_p7_config_t* config, nfapi_nr_srs_indication_t* ind);
 
+/*! Send the SRS ToA Vendor Extension: Introduced for positioning
+ * \param config A pointer to a PNF P7 config
+ * \param ind A pointer to the srs toa vendor ext indication message structure
+ * \return 0 means success, -1 means failure
+ */
+int nfapi_pnf_p7_nr_srs_toa_vendor_ext_ind(nfapi_pnf_p7_config_t* config, nfapi_nr_srs_toa_vendor_ext_indication_t* ind);
+
 /*! Send the SR.indication
  * \param config A pointer to a PNF P7 config
  * \param ind A pointer to the sr indication message structure

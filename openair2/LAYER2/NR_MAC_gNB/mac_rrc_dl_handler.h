@@ -22,5 +22,11 @@ void ue_context_modification_refuse(const f1ap_ue_context_modif_refuse_t *refuse
 void ue_context_release_command(const f1ap_ue_context_rel_cmd_t *cmd);
 
 void dl_rrc_message_transfer(const f1ap_dl_rrc_message_t *dl_rrc);
+void f1_paging(const f1ap_paging_t *paging);
+
+void trp_information_request(const f1ap_trp_information_req_t *req);
+void positioning_information_request(const f1ap_positioning_information_req_t *req);
+void positioning_activation_request(const f1ap_positioning_activation_req_t *req);
+void positioning_measurement_request(const f1ap_positioning_measurement_req_t *req);
 
 #endif /* MAC_RRC_DL_HANDLER_H */

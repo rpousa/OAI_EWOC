@@ -10,6 +10,8 @@
 #include "f1ap_cu_ue_context_management.h"
 #include "f1ap_du_ue_context_management.h"
 #include "f1ap_du_paging.h"
+#include "f1ap_du_positioning.h"
+#include "f1ap_cu_positioning.h"
 
 #include "F1AP_F1AP-PDU.h"
 #include "F1AP_InitiatingMessage.h"
@@ -44,6 +46,41 @@ static const f1ap_message_processing_t f1ap_messages_processing[][3] = {
     {0, 0, 0}, /* PWSCancel */
     {0, 0, 0}, /* PWSRestartIndication */
     {0, 0, 0}, /* PWSFailureIndication */
+    {0, 0, 0}, /* GNBDUStatusIndication */
+    {0, 0, 0}, /* RRCDeliveryReport */
+    {0, 0, 0}, /* F1Removal */
+    {0, 0, 0}, /* NetworkAccessRateReduction */
+    {0, 0, 0}, /* TraceStart */
+    {0, 0, 0}, /* DeactivateTrace */
+    {0, 0, 0}, /* DUCURadioInformationTransfer */
+    {0, 0, 0}, /* CUDURadioInformationTransfer */
+    {0, 0, 0}, /* BAPMappingConfiguration */
+    {0, 0, 0}, /* GNBDUResourceConfiguration */
+    {0, 0, 0}, /* IABTNLAddressAllocation */
+    {0, 0, 0}, /* IABUPConfigurationUpdate */
+    {0, 0, 0}, /* resourceStatusReportingInitiation */
+    {0, 0, 0}, /* resourceStatusReporting */
+    {0, 0, 0}, /* accessAndMobilityIndication */
+    {0, 0, 0}, /* accessSuccess */
+    {0, 0, 0}, /* cellTrafficTrace */
+    {DU_handle_POSITIONING_MEASUREMENT_REQUEST, CU_handle_POSITIONING_MEASUREMENT_RESPONSE, 0}, /* PositioningMeasurementExchange */
+    {0, 0, 0}, /* PositioningAssistanceInformationControl */
+    {0, 0, 0}, /* PositioningAssistanceInformationFeedback */
+    {0, 0, 0}, /* PositioningMeasurementReport */
+    {0, 0, 0}, /* PositioningMeasurementAbort */
+    {0, 0, 0}, /* PositioningMeasurementFailureIndication */
+    {0, 0, 0}, /* PositioningMeasurementUpdate */
+    {DU_handle_TRP_INFORMATION_REQUEST, CU_handle_TRP_INFORMATION_RESPONSE, 0}, /* TRPInformationExchange */
+    {DU_handle_POSITIONING_INFORMATION_REQUEST, CU_handle_POSITIONING_INFORMATION_RESPONSE, 0}, /* PositioningInformationExchange */
+    {DU_handle_POSITIONING_ACTIVATION_REQUEST, CU_handle_POSITIONING_ACTIVATION_RESPONSE, 0}, /* PositioningActivation */
+    {0, 0, 0}, /* PositioningDeactivation */
+    {0, 0, 0}, /* E_CIDMeasurementInitiation */
+    {0, 0, 0}, /* E_CIDMeasurementFailureIndication */
+    {0, 0, 0}, /* E_CIDMeasurementReport */
+    {0, 0, 0}, /* E_CIDMeasurementTermination */
+    {0, 0, 0}, /* PositioningInformationUpdate */
+    {0, 0, 0}, /* ReferenceTimeInformationReport */
+    {0, 0, 0}, /* ReferenceTimeInformationReportingControl */
 };
 
 const char *f1ap_direction2String(int f1ap_dir) {

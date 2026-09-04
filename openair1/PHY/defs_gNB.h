@@ -56,7 +56,7 @@ typedef struct {
 typedef struct {
   int dump_frame;
   int round_trials[8];
-  int total_bytes_tx;
+  uint64_t total_bytes_tx;
   int total_bytes_rx;
   int current_Qm;
   int current_RI;
@@ -110,6 +110,12 @@ typedef struct {
   uint8_t *b;
   /// Pointers to transport block segments
   uint8_t **c;
+#ifdef LDPC_CUDA
+  /// Pointers to transport block segments (contains pointers in c above)
+  uint8_t *c_devh;
+  /// Pointers to transport block segments (GPU mapping)
+  uint8_t *c_dev;
+#endif
   /// Interleaver outputs
   uint8_t *f;
   /// REs unavailable for DLSCH (overlapping with PTRS, CSIRS etc.)
@@ -181,6 +187,11 @@ typedef struct {
   uint32_t slot;
   /// ULSCH PDU
   nfapi_nr_pusch_pdu_t pusch_pdu;
+  // Multi-User (MU) group index
+  // -1 : unallocated
+  int16_t mu_group_idx;
+  // 1 for Single-User (SU) and > 1 is MU
+  uint8_t mu_group_size;
 } NR_gNB_PUSCH_job_t;
 
 typedef struct {
@@ -244,6 +255,10 @@ typedef struct {
   /// \brief llr values.
   /// - first index: ? [0..1179743] (hard coded)
   int16_t *llr;
+#ifdef LDPC_CUDA
+  /// \brief llr values link to device memory
+  int16_t *llr_dev;
+#endif
   // PTRS symbol index, to be updated every PTRS symbol within a slot.
   uint8_t ptrs_symbol_index;
   /// bit mask of PT-RS ofdm symbol indicies
@@ -417,26 +432,19 @@ typedef struct PHY_VARS_gNB_s {
   time_stats_t l1_rx_proc;
 
   time_stats_t phy_proc_tx;
+  time_stats_t gnb_tx_procedures_stats;
+  time_stats_t ru_tx_func_stats;
   time_stats_t phy_proc_rx;
   time_stats_t rx_prach;
 
   time_stats_t dlsch_encoding_stats;
+  time_stats_t dlsch_ldpc_encode_stats;
   time_stats_t dlsch_modulation_stats;
   time_stats_t dlsch_scrambling_stats;
   time_stats_t dlsch_pdsch_generation_stats;
   time_stats_t dlsch_layer_mapping_stats;
   time_stats_t dlsch_resource_mapping_stats;
   time_stats_t dlsch_precoding_stats;
-  time_stats_t tinput;
-  time_stats_t tinput_memcpy;
-  time_stats_t tprep;
-  time_stats_t tparity;
-  time_stats_t toutput;
-  time_stats_t tconcat;
-
-  time_stats_t dlsch_rate_matching_stats;
-  time_stats_t dlsch_interleaving_stats;
-  time_stats_t dlsch_segmentation_stats;
 
   time_stats_t dci_generation_stats;
   time_stats_t phase_comp_stats;
@@ -446,9 +454,6 @@ typedef struct PHY_VARS_gNB_s {
   time_stats_t ul_indication_stats;
   time_stats_t slot_indication_stats;
   time_stats_t ulsch_decoding_stats;
-  time_stats_t ts_deinterleave;
-  time_stats_t ts_rate_unmatch;
-  time_stats_t ts_seg_prep;
   time_stats_t ts_ldpc_decode;
   time_stats_t ulsch_deinterleaving_stats;
   time_stats_t ulsch_channel_estimation_stats;

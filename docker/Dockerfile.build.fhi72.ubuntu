@@ -9,7 +9,8 @@
 
 FROM ran-base:latest AS ran-base
 
-ARG xran_VERSION=11.1.1
+ARG DPDK_VERSION=22.11.11
+ARG xran_VERSION=11.1.6
 ARG E2AP_VERSION=E2AP_V3
 ARG KPM_VERSION=KPM_V3_00
 ENV DEBIAN_FRONTEND=noninteractive
@@ -32,7 +33,6 @@ RUN apt-get update && \
 
 RUN rm -Rf /oai-ran
 WORKDIR /oai-ran
-COPY . .
 
 RUN git clone https://github.com/CESNET/libyang.git && \
     cd libyang && \
@@ -67,9 +67,9 @@ RUN git clone https://github.com/CESNET/libnetconf2.git && \
      make install
 
 ## Download and build DPDK
-RUN wget --no-verbose http://fast.dpdk.org/rel/dpdk-24.11.4.tar.xz && \
-    tar -xf dpdk-24.11.4.tar.xz && \
-    cd dpdk-stable-24.11.4 && \
+RUN wget --no-verbose http://fast.dpdk.org/rel/dpdk-$DPDK_VERSION.tar.xz && \
+    tar -xf dpdk-$DPDK_VERSION.tar.xz && \
+    cd dpdk-stable-$DPDK_VERSION && \
     meson build && \
     ninja -C build && \
     ninja install -C build
@@ -79,7 +79,9 @@ RUN git clone https://github.com/openairinterface/o-du-phy.git /opt/phy && \
     cd /opt/phy && \
     git checkout $xran_VERSION &&\
     cd /opt/phy/fhi_lib/lib && \
-    WIRELESS_SDK_TOOLCHAIN=gcc RTE_SDK=/oai-ran/dpdk-stable-24.11.4/ XRAN_DIR=/opt/phy/fhi_lib make XRAN_LIB_SO=1
+    WIRELESS_SDK_TOOLCHAIN=gcc RTE_SDK=/oai-ran/dpdk-stable-$DPDK_VERSION/ XRAN_DIR=/opt/phy/fhi_lib make XRAN_LIB_SO=1
+
+COPY . .
 
 FROM ran-base AS ran-build-fhi72
 ## Build and install OAI

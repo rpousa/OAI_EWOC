@@ -20,40 +20,14 @@
 #include <stdbool.h>
 #include "types.h"
 
-#ifdef PHY_DBG_DEV_TST
-  #define PHY_DBG_DEV_TST_PRINTF(...)      printf(__VA_ARGS__)
-#else
-  #define PHY_DBG_DEV_TST_PRINTF(...)
-#endif
-
 /* to set for UE capabilities */
-#define MAX_NR_OF_SRS_RESOURCE_SET         (1)
 #define MAX_NR_OF_SRS_RESOURCES_PER_SET    (1)
 
 #define NR_NUMBER_OF_SUBFRAMES_PER_FRAME   (10)
 #define MAX_NROFSRS_PORTS                  (4)
 
-/* TS 38.211 Table 4.3.2-1: Number of OFDM symbols per slot, slots per frame, and slots per subframe for normal cyclic prefix */
-#define MU_NUMBER                          (5)
-static const uint8_t N_slot_subframe[MU_NUMBER] = {1, 2, 4, 8, 16};
-
-#define  NB_DL_DATA_TO_UL_ACK              (8) /* size of table TS 38.213 Table 9.2.3-1 */
-
 #define NR_PRACH_SEQ_LEN_L 839
 #define NR_PRACH_SEQ_LEN_S 139
-
-/***********************************************************************
-*
-* FUNCTIONALITY    :  System information type 1
-*
-* DESCRIPTION      :  parameters provided by system information 1
-*
-************************************************************************/
-typedef struct {
-
-  int N_BWP_SIZE; /* size of bandwidth part */
-}
-SystemInformationBlockType1_nr_t;
 
 /***********************************************************************
 *
@@ -63,78 +37,16 @@ SystemInformationBlockType1_nr_t;
 *
 ************************************************************************/
 
-#define NR_TDD_DOWNLINK_SLOT               (0x0000)
-#define NR_TDD_UPLINK_SLOT                 (0x3FFF) /* uplink bitmap for each symbol, there are 14 symbols per slots */
-#define NR_TDD_SET_ALL_SYMBOLS             (0x3FFF)
-
 #define NR_DOWNLINK_SLOT                   (0x01)
 #define NR_UPLINK_SLOT                     (0x02)
 #define NR_MIXED_SLOT                      (0x03)
 #define NR_SIDELINK_SLOT NR_UPLINK_SLOT
-
-#define FRAME_DURATION_MICRO_SEC           (10000)  /* frame duration in microsecond */
 
 enum nr_Link {
   link_type_dl,
   link_type_ul,
   link_type_sl,
 };
-
-typedef enum {
-  ms0p5    = 500,                 /* duration is given in microsecond */
-  ms0p625  = 625,
-  ms1      = 1000,
-  ms1p25   = 1250,
-  ms2      = 2000,
-  ms2p5    = 2500,
-  ms5      = 5000,
-  ms10     = 10000,
-} dl_UL_TransmissionPeriodicity_t;
-
-typedef struct TDD_UL_DL_configCommon_s {
-  /// Reference SCS used to determine the time domain boundaries in the UL-DL pattern which must be common across all subcarrier specific
-  /// virtual carriers, i.e., independent of the actual subcarrier spacing using for data transmission.
-  /// Only the values 15 or 30 kHz  (<6GHz), 60 or 120 kHz (>6GHz) are applicable.
-  /// Corresponds to L1 parameter 'reference-SCS' (see 38.211, section FFS_Section)
-  /// \ subcarrier spacing
-  uint8_t referenceSubcarrierSpacing;
-  /// \ Periodicity of the DL-UL pattern. Corresponds to L1 parameter 'DL-UL-transmission-periodicity' (see 38.211, section FFS_Section)
-  dl_UL_TransmissionPeriodicity_t dl_UL_TransmissionPeriodicity;
-  /// \ Number of consecutive full DL slots at the beginning of each DL-UL pattern.
-  /// Corresponds to L1 parameter 'number-of-DL-slots' (see 38.211, Table 4.3.2-1)
-  uint8_t nrofDownlinkSlots;
-  /// \ Number of consecutive DL symbols in the beginning of the slot following the last full DL slot (as derived from nrofDownlinkSlots).
-  /// If the field is absent or released, there is no partial-downlink slot.
-  /// Corresponds to L1 parameter 'number-of-DL-symbols-common' (see 38.211, section FFS_Section).
-  uint8_t nrofDownlinkSymbols;
-  /// \ Number of consecutive full UL slots at the end of each DL-UL pattern.
-  /// Corresponds to L1 parameter 'number-of-UL-slots' (see 38.211, Table 4.3.2-1)
-  uint8_t nrofUplinkSlots;
-  /// \ Number of consecutive UL symbols in the end of the slot preceding the first full UL slot (as derived from nrofUplinkSlots).
-  /// If the field is absent or released, there is no partial-uplink slot.
-  /// Corresponds to L1 parameter 'number-of-UL-symbols-common' (see 38.211, section FFS_Section)
-  uint8_t nrofUplinkSymbols;
-  /// \ for setting a sequence
-  struct TDD_UL_DL_configCommon_s *p_next;
-} TDD_UL_DL_configCommon_t;
-
-typedef struct TDD_UL_DL_SlotConfig_s {
-  /// \ Identifies a slot within a dl-UL-TransmissionPeriodicity (given in tdd-UL-DL-configurationCommon)
-  uint16_t slotIndex;
-  /// \ The direction (downlink or uplink) for the symbols in this slot. "allDownlink" indicates that all symbols in this slot are used
-  /// for downlink; "allUplink" indicates that all symbols in this slot are used for uplink; "explicit" indicates explicitly how many symbols
-  /// in the beginning and end of this slot are allocated to downlink and uplink, respectively.
-  /// Number of consecutive DL symbols in the beginning of the slot identified by slotIndex.
-  /// If the field is absent the UE assumes that there are no leading DL symbols.
-  /// Corresponds to L1 parameter 'number-of-DL-symbols-dedicated' (see 38.211, section FFS_Section)
-  uint16_t nrofDownlinkSymbols;
-  /// Number of consecutive UL symbols in the end of the slot identified by slotIndex.
-  /// If the field is absent the UE assumes that there are no trailing UL symbols.
-  /// Corresponds to L1 parameter 'number-of-UL-symbols-dedicated' (see 38.211, section FFS_Section)
-  uint16_t nrofUplinkSymbols;
-  /// \ for setting a sequence
-  struct TDD_UL_DL_SlotConfig_s *p_next_TDD_UL_DL_SlotConfig;
-} TDD_UL_DL_SlotConfig_t;
 
 /***********************************************************************
 *
@@ -294,12 +206,6 @@ typedef struct {
   srs_PowerControlAdjustmentStates_t srs_PowerControlAdjustmentStates;
 } SRS_ResourceSet_t;
 
-typedef struct {
-  uint8_t active_srs_Resource_Set;  /* ue implementation specific */
-  uint8_t number_srs_Resource_Set;  /* ue implementation specific */
-  SRS_ResourceSet_t *p_SRS_ResourceSetList[MAX_NR_OF_SRS_RESOURCE_SET]; /* ue implementation specific */
-} SRS_NR;
-
 /***********************************************************************
 *
 * FUNCTIONALITY    :  Physical Downlink Shared Channel PDSCH
@@ -307,8 +213,6 @@ typedef struct {
 * DESCRIPTION      :  interface description for PSDCH configuration
 *
 ************************************************************************/
-
-#define MAX_NR_OF_UL_ALLOCATIONS            (16)
 
 typedef enum {
   pdsch_dmrs_pos0 = 0,
@@ -324,57 +228,12 @@ typedef enum {
 * DESCRIPTION      :  configuration for PUSCH
 *
 ************************************************************************/
-typedef enum {
-  txConfig_codebook = 1,
-  txConfig_nonCodebook = 2
-} txConfig_t;
-typedef enum {
-  f_hop_mode1 = 1,
-  f_hop_mode2 = 2
-} frequencyHopping_t;
-typedef enum{
-  ul_resourceAllocationType0 = 1,
-  ul_resourceAllocationType1 = 2,
-  ul_dynamicSwitch = 3
-} ul_resourceAllocation_t;
-typedef enum{
-  ul_rgb_config1 = 1,
-  ul_rgb_config2 = 2
-} ul_rgb_Size_t;
 /* Aligned values of this enum to other tranform precoder enums 
  * eg: as defined in fapi_nr_ue_interface.h for transform_precoder_t*/
 typedef enum { 
   transformPrecoder_enabled = 0,
   transformPrecoder_disabled = 1
 } transformPrecoder_t;
-typedef enum {
-  codebookSubset_fullyAndPartialAndNonCoherent = 1,
-  codebookSubset_partialAndNonCoherent = 2,
-  codebookSubset_nonCoherent = 3
-} codebookSubset_t;
-typedef enum{
-  betaOffset_dynamic = 1,
-  betaOffset_semiStatic = 2
-}betaOffset_type_t;
-typedef struct{
-
-} betaOffset_t;
-typedef struct {
-  betaOffset_type_t betaOffset_type;
-  betaOffset_t betaOffset;
-} uci_onPusch_t;
-
-/***********************************************************************
-*
-* FUNCTIONALITY    :  Pucch Power Control
-*
-* DESCRIPTION      :  configuration for pucch power control
-*
-************************************************************************/
-
-#define NUMBER_PUCCH_FORMAT_NR                    (5)
-
-typedef int8_t power_level_t;      /* INTEGER (-16..15) */
 
 
 /***********************************************************************
@@ -394,75 +253,6 @@ typedef enum {
   disable = 2,
 } pucch_GroupHopping_t;
 
-typedef struct {
-/*
-  PUCCH-ConfigCommon ::=          SEQUENCE {
-  -- An entry into a 16-row table where each row configures a set of cell-specific PUCCH resources/parameters. The UE uses
-  -- those PUCCH resources during initial access on the initial uplink BWP. Once the network provides a dedicated PUCCH-Config
-  -- for that bandwidth part the UE applies that one instead of the one provided in this field.
-  -- Corresponds to L1 parameter 'PUCCH-resource-common' (see 38.213, section 9.2)
-  pucch-ResourceCommon          BIT STRING (SIZE (4))                             OPTIONAL, -- Need R
-*/
-  uint16_t pucch_ResourceCommon;
-/*
-  -- Configuration of group- and sequence hopping for all the PUCCH formats 0, 1, 3 and 4. "neither" implies neither group
-  -- or sequence hopping is enabled. "enable" enables group hopping and disables sequence hopping. "disable"” disables group
-  -- hopping and enables sequence hopping. Corresponds to L1 parameter 'PUCCH-GroupHopping' (see 38.211, section 6.4.1.3)
-  pucch-GroupHopping            ENUMERATED { neither, enable, disable },
-*/
-  pucch_GroupHopping_t   pucch_GroupHopping;
-/*
-  -- Cell-Specific scrambling ID for group hoppping and sequence hopping if enabled.
-  -- Corresponds to L1 parameter 'HoppingID' (see 38.211, section 6.3.2.2)
-  hoppingId               BIT STRING (SIZE (10))                              OPTIONAL,   -- Need R
-*/
-  uint32_t hoppingId;
-/*
-  -- Power control parameter P0 for PUCCH transmissions. Value in dBm. Only even values (step size 2) allowed.
-  -- Corresponds to L1 parameter 'p0-nominal-pucch' (see 38.213, section 7.2)
-  p0-nominal                INTEGER (-202..24)                                OPTIONAL,   -- Need R
-*/
-  int8_t p0_nominal;
-} PUCCH_ConfigCommon_nr_t;
-
-#define MAX_NB_OF_PUCCH_RESOURCE_SETS             (4)
-#define MAX_NB_OF_PUCCH_RESOURCES_PER_SET         (32)
-#define MAX_NB_OF_PUCCH_RESOURCES_PER_SET_NOT_0   (8)
-#define MAX_NB_OF_PUCCH_RESOURCES                 (128)
-#define NB_INITIAL_PUCCH_RESOURCE                 (16)
-#define MAX_PUCCH_RESOURCE_INDICATOR              (8)
-#define MAX_NB_CYCLIC_SHIFT                       (4)
-#define MAX_NR_OF_SPATIAL_RELATION_INFOS          (8)
-
-typedef enum {
-  pucch_format0_nr  = 1,
-  pucch_format1_nr  = 2,
-  pucch_format2_nr  = 3,
-  pucch_format3_nr  = 4,
-  pucch_format4_nr  = 5
-} pucch_format_nr_t;
-
-typedef enum {
-  feature_disabled = 0,
-  feature_enabled  = 1,
-} feature_status_t;
-
-typedef enum {
-  disable_feature = 0,
-  enable_feature  = 1
-} enable_feature_t;
-
-typedef enum {
-  zeroDot08 = 0,
-  zeroDot15 = 1,
-  zeroDot25 = 2,
-  zeroDot35 = 3,
-  zeroDot45 = 4,
-  zeroDot60 = 5,
-  zeroDot80 = 6,
-  reserved  = 7
-} PUCCH_MaxCodeRate_t;
-
 /***********************************************************************
 *
 * FUNCTIONALITY    :  Scheduling Request Configuration (SR)
@@ -472,11 +262,6 @@ typedef enum {
 *                     in a PUCCH, it should used its configuration.
 *
 ************************************************************************/
-
-#define MAX_NR_OF_SR_CONFIG_PER_CELL_GROUP          (8)
-
-#define NB_SR_PERIOD    (15)
-
 
 typedef enum {
   sr_sym2     = 0,
@@ -526,10 +311,5 @@ typedef struct {
   uint8_t                resource;
 
 } SchedulingRequestResourceConfig_t;
-
-typedef struct {
-  int                                active_sr_id;
-  SchedulingRequestResourceConfig_t  *sr_ResourceConfig[MAX_NR_OF_SR_CONFIG_PER_CELL_GROUP];
-} scheduling_request_config_t;
 
 #endif /* PHY_IMPL_DEFS_NR_H */

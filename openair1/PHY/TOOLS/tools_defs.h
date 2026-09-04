@@ -22,6 +22,23 @@
 #include "common/utils/utils.h"
 #include "common/utils/LOG/log.h"
 
+#if defined(__x86_64__) || defined(__i386__)
+// Pull in only the specific AVX512 intrinsics used by rotate_cpx_vector_avx512() below, rather
+// than the <simde/x86/avx512.h> umbrella header: the latter drags in
+// simde/x86/svml.h -> simde/simde-complex.h -> the C++ standard <complex> header, which cannot be
+// parsed inside the extern "C" blocks some C++ callers (e.g. benchmark_rotate_vector.cpp) use to
+// include this file.
+#include <simde/x86/avx512/types.h>
+#include <simde/x86/avx512/set1.h>
+#include <simde/x86/avx512/set.h>
+#include <simde/x86/avx512/loadu.h>
+#include <simde/x86/avx512/storeu.h>
+#include <simde/x86/avx512/madd.h>
+#include <simde/x86/avx512/srai.h>
+#include <simde/x86/avx512/packs.h>
+#include <simde/x86/avx512/shuffle.h>
+#endif
+
 #define simd_q15_t simde__m128i
 #define shiftright_int16(a,shift) simde_mm_srai_epi16(a,shift)
 #define set1_int16(a) simde_mm_set1_epi16(a)
@@ -42,7 +59,7 @@ extern "C" {
     int dim2;
     int dim3;
     int dim4;
-    uint8_t data[] __attribute__((aligned(32)));
+    uint8_t data[] __attribute__((aligned(64)));
   } fourDimArray_t;
 
   static inline fourDimArray_t *allocateFourDimArray(int elmtSz, int dim1, int dim2, int dim3, int dim4)
@@ -212,6 +229,13 @@ extern "C" {
     return (c32_t) {
       .r = ((a.r * b.r - a.i * b.i) >> Shift) + c.r,
       .i = ((a.r * b.i + a.i * b.r) >> Shift) + c.i
+    };
+  }
+
+  __attribute__((always_inline)) inline c64_t c64x16maddConjShift(const c16_t a, const c16_t b, const c64_t c, const int Shift) {
+    return (c64_t) {
+      .r = (((int64_t)a.r * b.r + (int64_t)a.i * b.i) >> Shift) + c.r,
+      .i = (((int64_t)a.r * b.i - (int64_t)a.i * b.r) >> Shift) + c.i
     };
   }
 
@@ -513,6 +537,17 @@ void init_fft(uint16_t size,
               uint8_t logsize,
               uint16_t *rev);
 
+
+#ifdef __aarch64__
+
+/*
+ * Legacy DFT/IDFT sizes for AArch64.
+ *
+ * Keep the previous implementation on ARM64 because some of the newly
+ * generated DFT/IDFT functions are not implemented for this
+ * architecture.
+ */
+
 #define FOREACH_DFTSZ(SZ_DEF) \
   SZ_DEF(12)                  \
   SZ_DEF(24)                  \
@@ -605,6 +640,164 @@ void init_fft(uint16_t size,
   SZ_DEF(49152)                \
   SZ_DEF(65536)                \
   SZ_DEF(98304)
+
+#else
+
+#define FOREACH_DFTSZ(SZ_DEF) \
+  SZ_DEF(12)                  \
+  SZ_DEF(16)                  \
+  SZ_DEF(24)                  \
+  SZ_DEF(32)                  \
+  SZ_DEF(36)                  \
+  SZ_DEF(48)                  \
+  SZ_DEF(60)                  \
+  SZ_DEF(64)                  \
+  SZ_DEF(72)                  \
+  SZ_DEF(96)                  \
+  SZ_DEF(108)                 \
+  SZ_DEF(120)                 \
+  SZ_DEF(128)                 \
+  SZ_DEF(144)                 \
+  SZ_DEF(180)                 \
+  SZ_DEF(192)                 \
+  SZ_DEF(216)                 \
+  SZ_DEF(240)                 \
+  SZ_DEF(256)                 \
+  SZ_DEF(288)                 \
+  SZ_DEF(300)                 \
+  SZ_DEF(324)                 \
+  SZ_DEF(360)                 \
+  SZ_DEF(384)                 \
+  SZ_DEF(432)                 \
+  SZ_DEF(480)                 \
+  SZ_DEF(512)                 \
+  SZ_DEF(540)                 \
+  SZ_DEF(576)                 \
+  SZ_DEF(600)                 \
+  SZ_DEF(648)                 \
+  SZ_DEF(720)                 \
+  SZ_DEF(768)                 \
+  SZ_DEF(864)                 \
+  SZ_DEF(900)                 \
+  SZ_DEF(960)                 \
+  SZ_DEF(972)                 \
+  SZ_DEF(1024)                \
+  SZ_DEF(1080)                \
+  SZ_DEF(1152)                \
+  SZ_DEF(1200)                \
+  SZ_DEF(1296)                \
+  SZ_DEF(1440)                \
+  SZ_DEF(1500)                \
+  SZ_DEF(1536)                \
+  SZ_DEF(1620)                \
+  SZ_DEF(1728)                \
+  SZ_DEF(1800)                \
+  SZ_DEF(1920)                \
+  SZ_DEF(1944)                \
+  SZ_DEF(2048)                \
+  SZ_DEF(2160)                \
+  SZ_DEF(2304)                \
+  SZ_DEF(2400)                \
+  SZ_DEF(2592)                \
+  SZ_DEF(2700)                \
+  SZ_DEF(2880)                \
+  SZ_DEF(2916)                \
+  SZ_DEF(3000)                \
+  SZ_DEF(3072)                \
+  SZ_DEF(3240)                \
+  SZ_DEF(4096)                \
+  SZ_DEF(6144)                \
+  SZ_DEF(8192)                \
+  SZ_DEF(12288)               \
+  SZ_DEF(16384)               \
+  SZ_DEF(18432)               \
+  SZ_DEF(24576)               \
+  SZ_DEF(32768)               \
+  SZ_DEF(36864)               \
+  SZ_DEF(49152)               \
+  SZ_DEF(65536)               \
+  SZ_DEF(1048576)             \
+  SZ_DEF(1572864)             \
+  SZ_DEF(98304)
+
+#define FOREACH_IDFTSZ(SZ_DEF) \
+  SZ_DEF(12)                   \
+  SZ_DEF(16)                   \
+  SZ_DEF(24)                   \
+  SZ_DEF(32)                   \
+  SZ_DEF(36)                   \
+  SZ_DEF(48)                   \
+  SZ_DEF(60)                   \
+  SZ_DEF(64)                   \
+  SZ_DEF(72)                   \
+  SZ_DEF(96)                   \
+  SZ_DEF(108)                  \
+  SZ_DEF(120)                  \
+  SZ_DEF(128)                  \
+  SZ_DEF(144)                  \
+  SZ_DEF(180)                  \
+  SZ_DEF(192)                  \
+  SZ_DEF(216)                  \
+  SZ_DEF(240)                  \
+  SZ_DEF(256)                  \
+  SZ_DEF(288)                  \
+  SZ_DEF(300)                  \
+  SZ_DEF(324)                  \
+  SZ_DEF(360)                  \
+  SZ_DEF(384)                  \
+  SZ_DEF(432)                  \
+  SZ_DEF(480)                  \
+  SZ_DEF(512)                  \
+  SZ_DEF(540)                  \
+  SZ_DEF(576)                  \
+  SZ_DEF(600)                  \
+  SZ_DEF(648)                  \
+  SZ_DEF(720)                  \
+  SZ_DEF(768)                  \
+  SZ_DEF(864)                  \
+  SZ_DEF(900)                  \
+  SZ_DEF(960)                  \
+  SZ_DEF(972)                  \
+  SZ_DEF(1024)                 \
+  SZ_DEF(1080)                 \
+  SZ_DEF(1152)                 \
+  SZ_DEF(1200)                 \
+  SZ_DEF(1296)                 \
+  SZ_DEF(1440)                 \
+  SZ_DEF(1500)                 \
+  SZ_DEF(1536)                 \
+  SZ_DEF(1620)                 \
+  SZ_DEF(1728)                 \
+  SZ_DEF(1800)                 \
+  SZ_DEF(1920)                 \
+  SZ_DEF(1944)                 \
+  SZ_DEF(2048)                 \
+  SZ_DEF(2160)                 \
+  SZ_DEF(2304)                 \
+  SZ_DEF(2400)                 \
+  SZ_DEF(2592)                 \
+  SZ_DEF(2700)                 \
+  SZ_DEF(2880)                 \
+  SZ_DEF(2916)                 \
+  SZ_DEF(3000)                 \
+  SZ_DEF(3072)                 \
+  SZ_DEF(3240)                 \
+  SZ_DEF(4096)                 \
+  SZ_DEF(6144)                 \
+  SZ_DEF(8192)                 \
+  SZ_DEF(12288)                \
+  SZ_DEF(16384)                \
+  SZ_DEF(18432)                \
+  SZ_DEF(24576)                \
+  SZ_DEF(32768)                \
+  SZ_DEF(36864)                \
+  SZ_DEF(49152)                \
+  SZ_DEF(65536)                \
+  SZ_DEF(1048576)              \
+  SZ_DEF(1572864)              \
+  SZ_DEF(98304)
+
+#endif
 
 typedef  void(*dftfunc_t)(uint8_t sizeidx,int16_t *sigF,int16_t *sig,unsigned char scale_flag);
 typedef void (*idftfunc_t)(uint8_t sizeidx, int16_t *sigF, int16_t *sig, unsigned char scale_flag);
@@ -719,10 +912,35 @@ static inline void rotate_cpx_vector(const c16_t *const x, const c16_t alpha, c1
   // stores result in y
   // N is the number of complex numbers
   // output_shift reduces the result of the multiplication by this number of bits
-#if defined(__x86_64__) || defined(__i386__)
-  if (__builtin_cpu_supports("avx2")) {
-    // output is 32 bytes aligned, but not the input
+  uint32_t i = 0;
 
+#if defined(__x86_64__) || defined(__i386__)
+#if defined(__AVX512F__) && defined(__AVX512BW__)
+  // Same VPMADDWD multiply-add / shift / saturating-pack / VPSHUFB re-interleave algorithm as the
+  // AVX2 tier below, widened to 512-bit registers (16 complex numbers per iteration instead of 8).
+  {
+    const c16_t for_re = {alpha.r, (int16_t)-alpha.i};
+    const simde__m512i alpha_for_real = simde_mm512_set1_epi32(*(uint32_t *)&for_re);
+    const c16_t for_im = {alpha.i, alpha.r};
+    const simde__m512i alpha_for_im = simde_mm512_set1_epi32(*(uint32_t *)&for_im);
+    // VPSHUFB shuffles within each 128-bit lane independently (only bits [3:0] of each index byte
+    // are used), so the same 16-byte intra-lane pattern used by the AVX2 tier just repeats here.
+    const simde__m512i perm_mask = simde_mm512_set_epi8(15, 14, 7, 6, 13, 12, 5, 4, 11, 10, 3, 2, 9, 8, 1, 0,
+                                                         15, 14, 7, 6, 13, 12, 5, 4, 11, 10, 3, 2, 9, 8, 1, 0,
+                                                         15, 14, 7, 6, 13, 12, 5, 4, 11, 10, 3, 2, 9, 8, 1, 0,
+                                                         15, 14, 7, 6, 13, 12, 5, 4, 11, 10, 3, 2, 9, 8, 1, 0);
+    for (; i < (N & ~15u); i += 16) {
+      const simde__m512i y512 = simde_mm512_loadu_si512((const simde__m512i *)(x + i));
+      const simde__m512i xre = simde_mm512_srai_epi32(simde_mm512_madd_epi16(y512, alpha_for_real), output_shift);
+      const simde__m512i xim = simde_mm512_srai_epi32(simde_mm512_madd_epi16(y512, alpha_for_im), output_shift);
+      const simde__m512i tmp = simde_mm512_packs_epi32(xre, xim);
+      simde_mm512_storeu_si512((simde__m512i *)(y + i), simde_mm512_shuffle_epi8(tmp, perm_mask));
+    }
+  }
+#endif
+#ifdef __AVX2__
+  // output is 32 bytes aligned, but not the input
+  {
     const c16_t for_re = {alpha.r, (int16_t)-alpha.i};
     const simde__m256i alpha_for_real = simde_mm256_set1_epi32(*(uint32_t *)&for_re);
     const c16_t for_im = {alpha.i, alpha.r};
@@ -759,20 +977,57 @@ static inline void rotate_cpx_vector(const c16_t *const x, const c16_t alpha, c1
                                                         8,
                                                         1,
                                                         0);
-    simde__m256i *xd = (simde__m256i *)x;
-    const simde__m256i *end = xd + N / 8;
-    for (simde__m256i *yd = (simde__m256i *)y; xd < end; yd++, xd++) {
-      const simde__m256i y256 = simde_mm256_lddqu_si256(xd);
+    for (; i < (N & ~7u); i += 8) {
+      const simde__m256i y256 = simde_mm256_lddqu_si256((const simde__m256i *)(x + i));
       const simde__m256i xre = simde_mm256_srai_epi32(simde_mm256_madd_epi16(y256, alpha_for_real), output_shift);
       const simde__m256i xim = simde_mm256_srai_epi32(simde_mm256_madd_epi16(y256, alpha_for_im), output_shift);
       // a bit faster than unpacklo+unpackhi+packs
       const simde__m256i tmp = simde_mm256_packs_epi32(xre, xim);
-      simde_mm256_storeu_si256(yd, simde_mm256_shuffle_epi8(tmp, perm_mask));
+      simde_mm256_storeu_si256((simde__m256i *)(y + i), simde_mm256_shuffle_epi8(tmp, perm_mask));
     }
-    c16_t *yLast;
-    yLast = ((c16_t *)y) + (N / 8) * 8;
-    for (c16_t *xTail = (c16_t *)end; xTail < ((c16_t *)x) + N; xTail++, yLast++) {
-      *yLast = c16mulShift(*xTail, alpha, output_shift);
+  }
+#endif
+#endif // defined(__x86_64__) || defined(__i386__)
+
+#ifdef __aarch64__
+  if (output_shift == 15) { // allows specific NEON instruction
+    int16x8_t ar = (int16x8_t)vdupq_n_s16(alpha.r);
+    int16x8_t ai = (int16x8_t)vdupq_n_s16(alpha.i);
+    for (; i < (N & ~3u); i += 4) {
+      const int16x8_t x_128 = *(const int16x8_t *)(x + i);
+      // Split interleaved -> separate real/imag
+      int16x8_t br = vuzp1q_s16(x_128, x_128);
+      int16x8_t bi = vuzp2q_s16(x_128, x_128);
+#ifdef __ARM_FEATURE_QRDMX
+      // ARMv8.1-A: Use RDM instructions (rounding doubling multiply)
+      // Start with the two “diagonal” products using high-half, doubling, sat:
+      // x = round( (2*ar*br) / 2^16 ), y = round( (2*ar*bi) / 2^16 )
+      int16x8_t real = vqdmulhq_s16(ar, br);
+      int16x8_t imag = vqdmulhq_s16(ar, bi);
+
+      // real -= round( (2*ai*bi) / 2^16 )
+      real = vqrdmlshq_s16(real, ai, bi);
+
+      // imag += round( (2*ai*br) / 2^16 )
+      imag = vqrdmlahq_s16(imag, ai, br);
+#else
+      // ARMv8.0-A fallback: Use standard 32-bit multiply
+      int32x4_t real_lo = vmull_s16(vget_low_s16(ar), vget_low_s16(br));
+      int32x4_t real_hi = vmull_s16(vget_high_s16(ar), vget_high_s16(br));
+      real_lo = vmlsl_s16(real_lo, vget_low_s16(ai), vget_low_s16(bi));
+      real_hi = vmlsl_s16(real_hi, vget_high_s16(ai), vget_high_s16(bi));
+
+      int32x4_t imag_lo = vmull_s16(vget_low_s16(ar), vget_low_s16(bi));
+      int32x4_t imag_hi = vmull_s16(vget_high_s16(ar), vget_high_s16(bi));
+      imag_lo = vmlal_s16(imag_lo, vget_low_s16(ai), vget_low_s16(br));
+      imag_hi = vmlal_s16(imag_hi, vget_high_s16(ai), vget_high_s16(br));
+
+      int16x8_t real = vcombine_s16(vqrshrn_n_s32(real_lo, 15), vqrshrn_n_s32(real_hi, 15));
+      int16x8_t imag = vcombine_s16(vqrshrn_n_s32(imag_lo, 15), vqrshrn_n_s32(imag_hi, 15));
+#endif
+      // Re-interleave [real, imag]
+      int16x8x2_t z = vzipq_s16(real, imag);
+      *(int16x8_t *)(y + i) = z.val[0];
     }
   } else {
 #endif
@@ -790,99 +1045,34 @@ static inline void rotate_cpx_vector(const c16_t *const x, const c16_t alpha, c1
     // log2_amp - increase the output amplitude by a factor 2^log2_amp (default is 0)
     //            WARNING: log2_amp>0 can cause overflow!!
 
+    // 128-bit tier: SSE2 on x86, transparently portable to other architectures via SIMDe. This
+    // is the tier used on hosts without wider SIMD, and the AVX512/AVX2 tiers' remainder handler.
+    const int32_t *xd = (const int32_t *)x;
+    const simde__m128i shift = simde_mm_cvtsi32_si128(output_shift);
+    const simde__m128i alpha_128 =
+        simde_mm_setr_epi16(alpha.r, (int16_t)-alpha.i, alpha.i, alpha.r, alpha.r, (int16_t)-alpha.i, alpha.i, alpha.r);
 
-#ifdef __aarch64__
-    if (output_shift == 15) { // allows specific NEON instruction
-
-      int16x8_t ar = (int16x8_t)vdupq_n_s16(alpha.r);
-      int16x8_t ai = (int16x8_t)vdupq_n_s16(alpha.i);
-      int16x8_t *y_128 = (int16x8_t *)y;
-      int16x8_t *x_128 = (int16x8_t *)x;
-      for (uint32_t i = 0; i < (N >> 2); i++) {
-        // Split interleaved -> separate real/imag
-        int16x8_t br = vuzp1q_s16(x_128[i], x_128[i]);
-        int16x8_t bi = vuzp2q_s16(x_128[i], x_128[i]);
-#ifdef __ARM_FEATURE_QRDMX
-        // ARMv8.1-A: Use RDM instructions (rounding doubling multiply)
-        // Start with the two “diagonal” products using high-half, doubling, sat:
-        // x = round( (2*ar*br) / 2^16 ), y = round( (2*ar*bi) / 2^16 )
-        int16x8_t real = vqdmulhq_s16(ar, br);
-        int16x8_t imag = vqdmulhq_s16(ar, bi);
-
-        // real -= round( (2*ai*bi) / 2^16 )
-        real = vqrdmlshq_s16(real, ai, bi);
-
-        // imag += round( (2*ai*br) / 2^16 )
-        imag = vqrdmlahq_s16(imag, ai, br);
-#else
-        // ARMv8.0-A fallback: Use standard 32-bit multiply
-        int32x4_t real_lo = vmull_s16(vget_low_s16(ar), vget_low_s16(br));
-        int32x4_t real_hi = vmull_s16(vget_high_s16(ar), vget_high_s16(br));
-        real_lo = vmlsl_s16(real_lo, vget_low_s16(ai), vget_low_s16(bi));
-        real_hi = vmlsl_s16(real_hi, vget_high_s16(ai), vget_high_s16(bi));
-
-        int32x4_t imag_lo = vmull_s16(vget_low_s16(ar), vget_low_s16(bi));
-        int32x4_t imag_hi = vmull_s16(vget_high_s16(ar), vget_high_s16(bi));
-        imag_lo = vmlal_s16(imag_lo, vget_low_s16(ai), vget_low_s16(br));
-        imag_hi = vmlal_s16(imag_hi, vget_high_s16(ai), vget_high_s16(br));
-
-        int16x8_t real = vcombine_s16(vqrshrn_n_s32(real_lo, 15), vqrshrn_n_s32(real_hi, 15));
-        int16x8_t imag = vcombine_s16(vqrshrn_n_s32(imag_lo, 15), vqrshrn_n_s32(imag_hi, 15));
-#endif
-        // Re-interleave [real, imag]
-        int16x8x2_t z = vzipq_s16(real, imag);
-
-        y_128[i] = z.val[0];
-        /*
-        printf("y : (%d %d) (%d %d) (%d %d) (%d %d)\n",
-                 vgetq_lane_s16(y_128[i],0),
-                 vgetq_lane_s16(y_128[i],1),
-                 vgetq_lane_s16(y_128[i],2),
-                 vgetq_lane_s16(y_128[i],3),
-                 vgetq_lane_s16(y_128[i],4),
-                 vgetq_lane_s16(y_128[i],5),
-                 vgetq_lane_s16(y_128[i],6),
-                 vgetq_lane_s16(y_128[i],7));*/
-      }
-    } else {
-#endif
-    uint32_t i; // loop counter
-
-    simd_q15_t *y_128, alpha_128;
-    int32_t *xd = (int32_t *)x;
-
-    simde__m128i shift = simde_mm_cvtsi32_si128(output_shift);
-
-    ((int16_t *)&alpha_128)[0] = alpha.r;
-    ((int16_t *)&alpha_128)[1] = (int16_t)-alpha.i;
-    ((int16_t *)&alpha_128)[2] = alpha.i;
-    ((int16_t *)&alpha_128)[3] = alpha.r;
-    ((int16_t *)&alpha_128)[4] = alpha.r;
-    ((int16_t *)&alpha_128)[5] =  (int16_t)-alpha.i;
-    ((int16_t *)&alpha_128)[6] = alpha.i;
-    ((int16_t *)&alpha_128)[7] = alpha.r;
-    y_128 = (simd_q15_t *)y;
-
-    for (i = 0; i < N >> 2; i++) {
-      y_128[i] = simde_mm_packs_epi32( // pack in 16bit integers with saturation [re im re im re im re im]
+    for (; i < (N & ~3u); i += 4) {
+      simde__m128i *y_128 = (simde__m128i *)(y + i);
+      *y_128 = simde_mm_packs_epi32( // pack in 16bit integers with saturation [re im re im re im re im]
           simde_mm_sra_epi32( // shift right by shift in order to  compensate for the input amplitude
               simde_mm_madd_epi16( // complex multiply. result is 32bit [Re Im Re Im]
-                  simde_mm_setr_epi32(xd[0 + i * 4], xd[0 + i * 4], xd[1 + i * 4], xd[1 + i * 4]),
+                  simde_mm_setr_epi32(xd[i], xd[i], xd[i + 1], xd[i + 1]),
                   alpha_128),
               shift),
           simde_mm_sra_epi32( // shift right by shift in order to  compensate for the input amplitude
               simde_mm_madd_epi16( // complex multiply. result is 32bit [Re Im Re Im]
-                  simde_mm_setr_epi32(xd[2 + i * 4], xd[2 + i * 4], xd[3 + i * 4], xd[3 + i * 4]),
+                  simde_mm_setr_epi32(xd[i + 2], xd[i + 2], xd[i + 3], xd[i + 3]),
                   alpha_128),
               shift));
-      // print_ints("y_128[0]=", &y_128[0]);
     }
 #ifdef __aarch64__
-    }
-#endif //__aarch64__
-#if defined(__x86_64__) || defined(__i386__)
   }
-#endif
+#endif //__aarch64__
+
+  // scalar tail: catches any remainder the SIMD tiers above (each width-gated on N) left behind
+  for (; i < N; i++)
+    y[i] = c16mulShift(x[i], alpha, output_shift);
 }
 
 /*!\fn int32_t sub_cpx_vector16(c16_t *x,c16_t *y, c16_t z, uint32_t N)
@@ -947,7 +1137,7 @@ uint32_t angle(struct complex16 perrror);
 unsigned char factor2(unsigned int x);
 
 int8_t dB_fixed(uint32_t x);
-int8_t dB_fixed64(uint64_t x);
+int dB_fixed64(uint64_t x);
 int8_t dB_fixed2(uint32_t x,uint32_t y);
 int16_t dB_fixed_times10(uint32_t x);
 int16_t dB_fixed_x10(uint32_t x);

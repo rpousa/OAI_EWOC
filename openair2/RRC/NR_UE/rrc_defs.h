@@ -16,6 +16,7 @@
 #include "common/platform_types.h"
 #include "commonDef.h"
 #include "common/platform_constants.h"
+#include "common/utils/LOG/log.h"
 
 #include "NR_asn_constant.h"
 #include "NR_MeasConfig.h"
@@ -40,13 +41,14 @@
 #include "as_message.h"
 #include "common/utils/nr/nr_common.h"
 #include "notified_fifo.h"
+#include "RRC/NR_UE/nr_mac_rrc_types.h"
 
 #define NB_CNX_UE 2//MAX_MANAGED_RG_PER_MOBILE
 #define MAX_MEAS_OBJ 64
 #define MAX_MEAS_CONFIG 64
 #define MAX_MEAS_ID 64
 #define MAX_QUANTITY_CONFIG 2
-#define NUMBER_OF_NEIGHBORING_CELLS_MAX 1
+#define NUMBER_OF_NEIGHBORING_CELLS_MAX 8
 
 typedef enum {
   nr_SecondaryCellGroupConfig_r15=0,
@@ -169,21 +171,26 @@ typedef enum {
 
 typedef enum { RB_NOT_PRESENT, RB_ESTABLISHED, RB_SUSPENDED } NR_RB_status_t;
 
+typedef struct meas_report_params_s {
+  long trigger_quantity;
+  long rs_type;
+  int reports_sent;
+  int max_reports;
+  int max_report_cells;
+  long report_interval_ms;
+  bool neighbor_cell_valid;
+  bool report_rsrp;
+  NR_timer_t TA2;
+  NR_timer_t TA3;
+  NR_timer_t periodic_report_timer;
+} meas_report_params_t;
+
 typedef struct l3_measurements_s {
   float ssb_filter_coeff_rsrp;
   float csi_RS_filter_coeff_rsrp;
   meas_t serving_cell;
   meas_t neighboring_cell[NUMBER_OF_NEIGHBORING_CELLS_MAX];
-  long trigger_to_measid;
-  long trigger_quantity;
-  long rs_type;
-  int reports_sent;
-  int max_reports;
-  long report_interval_ms;
-  bool neighbor_cell_valid;
-  NR_timer_t TA2;
-  NR_timer_t TA3;
-  NR_timer_t periodic_report_timer;
+  meas_report_params_t meas_report[MAX_MEAS_ID];
 } l3_measurements_t;
 
 typedef struct rrcPerNB {
@@ -205,12 +212,15 @@ typedef struct NR_UE_RRC_INST_s {
   rnti_t rnti;
   uint32_t phyCellID;
   long arfcn_ssb;
+  uint64_t cell_identity;
 
   OAI_NR_UECapability_t UECap;
   NR_UE_Timers_Constants_t timers_and_constants;
 
   RA_trigger_t ra_trigger;
   NR_ReestablishmentCause_t reestablishment_cause;
+  uint32_t reestab_source_pci;
+  rnti_t reestab_source_crnti;
   plmn_t plmnID;
 
   NR_BWP_Id_t dl_bwp_id;
@@ -252,6 +262,13 @@ typedef struct NR_UE_RRC_INST_s {
   NR_NTN_Config_r17_t *target_ntncfg;
   bool process_target_ntncfg;
   notifiedFIFO_t *mac_input_nf;
+  /* NAS PDU deferred until UL-DCCH exists: consumed in RRCSetupComplete/RRCResumeComplete dedicatedNAS-Message */
+  as_nas_info_t pending_initial_nas;
 } NR_UE_RRC_INST_t;
 
+#define RRCLOG_D(f, ...) LOG_D(NR_RRC, "[UE %ld] RNTI 0x%04x " f, rrc->ue_id, rrc->rnti __VA_OPT__(, ) __VA_ARGS__)
+#define RRCLOG_I(f, ...) LOG_I(NR_RRC, "[UE %ld] RNTI 0x%04x " f, rrc->ue_id, rrc->rnti __VA_OPT__(, ) __VA_ARGS__)
+#define RRCLOG_W(f, ...) LOG_W(NR_RRC, "[UE %ld] RNTI 0x%04x " f, rrc->ue_id, rrc->rnti __VA_OPT__(, ) __VA_ARGS__)
+#define RRCLOG_E(f, ...) LOG_E(NR_RRC, "[UE %ld] RNTI 0x%04x " f, rrc->ue_id, rrc->rnti __VA_OPT__(, ) __VA_ARGS__)
+#define RRCLOG_A(f, ...) LOG_A(NR_RRC, "[UE %ld] RNTI 0x%04x " f, rrc->ue_id, rrc->rnti __VA_OPT__(, ) __VA_ARGS__)
 #endif

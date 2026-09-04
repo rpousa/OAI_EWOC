@@ -98,7 +98,7 @@ int32_t xran_extract_iq_samples(struct rte_mbuf *mbuf,
       return 0;
     *compMeth = compr_hdr->ud_comp_hdr.ud_comp_meth;
     *iqWidth = compr_hdr->ud_comp_hdr.ud_iq_width;
-    *iq_data_start = rte_pktmbuf_mtod(mbuf, void *);
+    *iq_data_start = (void *)rte_pktmbuf_adj(mbuf, sizeof(*compr_hdr));
   } else {
     *iq_data_start = (void *)rte_pktmbuf_adj(mbuf, sizeof(*data_hdr));
   }

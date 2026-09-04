@@ -238,49 +238,50 @@ sctp_handle_new_association_req_multi(
     if ((sctp_new_association_req_p->remote_address.ipv6 != 0) ||
             (sctp_new_association_req_p->remote_address.ipv4 != 0)) {
         uint8_t address_index = 0;
-        uint8_t used_address  = sctp_new_association_req_p->remote_address.ipv6 +
-                                sctp_new_association_req_p->remote_address.ipv4;
-        struct sockaddr_in addr[used_address];
+        const net_ip_address_t *remote = &sctp_new_association_req_p->remote_address;
+        uint8_t used_address  = remote->ipv6 + remote->ipv4;
+        struct sockaddr_storage addr[used_address];
 
-        memset(addr, 0, used_address * sizeof(struct sockaddr_in));
+        memset(addr, 0, used_address * sizeof(*addr));
 
-        if (sctp_new_association_req_p->remote_address.ipv6 == 1) {
-            if (inet_pton(AF_INET6, sctp_new_association_req_p->remote_address.ipv6_address,
-                          &addr[address_index].sin_addr.s_addr) != 1) {
+        if (remote->ipv6 == 1) {
+            struct sockaddr_in6 *sa6 = (struct sockaddr_in6 *)&addr[address_index];
+            if (inet_pton(AF_INET6, remote->ipv6_address, &sa6->sin6_addr.s6_addr) != 1) {
                 SCTP_ERROR("Failed to convert ipv6 address %*s to network type\n",
-                           (int)strlen(sctp_new_association_req_p->remote_address.ipv6_address),
-                           sctp_new_association_req_p->remote_address.ipv6_address);
+                           (int)strlen(remote->ipv6_address),
+                           remote->ipv6_address);
                 //close(sd);
                 //return;
                 exit_fun("sctp_handle_new_association_req_multi fatal: inet_pton error");
             }
 
             SCTP_DEBUG("Converted ipv6 address %*s to network type\n",
-                       (int)strlen(sctp_new_association_req_p->remote_address.ipv6_address),
-                       sctp_new_association_req_p->remote_address.ipv6_address);
+                       (int)strlen(remote->ipv6_address),
+                       remote->ipv6_address);
 
-            addr[address_index].sin_family = AF_INET6;
-            addr[address_index].sin_port   = htons(sctp_new_association_req_p->port);
+            sa6->sin6_family = AF_INET6;
+            sa6->sin6_port   = htons(sctp_new_association_req_p->port);
             address_index++;
         }
 
-        if (sctp_new_association_req_p->remote_address.ipv4 == 1) {
-            if (inet_pton(AF_INET, sctp_new_association_req_p->remote_address.ipv4_address,
-                          &addr[address_index].sin_addr.s_addr) != 1) {
+        if (remote->ipv4 == 1) {
+            struct sockaddr_in *sa = (struct sockaddr_in *)&addr[address_index];
+            if (inet_pton(AF_INET, remote->ipv4_address,
+                          &sa->sin_addr.s_addr) != 1) {
                 SCTP_ERROR("Failed to convert ipv4 address %*s to network type\n",
-                           (int)strlen(sctp_new_association_req_p->remote_address.ipv4_address),
-                           sctp_new_association_req_p->remote_address.ipv4_address);
+                           (int)strlen(remote->ipv4_address),
+                           remote->ipv4_address);
                 //close(sd);
                 //return;
                 exit_fun("sctp_handle_new_association_req_multi fatal: inet_pton error");
             }
 
             SCTP_DEBUG("Converted ipv4 address %*s to network type\n",
-                       (int)strlen(sctp_new_association_req_p->remote_address.ipv4_address),
-                       sctp_new_association_req_p->remote_address.ipv4_address);
+                       (int)strlen(remote->ipv4_address),
+                       remote->ipv4_address);
 
-            addr[address_index].sin_family = AF_INET;
-            addr[address_index].sin_port   = htons(sctp_new_association_req_p->port);
+            sa->sin_family = AF_INET;
+            sa->sin_port   = htons(sctp_new_association_req_p->port);
             address_index++;
         }
 

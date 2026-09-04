@@ -42,6 +42,9 @@ uint8_t fapi_nr_p7_message_body_pack(nfapi_nr_p7_message_header_t *header,
     case NFAPI_NR_PHY_MSG_TYPE_SRS_INDICATION:
       result = pack_nr_srs_indication(header, ppWritePackedMsg, end);
     break;
+    case NFAPI_NR_PHY_MSG_TYPE_SRS_TOA_VENDOR_EXTENSION_INDICATION:
+      result = pack_nr_srs_toa_vendor_ext_indication(header, ppWritePackedMsg, end);
+      break;
     case NFAPI_NR_PHY_MSG_TYPE_RACH_INDICATION:
       result = pack_nr_rach_indication(header, ppWritePackedMsg, end);
     break;
@@ -93,7 +96,7 @@ int fapi_nr_p7_message_pack(void *pMessageBuf, void *pPackedBuf, uint32_t packed
   // Message type ID [2,3]
   // Message Length [4,5,6,7]
   // Message Body [8,...]
-  if (!(push8(1, &pWritePackedMessage, pPackMessageEnd) && push8(0, &pWritePackedMessage, pPackMessageEnd)
+  if (!(push8(1, &pWritePackedMessage, pPackMessageEnd) && push8(pMessageHeader->phy_id, &pWritePackedMessage, pPackMessageEnd)
         && push16(pMessageHeader->message_id, &pWritePackedMessage, pPackMessageEnd))) {
     NFAPI_TRACE(NFAPI_TRACE_ERROR, "P7 Pack header failed\n");
     return -1;
@@ -126,7 +129,6 @@ bool fapi_nr_p7_message_unpack(void *pMessageBuf,
 {
   int result = 0;
   nfapi_nr_p7_message_header_t *pMessageHeader = (nfapi_nr_p7_message_header_t *)pUnpackedBuf;
-  fapi_message_header_t fapi_hdr;
   AssertFatal(pMessageBuf != NULL && pUnpackedBuf != NULL, "P7 unpack supplied pointers are null");
 
   AssertFatal(messageBufLen >= NFAPI_HEADER_LENGTH && unpackedBufLen >= sizeof(fapi_message_header_t),
@@ -134,14 +136,12 @@ bool fapi_nr_p7_message_unpack(void *pMessageBuf,
               messageBufLen,
               unpackedBufLen);
 
-  if (!fapi_nr_message_header_unpack(pMessageBuf, NFAPI_HEADER_LENGTH, &fapi_hdr, sizeof(fapi_message_header_t), 0)) {
+  if (!fapi_nr_message_header_unpack(pMessageBuf, NFAPI_HEADER_LENGTH, pMessageHeader, sizeof(fapi_message_header_t), 0)) {
     // failed to read the header
     return false;
   }
   uint8_t *pReadPackedMessage = pMessageBuf + NFAPI_HEADER_LENGTH;
   uint8_t *end = (uint8_t *)pMessageBuf + messageBufLen;
-  pMessageHeader->message_length = fapi_hdr.message_length;
-  pMessageHeader->message_id = fapi_hdr.message_id;
   if ((uint8_t *)(pMessageBuf + pMessageHeader->message_length) > end) {
     NFAPI_TRACE(NFAPI_TRACE_ERROR, "P7 unpack message length is greater than the message buffer \n");
     return false;
@@ -191,6 +191,11 @@ bool fapi_nr_p7_message_unpack(void *pMessageBuf,
         result = unpack_nr_srs_indication(&pReadPackedMessage, end, pMessageHeader);
       }
     break;
+    case NFAPI_NR_PHY_MSG_TYPE_SRS_TOA_VENDOR_EXTENSION_INDICATION:
+      if (check_nr_fapi_unpack_length(NFAPI_NR_PHY_MSG_TYPE_SRS_TOA_VENDOR_EXTENSION_INDICATION, unpackedBufLen)) {
+        result = unpack_nr_srs_toa_vendor_ext_indication(&pReadPackedMessage, end, pMessageHeader);
+      }
+      break;
     case NFAPI_NR_PHY_MSG_TYPE_RACH_INDICATION:
       if (check_nr_fapi_unpack_length(NFAPI_NR_PHY_MSG_TYPE_RACH_INDICATION, unpackedBufLen)) {
         result = unpack_nr_rach_indication(&pReadPackedMessage, end, pMessageHeader);
@@ -1635,7 +1640,9 @@ static uint8_t pack_tx_data_pdu_list_value(void *tlv, uint8_t **ppWritePackedMsg
     return 0;
 
   for (int i = 0; i < value->num_TLV; ++i) {
-    if (!push16(value->TLVs[i].tag, ppWritePackedMsg, end))
+    uint16_t tag = value->TLVs[i].tag == 2 ? 2 : 0;
+    // preserve tag == 2 for nvidia, for direct/ptr, convert to pointer
+    if (!push16(tag, ppWritePackedMsg, end))
       return 0;
 #ifdef ENABLE_AERIAL
     if (!push16(value->TLVs[i].length, ppWritePackedMsg, end))
@@ -1717,22 +1724,18 @@ static uint8_t unpack_tx_data_pdu_list_value(uint8_t **ppReadPackedMsg, uint8_t 
       return 0;
     const uint32_t byte_len = (pNfapiMsg->TLVs[i].length + 3) / 4;
     if (pNfapiMsg->TLVs[i].tag == 1) {
-      pNfapiMsg->TLVs[i].value.ptr = calloc(byte_len, sizeof(uint32_t));
+      pNfapiMsg->TLVs[i].tag = 0;
     }
     switch (pNfapiMsg->TLVs[i].tag) {
-      case 0: {
+      case 0:
+      case 1: {
+        // always pull into direct, which simply avoids one (possibly big)
+        // malloc
         if (!pullarray32(ppReadPackedMsg,
                          pNfapiMsg->TLVs[i].value.direct,
                          sizeof(pNfapiMsg->TLVs[i].value.direct) / sizeof(uint32_t),
                          byte_len,
                          end))
-          return 0;
-
-        break;
-      }
-
-      case 1: {
-        if (!pullarray32(ppReadPackedMsg, pNfapiMsg->TLVs[i].value.ptr, byte_len, byte_len, end))
           return 0;
 
         break;
@@ -2403,8 +2406,39 @@ uint8_t pack_nr_srs_indication(void *msg, uint8_t **ppWritePackedMsg, uint8_t *e
   return 1;
 }
 
+uint8_t pack_nr_srs_toa_vendor_ext_indication(void *msg, uint8_t **ppWritePackedMsg, uint8_t *end)
+{
+  nfapi_nr_srs_toa_vendor_ext_indication_t *pNfapiMsg = (nfapi_nr_srs_toa_vendor_ext_indication_t *)msg;
+
+  if (!(push16(pNfapiMsg->sfn, ppWritePackedMsg, end) && push16(pNfapiMsg->slot, ppWritePackedMsg, end)
+        && push16(pNfapiMsg->rnti, ppWritePackedMsg, end) && push8(pNfapiMsg->num_ta, ppWritePackedMsg, end))) {
+    return 0;
+  }
+
+  AssertFatal(pNfapiMsg->num_ta <= NFAPI_NR_MAX_NUM_TA_NSEC,
+              "pNfapiMsg->num_ta %d cannot be greater than %d\n",
+              pNfapiMsg->num_ta,
+              NFAPI_NR_MAX_NUM_TA_NSEC);
+
+  for (int i = 0; i < pNfapiMsg->num_ta; i++) {
+    if (!pushs16(pNfapiMsg->ta_offset_nsec[i], ppWritePackedMsg, end)) {
+      return 0;
+    }
+  }
+
+  return 1;
+}
+
 uint8_t unpack_nr_srs_report_tlv_value(nfapi_srs_report_tlv_t *report_tlv, uint8_t **ppReadPackedMsg, uint8_t *end)
 {
+  if ((report_tlv->length + 3) / 4 > sizeof(report_tlv->value) / sizeof(report_tlv->value[0])) {
+    NFAPI_TRACE(NFAPI_TRACE_ERROR,
+                "%s: SRS report TLV too large to unpack (length %u bytes, max %zu), dropping report\n",
+                __FUNCTION__,
+                report_tlv->length,
+                sizeof(report_tlv->value));
+    return 0;
+  }
 #ifndef ENABLE_AERIAL
   for (int i = 0; i < (report_tlv->length + 3) / 4; i++) {
     if (!pull32(ppReadPackedMsg, &report_tlv->value[i], end)) {
@@ -2412,7 +2446,7 @@ uint8_t unpack_nr_srs_report_tlv_value(nfapi_srs_report_tlv_t *report_tlv, uint8
     }
   }
 #else
-  const int16_t last_idx = ((report_tlv->length + 3) / 4) - 1;
+  const int32_t last_idx = ((report_tlv->length + 3) / 4) - 1;
   for (int i = 0; i < last_idx; i++) {
     if (!pull32(ppReadPackedMsg, &report_tlv->value[i], end)) {
       return 0;
@@ -2467,6 +2501,28 @@ uint8_t unpack_nr_srs_indication(uint8_t **ppReadPackedMsg, uint8_t *end, void *
   pNfapiMsg->pdu_list = calloc(pNfapiMsg->number_of_pdus, sizeof(*pNfapiMsg->pdu_list));
   for (int i = 0; i < pNfapiMsg->number_of_pdus; i++) {
     if (!unpack_nr_srs_indication_body(&pNfapiMsg->pdu_list[i], ppReadPackedMsg, end)) {
+      return 0;
+    }
+  }
+
+  return 1;
+}
+
+uint8_t unpack_nr_srs_toa_vendor_ext_indication(uint8_t **ppReadPackedMsg, uint8_t *end, void *msg)
+{
+  nfapi_nr_srs_toa_vendor_ext_indication_t *pNfapiMsg = (nfapi_nr_srs_toa_vendor_ext_indication_t *)msg;
+  if (!(pull16(ppReadPackedMsg, &pNfapiMsg->sfn, end) && pull16(ppReadPackedMsg, &pNfapiMsg->slot, end)
+        && pull16(ppReadPackedMsg, &pNfapiMsg->rnti, end) && pull8(ppReadPackedMsg, &pNfapiMsg->num_ta, end))) {
+    return 0;
+  }
+
+  AssertFatal(pNfapiMsg->num_ta <= NFAPI_NR_MAX_NUM_TA_NSEC,
+              "pNfapiMsg->num_ta %d cannot be greater than %d\n",
+              pNfapiMsg->num_ta,
+              NFAPI_NR_MAX_NUM_TA_NSEC);
+
+  for (int i = 0; i < pNfapiMsg->num_ta; i++) {
+    if (!pulls16(ppReadPackedMsg, &pNfapiMsg->ta_offset_nsec[i], end)) {
       return 0;
     }
   }

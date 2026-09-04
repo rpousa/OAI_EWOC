@@ -17,6 +17,7 @@
 #include "PHY/NR_TRANSPORT/nr_transport_proto.h"
 #include "PHY/NR_TRANSPORT/nr_ulsch.h"
 #include "PHY/NR_TRANSPORT/nr_dlsch.h"
+#include "PHY/nr_phy_common/inc/nr_phy_meas.h"
 #include "SCHED_NR/sched_nr.h"
 #include "defs.h"
 #include "bits.h"
@@ -33,6 +34,10 @@
 #define PRINT_CRC_CHECK(a)
 #endif
 
+#ifdef LDPC_CUDA
+#include <cuda_runtime.h>
+#endif
+
 void free_gNB_ulsch(NR_gNB_ULSCH_t *ulsch, uint16_t N_RB_UL)
 {
   uint16_t a_segments = MAX_NUM_NR_ULSCH_SEGMENTS; // number of segments to be allocated
@@ -47,8 +52,13 @@ void free_gNB_ulsch(NR_gNB_ULSCH_t *ulsch, uint16_t N_RB_UL)
       free_and_zero(ulsch->harq_process->b);
       ulsch->harq_process->b = NULL;
     }
+#ifdef LDPC_CUDA
+    cudaFreeHost(ulsch->harq_process->c);
+    cudaFreeHost(ulsch->harq_process->d);
+#else
     free_and_zero(ulsch->harq_process->c);
     free_and_zero(ulsch->harq_process->d);
+#endif
     free_and_zero(ulsch->harq_process);
     ulsch->harq_process = NULL;
   }
@@ -75,8 +85,16 @@ NR_gNB_ULSCH_t new_gNB_ulsch(uint8_t max_ldpc_iterations, uint16_t N_RB_UL)
   ulsch.harq_process = harq;
   harq->b = malloc16_clear(ulsch_bytes * sizeof(*harq->b));
   // Allocate one contiguous buffer fr all c/d arrays to simplify addressing for GPU LDPC offload
+#ifdef LDPC_CUDA
+  cudaError_t err = cudaHostAlloc((void **)&harq->c, a_segments * 8448 * sizeof(*harq->c), cudaHostAllocMapped);
+  AssertFatal(err == cudaSuccess, "CUDA cudaHostAlloc failed for harq->c: %s\n", cudaGetErrorString(err));
+
+  err = cudaHostAlloc((void **)&harq->d, a_segments * 64 * 384 * sizeof(*harq->d), cudaHostAllocMapped);
+  AssertFatal(err == cudaSuccess, "CUDA cudaHostAlloc failed for harq->d: %s\n", cudaGetErrorString(err));
+#else
   harq->c = malloc16_clear(a_segments * 8448 * sizeof(*harq->c));
   harq->d = malloc16_clear(a_segments * 68 * 384 * sizeof(*harq->d));
+#endif
   return (ulsch);
 }
 
@@ -103,6 +121,7 @@ int nr_ulsch_decoding(PHY_VARS_gNB *phy_vars_gNB,
     NR_gNB_PUSCH *pusch = &phy_vars_gNB->pusch_vars[ULSCH_id];
     NR_UL_gNB_HARQ_t *harq_process = ulsch->harq_process;
     const nfapi_nr_pusch_pdu_t *pusch_pdu = &harq_process->ulsch_pdu;
+    uint8_t harq_pid = ulsch->harq_pid;
 
     nrLDPC_TB_decoding_parameters_t *TB_parameters = &TBs[pusch_id];
 
@@ -126,7 +145,12 @@ int nr_ulsch_decoding(PHY_VARS_gNB *phy_vars_gNB,
 
 
     // The harq_pid is not unique among the active HARQ processes in the instance so we use ULSCH_id instead
-    TB_parameters->harq_unique_pid = ULSCH_id;
+    TB_parameters->harq_unique_pid = (phy_vars_gNB->max_nb_pusch * harq_pid) + ULSCH_id;
+    AssertFatal(TB_parameters->harq_unique_pid < 0xffffffff,
+                "harq_unique_pid >= %d, harq_pid %d, ULSCH_id %d\n",
+                16 * phy_vars_gNB->max_nb_pusch,
+                harq_pid,
+                ULSCH_id);
 
     // ------------------------------------------------------------------
     TB_parameters->nb_rb = pusch_pdu->rb_size;
@@ -155,7 +179,6 @@ int nr_ulsch_decoding(PHY_VARS_gNB *phy_vars_gNB,
       }
     }
 
-    uint8_t harq_pid = ulsch->harq_pid;
     LOG_D(PHY,
           "ULSCH Decoding, harq_pid %d rnti %x TBS %d G %d mcs %d Nl %d nb_rb %d, Qm %d, Coderate %f RV %d round %d new RX %d\n",
           harq_pid,
@@ -218,7 +241,11 @@ int nr_ulsch_decoding(PHY_VARS_gNB *phy_vars_gNB,
     uint8_t ULSCH_id = ULSCH_ids[pusch_id];
     NR_gNB_ULSCH_t *ulsch = &phy_vars_gNB->ulsch[ULSCH_id];
     NR_UL_gNB_HARQ_t *harq_process = ulsch->harq_process;
-    short *ulsch_llr = phy_vars_gNB->pusch_vars[ULSCH_id].llr;
+#ifdef LDPC_CUDA
+    int16_t *ulsch_llr = phy_vars_gNB->pusch_vars[ULSCH_id].llr_dev;
+#else
+    int16_t *ulsch_llr = phy_vars_gNB->pusch_vars[ULSCH_id].llr;
+#endif
 
     if (!ulsch_llr) {
       LOG_E(PHY, "ulsch_decoding.c: NULL ulsch_llr pointer\n");
@@ -226,11 +253,13 @@ int nr_ulsch_decoding(PHY_VARS_gNB *phy_vars_gNB,
     }
 
     nrLDPC_TB_decoding_parameters_t *TB_parameters = &TBs[pusch_id];
-
+    int E = nr_get_E(TB_parameters->G, TB_parameters->C, TB_parameters->Qm, TB_parameters->nb_layers, 0);
+    if (E < 0)
+      return -1;
     TB_parameters->llr = ulsch_llr;
     TB_parameters->d = harq_process->d;
     TB_parameters->c = harq_process->c;
-    TB_parameters->E = nr_get_E(TB_parameters->G, TB_parameters->C, TB_parameters->Qm, TB_parameters->nb_layers, 0);
+    TB_parameters->E = E;
     TB_parameters->first_rE2 = TB_parameters->C;
     TB_parameters->E2 = TB_parameters->E;
     TB_parameters->R = nr_get_R_ldpc_decoder(TB_parameters->rv_index,
@@ -242,9 +271,6 @@ int nr_ulsch_decoding(PHY_VARS_gNB *phy_vars_gNB,
     for (int r = 0; r < TB_parameters->C; r++)
       TB_parameters->decodeSuccess[r] = false;
     TB_parameters->d_to_be_cleared = harq_process->harq_to_be_cleared;
-    reset_meas(&TB_parameters->ts_deinterleave);
-    reset_meas(&TB_parameters->ts_rate_unmatch);
-    reset_meas(&TB_parameters->ts_seg_prep);
     reset_meas(&TB_parameters->ts_ldpc_decode);
     for (int r = 0; r < TB_parameters->C; r++) {
       int Etmp = nr_get_E(TB_parameters->G, TB_parameters->C, TB_parameters->Qm, TB_parameters->nb_layers, r);
@@ -264,6 +290,7 @@ int nr_ulsch_decoding(PHY_VARS_gNB *phy_vars_gNB,
 
   int ret_decoder = phy_vars_gNB->nrLDPC_coding_interface.nrLDPC_coding_decoder(&slot_parameters);
   // post decode
+  int slot_type = nr_slot_select(&phy_vars_gNB->gNB_config, frame, nr_tti_rx);
   for (uint8_t pusch_id = 0; pusch_id < nb_pusch; pusch_id++) {
     uint8_t ULSCH_id = ULSCH_ids[pusch_id];
     NR_gNB_ULSCH_t *ulsch = &phy_vars_gNB->ulsch[ULSCH_id];
@@ -272,32 +299,24 @@ int nr_ulsch_decoding(PHY_VARS_gNB *phy_vars_gNB,
     nrLDPC_TB_decoding_parameters_t *TB_parameters = &TBs[pusch_id];
 
     uint32_t offset = 0, r_offset = 0;
-    bool crcok = true;
     LOG_D(PHY, "C = %d\n", TB_parameters->C);
     for (int r = 0; r < TB_parameters->C; r++) {
       LOG_D(PHY, "Segment %d %d\n", r, TB_parameters->decodeSuccess[r]);
-      if (TB_parameters->decodeSuccess[r] == false) {
+      uint32_t seg_len = (harq_process->K >> 3) - (harq_process->F >> 3) - ((harq_process->C > 1) ? 3 : 0);
+      if (TB_parameters->decodeSuccess[r]) {
+        memcpy(harq_process->b + offset, harq_process->c + r_offset, seg_len);
+      } else {
         LOG_D(PHY, "Segment %d/%d in error\n", r, TB_parameters->C);
-        crcok = false;
-        break;
       }
+      offset += seg_len;
+      r_offset += (harq_process->K >> 3);
     }
-    if (crcok) {
-      for (int r = 0; r < TB_parameters->C; r++) {
-        // Copy c to b in case of decoding success
-        memcpy(harq_process->b + offset,
-               harq_process->c + r_offset,
-               (harq_process->K >> 3) - (harq_process->F >> 3) - ((harq_process->C > 1) ? 3 : 0));
-        offset += ((harq_process->K >> 3) - (harq_process->F >> 3) - ((harq_process->C > 1) ? 3 : 0));
-        r_offset += (harq_process->K >> 3);
-      }
-    } else {
+    bool crcok = (harq_process->processedSegments == TB_parameters->C);
+    if (!crcok)
       LOG_D(PHY, "ULSCH %d in error\n", ULSCH_id);
-    }
-    merge_meas(&phy_vars_gNB->ts_deinterleave, &TB_parameters->ts_deinterleave);
-    merge_meas(&phy_vars_gNB->ts_rate_unmatch, &TB_parameters->ts_rate_unmatch);
-    merge_meas(&phy_vars_gNB->ts_seg_prep, &TB_parameters->ts_seg_prep);
-    merge_meas(&phy_vars_gNB->ts_ldpc_decode, &TB_parameters->ts_ldpc_decode);
+
+    MERGE_MEAS_FULL_SLOT(&phy_vars_gNB->ts_ldpc_decode, &TB_parameters->ts_ldpc_decode, slot_type, NR_UPLINK_SLOT);
+
     harq_process->harq_to_be_cleared = false;
   }
 

@@ -353,9 +353,9 @@ static bool check_periodicity(int val, int ideal_period, const frame_structure_t
   return (ideal_period < val + 1) && valid_periodicity_for_tdd_period;
 }
 
-static int set_ideal_period(bool is_csi)
+static int set_ideal_period(const nr_cell_sched_t *cell, bool is_csi)
 {
-  const frame_structure_t *fs = &RC.nrmac[0]->frame_structure;
+  const frame_structure_t *fs = &cell->frame_structure;
   const int nb_slots_per_period = fs->numb_slots_period;
   const int n_ul_slots_per_period = get_ul_slots_per_period(fs); // full UL + mixed with UL symbols
   // 2 reports per UE (RSRP and RI-PMI-CQI)
@@ -363,13 +363,13 @@ static int set_ideal_period(bool is_csi)
 }
 
 static void set_csirs_periodicity(NR_NZP_CSI_RS_Resource_t *nzpcsi0,
-                                  int id,
+                                  int offset,
                                   int ideal_period,
                                   const frame_structure_t *fs)
 {
   nzpcsi0->periodicityAndOffset = calloc(1,sizeof(*nzpcsi0->periodicityAndOffset));
   // TODO ideal period to be set according to estimation by the gNB on how fast the channel changes
-  const int offset = id; // id = ssb_index/2, offset should be set to ssb_index/2.
+  AssertFatal(offset < ideal_period, "CSI-RS offset %d goes beyond the assumed period %d\n", offset, ideal_period);
   if (check_periodicity(4, ideal_period, fs)) {
     nzpcsi0->periodicityAndOffset->present = NR_CSI_ResourcePeriodicityAndOffset_PR_slots4;
     nzpcsi0->periodicityAndOffset->choice.slots4 = offset;
@@ -410,12 +410,17 @@ static void set_csirs_periodicity(NR_NZP_CSI_RS_Resource_t *nzpcsi0,
     nzpcsi0->periodicityAndOffset->present = NR_CSI_ResourcePeriodicityAndOffset_PR_slots320;
     const int nb_dl_slots_period = get_full_dl_slots_per_period(fs); // full DL slots
     // checked for validity in verify_radio_configuration
-    AssertFatal(offset / 320 < nb_dl_slots_period, "Cannot allocate CSI-RS for BWP %d. Not enough resources for CSI-RS\n", id);
+    AssertFatal(offset / 320 < nb_dl_slots_period, "Cannot allocate CSI-RS for BWP %d. Not enough resources for CSI-RS\n", offset);
     nzpcsi0->periodicityAndOffset->choice.slots320 = (offset % 320) + (offset / 320);
   }
 }
 
-static NR_NZP_CSI_RS_Resource_t *get_nzp_csi_rs_resource(int id, int num_dl_antenna_ports, int curr_bwp, long scramblingID)
+static NR_NZP_CSI_RS_Resource_t *get_nzp_csi_rs_resource(int id,
+                                                         int num_dl_antenna_ports,
+                                                         int curr_bwp,
+                                                         int symbol_index,
+                                                         long scramblingID,
+                                                         const nr_cell_sched_t *cell)
 {
   NR_NZP_CSI_RS_Resource_t *nzpcsi = calloc(1, sizeof(*nzpcsi));
   nzpcsi->nzp_CSI_RS_ResourceId = id;
@@ -471,7 +476,7 @@ static NR_NZP_CSI_RS_Resource_t *get_nzp_csi_rs_resource(int id, int num_dl_ante
     default:
       AssertFatal(false, "Number of ports not yet supported\n");
   }
-  resourceMapping.firstOFDMSymbolInTimeDomain = 13; // last symbol of slot
+  resourceMapping.firstOFDMSymbolInTimeDomain = 13 - symbol_index;
   resourceMapping.firstOFDMSymbolInTimeDomain2 = NULL;
   resourceMapping.density.present = NR_CSI_RS_ResourceMapping__density_PR_one;
   resourceMapping.density.choice.one = (NULL_t)0;
@@ -483,8 +488,8 @@ static NR_NZP_CSI_RS_Resource_t *get_nzp_csi_rs_resource(int id, int num_dl_ante
   nzpcsi->powerControlOffsetSS = calloc(1, sizeof(*nzpcsi->powerControlOffsetSS));
   *nzpcsi->powerControlOffsetSS = NR_NZP_CSI_RS_Resource__powerControlOffsetSS_db0;
   nzpcsi->scramblingID = scramblingID;
-  const int ideal_period = set_ideal_period(true); // same periodicity as CSI measurement report
-  const frame_structure_t *fs = &(RC.nrmac[0]->frame_structure);
+  const int ideal_period = set_ideal_period(cell, true); // same periodicity as CSI measurement report
+  const frame_structure_t *fs = &cell->frame_structure;
   set_csirs_periodicity(nzpcsi, id, ideal_period, fs);
   nzpcsi->qcl_InfoPeriodicCSI_RS = calloc(1, sizeof(*nzpcsi->qcl_InfoPeriodicCSI_RS));
   *nzpcsi->qcl_InfoPeriodicCSI_RS = 0;
@@ -494,9 +499,11 @@ static NR_NZP_CSI_RS_Resource_t *get_nzp_csi_rs_resource(int id, int num_dl_ante
 
 static void config_csirs(const NR_ServingCellConfigCommon_t *servingcellconfigcommon,
                          NR_CSI_MeasConfig_t *csi_MeasConfig,
+                         const nr_cell_sched_t *cell,
                          int num_dl_antenna_ports,
                          int curr_bwp,
                          int do_csirs,
+                         int symbol_index,
                          int id)
 {
   if (do_csirs) {
@@ -515,7 +522,7 @@ static void config_csirs(const NR_ServingCellConfigCommon_t *servingcellconfigco
     if (!csi_MeasConfig->nzp_CSI_RS_ResourceToAddModList)
       csi_MeasConfig->nzp_CSI_RS_ResourceToAddModList = calloc(1, sizeof(*csi_MeasConfig->nzp_CSI_RS_ResourceToAddModList));
     NR_NZP_CSI_RS_Resource_t *nzpcsi0 =
-        get_nzp_csi_rs_resource(id, num_dl_antenna_ports, curr_bwp, *servingcellconfigcommon->physCellId);
+        get_nzp_csi_rs_resource(id, num_dl_antenna_ports, curr_bwp, symbol_index, *servingcellconfigcommon->physCellId, cell);
     asn1cSeqAdd(&csi_MeasConfig->nzp_CSI_RS_ResourceToAddModList->list, nzpcsi0);
 
     // Add NZP CSI-RS Resource ID: identifier used to reference one NZP-CSI-RS-Resource
@@ -674,13 +681,13 @@ static void set_dl_maxmimolayers(NR_PDSCH_ServingCellConfig_t *pdsch_servingcell
     *pdsch_servingcellconfig->ext1->maxMIMO_Layers = min(maxMIMO_layers, ue_supported_layers);
 }
 
-static struct NR_SRS_Resource__resourceType__periodic *configure_periodic_srs(const int uid)
+static struct NR_SRS_Resource__resourceType__periodic *configure_periodic_srs(const int uid, const nr_cell_sched_t *cell)
 {
-  frame_structure_t *fs = &RC.nrmac[0]->frame_structure;
+  const frame_structure_t *fs = &cell->frame_structure;
   int offset = get_ul_slot_offset(fs, uid, false); // only full UL slots for SRS
   // checked for validity in verify_radio_configuration
   AssertFatal(offset < 2560, "Cannot allocate SRS configuration for uid %d, not enough resources\n", uid);
-  const int ideal_period = set_ideal_period(false);
+  const int ideal_period = set_ideal_period(cell,false);
 
   struct NR_SRS_Resource__resourceType__periodic *periodic_srs = calloc(1,sizeof(*periodic_srs));
   if (check_periodicity(4, ideal_period, fs)) {
@@ -784,6 +791,7 @@ static NR_SRS_ResourceSet_t *get_srs_resourceset(const int resset_id,
 }
 
 static NR_SRS_Resource_t *get_srs_resource(const NR_UE_NR_Capability_t *uecap,
+                                           const nr_cell_sched_t *cell,
                                            const int curr_bwp,
                                            const int uid,
                                            const int res_id,
@@ -859,7 +867,7 @@ static NR_SRS_Resource_t *get_srs_resource(const NR_UE_NR_Capability_t *uecap,
   srs_res->groupOrSequenceHopping = NR_SRS_Resource__groupOrSequenceHopping_neither;
   if (do_srs == PERIODIC_SRS) {
     srs_res->resourceType.present = NR_SRS_Resource__resourceType_PR_periodic;
-    srs_res->resourceType.choice.periodic = configure_periodic_srs(uid);
+    srs_res->resourceType.choice.periodic = configure_periodic_srs(uid, cell);
   } else {
     srs_res->resourceType.present = NR_SRS_Resource__resourceType_PR_aperiodic;
     srs_res->resourceType.choice.aperiodic = calloc_or_fail(1, sizeof(*srs_res->resourceType.choice.aperiodic));
@@ -875,6 +883,7 @@ static NR_SRS_Resource_t *get_srs_resource(const NR_UE_NR_Capability_t *uecap,
 
 static NR_SetupRelease_SRS_Config_t *get_config_srs(const NR_ServingCellConfigCommon_t *scc,
                                                     const NR_UE_NR_Capability_t *uecap,
+                                                    const nr_cell_sched_t *cell,
                                                     const int curr_bwp,
                                                     const int uid,
                                                     const int res_id,
@@ -889,30 +898,15 @@ static NR_SetupRelease_SRS_Config_t *get_config_srs(const NR_ServingCellConfigCo
 
   srs_Config->srs_ResourceToAddModList = calloc_or_fail(1, sizeof(*srs_Config->srs_ResourceToAddModList));
   NR_SRS_Resource_t *srs_res0 =
-      get_srs_resource(uecap, curr_bwp, uid, res_id, maxMIMO_Layers, NR_SRS_Resource__transmissionComb_PR_n2, do_srs);
+      get_srs_resource(uecap, cell, curr_bwp, uid, res_id, maxMIMO_Layers, NR_SRS_Resource__transmissionComb_PR_n2, do_srs);
   asn1cSeqAdd(&srs_Config->srs_ResourceToAddModList->list, srs_res0);
 
   srs_Config->srs_ResourceSetToAddModList = calloc_or_fail(1, sizeof(*srs_Config->srs_ResourceSetToAddModList));
   int k2 = minRXTXTIME;
-  int num_reset = 1;
+  int num_res_set = 1;
   const long usage = NR_SRS_ResourceSet__usage_codebook;
-  NR_SRS_ResourceSet_t *srs_resset = get_srs_resourceset(num_reset, res_id, usage, k2, num_reset, do_srs);
+  NR_SRS_ResourceSet_t *srs_resset = get_srs_resourceset(num_res_set, res_id, usage, k2, num_res_set, do_srs);
   asn1cSeqAdd(&srs_Config->srs_ResourceSetToAddModList->list, srs_resset);
-  if (do_srs == APERIODIC_SRS) {
-    NR_PUSCH_TimeDomainResourceAllocationList_t *tda_list =
-          scc->uplinkConfigCommon->initialUplinkBWP->pusch_ConfigCommon->choice.setup->pusch_TimeDomainAllocationList;
-    for (int i = 0; i < tda_list->list.count; ++i) {
-      if (k2 == *tda_list->list.array[i]->k2)
-        continue;
-      num_reset++;
-      k2 = *tda_list->list.array[i]->k2;
-      // in case of UL heavy configuration better use periodic SRS if there are more UL slots than allowed trigger states
-      AssertFatal(num_reset < 4, "Exceeded the number of allowed SRS trigger states.\n");
-      const long usage = NR_SRS_ResourceSet__usage_codebook;
-      NR_SRS_ResourceSet_t *srs_resset = get_srs_resourceset(num_reset, res_id, usage, k2, num_reset, do_srs);
-      asn1cSeqAdd(&srs_Config->srs_ResourceSetToAddModList->list, srs_resset);
-    }
-  }
   srs_Config->srs_ResourceSetToReleaseList = NULL;
   srs_Config->srs_ResourceToReleaseList = NULL;
 
@@ -1034,9 +1028,25 @@ void prepare_sim_uecap(NR_UE_NR_Capability_t *cap,
   }
 }
 
+int csi_symbols_in_slot(const NR_ServingCellConfigCommon_t *scc)
+{
+  uint64_t ssb_bitmap = get_ssb_bitmap(scc);
+  bool two_ssb_per_slot = false;
+  for (int i = 0; i < 64; i += 2) {
+    // check if both even ssb and subsequent odd ssb are configured
+    int even_and_odd_set = (ssb_bitmap >> (63 - (i + 1))) & 0x03;
+    if (even_and_odd_set == 0x3) {
+      two_ssb_per_slot = true;
+      break;
+    }
+  }
+  return two_ssb_per_slot ? 2 : 1;
+}
+
 void nr_rrc_config_dl_tda(NR_PDSCH_TimeDomainResourceAllocationList_t *pdsch_TimeDomainAllocationList,
                           frame_type_t frame_type,
-                          NR_TDD_UL_DL_ConfigCommon_t *tdd_UL_DL_ConfigurationCommon,
+                          const NR_TDD_UL_DL_ConfigCommon_t *tdd_UL_DL_ConfigurationCommon,
+                          int csi_symbols,
                           int len_coreset)
 {
   // setting default TDA for DL with TDA index 0
@@ -1048,12 +1058,11 @@ void nr_rrc_config_dl_tda(NR_PDSCH_TimeDomainResourceAllocationList_t *pdsch_Tim
   timedomainresourceallocation->startSymbolAndLength = get_SLIV(len_coreset,14-len_coreset); // basic slot configuration starting in symbol 1 til the end of the slot
   asn1cSeqAdd(&pdsch_TimeDomainAllocationList->list, timedomainresourceallocation);
   // setting TDA for CSI-RS symbol with index 1
-  struct NR_PDSCH_TimeDomainResourceAllocation *timedomainresourceallocation1 = CALLOC(1,sizeof(NR_PDSCH_TimeDomainResourceAllocation_t));
+  NR_PDSCH_TimeDomainResourceAllocation_t *timedomainresourceallocation1 = CALLOC(1,sizeof(NR_PDSCH_TimeDomainResourceAllocation_t));
   timedomainresourceallocation1->mappingType = NR_PDSCH_TimeDomainResourceAllocation__mappingType_typeA;
-  timedomainresourceallocation1->startSymbolAndLength = get_SLIV(len_coreset,14-len_coreset-1); // 1 symbol CSI-RS
+  timedomainresourceallocation1->startSymbolAndLength = get_SLIV(len_coreset, 14 - len_coreset - csi_symbols); // CSI-RS symbols
   asn1cSeqAdd(&pdsch_TimeDomainAllocationList->list, timedomainresourceallocation1);
-  if(frame_type==TDD) {
-    // TDD
+  if(frame_type == TDD) {
     if(tdd_UL_DL_ConfigurationCommon) {
       int dl_symb = 0;
       if (tdd_UL_DL_ConfigurationCommon->pattern2 && tdd_UL_DL_ConfigurationCommon->pattern2->nrofDownlinkSymbols)
@@ -1068,7 +1077,7 @@ void nr_rrc_config_dl_tda(NR_PDSCH_TimeDomainResourceAllocationList_t *pdsch_Tim
       }
       if(dl_symb > 1) {
         // mixed slot TDA with TDA index 2
-        struct NR_PDSCH_TimeDomainResourceAllocation *timedomainresourceallocation2 = CALLOC(1,sizeof(NR_PDSCH_TimeDomainResourceAllocation_t));
+        NR_PDSCH_TimeDomainResourceAllocation_t *timedomainresourceallocation2 = CALLOC(1,sizeof(NR_PDSCH_TimeDomainResourceAllocation_t));
         timedomainresourceallocation2->mappingType = NR_PDSCH_TimeDomainResourceAllocation__mappingType_typeA;
         timedomainresourceallocation2->startSymbolAndLength = get_SLIV(len_coreset,dl_symb-len_coreset); // mixed slot configuration starting in symbol 1 til the end of the dl allocation
         asn1cSeqAdd(&pdsch_TimeDomainAllocationList->list, timedomainresourceallocation2);
@@ -1354,9 +1363,9 @@ static void set_pucch_power_config(NR_PUCCH_Config_t *pucch_Config)
   asn1cSeqAdd(&pucch_Config->spatialRelationInfoToAddModList->list,pucchspatial);
 }
 
-static void set_SR_periodandoffset(NR_SchedulingRequestResourceConfig_t *schedulingRequestResourceConfig, int scs)
+static void set_SR_periodandoffset(const nr_cell_sched_t *cell, NR_SchedulingRequestResourceConfig_t *schedulingRequestResourceConfig, int scs)
 {
-  const frame_structure_t *fs = &RC.nrmac[0]->frame_structure;
+  const frame_structure_t *fs = &cell->frame_structure;
   int sr_slot = 1; // in FDD SR in slot 1
   if (fs->frame_type == TDD)
     sr_slot = get_first_ul_slot(fs, true);
@@ -1399,7 +1408,7 @@ static void set_SR_periodandoffset(NR_SchedulingRequestResourceConfig_t *schedul
   }
 }
 
-static void scheduling_request_config(NR_PUCCH_Config_t *pucch_Config, int scs)
+static void scheduling_request_config(const nr_cell_sched_t *cell, NR_PUCCH_Config_t *pucch_Config, int scs)
 {
   // format with <=2 bits in pucch resource set 0
   NR_PUCCH_ResourceSet_t *pucchresset = pucch_Config->resourceSetToAddModList->list.array[0];
@@ -1411,7 +1420,7 @@ static void scheduling_request_config(NR_PUCCH_Config_t *pucch_Config, int scs)
   schedulingRequestResourceConfig->schedulingRequestResourceId = 1;
   schedulingRequestResourceConfig->schedulingRequestID = 0;
 
-  set_SR_periodandoffset(schedulingRequestResourceConfig, scs);
+  set_SR_periodandoffset(cell, schedulingRequestResourceConfig, scs);
 
   schedulingRequestResourceConfig->resource = calloc(1,sizeof(*schedulingRequestResourceConfig->resource));
   *schedulingRequestResourceConfig->resource = *pucchressetid;
@@ -1717,7 +1726,7 @@ static NR_PTRS_DownlinkConfig_t *config_dlptrs(const nr_ptrs_config_t *ptrs)
   return ptrs_config;
 }
 
-static NR_SetupRelease_PDSCH_Config_t *config_pdsch(uint64_t ssb_bitmap, int bwp_Id, bool do_TCI, nr_ptrs_config_t *ptrs)
+static NR_SetupRelease_PDSCH_Config_t *config_pdsch(uint64_t ssb_bitmap, int bwp_Id, const nr_mac_config_t *configuration)
 {
   NR_SetupRelease_PDSCH_Config_t *setup_pdsch_Config = calloc(1,sizeof(*setup_pdsch_Config));
   setup_pdsch_Config->present = NR_SetupRelease_PDSCH_Config_PR_setup;
@@ -1727,8 +1736,8 @@ static NR_SetupRelease_PDSCH_Config_t *config_pdsch(uint64_t ssb_bitmap, int bwp
   pdsch_Config->dmrs_DownlinkForPDSCH_MappingTypeA->present = NR_SetupRelease_DMRS_DownlinkConfig_PR_setup;
   pdsch_Config->dmrs_DownlinkForPDSCH_MappingTypeA->choice.setup = calloc(1, sizeof(*pdsch_Config->dmrs_DownlinkForPDSCH_MappingTypeA->choice.setup));
   NR_DMRS_DownlinkConfig_t *dmrs_DownlinkForPDSCH_MappingTypeA = pdsch_Config->dmrs_DownlinkForPDSCH_MappingTypeA->choice.setup;
-  if (ptrs) {
-    NR_PTRS_DownlinkConfig_t *ptrs_config = config_dlptrs(ptrs);
+  if (configuration->ptrs) {
+    NR_PTRS_DownlinkConfig_t *ptrs_config = config_dlptrs(configuration->ptrs);
     NR_SetupRelease_PTRS_DownlinkConfig_t *phaseTrackingRS = calloc(1, sizeof(*phaseTrackingRS));
     phaseTrackingRS->present = NR_SetupRelease_PTRS_DownlinkConfig_PR_setup;
     phaseTrackingRS->choice.setup = ptrs_config;
@@ -1750,7 +1759,7 @@ static NR_SetupRelease_PDSCH_Config_t *config_pdsch(uint64_t ssb_bitmap, int bwp
   pdsch_Config->prb_BundlingType.choice.staticBundling->bundleSize = calloc(1, sizeof(*pdsch_Config->prb_BundlingType.choice.staticBundling->bundleSize));
   *pdsch_Config->prb_BundlingType.choice.staticBundling->bundleSize = NR_PDSCH_Config__prb_BundlingType__staticBundling__bundleSize_wideband;
 
-  if (do_TCI) {
+  if (configuration->do_TCI) {
     int n_ssb = 0;
     if (!pdsch_Config->tci_StatesToAddModList)
       pdsch_Config->tci_StatesToAddModList=calloc(1,sizeof(*pdsch_Config->tci_StatesToAddModList));
@@ -1838,6 +1847,7 @@ static NR_BWP_Downlink_t *config_downlinkBWP(const NR_ServingCellConfigCommon_t 
   nr_rrc_config_dl_tda(bwp->bwp_Common->pdsch_ConfigCommon->choice.setup->pdsch_TimeDomainAllocationList,
                        get_frame_type((int)*scc->downlinkConfigCommon->frequencyInfoDL->frequencyBandList.list.array[0], *scc->ssbSubcarrierSpacing),
                        scc->tdd_UL_DL_ConfigurationCommon,
+                       csi_symbols_in_slot(scc),
                        coreset->duration);
 
   if (!bwp->bwp_Dedicated) {
@@ -1866,7 +1876,7 @@ static NR_BWP_Downlink_t *config_downlinkBWP(const NR_ServingCellConfigCommon_t 
   asn1cSeqAdd(&bwp->bwp_Dedicated->pdcch_Config->choice.setup->searchSpacesToAddModList->list, ss3);
 
   bwp->bwp_Dedicated->pdcch_Config->choice.setup->searchSpacesToReleaseList = NULL;
-  bwp->bwp_Dedicated->pdsch_Config = config_pdsch(ssb_bitmap, bwp->bwp_Id, configuration->do_TCI, configuration->ptrs);
+  bwp->bwp_Dedicated->pdsch_Config = config_pdsch(ssb_bitmap, bwp->bwp_Id, configuration);
 
   set_dl_mcs_table(bwp->bwp_Common->genericParameters.subcarrierSpacing,
                    force_256qam_off ? NULL : uecap,
@@ -1879,6 +1889,7 @@ static NR_BWP_Uplink_t *config_uplinkBWP(bool is_SA,
                                          int uid,
                                          int maxMIMO_Layers,
                                          const nr_mac_config_t *configuration,
+                                         const nr_cell_sched_t *cell,
                                          const NR_ServingCellConfigCommon_t *scc,
                                          const NR_UE_NR_Capability_t *uecap)
 {
@@ -1923,13 +1934,13 @@ static NR_BWP_Uplink_t *config_uplinkBWP(bool is_SA,
   config_pucch_resset0(scc, pucch_Config, uid, curr_bwp, uecap, &configuration->pdsch_AntennaPorts);
   config_pucch_resset1(scc, pucch_Config, uid, curr_bwp, uecap, &configuration->pdsch_AntennaPorts);
   set_pucch_power_config(pucch_Config);
-  scheduling_request_config(pucch_Config, ubwp->bwp_Common->genericParameters.subcarrierSpacing);
+  scheduling_request_config(cell, pucch_Config, ubwp->bwp_Common->genericParameters.subcarrierSpacing);
   set_dl_DataToUL_ACK(pucch_Config, configuration->minRXTXTIME);
-
   ubwp->bwp_Dedicated->pusch_Config = config_pusch(configuration, scc, uecap);
 
   ubwp->bwp_Dedicated->srs_Config = get_config_srs(scc,
                                                    NULL,
+                                                   cell,
                                                    curr_bwp,
                                                    uid,
                                                    ubwp->bwp_Id,
@@ -1952,17 +1963,18 @@ static void set_phr_config(NR_MAC_CellGroupConfig_t *mac_CellGroupConfig)
   mac_CellGroupConfig->phr_Config->choice.setup->phr_Tx_PowerFactorChange = NR_PHR_Config__phr_Tx_PowerFactorChange_dB1;
 }
 
-static void set_csi_meas_periodicity(const NR_ServingCellConfigCommon_t *scc,
+static void set_csi_meas_periodicity(const nr_cell_sched_t *cell,
+                                     const NR_ServingCellConfigCommon_t *scc,
                                      NR_CSI_ReportConfig_t *csirep,
                                      int uid,
                                      int curr_bwp,
                                      const nr_pdsch_AntennaPorts_t *antennaports,
                                      bool is_rsrp)
 {
-  const int ideal_period = set_ideal_period(true);
+  const int ideal_period = set_ideal_period(cell, true);
   const int num_pucch2 = get_nb_pucch2_per_slot(scc, curr_bwp, antennaports);
   const int idx = (uid * 2 / num_pucch2) + is_rsrp;
-  frame_structure_t *fs = &RC.nrmac[0]->frame_structure;
+  const frame_structure_t *fs = &cell->frame_structure;
   int offset = get_ul_slot_offset(fs, idx, true);
   LOG_D(NR_MAC, "set_csi_meas_periodicity: uid = %d, offset = %d, ideal_period = %d", uid, offset, ideal_period);
   // checked for validity in verify_radio_configuration
@@ -2108,7 +2120,8 @@ static NR_CodebookConfig_t *config_csi_codebook(const nr_pdsch_AntennaPorts_t *a
   return codebookConfig;
 }
 
-static void config_csi_meas_report(NR_CSI_MeasConfig_t *csi_MeasConfig,
+static void config_csi_meas_report(const nr_cell_sched_t *cell,
+                                   NR_CSI_MeasConfig_t *csi_MeasConfig,
                                    const NR_ServingCellConfigCommon_t *servingcellconfigcommon,
                                    NR_PUCCH_CSI_Resource_t *pucchcsires,
                                    struct NR_SetupRelease_PDSCH_Config *pdsch_Config,
@@ -2145,7 +2158,7 @@ static void config_csi_meas_report(NR_CSI_MeasConfig_t *csi_MeasConfig,
   csirep->nzp_CSI_RS_ResourcesForInterference = NULL;
   csirep->reportConfigType.present = NR_CSI_ReportConfig__reportConfigType_PR_periodic;
   csirep->reportConfigType.choice.periodic = calloc(1, sizeof(*csirep->reportConfigType.choice.periodic));
-  set_csi_meas_periodicity(servingcellconfigcommon, csirep, uid, curr_bwp, antennaports, false);
+  set_csi_meas_periodicity(cell, servingcellconfigcommon, csirep, uid, curr_bwp, antennaports, false);
   asn1cSeqAdd(&csirep->reportConfigType.choice.periodic->pucch_CSI_ResourceList.list, pucchcsires);
   csirep->reportQuantity.present = NR_CSI_ReportConfig__reportQuantity_PR_cri_RI_PMI_CQI;
   csirep->reportQuantity.choice.cri_RI_PMI_CQI = (NULL_t)0;
@@ -2208,6 +2221,7 @@ static void config_rsrp_meas_report(NR_CSI_MeasConfig_t *csi_MeasConfig,
                                     const NR_ServingCellConfigCommon_t *servingcellconfigcommon,
                                     NR_PUCCH_CSI_Resource_t *pucchcsires,
                                     const nr_mac_config_t *configuration,
+                                    const nr_cell_sched_t *cell,
                                     int rep_id,
                                     int uid,
                                     int curr_bwp,
@@ -2239,7 +2253,7 @@ static void config_rsrp_meas_report(NR_CSI_MeasConfig_t *csi_MeasConfig,
   csirep->nzp_CSI_RS_ResourcesForInterference = NULL;
   csirep->reportConfigType.present = NR_CSI_ReportConfig__reportConfigType_PR_periodic;
   csirep->reportConfigType.choice.periodic = calloc(1, sizeof(*csirep->reportConfigType.choice.periodic));
-  set_csi_meas_periodicity(servingcellconfigcommon, csirep, uid, curr_bwp, pdschap, true);
+  set_csi_meas_periodicity(cell, servingcellconfigcommon, csirep, uid, curr_bwp, pdschap, true);
   asn1cSeqAdd(&csirep->reportConfigType.choice.periodic->pucch_CSI_ResourceList.list, pucchcsires);
   if (configuration->report_type == SSB_SINR) {
     csirep->reportQuantity.present = NR_CSI_ReportConfig__reportQuantity_PR_none;
@@ -2955,6 +2969,8 @@ NR_BCCH_DL_SCH_Message_t *get_SIB1_NR(const NR_ServingCellConfigCommon_t *scc,
   switch (scc->ssb_PositionsInBurst->present) {
     case NR_ServingCellConfigCommon__ssb_PositionsInBurst_PR_shortBitmap:
       ServCellCom->ssb_PositionsInBurst.inOneGroup = bit_string_clone(&scc->ssb_PositionsInBurst->choice.shortBitmap);
+      // ServingCellConfigCommonSIB requires an eight-bit inOneGroup bitmap.
+      ServCellCom->ssb_PositionsInBurst.inOneGroup.bits_unused = 0;
       break;
     case NR_ServingCellConfigCommon__ssb_PositionsInBurst_PR_mediumBitmap:
       ServCellCom->ssb_PositionsInBurst.inOneGroup = bit_string_clone(&scc->ssb_PositionsInBurst->choice.mediumBitmap);
@@ -3088,6 +3104,10 @@ int encode_SIB_NR(NR_BCCH_DL_SCH_Message_t *sib, uint8_t *buffer, int max_buffer
   AssertFatal(max_buffer_size <= NR_MAX_SIB_LENGTH / 8,
               "Maximum buffer size too large: 3GPP TS 38.331 section 5.2.1 - The physical layer imposes a limit to the "
               "maximum size a SIB can take. The maximum SIB1 or SI message size is 2976 bits.\n");
+  char errbuf[256] = {0};
+  size_t errlen = sizeof(errbuf);
+  const int ret = asn_check_constraints(&asn_DEF_NR_BCCH_DL_SCH_Message, sib, errbuf, &errlen);
+  AssertFatal(ret == 0, "BCCH-DL-SCH ASN.1 constraint check failed: %s\n", errbuf);
   asn_enc_rval_t enc_rval = uper_encode_to_buffer(&asn_DEF_NR_BCCH_DL_SCH_Message, NULL, sib, buffer, max_buffer_size);
   AssertFatal(enc_rval.encoded > 0 && enc_rval.encoded <= max_buffer_size * 8, "ASN1 message encoding failed (%s, %lu)!\n", enc_rval.failed_type->name, enc_rval.encoded);
   return (enc_rval.encoded + 7) / 8;
@@ -3354,6 +3374,7 @@ static void fill_harq_IEs(NR_ServingCellConfig_t *scc, int num_dlharq, int num_u
 
 static NR_BWP_UplinkDedicated_t *configure_initial_ul_bwp(const NR_ServingCellConfigCommon_t *scc,
                                                           const nr_mac_config_t *configuration,
+                                                          const nr_cell_sched_t *cell,
                                                           int maxMIMO_Layers,
                                                           const NR_UE_NR_Capability_t *uecap,
                                                           int id)
@@ -3376,6 +3397,7 @@ static NR_BWP_UplinkDedicated_t *configure_initial_ul_bwp(const NR_ServingCellCo
   initialUplinkBWP->pusch_Config = config_pusch(configuration, scc, uecap);
   initialUplinkBWP->srs_Config = get_config_srs(scc,
                                                 uecap,
+                                                cell,
                                                 curr_bwp,
                                                 id,
                                                 0,
@@ -3383,7 +3405,7 @@ static NR_BWP_UplinkDedicated_t *configure_initial_ul_bwp(const NR_ServingCellCo
                                                 configuration->minRXTXTIME,
                                                 configuration->do_SRS);
 
-  scheduling_request_config(pucch_Config, scc->uplinkConfigCommon->initialUplinkBWP->genericParameters.subcarrierSpacing);
+  scheduling_request_config(cell, pucch_Config, scc->uplinkConfigCommon->initialUplinkBWP->genericParameters.subcarrierSpacing);
   set_dl_DataToUL_ACK(pucch_Config, configuration->minRXTXTIME);
   return initialUplinkBWP;
 }
@@ -3430,7 +3452,7 @@ static NR_BWP_DownlinkDedicated_t *configure_initial_dl_bwp(const NR_ServingCell
   asn1cSeqAdd(&pdcch_Config->searchSpacesToAddModList->list, ss2);
   bwp_Dedicated->pdcch_Config->choice.setup = pdcch_Config;
 
-  bwp_Dedicated->pdsch_Config = config_pdsch(bitmap, 0, configuration->do_TCI, configuration->ptrs);
+  bwp_Dedicated->pdsch_Config = config_pdsch(bitmap, 0, configuration);
   // we might call configuration of initial BWP for BWP switch when we already have UE capabilities
   set_dl_mcs_table(scc->uplinkConfigCommon->initialUplinkBWP->genericParameters.subcarrierSpacing,
                    configuration->force_256qam_off ? NULL : uecap,
@@ -3442,7 +3464,8 @@ static NR_BWP_DownlinkDedicated_t *configure_initial_dl_bwp(const NR_ServingCell
 static NR_CSI_MeasConfig_t *get_csiMeasConfig(const NR_ServingCellConfig_t *configDedicated,
                                               const NR_UE_NR_Capability_t *uecap,
                                               const NR_ServingCellConfigCommon_t *scc,
-                                              const nr_mac_config_t *configuration,
+                                              const nr_mac_config_t *config,
+                                              const nr_cell_sched_t *cell,
                                               int uid,
                                               int bwp_id,
                                               uint64_t bitmap,
@@ -3483,11 +3506,13 @@ static NR_CSI_MeasConfig_t *get_csiMeasConfig(const NR_ServingCellConfig_t *conf
     pdsch_Config = bwp->bwp_Dedicated->pdsch_Config;
     curr_bwp = NRRIV2BW(bwp->bwp_Common->genericParameters.locationAndBandwidth, MAX_BWP_SIZE);
   }
-
-  const int pdsch_AntennaPorts =
-      configuration->pdsch_AntennaPorts.N1 * configuration->pdsch_AntennaPorts.N2 * configuration->pdsch_AntennaPorts.XP;
-  config_csirs(scc, csi_MeasConfig, pdsch_AntennaPorts, curr_bwp, configuration->do_CSIRS, ssb_index / 2);
-  config_csiim(configuration->do_CSIRS, pdsch_AntennaPorts, curr_bwp, csi_MeasConfig, ssb_index / 2);
+  // check if SSB index is even/odd and then select the other SSB index in the same slot
+  int same_slot_index = (ssb_index % 2 == 0) ? (ssb_index + 1) : (ssb_index - 1);
+  bool has_companion = (bitmap >> (63 - same_slot_index)) & 0x01;
+  int symbol_index = has_companion ? ssb_index % 2 : 0;
+  const int pdsch_AntennaPorts = config->pdsch_AntennaPorts.N1 * config->pdsch_AntennaPorts.N2 * config->pdsch_AntennaPorts.XP;
+  config_csirs(scc, csi_MeasConfig, cell, pdsch_AntennaPorts, curr_bwp, config->do_CSIRS, symbol_index, ssb_index);
+  config_csiim(config->do_CSIRS, pdsch_AntennaPorts, curr_bwp, csi_MeasConfig, ssb_index);
 
   NR_CSI_ResourceConfig_t *csires1 = calloc(1, sizeof(*csires1));
   csires1->csi_ResourceConfigId = bwp_id + 20;
@@ -3504,7 +3529,7 @@ static NR_CSI_MeasConfig_t *get_csiMeasConfig(const NR_ServingCellConfig_t *conf
   asn1cSeqAdd(&csi_MeasConfig->csi_ResourceConfigToAddModList->list, csires1);
 
   int pucch_Resource = 2;
-  if (configuration->do_CSIRS) {
+  if (config->do_CSIRS) {
     NR_CSI_ResourceConfig_t *csires0 = calloc(1, sizeof(*csires0));
     csires0->csi_ResourceConfigId = bwp_id;
     csires0->csi_RS_ResourceSetList.present = NR_CSI_ResourceConfig__csi_RS_ResourceSetList_PR_nzp_CSI_RS_SSB;
@@ -3513,21 +3538,21 @@ static NR_CSI_MeasConfig_t *get_csiMeasConfig(const NR_ServingCellConfig_t *conf
     csires0->csi_RS_ResourceSetList.choice.nzp_CSI_RS_SSB->nzp_CSI_RS_ResourceSetList =
         calloc(1, sizeof(*csires0->csi_RS_ResourceSetList.choice.nzp_CSI_RS_SSB->nzp_CSI_RS_ResourceSetList));
     NR_NZP_CSI_RS_ResourceSetId_t *nzp0 = calloc(1, sizeof(*nzp0));
-    *nzp0 = ssb_index / 2;
+    *nzp0 = ssb_index;
     asn1cSeqAdd(&csires0->csi_RS_ResourceSetList.choice.nzp_CSI_RS_SSB->nzp_CSI_RS_ResourceSetList->list, nzp0);
     csires0->bwp_Id = bwp_id;
     csires0->resourceType = NR_CSI_ResourceConfig__resourceType_periodic;
     asn1cSeqAdd(&csi_MeasConfig->csi_ResourceConfigToAddModList->list, csires0);
   }
 
-  if (configuration->do_CSIRS) {
+  if (config->do_CSIRS) {
     NR_CSI_ResourceConfig_t *csires2 = calloc(1, sizeof(*csires2));
     csires2->csi_ResourceConfigId = bwp_id + 10;
     csires2->csi_RS_ResourceSetList.present = NR_CSI_ResourceConfig__csi_RS_ResourceSetList_PR_csi_IM_ResourceSetList;
     csires2->csi_RS_ResourceSetList.choice.csi_IM_ResourceSetList =
         calloc(1, sizeof(*csires2->csi_RS_ResourceSetList.choice.csi_IM_ResourceSetList));
     NR_CSI_IM_ResourceSetId_t *csiim00 = calloc(1, sizeof(*csiim00));
-    *csiim00 = ssb_index / 2;
+    *csiim00 = ssb_index;
     asn1cSeqAdd(&csires2->csi_RS_ResourceSetList.choice.csi_IM_ResourceSetList->list, csiim00);
     csires2->bwp_Id = bwp_id;
     csires2->resourceType = NR_CSI_ResourceConfig__resourceType_periodic;
@@ -3536,11 +3561,12 @@ static NR_CSI_MeasConfig_t *get_csiMeasConfig(const NR_ServingCellConfig_t *conf
     NR_PUCCH_CSI_Resource_t *pucchcsi = calloc(1, sizeof(*pucchcsi));
     pucchcsi->uplinkBandwidthPartId = bwp_id;
     pucchcsi->pucch_Resource = pucch_Resource;
-    config_csi_meas_report(csi_MeasConfig,
+    config_csi_meas_report(cell,
+                           csi_MeasConfig,
                            scc,
                            pucchcsi,
                            pdsch_Config,
-                           &configuration->pdsch_AntennaPorts,
+                           &config->pdsch_AntennaPorts,
                            *configDedicated->pdsch_ServingCellConfig->choice.setup->ext1->maxMIMO_Layers,
                            bwp_id,
                            uid,
@@ -3553,7 +3579,8 @@ static NR_CSI_MeasConfig_t *get_csiMeasConfig(const NR_ServingCellConfig_t *conf
                           uecap,
                           scc,
                           pucchrsrp,
-                          configuration,
+                          config,
+                          cell,
                           bwp_id + 10,
                           uid,
                           curr_bwp,
@@ -3562,10 +3589,12 @@ static NR_CSI_MeasConfig_t *get_csiMeasConfig(const NR_ServingCellConfig_t *conf
 }
 
 static NR_SpCellConfig_t *get_initial_SpCellConfig(int uid,
+                                                   bool redcap,
                                                    const NR_ServingCellConfigCommon_t *scc,
-                                                   const nr_mac_config_t *configuration,
+                                                   const nr_cell_sched_t *cell,
                                                    int ssb_index)
 {
+  const nr_mac_config_t *configuration = &cell->radio_config;
   NR_SpCellConfig_t *SpCellConfig = calloc(1, sizeof(*SpCellConfig));
   SpCellConfig->servCellIndex = NULL;
   SpCellConfig->reconfigurationWithSync = NULL;
@@ -3596,20 +3625,20 @@ static NR_SpCellConfig_t *get_initial_SpCellConfig(int uid,
 
   uint64_t bitmap = get_ssb_bitmap(scc);
   int first_active_bwp = 0;
-  if (configuration->num_additional_bwps > 0)
+  if (!redcap && configuration->num_additional_bwps > 0)
     first_active_bwp = configuration->first_active_bwp > 0 ? 1 : 0;
 
   asn1cCallocOne(configDedicated->firstActiveDownlinkBWP_Id, first_active_bwp);
   asn1cCallocOne(uplinkConfig->firstActiveUplinkBWP_Id, first_active_bwp);
   if (first_active_bwp == 0) {
-    uplinkConfig->initialUplinkBWP = configure_initial_ul_bwp(scc, configuration, maxMIMO_Layers, NULL, uid);
+    uplinkConfig->initialUplinkBWP = configure_initial_ul_bwp(scc, configuration, cell, maxMIMO_Layers, NULL, uid);
     configDedicated->initialDownlinkBWP = configure_initial_dl_bwp(scc, bitmap, NULL, configuration);
   } else {
     configDedicated->downlinkBWP_ToAddModList = calloc(1, sizeof(*configDedicated->downlinkBWP_ToAddModList));
     NR_BWP_Downlink_t *bwp = config_downlinkBWP(scc, NULL, false, true, configuration);
     asn1cSeqAdd(&configDedicated->downlinkBWP_ToAddModList->list, bwp);
     uplinkConfig->uplinkBWP_ToAddModList = calloc(1, sizeof(*uplinkConfig->uplinkBWP_ToAddModList));
-    NR_BWP_Uplink_t *ubwp = config_uplinkBWP(true, uid, maxMIMO_Layers, configuration, scc, NULL);
+    NR_BWP_Uplink_t *ubwp = config_uplinkBWP(true, uid, maxMIMO_Layers, configuration, cell, scc, NULL);
     asn1cSeqAdd(&uplinkConfig->uplinkBWP_ToAddModList->list, ubwp);
   }
 
@@ -3619,6 +3648,7 @@ static NR_SpCellConfig_t *get_initial_SpCellConfig(int uid,
                                                                     NULL,
                                                                     scc,
                                                                     configuration,
+                                                                    cell,
                                                                     uid,
                                                                     first_active_bwp,
                                                                     bitmap,
@@ -3755,9 +3785,13 @@ NR_RLC_BearerConfig_t *get_DRB_RLC_BearerConfig(long lcChannelId,
   return rlc_BearerConfig;
 }
 
-static bool verify_radio_configuration(int uid, const NR_ServingCellConfigCommon_t *scc, const nr_mac_config_t *configuration)
+static bool verify_radio_configuration(int uid,
+                                       bool redcap,
+                                       const NR_ServingCellConfigCommon_t *scc,
+                                       const nr_cell_sched_t *cell)
 {
-  frame_structure_t *fs = &RC.nrmac[0]->frame_structure;
+  const nr_mac_config_t *configuration = &cell->radio_config;
+  const frame_structure_t *fs = &cell->frame_structure;
   int srs_offset = get_ul_slot_offset(fs, uid, false);
   // see configure_periodic_srs
   if (srs_offset >= 2560) {
@@ -3765,7 +3799,7 @@ static bool verify_radio_configuration(int uid, const NR_ServingCellConfigCommon
     return false;
   }
 
-  int n_dl_bwp = 1 + configuration->num_additional_bwps; // initial + additional bwps
+  int n_dl_bwp = 1 + (redcap ? 0 : configuration->num_additional_bwps); // initial + additional bwps
   int csi_offset = fs->numb_slots_period * n_dl_bwp;
   // see set_csirs_periodicity
   if (csi_offset / 320 >= get_full_dl_slots_per_period(fs)) {
@@ -3800,15 +3834,17 @@ static bool verify_radio_configuration(int uid, const NR_ServingCellConfigCommon
 }
 
 NR_CellGroupConfig_t *get_initial_cellGroupConfig(int uid,
+                                                  bool redcap,
                                                   const NR_ServingCellConfigCommon_t *scc,
-                                                  const nr_mac_config_t *configuration,
+                                                  const nr_cell_sched_t *cell,
                                                   const nr_rlc_configuration_t *default_rlc_config,
                                                   int ssb_index)
 {
-  if (!verify_radio_configuration(uid, scc, configuration))
+  const nr_mac_config_t *configuration = &cell->radio_config;
+  if (!verify_radio_configuration(uid, redcap, scc, cell))
     return NULL;
 
-  NR_SpCellConfig_t *spCellConfig = get_initial_SpCellConfig(uid, scc, configuration, ssb_index);
+  NR_SpCellConfig_t *spCellConfig = get_initial_SpCellConfig(uid, redcap, scc, cell, ssb_index);
   NR_CellGroupConfig_t *cellGroupConfig = calloc(1, sizeof(*cellGroupConfig));
   cellGroupConfig->cellGroupId = 0;
 
@@ -3833,101 +3869,77 @@ NR_CellGroupConfig_t *get_initial_cellGroupConfig(int uid,
   return cellGroupConfig;
 }
 
-NR_CellGroupConfig_t *update_cellGroupConfig_for_BWP_switch(NR_CellGroupConfig_t *cellGroupConfig,
-                                                            const nr_mac_config_t *configuration,
-                                                            const NR_UE_NR_Capability_t *uecap,
-                                                            const NR_ServingCellConfigCommon_t *scc,
-                                                            int uid,
-                                                            int old_bwp,
-                                                            int new_bwp,
-                                                            int ssb_index)
+NR_CellGroupConfig_t *update_cellGroupConfig_for_reconfig(NR_CellGroupConfig_t *cellGroupConfig,
+                                                          const nr_cell_sched_t *cell,
+                                                          const NR_UE_NR_Capability_t *uecap,
+                                                          const NR_ServingCellConfigCommon_t *scc,
+                                                          int uid,
+                                                          int old_bwp,
+                                                          int new_bwp,
+                                                          int ssb_index)
 {
+  const nr_mac_config_t *configuration = &cell->radio_config;
   NR_SpCellConfig_t *spCellConfig = cellGroupConfig->spCellConfig;
   NR_ServingCellConfig_t *configDedicated = spCellConfig->spCellConfigDedicated;
-  *configDedicated->firstActiveDownlinkBWP_Id = new_bwp != 0;  // 1 for any BWP != 0
   NR_UplinkConfig_t *uplinkConfig = configDedicated->uplinkConfig;
-  *uplinkConfig->firstActiveUplinkBWP_Id = new_bwp != 0;  // 1 for any BWP != 0
-  nr_mac_config_t local_config = *configuration;
-  long ul_maxMIMO_Layers = set_ul_max_layers(configuration, uecap);
-  local_config.first_active_bwp = new_bwp;
   uint64_t bitmap = get_ssb_bitmap(scc);
-  // add new BWP
-  if (new_bwp == 0) {
-    if (!configDedicated->initialDownlinkBWP)
-      configDedicated->initialDownlinkBWP = calloc_or_fail(1, sizeof(*configDedicated->initialDownlinkBWP));
-    if (!uplinkConfig->initialUplinkBWP)
-      uplinkConfig->initialUplinkBWP = calloc_or_fail(1, sizeof(*uplinkConfig->initialUplinkBWP));
-    uplinkConfig->initialUplinkBWP = configure_initial_ul_bwp(scc, &local_config, ul_maxMIMO_Layers, uecap, uid);
-    configDedicated->initialDownlinkBWP = configure_initial_dl_bwp(scc, bitmap, uecap, &local_config);
-  } else {
-    if (!configDedicated->downlinkBWP_ToAddModList)
-      configDedicated->downlinkBWP_ToAddModList = calloc_or_fail(1, sizeof(*configDedicated->downlinkBWP_ToAddModList));
-    NR_BWP_Downlink_t *dl_bwp = config_downlinkBWP(scc, uecap, local_config.force_256qam_off, true, &local_config);
-    asn1cSeqAdd(&configDedicated->downlinkBWP_ToAddModList->list, dl_bwp);
-
-    if (!uplinkConfig->uplinkBWP_ToAddModList)
-      uplinkConfig->uplinkBWP_ToAddModList = calloc_or_fail(1, sizeof(*uplinkConfig->uplinkBWP_ToAddModList));
-    NR_BWP_Uplink_t *ul_bwp = config_uplinkBWP(true, uid, ul_maxMIMO_Layers, &local_config, scc, uecap);
-    asn1cSeqAdd(&uplinkConfig->uplinkBWP_ToAddModList->list, ul_bwp);
+  nr_mac_config_t local_config = *configuration;
+  if (new_bwp >= 0) {
+    *configDedicated->firstActiveDownlinkBWP_Id = new_bwp != 0;  // 1 for any BWP != 0
+    *uplinkConfig->firstActiveUplinkBWP_Id = new_bwp != 0;  // 1 for any BWP != 0
+    long ul_maxMIMO_Layers = set_ul_max_layers(configuration, uecap);
+    local_config.first_active_bwp = new_bwp;
+    // add new BWP
+    if (new_bwp == 0) {
+      if (!configDedicated->initialDownlinkBWP)
+        configDedicated->initialDownlinkBWP = calloc_or_fail(1, sizeof(*configDedicated->initialDownlinkBWP));
+      if (!uplinkConfig->initialUplinkBWP)
+        uplinkConfig->initialUplinkBWP = calloc_or_fail(1, sizeof(*uplinkConfig->initialUplinkBWP));
+      uplinkConfig->initialUplinkBWP = configure_initial_ul_bwp(scc, &local_config, cell, ul_maxMIMO_Layers, uecap, uid);
+      configDedicated->initialDownlinkBWP = configure_initial_dl_bwp(scc, bitmap, uecap, &local_config);
+    } else {
+      if (!configDedicated->downlinkBWP_ToAddModList)
+        configDedicated->downlinkBWP_ToAddModList = calloc_or_fail(1, sizeof(*configDedicated->downlinkBWP_ToAddModList));
+      NR_BWP_Downlink_t *dl_bwp = config_downlinkBWP(scc, uecap, local_config.force_256qam_off, true, &local_config);
+      asn1cSeqAdd(&configDedicated->downlinkBWP_ToAddModList->list, dl_bwp);
+      if (!uplinkConfig->uplinkBWP_ToAddModList)
+        uplinkConfig->uplinkBWP_ToAddModList = calloc_or_fail(1, sizeof(*uplinkConfig->uplinkBWP_ToAddModList));
+      NR_BWP_Uplink_t *ul_bwp = config_uplinkBWP(true, uid, ul_maxMIMO_Layers, &local_config, cell, scc, uecap);
+      asn1cSeqAdd(&uplinkConfig->uplinkBWP_ToAddModList->list, ul_bwp);
+    }
   }
-
-  ASN_STRUCT_FREE(asn_DEF_NR_CSI_MeasConfig, configDedicated->csi_MeasConfig->choice.setup);
-  configDedicated->csi_MeasConfig->choice.setup = get_csiMeasConfig(configDedicated,
-                                                                    uecap,
-                                                                    scc,
-                                                                    &local_config,
-                                                                    uid,
-                                                                    *uplinkConfig->firstActiveUplinkBWP_Id,
-                                                                    bitmap,
-                                                                    ssb_index);
-
   // we temporarily need to keep both the old and the new BWP in the CG used by the gNB
   // while removing the old from the CG sent to the UE
   NR_CellGroupConfig_t *clone_cg = NULL;
   const int copy_result = asn_copy(&asn_DEF_NR_CellGroupConfig, (void **)&clone_cg, cellGroupConfig);
   AssertFatal(copy_result == 0, "unable to copy NR_CellGroupConfig for cloning\n");
-  if (old_bwp > 0)
+  NR_ServingCellConfig_t *clone_configDedicated = clone_cg->spCellConfig->spCellConfigDedicated;
+  clone_configDedicated->csi_MeasConfig->choice.setup  = get_csiMeasConfig(configDedicated,
+                                                                           uecap,
+                                                                           scc,
+                                                                           &local_config,
+                                                                           cell,
+                                                                           uid,
+                                                                           *uplinkConfig->firstActiveUplinkBWP_Id,
+                                                                           bitmap,
+                                                                           ssb_index);
+
+  if (new_bwp >= 0 && old_bwp > 0)
     clean_bwp_structures(clone_cg->spCellConfig);
-  return clone_cg;
-}
-
-NR_CellGroupConfig_t *update_cellGroupConfig_for_beam_switch(NR_CellGroupConfig_t *cellGroupConfig,
-                                                            const nr_mac_config_t *configuration,
-                                                            const NR_UE_NR_Capability_t *uecap,
-                                                            const NR_ServingCellConfigCommon_t *scc,
-                                                            int uid,
-                                                            int bwp,
-                                                            int ssb_index)
-{
-  NR_SpCellConfig_t *spCellConfig = cellGroupConfig->spCellConfig;
-  NR_ServingCellConfig_t *configDedicated = spCellConfig->spCellConfigDedicated;
-
-  uint64_t bitmap = get_ssb_bitmap(scc);
-  ASN_STRUCT_FREE(asn_DEF_NR_CSI_MeasConfig, configDedicated->csi_MeasConfig->choice.setup);
-  configDedicated->csi_MeasConfig->choice.setup = get_csiMeasConfig(configDedicated,
-                                                                    uecap,
-                                                                    scc,
-                                                                    configuration,
-                                                                    uid,
-                                                                    bwp,
-                                                                    bitmap,
-                                                                    ssb_index);
-
-  NR_CellGroupConfig_t *clone_cg = NULL;
-  const int copy_result = asn_copy(&asn_DEF_NR_CellGroupConfig, (void **)&clone_cg, cellGroupConfig);
-  AssertFatal(copy_result == 0, "unable to copy NR_CellGroupConfig for cloning\n");
   return clone_cg;
 }
 
 void update_cellGroupConfig(NR_CellGroupConfig_t *cellGroupConfig,
                             const int uid,
                             const NR_UE_NR_Capability_t *uecap,
-                            const nr_mac_config_t *configuration,
+                            const nr_cell_sched_t *cell,
                             const NR_ServingCellConfigCommon_t *scc)
 {
   DevAssert(cellGroupConfig != NULL);
   DevAssert(cellGroupConfig->spCellConfig != NULL);
   DevAssert(cellGroupConfig->spCellConfig->spCellConfigDedicated != NULL);
+  DevAssert(cell != NULL);
+  const nr_mac_config_t *configuration = &cell->radio_config;
   DevAssert(configuration != NULL);
   DevAssert(scc != NULL);
 
@@ -4002,6 +4014,7 @@ void update_cellGroupConfig(NR_CellGroupConfig_t *cellGroupConfig,
       ASN_STRUCT_FREE(asn_DEF_NR_SetupRelease_SRS_Config, ul_bwp_Dedicated->srs_Config);
       ul_bwp_Dedicated->srs_Config = get_config_srs(scc,
                                                     uecap,
+                                                    cell,
                                                     curr_bwp,
                                                     uid,
                                                     bwp_id,
@@ -4060,6 +4073,7 @@ NR_CellGroupConfig_t *get_default_secondaryCellGroup(const NR_ServingCellConfigC
                                                      int scg_id,
                                                      int servCellIndex,
                                                      const nr_mac_config_t *configuration,
+                                                     const nr_cell_sched_t *cell,
                                                      int uid,
                                                      int ssb_index)
 {
@@ -4102,7 +4116,7 @@ NR_CellGroupConfig_t *get_default_secondaryCellGroup(const NR_ServingCellConfigC
 
   configDedicated->initialDownlinkBWP = calloc(1, sizeof(*configDedicated->initialDownlinkBWP));
   configDedicated->initialDownlinkBWP->pdcch_Config = NULL;
-  configDedicated->initialDownlinkBWP->pdsch_Config = config_pdsch(bitmap, 0, configuration->do_TCI, configuration->ptrs);
+  configDedicated->initialDownlinkBWP->pdsch_Config = config_pdsch(bitmap, 0, configuration);
   configDedicated->initialDownlinkBWP->sps_Config = NULL; // calloc(1,sizeof(struct NR_SetupRelease_SPS_Config));
 
   configDedicated->initialDownlinkBWP->radioLinkMonitoringConfig = NULL;
@@ -4124,6 +4138,7 @@ NR_CellGroupConfig_t *get_default_secondaryCellGroup(const NR_ServingCellConfigC
                           MAX_BWP_SIZE);
   initialUplinkBWP->srs_Config = get_config_srs(servingcellconfigcommon,
                                                 NULL,
+                                                cell,
                                                 curr_bwp,
                                                 uid,
                                                 0,
@@ -4148,7 +4163,7 @@ NR_CellGroupConfig_t *get_default_secondaryCellGroup(const NR_ServingCellConfigC
   // Uplink BWPs
   int firstActiveUplinkBWP_Id = 1;
   ulConfig->uplinkBWP_ToAddModList = calloc(1, sizeof(*ulConfig->uplinkBWP_ToAddModList));
-  NR_BWP_Uplink_t *ubwp = config_uplinkBWP(false, uid, maxMIMO_Layers, configuration, servingcellconfigcommon, uecap);
+  NR_BWP_Uplink_t *ubwp = config_uplinkBWP(false, uid, maxMIMO_Layers, configuration, cell, servingcellconfigcommon, uecap);
   asn1cSeqAdd(&ulConfig->uplinkBWP_ToAddModList->list, ubwp);
   ulConfig->firstActiveUplinkBWP_Id = calloc(1, sizeof(*ulConfig->firstActiveUplinkBWP_Id));
   *ulConfig->firstActiveUplinkBWP_Id = firstActiveUplinkBWP_Id;
@@ -4206,6 +4221,7 @@ NR_CellGroupConfig_t *get_default_secondaryCellGroup(const NR_ServingCellConfigC
                                                                     uecap,
                                                                     servingcellconfigcommon,
                                                                     configuration,
+                                                                    cell,
                                                                     uid,
                                                                     firstActiveUplinkBWP_Id,
                                                                     bitmap,
@@ -4442,4 +4458,514 @@ int encode_measgap_config(const measgap_config_t *c, uint8_t *buf)
   AssertFatal(enc_rval_mgc.encoded > 0, "Could not encode CellGroup, failed element %s\n", enc_rval_mgc.failed_type->name);
   ASN_STRUCT_FREE(asn_DEF_NR_MeasGapConfig, measGapConfig);
   return (int)((enc_rval_mgc.encoded + 7) >> 3);
+}
+
+void create_trp_info_item(const f1ap_trp_information_req_t *req,
+                          f1ap_trp_information_t *trp_info_item,
+                          positioning_config_t *positioning_config,
+                          int trp_idx)
+{
+  gNB_MAC_INST *mac = RC.nrmac[0];
+  const f1ap_setup_req_t *setup_req = mac->f1_config.setup_req;
+  const f1ap_served_cell_info_t *du_cell = &setup_req->cell[0].info;
+  const f1ap_trp_information_type_list_t *req_list = &req->trp_information_type_list;
+  uint8_t trp_info_type_len = req_list->trp_information_type_list_length;
+  DevAssert(trp_info_type_len > 0);
+
+  f1ap_trp_information_type_response_list_t *resp_list = &trp_info_item->trp_information_type_response_list;
+  resp_list->trp_information_type_response_item_length = trp_info_type_len;
+  resp_list->trp_information_type_response_item =
+      calloc_or_fail(trp_info_type_len, sizeof(*resp_list->trp_information_type_response_item));
+
+  for (int i = 0; i < trp_info_type_len; i++) {
+    f1ap_trp_information_type_response_item_t *trp_info_type_resp_item = &resp_list->trp_information_type_response_item[i];
+    switch (req_list->trp_information_type_item[i]) {
+      case F1AP_TRP_INFORMATION_TYPE_ITEM_NR_PCI:
+        trp_info_type_resp_item->present = F1AP_TRP_INFORMATION_TYPE_RESPONSE_ITEM_PR_PCI_NR;
+        trp_info_type_resp_item->choice.pci_nr = du_cell->nr_pci;
+        break;
+      case F1AP_TRP_INFORMATION_TYPE_ITEM_NG_RAN_CGI:
+        trp_info_type_resp_item->present = F1AP_TRP_INFORMATION_TYPE_RESPONSE_ITEM_PR_NG_RAN_CGI;
+        trp_info_type_resp_item->choice.ng_ran_cgi.plmn.mcc = du_cell->plmn.mcc;
+        trp_info_type_resp_item->choice.ng_ran_cgi.plmn.mnc = du_cell->plmn.mnc;
+        trp_info_type_resp_item->choice.ng_ran_cgi.plmn.mnc_digit_length = du_cell->plmn.mnc_digit_length;
+        trp_info_type_resp_item->choice.ng_ran_cgi.nr_cellid = du_cell->nr_cellid;
+        break;
+      case F1AP_TRP_INFORMATION_TYPE_ITEM_NR_ARFCN:
+        trp_info_type_resp_item->present = F1AP_TRP_INFORMATION_TYPE_RESPONSE_ITEM_PR_NRARFCN;
+        if (du_cell->mode == F1AP_MODE_TDD) {
+          trp_info_type_resp_item->choice.nr_arfcn = du_cell->tdd.freqinfo.arfcn;
+        } else if (du_cell->mode == F1AP_MODE_FDD) {
+          trp_info_type_resp_item->choice.nr_arfcn = du_cell->fdd.ul_freqinfo.arfcn;
+        } else {
+          AssertFatal(false, "illegal mode\n");
+        }
+        break;
+      case F1AP_TRP_INFORMATION_TYPE_ITEM_PRS_CONFIG:
+        AssertFatal(false, "PRS config not supported\n");
+        break;
+      case F1AP_TRP_INFORMATION_TYPE_ITEM_SSB_CONFIG:
+        AssertFatal(false, "SSB config not supported\n");
+        break;
+      case F1AP_TRP_INFORMATION_TYPE_ITEM_SFN_INIT_TIME:
+        AssertFatal(false, "SFN INIT TIME not supported\n");
+        break;
+      case F1AP_TRP_INFORMATION_TYPE_ITEM_SPATIAL_DIRECTION_INFO:
+        AssertFatal(false, "SPATIAL DIRECTION INFO not supported\n");
+        break;
+      case F1AP_TRP_INFORMATION_TYPE_ITEM_GEO_COORDINATES:
+        trp_info_type_resp_item->present = F1AP_TRP_INFORMATION_TYPE_RESPONSE_ITEM_PR_GEOGRAPHICALCOORDINATES;
+        f1ap_geographical_coordinates_t *geographicalCoordinates = &trp_info_type_resp_item->choice.geographical_coordinates;
+        f1ap_trp_position_definition_type_t *tRPPositionDefinitionType = &geographicalCoordinates->trp_position_definition_type;
+
+        // referenced
+        tRPPositionDefinitionType->present = F1AP_TRP_POSITION_DEFINITION_TYPE_PR_REFERENCED;
+        f1ap_trp_position_referenced_t *referenced = &tRPPositionDefinitionType->choice.referenced;
+
+        // coordinate ID
+        referenced->reference_point.present = F1AP_REFERENCE_POINT_PR_COORDINATEID;
+        referenced->reference_point.choice.coordinate_id = 2;
+
+        // relative cartesian
+        f1ap_trp_reference_point_type_t *referencePointType = &referenced->reference_point_type;
+        referencePointType->present = F1AP_TRP_REFERENCE_POINT_TYPE_PR_TRPPOSITION_RELATIVE_CARTESIAN;
+        f1ap_relative_cartesian_location_t *trp_pos_cart = &referencePointType->choice.trp_position_relative_cartesian;
+
+        // 0 = millimeter
+        trp_pos_cart->xyz_unit = positioning_config->trps[trp_idx].unit;
+        trp_pos_cart->xvalue = positioning_config->trps[trp_idx].x_axis;
+        trp_pos_cart->yvalue = positioning_config->trps[trp_idx].y_axis;
+        trp_pos_cart->zvalue = positioning_config->trps[trp_idx].z_axis;
+
+        // random values for uncertainity and confidence
+        trp_pos_cart->location_uncertainty.horizontal_uncertainty = 1;
+        trp_pos_cart->location_uncertainty.horizontal_confidence = 2;
+        trp_pos_cart->location_uncertainty.vertical_uncertainty = 3;
+        trp_pos_cart->location_uncertainty.vertical_confidence = 4;
+        break;
+      default:
+        AssertFatal(false, "Illegal trp information type item\n");
+        break;
+    }
+  }
+}
+
+f1ap_srs_configuration_t cp_rrc_to_f1ap_srs_configuration(NR_UE_UL_BWP_t *current_UL_BWP, NR_ServingCellConfigCommon_t *scc)
+{
+  f1ap_srs_configuration_t srs_configuration = {0};
+  f1ap_srs_carrier_list_t *srs_carrier_list = &srs_configuration.srs_carrier_list;
+
+  srs_carrier_list->srs_carrier_list_length = 1;
+  srs_carrier_list->srs_carrier_list_item = calloc_or_fail(1, sizeof(*srs_carrier_list->srs_carrier_list_item));
+
+  f1ap_srs_carrier_list_item_t *item = &srs_carrier_list->srs_carrier_list_item[0];
+
+  // pointA
+  if (scc->uplinkConfigCommon && scc->uplinkConfigCommon->frequencyInfoUL
+      && scc->uplinkConfigCommon->frequencyInfoUL->absoluteFrequencyPointA) {
+    item->pointA = *scc->uplinkConfigCommon->frequencyInfoUL->absoluteFrequencyPointA;
+  } else if (scc->downlinkConfigCommon && scc->downlinkConfigCommon->frequencyInfoDL
+             && scc->downlinkConfigCommon->frequencyInfoDL->absoluteFrequencyPointA) {
+    item->pointA = scc->downlinkConfigCommon->frequencyInfoDL->absoluteFrequencyPointA;
+  } else {
+    AssertFatal(false, "Neither UL nor DL configuration contains Point A");
+  }
+
+  // Uplink Channel BW-PerSCS-List
+  struct NR_FrequencyInfoUL__scs_SpecificCarrierList *scs_list = &scc->uplinkConfigCommon->frequencyInfoUL->scs_SpecificCarrierList;
+
+  f1ap_uplink_channel_bw_per_scs_list_t *ul_bw_list = &item->uplink_channel_bw_per_scs_list;
+  ul_bw_list->scs_specific_carrier_list_length = scs_list->list.count;
+  ul_bw_list->scs_specific_carrier =
+      calloc_or_fail(ul_bw_list->scs_specific_carrier_list_length, sizeof(*ul_bw_list->scs_specific_carrier));
+
+  for (int i = 0; i < ul_bw_list->scs_specific_carrier_list_length; i++) {
+    f1ap_scs_specific_carrier_t *f1_scs = &ul_bw_list->scs_specific_carrier[i];
+    NR_SCS_SpecificCarrier_t *rrc_scs = scs_list->list.array[i];
+
+    // offset to carrier
+    f1_scs->offset_to_carrier = rrc_scs->offsetToCarrier;
+
+    // subcarrier spacing
+    switch (rrc_scs->subcarrierSpacing) {
+      case NR_SubcarrierSpacing_kHz15:
+        f1_scs->subcarrier_spacing = F1AP_SUBCARRIER_SPACING_15KHZ;
+        break;
+      case NR_SubcarrierSpacing_kHz30:
+        f1_scs->subcarrier_spacing = F1AP_SUBCARRIER_SPACING_30KHZ;
+        break;
+      case NR_SubcarrierSpacing_kHz60:
+        f1_scs->subcarrier_spacing = F1AP_SUBCARRIER_SPACING_60KHZ;
+        break;
+      case NR_SubcarrierSpacing_kHz120:
+        f1_scs->subcarrier_spacing = F1AP_SUBCARRIER_SPACING_120KHZ;
+        break;
+        AssertFatal(false, "Illegal Subcarrier Spacing\n");
+      default:
+        break;
+    }
+
+    // carrier bandwidth
+    f1_scs->carrier_bandwidth = rrc_scs->carrierBandwidth;
+  }
+
+  // Active UL BWP
+  f1ap_active_ul_bwp_t *active_ul_bwp = &item->active_ul_bwp;
+
+  // location and bandwidth
+  active_ul_bwp->location_and_bandwidth = PRBalloc_to_locationandbandwidth(current_UL_BWP->BWPSize, current_UL_BWP->BWPStart);
+
+  // subcarrier spacing
+  switch (current_UL_BWP->scs) {
+    case NR_SubcarrierSpacing_kHz15:
+      active_ul_bwp->subcarrier_spacing = F1AP_SUBCARRIER_SPACING_15KHZ;
+      break;
+    case NR_SubcarrierSpacing_kHz30:
+      active_ul_bwp->subcarrier_spacing = F1AP_SUBCARRIER_SPACING_30KHZ;
+      break;
+    case NR_SubcarrierSpacing_kHz60:
+      active_ul_bwp->subcarrier_spacing = F1AP_SUBCARRIER_SPACING_60KHZ;
+      break;
+    case NR_SubcarrierSpacing_kHz120:
+      active_ul_bwp->subcarrier_spacing = F1AP_SUBCARRIER_SPACING_120KHZ;
+      break;
+      AssertFatal(false, "Illegal Subcarrier Spacing\n");
+    default:
+      break;
+  }
+
+  if (current_UL_BWP->cyclicprefix) {
+    active_ul_bwp->cyclic_prefix = F1AP_CP_TYPE_EXTENDED;
+  } else {
+    active_ul_bwp->cyclic_prefix = F1AP_CP_TYPE_NORMAL;
+  }
+
+  active_ul_bwp->tx_direct_current_location = 0;
+
+  NR_SRS_Config_t *rrc_srs_config = current_UL_BWP->srs_Config;
+  f1ap_srs_config_t *f1_srs_config = &active_ul_bwp->srs_config;
+
+  // SRS Resource List
+  if (rrc_srs_config->srs_ResourceToAddModList) {
+    f1_srs_config->srs_resource_list = calloc_or_fail(1, sizeof(*f1_srs_config->srs_resource_list));
+    f1ap_srs_resource_list_t *srs_resource_list = f1_srs_config->srs_resource_list;
+    uint32_t srs_resource_list_length = rrc_srs_config->srs_ResourceToAddModList->list.count;
+    srs_resource_list->srs_resource_list_length = srs_resource_list_length;
+    srs_resource_list->srs_resource = calloc_or_fail(srs_resource_list_length, sizeof(*srs_resource_list->srs_resource));
+
+    for (int i = 0; i < srs_resource_list_length; i++) {
+      NR_SRS_Resource_t *rrc_res = rrc_srs_config->srs_ResourceToAddModList->list.array[i];
+      f1ap_srs_resource_t *srs_resource = &srs_resource_list->srs_resource[i];
+      srs_resource->srs_resource_id = rrc_res->srs_ResourceId;
+
+      switch (rrc_res->nrofSRS_Ports) {
+        case NR_SRS_Resource__nrofSRS_Ports_port1:
+          srs_resource->nr_of_srs_ports = F1AP_SRS_NUMBER_OF_PORTS_N1;
+          break;
+        case NR_SRS_Resource__nrofSRS_Ports_ports2:
+          srs_resource->nr_of_srs_ports = F1AP_SRS_NUMBER_OF_PORTS_N2;
+          break;
+        case NR_SRS_Resource__nrofSRS_Ports_ports4:
+          srs_resource->nr_of_srs_ports = F1AP_SRS_NUMBER_OF_PORTS_N4;
+          break;
+        default:
+          AssertFatal(false, "Illegal number of ports\n");
+          break;
+      }
+
+      struct NR_SRS_Resource__transmissionComb *rrc_tx_comb = &rrc_res->transmissionComb;
+      f1ap_transmission_comb_t *tx_comb = &srs_resource->transmission_comb;
+      switch (rrc_res->transmissionComb.present) {
+        case NR_SRS_Resource__transmissionComb_PR_n2:
+          tx_comb->present = F1AP_TRANSMISSION_COMB_PR_N2;
+          tx_comb->choice.n2.comb_offset_n2 = rrc_tx_comb->choice.n2->combOffset_n2;
+          tx_comb->choice.n2.cyclic_shift_n2 = rrc_tx_comb->choice.n2->cyclicShift_n2;
+          break;
+        case NR_SRS_Resource__transmissionComb_PR_n4:
+          tx_comb->present = F1AP_TRANSMISSION_COMB_PR_N4;
+          tx_comb->choice.n4.comb_offset_n4 = rrc_tx_comb->choice.n4->combOffset_n4;
+          tx_comb->choice.n4.cyclic_shift_n4 = rrc_tx_comb->choice.n4->cyclicShift_n4;
+          break;
+        default:
+          AssertFatal(false, "Illegal comb size\n");
+          break;
+      }
+
+      srs_resource->start_position = rrc_res->resourceMapping.startPosition;
+
+      switch (rrc_res->resourceMapping.nrofSymbols) {
+        case NR_SRS_Resource__resourceMapping__nrofSymbols_n1:
+          srs_resource->nr_of_symbols = F1AP_SRS_NUMBER_OF_SYMBOLS_N1;
+          break;
+        case NR_SRS_Resource__resourceMapping__nrofSymbols_n2:
+          srs_resource->nr_of_symbols = F1AP_SRS_NUMBER_OF_SYMBOLS_N2;
+          break;
+        case NR_SRS_Resource__resourceMapping__nrofSymbols_n4:
+          srs_resource->nr_of_symbols = F1AP_SRS_NUMBER_OF_SYMBOLS_N4;
+          break;
+        default:
+          AssertFatal(false, "Illegal number of symbols\n");
+          break;
+      }
+
+      switch (rrc_res->resourceMapping.repetitionFactor) {
+        case NR_SRS_Resource__resourceMapping__repetitionFactor_n1:
+          srs_resource->repetition_factor = F1AP_SRS_REPETITION_FACTOR_RF1;
+          break;
+        case NR_SRS_Resource__resourceMapping__repetitionFactor_n2:
+          srs_resource->repetition_factor = F1AP_SRS_REPETITION_FACTOR_RF2;
+          break;
+        case NR_SRS_Resource__resourceMapping__repetitionFactor_n4:
+          srs_resource->repetition_factor = F1AP_SRS_REPETITION_FACTOR_RF4;
+          break;
+        default:
+          AssertFatal(false, "Illegal Repetition Factor\n");
+          break;
+      }
+
+      srs_resource->freq_domain_position = rrc_res->freqDomainPosition;
+      srs_resource->freq_domain_shift = rrc_res->freqDomainShift;
+      srs_resource->c_srs = rrc_res->freqHopping.c_SRS;
+      srs_resource->b_srs = rrc_res->freqHopping.b_SRS;
+      srs_resource->b_hop = rrc_res->freqHopping.b_hop;
+
+      switch (rrc_res->groupOrSequenceHopping) {
+        case NR_SRS_Resource__groupOrSequenceHopping_neither:
+          srs_resource->group_or_sequence_hopping = F1AP_GROUPORSEQUENCEHOPPING_NOTHING;
+          break;
+        case NR_SRS_Resource__groupOrSequenceHopping_groupHopping:
+          srs_resource->group_or_sequence_hopping = F1AP_GROUPORSEQUENCEHOPPING_GROUPHOPPING;
+          break;
+        case NR_SRS_Resource__groupOrSequenceHopping_sequenceHopping:
+          srs_resource->group_or_sequence_hopping = F1AP_GROUPORSEQUENCEHOPPING_SEQUENCEHOPPING;
+          break;
+        default:
+          AssertFatal(false, "Illegal group or sequence hopping\n");
+          break;
+      }
+
+      switch (rrc_res->resourceType.present) {
+        case NR_SRS_Resource__resourceType_PR_NOTHING:
+          srs_resource->resource_type.present = F1AP_RESOURCE_TYPE_PR_NOTHING;
+          break;
+        case NR_SRS_Resource__resourceType_PR_periodic:
+          srs_resource->resource_type.present = F1AP_RESOURCE_TYPE_PR_PERIODIC;
+          f1ap_resource_type_periodic_t *periodic = &srs_resource->resource_type.choice.periodic;
+          struct NR_SRS_Resource__resourceType__periodic *rrc_periodic = rrc_res->resourceType.choice.periodic;
+          NR_SRS_PeriodicityAndOffset_t *rrc_periodicityAndOffset_p = &rrc_periodic->periodicityAndOffset_p;
+          switch (rrc_periodicityAndOffset_p->present) {
+            case NR_SRS_PeriodicityAndOffset_PR_sl1:
+              periodic->periodicity = F1AP_SRS_RESOURCE_TYPE_PERIODICITY_SLOT1;
+              periodic->offset = rrc_periodicityAndOffset_p->choice.sl1;
+              break;
+            case NR_SRS_PeriodicityAndOffset_PR_sl2:
+              periodic->periodicity = F1AP_SRS_RESOURCE_TYPE_PERIODICITY_SLOT2;
+              periodic->offset = rrc_periodicityAndOffset_p->choice.sl2;
+              break;
+            case NR_SRS_PeriodicityAndOffset_PR_sl4:
+              periodic->periodicity = F1AP_SRS_RESOURCE_TYPE_PERIODICITY_SLOT4;
+              periodic->offset = rrc_periodicityAndOffset_p->choice.sl4;
+              break;
+            case NR_SRS_PeriodicityAndOffset_PR_sl5:
+              periodic->periodicity = F1AP_SRS_RESOURCE_TYPE_PERIODICITY_SLOT5;
+              periodic->offset = rrc_periodicityAndOffset_p->choice.sl5;
+              break;
+            case NR_SRS_PeriodicityAndOffset_PR_sl8:
+              periodic->periodicity = F1AP_SRS_RESOURCE_TYPE_PERIODICITY_SLOT8;
+              periodic->offset = rrc_periodicityAndOffset_p->choice.sl8;
+              break;
+            case NR_SRS_PeriodicityAndOffset_PR_sl10:
+              periodic->periodicity = F1AP_SRS_RESOURCE_TYPE_PERIODICITY_SLOT10;
+              periodic->offset = rrc_periodicityAndOffset_p->choice.sl10;
+              break;
+            case NR_SRS_PeriodicityAndOffset_PR_sl16:
+              periodic->periodicity = F1AP_SRS_RESOURCE_TYPE_PERIODICITY_SLOT16;
+              periodic->offset = rrc_periodicityAndOffset_p->choice.sl16;
+              break;
+            case NR_SRS_PeriodicityAndOffset_PR_sl20:
+              periodic->periodicity = F1AP_SRS_RESOURCE_TYPE_PERIODICITY_SLOT20;
+              periodic->offset = rrc_periodicityAndOffset_p->choice.sl20;
+              break;
+            case NR_SRS_PeriodicityAndOffset_PR_sl32:
+              periodic->periodicity = F1AP_SRS_RESOURCE_TYPE_PERIODICITY_SLOT32;
+              periodic->offset = rrc_periodicityAndOffset_p->choice.sl32;
+              break;
+            case NR_SRS_PeriodicityAndOffset_PR_sl40:
+              periodic->periodicity = F1AP_SRS_RESOURCE_TYPE_PERIODICITY_SLOT40;
+              periodic->offset = rrc_periodicityAndOffset_p->choice.sl40;
+              break;
+            case NR_SRS_PeriodicityAndOffset_PR_sl64:
+              periodic->periodicity = F1AP_SRS_RESOURCE_TYPE_PERIODICITY_SLOT64;
+              periodic->offset = rrc_periodicityAndOffset_p->choice.sl64;
+              break;
+            case NR_SRS_PeriodicityAndOffset_PR_sl80:
+              periodic->periodicity = F1AP_SRS_RESOURCE_TYPE_PERIODICITY_SLOT80;
+              periodic->offset = rrc_periodicityAndOffset_p->choice.sl80;
+              break;
+            case NR_SRS_PeriodicityAndOffset_PR_sl160:
+              periodic->periodicity = F1AP_SRS_RESOURCE_TYPE_PERIODICITY_SLOT160;
+              periodic->offset = rrc_periodicityAndOffset_p->choice.sl160;
+              break;
+            case NR_SRS_PeriodicityAndOffset_PR_sl320:
+              periodic->periodicity = F1AP_SRS_RESOURCE_TYPE_PERIODICITY_SLOT320;
+              periodic->offset = rrc_periodicityAndOffset_p->choice.sl320;
+              break;
+            case NR_SRS_PeriodicityAndOffset_PR_sl640:
+              periodic->periodicity = F1AP_SRS_RESOURCE_TYPE_PERIODICITY_SLOT640;
+              periodic->offset = rrc_periodicityAndOffset_p->choice.sl640;
+              break;
+            case NR_SRS_PeriodicityAndOffset_PR_sl1280:
+              periodic->periodicity = F1AP_SRS_RESOURCE_TYPE_PERIODICITY_SLOT1280;
+              periodic->offset = rrc_periodicityAndOffset_p->choice.sl1280;
+              break;
+            case NR_SRS_PeriodicityAndOffset_PR_sl2560:
+              periodic->periodicity = F1AP_SRS_RESOURCE_TYPE_PERIODICITY_SLOT2560;
+              periodic->offset = rrc_periodicityAndOffset_p->choice.sl2560;
+              break;
+            default:
+              AssertFatal(false, "illegal periodicity\n");
+              break;
+          }
+          break;
+        case NR_SRS_Resource__resourceType_PR_semi_persistent:
+          srs_resource->resource_type.present = F1AP_RESOURCE_TYPE_PR_SEMI_PERSISTENT;
+          f1ap_resource_type_semi_persistent_t *semi_persistent = &srs_resource->resource_type.choice.semi_persistent;
+          struct NR_SRS_Resource__resourceType__semi_persistent *rrc_semi_persistent = rrc_res->resourceType.choice.semi_persistent;
+          NR_SRS_PeriodicityAndOffset_t *rrc_periodicityAndOffset_sp = &rrc_semi_persistent->periodicityAndOffset_sp;
+          switch (rrc_periodicityAndOffset_sp->present) {
+            case NR_SRS_PeriodicityAndOffset_PR_sl1:
+              semi_persistent->periodicity = F1AP_SRS_RESOURCE_TYPE_PERIODICITY_SLOT1;
+              semi_persistent->offset = rrc_periodicityAndOffset_sp->choice.sl1;
+              break;
+            case NR_SRS_PeriodicityAndOffset_PR_sl2:
+              semi_persistent->periodicity = F1AP_SRS_RESOURCE_TYPE_PERIODICITY_SLOT2;
+              semi_persistent->offset = rrc_periodicityAndOffset_sp->choice.sl2;
+              break;
+            case NR_SRS_PeriodicityAndOffset_PR_sl4:
+              semi_persistent->periodicity = F1AP_SRS_RESOURCE_TYPE_PERIODICITY_SLOT4;
+              semi_persistent->offset = rrc_periodicityAndOffset_sp->choice.sl4;
+              break;
+            case NR_SRS_PeriodicityAndOffset_PR_sl5:
+              semi_persistent->periodicity = F1AP_SRS_RESOURCE_TYPE_PERIODICITY_SLOT5;
+              semi_persistent->offset = rrc_periodicityAndOffset_sp->choice.sl5;
+              break;
+            case NR_SRS_PeriodicityAndOffset_PR_sl8:
+              semi_persistent->periodicity = F1AP_SRS_RESOURCE_TYPE_PERIODICITY_SLOT8;
+              semi_persistent->offset = rrc_periodicityAndOffset_sp->choice.sl8;
+              break;
+            case NR_SRS_PeriodicityAndOffset_PR_sl10:
+              semi_persistent->periodicity = F1AP_SRS_RESOURCE_TYPE_PERIODICITY_SLOT10;
+              semi_persistent->offset = rrc_periodicityAndOffset_sp->choice.sl10;
+              break;
+            case NR_SRS_PeriodicityAndOffset_PR_sl16:
+              semi_persistent->periodicity = F1AP_SRS_RESOURCE_TYPE_PERIODICITY_SLOT16;
+              semi_persistent->offset = rrc_periodicityAndOffset_sp->choice.sl16;
+              break;
+            case NR_SRS_PeriodicityAndOffset_PR_sl20:
+              semi_persistent->periodicity = F1AP_SRS_RESOURCE_TYPE_PERIODICITY_SLOT20;
+              semi_persistent->offset = rrc_periodicityAndOffset_sp->choice.sl20;
+              break;
+            case NR_SRS_PeriodicityAndOffset_PR_sl32:
+              semi_persistent->periodicity = F1AP_SRS_RESOURCE_TYPE_PERIODICITY_SLOT32;
+              semi_persistent->offset = rrc_periodicityAndOffset_sp->choice.sl32;
+              break;
+            case NR_SRS_PeriodicityAndOffset_PR_sl40:
+              semi_persistent->periodicity = F1AP_SRS_RESOURCE_TYPE_PERIODICITY_SLOT40;
+              semi_persistent->offset = rrc_periodicityAndOffset_sp->choice.sl40;
+              break;
+            case NR_SRS_PeriodicityAndOffset_PR_sl64:
+              semi_persistent->periodicity = F1AP_SRS_RESOURCE_TYPE_PERIODICITY_SLOT64;
+              semi_persistent->offset = rrc_periodicityAndOffset_sp->choice.sl64;
+              break;
+            case NR_SRS_PeriodicityAndOffset_PR_sl80:
+              semi_persistent->periodicity = F1AP_SRS_RESOURCE_TYPE_PERIODICITY_SLOT80;
+              semi_persistent->offset = rrc_periodicityAndOffset_sp->choice.sl80;
+              break;
+            case NR_SRS_PeriodicityAndOffset_PR_sl160:
+              semi_persistent->periodicity = F1AP_SRS_RESOURCE_TYPE_PERIODICITY_SLOT160;
+              semi_persistent->offset = rrc_periodicityAndOffset_sp->choice.sl160;
+              break;
+            case NR_SRS_PeriodicityAndOffset_PR_sl320:
+              semi_persistent->periodicity = F1AP_SRS_RESOURCE_TYPE_PERIODICITY_SLOT320;
+              semi_persistent->offset = rrc_periodicityAndOffset_sp->choice.sl320;
+              break;
+            case NR_SRS_PeriodicityAndOffset_PR_sl640:
+              semi_persistent->periodicity = F1AP_SRS_RESOURCE_TYPE_PERIODICITY_SLOT640;
+              semi_persistent->offset = rrc_periodicityAndOffset_sp->choice.sl640;
+              break;
+            case NR_SRS_PeriodicityAndOffset_PR_sl1280:
+              semi_persistent->periodicity = F1AP_SRS_RESOURCE_TYPE_PERIODICITY_SLOT1280;
+              semi_persistent->offset = rrc_periodicityAndOffset_sp->choice.sl1280;
+              break;
+            case NR_SRS_PeriodicityAndOffset_PR_sl2560:
+              semi_persistent->periodicity = F1AP_SRS_RESOURCE_TYPE_PERIODICITY_SLOT2560;
+              semi_persistent->offset = rrc_periodicityAndOffset_sp->choice.sl2560;
+              break;
+            default:
+              AssertFatal(false, "illegal periodicity\n");
+              break;
+          }
+          break;
+        case NR_SRS_Resource__resourceType_PR_aperiodic:
+          srs_resource->resource_type.present = F1AP_RESOURCE_TYPE_PR_APERIODIC;
+          srs_resource->resource_type.choice.aperiodic = true;
+          break;
+        default:
+          AssertFatal(false, "illegal resource type\n");
+          break;
+      }
+      srs_resource->sequence_id = rrc_res->sequenceId;
+    }
+  }
+
+  // SRS Resource Set List
+  if (rrc_srs_config->srs_ResourceSetToAddModList) {
+    f1_srs_config->srs_resource_set_list = calloc_or_fail(1, sizeof(*f1_srs_config->srs_resource_set_list));
+    f1ap_srs_resource_set_list_t *srs_resource_set_list = f1_srs_config->srs_resource_set_list;
+    uint32_t srs_resource_set_list_length = rrc_srs_config->srs_ResourceSetToAddModList->list.count;
+    srs_resource_set_list->srs_resource_set_list_length = srs_resource_set_list_length;
+    srs_resource_set_list->srs_resource_set =
+        calloc_or_fail(srs_resource_set_list_length, sizeof(*srs_resource_set_list->srs_resource_set));
+
+    for (int i = 0; i < srs_resource_set_list_length; i++) {
+      f1ap_srs_resource_set_t *srs_resource_set = &srs_resource_set_list->srs_resource_set[i];
+      NR_SRS_ResourceSet_t *rrc_set = rrc_srs_config->srs_ResourceSetToAddModList->list.array[i];
+      srs_resource_set->srs_resource_set_id = rrc_set->srs_ResourceSetId;
+
+      uint8_t srs_resource_id_list_length = rrc_set->srs_ResourceIdList->list.count;
+      f1ap_srs_resource_id_list_t *srs_resource_id_list = &srs_resource_set->srs_resource_id_list;
+      srs_resource_id_list->srs_resource_id_list_length = srs_resource_id_list_length;
+      srs_resource_id_list->srs_resource_id =
+          calloc_or_fail(srs_resource_id_list_length, sizeof(*srs_resource_id_list->srs_resource_id));
+      for (int k = 0; k < srs_resource_id_list_length; k++) {
+        srs_resource_id_list->srs_resource_id[k] = *rrc_set->srs_ResourceIdList->list.array[k];
+      }
+
+      f1ap_resource_set_type_t *resource_set_type = &srs_resource_set->resource_set_type;
+
+      switch (rrc_set->resourceType.present) {
+        case NR_SRS_ResourceSet__resourceType_PR_periodic:
+          resource_set_type->present = F1AP_RESOURCE_SET_TYPE_PR_PERIODIC;
+          resource_set_type->choice.periodic = 0;
+          break;
+        case NR_SRS_ResourceSet__resourceType_PR_semi_persistent:
+          resource_set_type->present = F1AP_RESOURCE_SET_TYPE_PR_SEMI_PERSISTENT;
+          resource_set_type->choice.semi_persistent = 0;
+          break;
+        case NR_SRS_ResourceSet__resourceType_PR_aperiodic: {
+          struct NR_SRS_ResourceSet__resourceType__aperiodic *rs_aperiodic = rrc_set->resourceType.choice.aperiodic;
+          resource_set_type->present = F1AP_RESOURCE_SET_TYPE_PR_APERIODIC;
+          resource_set_type->choice.aperiodic.srs_resource_trigger = rs_aperiodic->aperiodicSRS_ResourceTrigger;
+          if (rs_aperiodic->slotOffset)
+            resource_set_type->choice.aperiodic.slot_offset = *rs_aperiodic->slotOffset;
+          break;
+        }
+        default:
+          AssertFatal(false, "illegal resource type\n");
+          break;
+      }
+    }
+  }
+
+  return srs_configuration;
 }

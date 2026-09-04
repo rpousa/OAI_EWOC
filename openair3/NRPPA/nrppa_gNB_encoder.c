@@ -89,10 +89,14 @@ static inline int nrppa_gNB_encode_unsuccessfull_outcome(NRPPA_NRPPA_PDU_t *pdu,
 
 int nrppa_gNB_encode_pdu(NRPPA_NRPPA_PDU_t *pdu, uint8_t **buffer, uint32_t *len)
 {
-  int ret = -1;
   DevAssert(pdu != NULL);
   DevAssert(buffer != NULL);
   DevAssert(len != NULL);
+
+  char errbuf[1024];
+  size_t errlen = sizeof(errbuf);
+  int ret = asn_check_constraints(&asn_DEF_NRPPA_NRPPA_PDU, pdu, errbuf, &errlen);
+  AssertFatal(ret == 0, "asn_check_constraints() failed: %s\n", errbuf);
 
   // xer_fprint(stdout, &asn_DEF_NRPPA_NRPPA_PDU, (void *)pdu);
 

@@ -222,7 +222,7 @@ if(PACKAGING_PHYSIM)
     --------------------------------------------------------
     Coding focused: polartest, smallblocktest, ldpctest
     Downlink PHY: nr_dlschsim, nr_psbchsim, nr_dlsim
-    Uplink PHY: nr_pucchsim nr_prachsim nr_ulschsim nr_ulsim
+    Uplink PHY: nr_pucchsim nr_prachsim nr_ulschsim nr_ulsim nr_ulsim_mu_mimo
     --------------------------------------------------------
     polartest: test polar codes which are used in 5G control channels, validates encoding, decoding and error correction performance*
     smallblocktest: generic test for small channel coding blocks, validates encoding and decoding for small transport blocks
@@ -233,7 +233,8 @@ if(PACKAGING_PHYSIM)
     nr_dlsim: simulates NR downlink, including multiple downlink channels and measurements of BLER/throughput
     nr_prachsim: simulates the Physical Random Access Channel, including UE initial access, preamble detection and timing alignment
     nr_ulschsim: simulates the Uplink Shared Channel, including LDPC encoding, modulation, transmission and decoding
-    nr_ulsim: simulates the NR uplink simulation, including PUCCH, PUSCH and PRACH")
+    nr_ulsim: simulates the NR uplink simulation, including PUCCH, PUSCH and PRACH
+    nr_ulsim_mu_mimo: simulates the NR uplink simulation with PUSCH multi user MIMO")
 
   if(PACKAGING_RPM)
     set(CPACK_RPM_PACKAGE_OAI-PHYSIM_SUMMARY "OpenAirInterface PhySim package")
@@ -254,7 +255,7 @@ if(PACKAGING_PHYSIM)
   install(FILES "${CMAKE_SOURCE_DIR}/doc/physical-simulators.md" DESTINATION share/doc/ COMPONENT oai-physim)
 
   #Add the targets to the package
-  install(TARGETS polartest smallblocktest ldpctest nr_dlschsim nr_psbchsim nr_pucchsim nr_dlsim nr_prachsim nr_ulschsim nr_ulsim
+  install(TARGETS polartest smallblocktest ldpctest nr_dlschsim nr_psbchsim nr_pucchsim nr_dlsim nr_prachsim nr_ulschsim nr_ulsim nr_ulsim_mu_mimo
         COMPONENT oai-physim
         RUNTIME DESTINATION /usr/bin
         LIBRARY DESTINATION /usr/lib

@@ -178,10 +178,7 @@ static void sl_nr_extract_sss(PHY_VARS_NR_UE *ue,
         rxF_ext = &sss_ext[aarx][sym - SL_NR_FIRST_SSS_SYMBOL][0];
       }
 
-      unsigned int k = sl_fp->first_carrier_offset + sl_fp->ssb_start_subcarrier + 2;
-      if (k >= ofdm_symbol_size)
-        k -= ofdm_symbol_size;
-
+      unsigned int k = CIRCULAR_INC(sl_fp->first_carrier_offset, sl_fp->ssb_start_subcarrier + 2, ofdm_symbol_size);
       LOG_D(PHY,
             "firstcarrieroffset:%d, ssb_sc:%d, k:%d, symbol:%d\n",
             sl_fp->first_carrier_offset,
@@ -191,9 +188,7 @@ static void sl_nr_extract_sss(PHY_VARS_NR_UE *ue,
 
       for (int i = 0; i < SL_NR_PSS_SEQUENCE_LENGTH; i++) {
         rxF_ext[i] = rxdataF[aarx][sym * ofdm_symbol_size + k];
-        k++;
-        if (k == ofdm_symbol_size)
-          k = 0;
+        k = CIRCULAR_INC(k, 1, ofdm_symbol_size);
       }
     }
 

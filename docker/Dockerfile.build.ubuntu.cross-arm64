@@ -19,7 +19,7 @@ RUN /bin/sh oaienv && \
     mkdir -p log ran_build/build ran_build/build-cross && \
     cd ran_build/build && \
     cmake ../../.. -GNinja && \
-    ninja ldpc_generators generate_T && \
+    ninja generate_T && \
     cd ../build-cross/ && \
     # install missing libyaml-cpp-dev for arm64
     apt install -y libyaml-cpp-dev:arm64 && \

@@ -14,12 +14,16 @@
 #include "PHY/NR_TRANSPORT/nr_transport_proto.h"
 #include "PHY/NR_TRANSPORT/nr_transport_common_proto.h"
 #include "PHY/NR_TRANSPORT/nr_dlsch.h"
+#include "PHY/nr_phy_common/inc/nr_phy_meas.h"
 #include "SCHED_NR/sched_nr.h"
 #include "common/utils/LOG/log.h"
 #include "common/utils/nr/nr_common.h"
 #include <syscall.h>
 #include <openair2/UTIL/OPT/opt.h>
 
+#ifdef LDPC_CUDA
+#include <cuda_runtime.h>
+#endif
 // #define DEBUG_DLSCH_CODING
 // #define DEBUG_DLSCH_FREE 1
 
@@ -34,7 +38,11 @@ void free_gNB_dlsch(NR_gNB_DLSCH_t *dlsch, uint16_t N_RB, const NR_DL_FRAME_PARM
   }
 
   if (dlsch->b) {
+#ifdef LDPC_CUDA
+    cudaFreeHost(dlsch->b);
+#else
     free16(dlsch->b, a_segments * 1056);
+#endif
     dlsch->b = NULL;
   }
   if (dlsch->f) {
@@ -42,7 +50,11 @@ void free_gNB_dlsch(NR_gNB_DLSCH_t *dlsch, uint16_t N_RB, const NR_DL_FRAME_PARM
     dlsch->f = NULL;
   }
   for (int r = 0; r < a_segments; r++) {
+#ifdef LDPC_CUDA
+    cudaFreeHost(dlsch->c[r]);
+#else
     free(dlsch->c[r]);
+#endif
     dlsch->c[r] = NULL;
   }
   free(dlsch->c);
@@ -67,14 +79,29 @@ NR_gNB_DLSCH_t new_gNB_dlsch(NR_DL_FRAME_PARMS *frame_parms, uint16_t N_RB)
   bzero(dlsch.b, dlsch_bytes);
 
   dlsch.c = (uint8_t **)malloc16(a_segments * sizeof(uint8_t *));
+#ifdef LDPC_CUDA
+  cudaError_t err = cudaHostAlloc((void **)&dlsch.c_devh, a_segments * sizeof(uint8_t *), cudaHostAllocMapped);
+  AssertFatal(err == cudaSuccess, "CUDA Error (dlsch->c_devh): %s\n", cudaGetErrorString(err));
+  err = cudaHostGetDevicePointer((void **)&dlsch.c_dev, (void *)dlsch.c_devh, 0);
+  AssertFatal(err == cudaSuccess, "CUDA Error (dlsch->c_dev): %s\n", cudaGetErrorString(err));
+#endif
   for (int r = 0; r < a_segments; r++) {
     // account for filler in first segment and CRCs for multiple segment case
     // [hna] 8448 is the maximum CB size in NR
     //       68*348 = 68*(maximum size of Zc)
     //       In section 5.3.2 in 38.212, the for loop is up to N + 2*Zc (maximum size of N is 66*Zc, therefore 68*Zc)
-    dlsch.c[r] = malloc16(8448);
-    AssertFatal(dlsch.c[r], "cannot allocate dlsch.c[%d]\n", r);
-    bzero(dlsch.c[r], 8448);
+#ifdef LDPC_CUDA
+    err = cudaHostAlloc((void **)&dlsch.c[r], (8448 / 8) * sizeof(uint8_t), cudaHostAllocMapped);
+    AssertFatal(err == cudaSuccess, "CUDA Error (dlsch->c[%d]): %s\n", r, cudaGetErrorString(err));
+    uint8_t *tmpcr;
+    err = cudaHostGetDevicePointer((void **)&tmpcr, (void *)dlsch.c[r], 0);
+    ((uint8_t **)dlsch.c_devh)[r] = tmpcr;
+    AssertFatal(err == cudaSuccess, "CUDA Error (cudaHostGetDevicePointer) dlsch->c_devh[%d]: %s\n", r, cudaGetErrorString(err));
+#else
+    dlsch.c[r] = malloc16(8448 / 8);
+#endif
+    AssertFatal(dlsch.c[r], "cannot allocate dlsch->c[%d]\n", r);
+    bzero(dlsch.c[r], 8448 / 8);
   }
 
   dlsch.f = malloc16(N_RB * frame_parms->symbols_per_slot * NR_NB_SC_PER_RB * 8 * NR_MAX_NB_LAYERS);
@@ -89,16 +116,7 @@ int nr_dlsch_encoding(PHY_VARS_gNB *gNB,
                       NR_gNB_DLSCH_t *dlsch_array,
                       int frame,
                       uint8_t slot,
-                      unsigned char *output,
-                      time_stats_t *tinput,
-                      time_stats_t *tinput_memcpy,
-                      time_stats_t *tprep,
-                      time_stats_t *tparity,
-                      time_stats_t *toutput,
-                      time_stats_t *tconcat,
-                      time_stats_t *dlsch_rate_matching_stats,
-                      time_stats_t *dlsch_interleaving_stats,
-                      time_stats_t *dlsch_segmentation_stats)
+                      unsigned char *output)
 {
   nrLDPC_TB_encoding_parameters_t TBs[n_dlsch];
   memset(TBs, 0, sizeof(TBs));
@@ -171,7 +189,6 @@ int nr_dlsch_encoding(PHY_VARS_gNB *gNB,
     TB_parameters->harq_unique_pid = i;
     TB_parameters->BG = rel15->maintenance_parms_v3.ldpcBaseGraph;
     TB_parameters->A = A;
-    start_meas(dlsch_segmentation_stats);
     TB_parameters->Kb = nr_segmentation(dlsch->b,
                                         dlsch->c,
                                         B,
@@ -180,7 +197,6 @@ int nr_dlsch_encoding(PHY_VARS_gNB *gNB,
                                         &TB_parameters->Z,
                                         &TB_parameters->F,
                                         TB_parameters->BG);
-    stop_meas(dlsch_segmentation_stats);
 
     if (TB_parameters->C > MAX_NUM_NR_DLSCH_SEGMENTS_PER_LAYER * rel15->nrOfLayers) {
       LOG_E(PHY, "nr_segmentation.c: too many segments %d, B %d\n", TB_parameters->C, B);
@@ -219,6 +235,9 @@ int nr_dlsch_encoding(PHY_VARS_gNB *gNB,
     TB_parameters->nb_layers = rel15->nrOfLayers;
     TB_parameters->rv_index = rel15->rvIndex[0];
 
+#ifdef LDPC_CUDA
+    TB_parameters->c_dev = (uint8_t **)dlsch->c_dev;
+#endif
     int nb_re_dmrs =
         (rel15->dmrsConfigType == NFAPI_NR_DMRS_TYPE1) ? (6 * rel15->numDmrsCdmGrpsNoData) : (4 * rel15->numDmrsCdmGrpsNoData);
     TB_parameters->G = nr_get_G(rbsize,
@@ -235,11 +254,12 @@ int nr_dlsch_encoding(PHY_VARS_gNB *gNB,
 
     for (int r = 0; r < TB_parameters->C; r++) {
       nrLDPC_segment_encoding_parameters_t *segment_parameters = &TB_parameters->segments[r];
+      int E = nr_get_E(TB_parameters->G, TB_parameters->C, TB_parameters->Qm, rel15->nrOfLayers, r);
+      if (E < 0)
+        return -1;
       segment_parameters->c = dlsch->c[r];
-      segment_parameters->E = nr_get_E(TB_parameters->G, TB_parameters->C, TB_parameters->Qm, rel15->nrOfLayers, r);
+      segment_parameters->E = E;
 
-      reset_meas(&segment_parameters->ts_interleave);
-      reset_meas(&segment_parameters->ts_rate_match);
       reset_meas(&segment_parameters->ts_ldpc_encode);
     }
 
@@ -256,20 +276,15 @@ int nr_dlsch_encoding(PHY_VARS_gNB *gNB,
                                                        .slot = slot,
                                                        .nb_TBs = n_dlsch,
                                                        .threadPool = &gNB->threadPool,
-                                                       .tinput = tinput,
-                                                       .tprep = tprep,
-                                                       .tparity = tparity,
-                                                       .toutput = toutput,
                                                        .TBs = TBs};
   gNB->nrLDPC_coding_interface.nrLDPC_coding_encoder(&slot_parameters);
 
+  int slot_type = nr_slot_select(&gNB->gNB_config, frame, slot);
   for (int i = 0; i < n_dlsch; i++) {
     nrLDPC_TB_encoding_parameters_t *TB_parameters = &TBs[i];
     for (int r = 0; r < TB_parameters->C; r++) {
       nrLDPC_segment_encoding_parameters_t *segment_parameters = &TB_parameters->segments[r];
-      merge_meas(dlsch_interleaving_stats, &segment_parameters->ts_interleave);
-      merge_meas(dlsch_rate_matching_stats, &segment_parameters->ts_rate_match);
-      // merge_meas(, &segment_parameters->ts_ldpc_encode);
+      MERGE_MEAS_FULL_SLOT(&gNB->dlsch_ldpc_encode_stats, &segment_parameters->ts_ldpc_encode, slot_type, NR_DOWNLINK_SLOT);
     }
   }
   return 0;

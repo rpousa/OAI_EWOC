@@ -50,14 +50,6 @@
 
   <testCase>
     <class>Custom_Command</class>
-    <desc>Configure policy routing for PDU2 source IP</desc>
-    <may_fail>true</may_fail>
-    <node>localhost</node>
-    <command>docker exec rfsim5g-oai-nr-ue sh -c "ip rule add from 12.1.2.2/32 table 1002 prio 1002; ip route replace default dev oaitun_ue1p2 src 12.1.2.2 table 1002"</command>
-  </testCase>
-
-  <testCase>
-    <class>Custom_Command</class>
     <desc>Ping ext-dn from UE PDU session 1 interface</desc>
     <node>localhost</node>
     <command>docker exec rfsim5g-oai-nr-ue ping -I oaitun_ue1 -c 10 192.168.72.135</command>

@@ -95,13 +95,13 @@ class Analysis():
 		test_summary['Nbfail'] =  nb_failed
 		return nb_failed == 0, test_summary, test_result
 
-	def analyze_rt_stats(thresholds, L1_stats, MAC_stats):
+	def analyze_rt_stats(thresholds, stat_files):
 		with open(thresholds, 'r') as f:
 			datalog_rt_stats = yaml.load(f, Loader=yaml.FullLoader)
 
 		rt_keys = datalog_rt_stats['Ref']
 		real_time_stats = {}
-		for sf in [L1_stats, MAC_stats]:
+		for sf in stat_files:
 			with open(sf, 'r') as f:
 				for line in f.readlines():
 					for k in rt_keys:
@@ -114,7 +114,7 @@ class Analysis():
 		# datalog_rt_stats format must align with HTML.CreateHtmlDataLogTable()
 		datalog_rt_stats['Data']={}
 		for k in real_time_stats:
-			tmp = re.match(r'^(?P<metric>.*):\s+(?P<avg>\d+\.\d+) us;\s+(?P<count>\d+);\s+(?P<max>\d+\.\d+) us;', real_time_stats[k])
+			tmp = re.match(r'^(?P<metric>.*):\s+(?P<avg>\d+\.\d+) us;\s+(?P<max>\d+\.\d+) us;\s+(?P<std_dev>\d+\.\d+) us;\s+(?P<count>\d+);', real_time_stats[k])
 			if tmp is not None:
 				metric = tmp.group('metric')
 				avg = float(tmp.group('avg'))

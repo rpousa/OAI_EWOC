@@ -47,6 +47,8 @@
 #define NGAP_HANDOVER_NOTIFY(mSGpTR) (mSGpTR)->ittiMsg.ngap_handover_notify
 #define NGAP_HANDOVER_CANCEL(mSGpTR) (mSGpTR)->ittiMsg.ngap_handover_cancel
 #define NGAP_HANDOVER_CANCEL_ACK(mSGpTR) (mSGpTR)->ittiMsg.ngap_handover_cancel_ack
+#define NGAP_PATH_SWITCH_REQ(mSGpTR) (mSGpTR)->ittiMsg.ngap_path_switch_req
+#define NGAP_PATH_SWITCH_REQ_ACK(mSGpTR) (mSGpTR)->ittiMsg.ngap_path_switch_req_ack
 
 #define NGAP_UE_CONTEXT_RELEASE_REQ(mSGpTR)     (mSGpTR)->ittiMsg.ngap_ue_release_req
 #define NGAP_PDUSESSION_RELEASE_COMMAND(mSGpTR)      (mSGpTR)->ittiMsg.ngap_pdusession_release_command
@@ -668,6 +670,69 @@ typedef struct {
   // AMF UE NGAP ID
   uint64_t amf_ue_ngap_id;
 } ngap_handover_cancel_ack_t;
+
+/* Path Switch Request 9.2.3.8 3GPP TS 38.413 */
+typedef struct ngap_path_switch_req_s {
+  // RAN UE NGAP ID
+  uint32_t gNB_ue_ngap_id;
+  // Source AMF UE NGAP ID
+  uint64_t amf_ue_ngap_id;
+  // User Location Information
+  user_location_information_t user_info;
+  // UE Security Capabilities
+  ngap_security_capabilities_t security_capabilities;
+  // Number of pdusession to be switched in the downlink list
+  uint16_t nb_of_pdusessions;
+  // List of PDU Session Resource to be Switched in Downlink
+  pdusession_setup_t pdusessions_tobeswitched[NR_MAX_NB_PDU_SESSIONS];
+} ngap_path_switch_req_t;
+
+typedef enum ngap_security_ind_s {
+  NGAP_SECURITY_REQUIRED = 0,
+  NGAP_SECURITY_PREFERRED = 1,
+  NGAP_SECURITY_NOT_NEEDED = 2,
+} ngap_security_ind_t;
+
+/* 9.3.1.27 3GPP TS 38.413 */
+typedef struct security_ind_s {
+  ngap_security_ind_t integrity_protection_ind;
+  ngap_security_ind_t confidentiality_protection_ind;
+} security_ind_t;
+
+/* 9.3.4.9 3GPP TS 38.413 */
+typedef struct path_switch_request_ack_transfer_s {
+  // UL NG-U UP TNL Information (O)
+  gtpu_tunnel_t *n3_incoming;
+  // Security Indication (O)
+  security_ind_t *security_ind;
+} path_switch_request_ack_transfer_t;
+
+/* Path Switch Request Acknowledge 9.2.3.9 3GPP TS 38.413
+ * PDU Session Resource Switched Item */
+typedef struct path_switch_request_ack_pdusession_s {
+  // PDU Session ID (M)
+  int pdusession_id;
+  // Path Switch Request Acknowledge Transfer (M)
+  path_switch_request_ack_transfer_t pathSwitchReqAckTransfer;
+} path_switch_request_ack_pdusession_t;
+
+/* Path Switch Request Acknowledge 9.2.3.9 3GPP TS 38.413 */
+typedef struct ngap_path_switch_req_ack_s {
+  // AMF UE NGAP ID (M)
+  uint64_t amf_ue_ngap_id;
+  // RAN UE NGAP ID (M)
+  uint32_t gNB_ue_ngap_id;
+  // Security Context - Next-Hop Chaining Count (M)
+  uint8_t nh_ncc;
+  // Security Context - Next-Hop NH (M)
+  uint8_t next_security_key[SECURITY_KEY_LENGTH];
+  // List of PDU Session Resource Switched (M)
+  uint16_t nb_of_pdusessions;
+  path_switch_request_ack_pdusession_t pdusessions_switched[NR_MAX_NB_PDU_SESSIONS];
+  // Allowed NSSAI (M)
+  uint8_t nb_allowed_nssais;
+  nssai_t allowed_nssai[NR_MAX_NB_ALLOWED_SNSSAI];
+} ngap_path_switch_req_ack_t;
 
 typedef struct ngap_ue_cap_info_ind_s {
   uint32_t  gNB_ue_ngap_id;

@@ -88,10 +88,7 @@ int nr_get_srs_signal(PHY_VARS_gNB *gNB,
         LOG_I(NR_PHY, ":::::::: OFDM symbol %d ::::::::\n", l0 + l_line);
 #endif
 
-        uint16_t subcarrier = subcarrier_offset + nr_srs_info->k_0_p[p_index][l_line];
-        if (subcarrier >= frame_parms->ofdm_symbol_size) {
-          subcarrier -= frame_parms->ofdm_symbol_size;
-        }
+        int subcarrier = CIRCULAR_INC(subcarrier_offset, nr_srs_info->k_0_p[p_index][l_line], frame_parms->ofdm_symbol_size);
         uint16_t l_line_offset = l_line * frame_parms->ofdm_symbol_size;
 
         for (int k = 0; k < M_sc_b_SRS; k++) {
@@ -104,10 +101,7 @@ int nr_get_srs_signal(PHY_VARS_gNB *gNB,
           // Subcarriers without SRS symbols and only noise
           srs_received_noise[ant][l_line_offset + subcarrier] = rx_signal[l_line_offset + subcarrier + 1];
           for (int n = 1; n < K_TC; n++) {
-            uint16_t subcarrier_n = subcarrier + n;
-            if (subcarrier_n >= frame_parms->ofdm_symbol_size) {
-              subcarrier_n -= frame_parms->ofdm_symbol_size;
-            }
+            uint subcarrier_n = CIRCULAR_INC(subcarrier, n, frame_parms->ofdm_symbol_size);
             srs_received_noise[ant][l_line_offset + subcarrier_n] = rx_signal[l_line_offset + subcarrier_n];
           }
 
@@ -127,11 +121,7 @@ int nr_get_srs_signal(PHY_VARS_gNB *gNB,
 #endif
 
           // Subcarrier increment
-          subcarrier += K_TC;
-          if (subcarrier >= frame_parms->ofdm_symbol_size) {
-            subcarrier -= frame_parms->ofdm_symbol_size;
-          }
-
+          subcarrier = CIRCULAR_INC(subcarrier, K_TC, frame_parms->ofdm_symbol_size);
         } // for (int k = 0; k < M_sc_b_SRS; k++)
       } // for (int l_line = 0; l_line < N_symb_SRS; l_line++)
     } // for (int p_index = 0; p_index < N_ap; p_index++)

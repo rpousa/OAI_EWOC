@@ -102,6 +102,7 @@ Here are some useful command line options for the NR UE:
 | `--autonomous-ta`        | Enables the autonomous TA update, based on DL drift (useful if main contribution to DL drift is movement, e.g. LEO satellite). |
 | `--time-sync-P`          | Sets the coefficient for the Proportional part of the PI-controller for the time synchronization. Default value 0.5. |
 | `--time-sync-I`          | Sets the coefficient for the Integrating part of the PI-controller for the time synchronization. Default value 0.0. |
+| `--disable-blind-search` | Disables the blind search for neighboring cells. Useful for less powerful computers. |
 | `--usrp-args`            | Equivalent to the `sdr_addrs` field in the gNB config file. Used to identify the USRP and set some basic parameters (like the clock source).  |
 | `--clock-source`         | Sets the clock source (internal or external).                                                                 |
 | `--time-source`          | Sets the time source (internal or external).                                                                  |

@@ -9,12 +9,14 @@
 
 #define NRPPA_TRP_INFORMATION_REQ(mSGpTR) (mSGpTR)->ittiMsg.nrppa_trp_information_req
 #define NRPPA_TRP_INFORMATION_RESP(mSGpTR) (mSGpTR)->ittiMsg.nrppa_trp_information_resp
+#define NRPPA_TRP_INFORMATION_FAILURE(mSGpTR) (mSGpTR)->ittiMsg.nrppa_trp_information_failure
 #define NRPPA_POSITIONING_INFORMATION_REQ(mSGpTR) (mSGpTR)->ittiMsg.nrppa_positioning_information_req
 #define NRPPA_POSITIONING_INFORMATION_RESP(mSGpTR) (mSGpTR)->ittiMsg.nrppa_positioning_information_resp
 #define NRPPA_POSITIONING_ACTIVATION_REQ(mSGpTR) (mSGpTR)->ittiMsg.nrppa_positioning_activation_req
 #define NRPPA_POSITIONING_ACTIVATION_RESP(mSGpTR) (mSGpTR)->ittiMsg.nrppa_positioning_activation_resp
 #define NRPPA_MEASUREMENT_REQ(mSGpTR) (mSGpTR)->ittiMsg.nrppa_measurement_req
 #define NRPPA_MEASUREMENT_RESP(mSGpTR) (mSGpTR)->ittiMsg.nrppa_measurement_resp
+#define NRPPA_MEASUREMENT_FAILURE(mSGpTR) (mSGpTR)->ittiMsg.nrppa_measurement_failure
 
 /* Structure of Positioning related NRPPA messages */
 /* IE structures for Positioning related messages as per TS 38.455 V16.7.1*/
@@ -735,6 +737,18 @@ typedef struct nrppa_measurement_response_list_s {
   uint32_t measurement_response_list_length;
 } nrppa_measurement_response_list_t;
 
+typedef enum nrppa_cause_type_e {
+  NRPPA_CAUSE_NOTHING, /* No components present */
+  NRPPA_CAUSE_RADIO_NETWORK,
+  NRPPA_CAUSE_PROTOCOL,
+  NRPPA_CAUSE_MISC,
+} nrppa_cause_type_t;
+
+typedef struct nrppa_cause_e {
+  nrppa_cause_type_t type;
+  uint8_t value;
+} nrppa_cause_t;
+
 typedef struct nrppa_trp_information_req_s {
   // IE 9.2.4 (mandatory)
   uint16_t transaction_id;
@@ -751,6 +765,13 @@ typedef struct nrppa_trp_information_resp_s {
   // mandatory
   nrppa_trp_information_list_t trp_information_list;
 } nrppa_trp_information_resp_t;
+
+typedef struct nrppa_trp_information_failure_s {
+  // IE 9.2.4 (mandatory)
+  uint16_t transaction_id;
+  // IE 9.2.1 (mandatory)
+  nrppa_cause_t cause;
+} nrppa_trp_information_failure_t;
 
 typedef struct nrppa_positioning_information_req_s {
   // IE 9.2.4 (mandatory)
@@ -803,5 +824,14 @@ typedef struct nrppa_measurement_resp_s {
   // (optional)
   nrppa_measurement_response_list_t *measurement_response_list;
 } nrppa_measurement_resp_t;
+
+typedef struct nrppa_measurement_failure_s {
+  // IE 9.2.4 (mandatory)
+  uint16_t transaction_id;
+  // (mandatory)
+  uint32_t lmf_measurement_id;
+  // IE 9.2.1 (mandatory)
+  nrppa_cause_t cause;
+} nrppa_measurement_failure_t;
 
 #endif // NRPPA_MESSAGES_TYPES_H_

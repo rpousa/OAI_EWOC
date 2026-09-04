@@ -373,3 +373,45 @@ void multipath_channel_float(channel_desc_t *desc,
 }
 
 #endif
+
+// \f$\mathbf{y} = y + \mathbf{x}\f$
+#ifdef CHANNEL_SSE
+void __attribute__((no_sanitize_address)) add_rx_signals(float **y_re,
+                                                         float **y_im,
+                                                         float **x_re,
+                                                         float **x_im,
+                                                         int n_rx,
+                                                         int length)
+{
+  for (int aarx = 0; aarx < n_rx; aarx++) {
+    int i = 0;
+    for (; i <= length - 4; i += 4) {
+      // Add real values
+      simde__m128 vec_re_x = simde_mm_loadu_ps(&x_re[aarx][i]);
+      simde__m128 vec_re_y = simde_mm_loadu_ps(&y_re[aarx][i]);
+      simde_mm_storeu_ps(&y_re[aarx][i], simde_mm_add_ps(vec_re_y, vec_re_x));
+
+      // Add imaginary values
+      simde__m128 vec_im_x = simde_mm_loadu_ps(&x_im[aarx][i]);
+      simde__m128 vec_im_y = simde_mm_loadu_ps(&y_im[aarx][i]);
+      simde_mm_storeu_ps(&y_im[aarx][i], simde_mm_add_ps(vec_im_y, vec_im_x));
+    }
+
+    // Add remaining samples
+    for (; i < length; i++) {
+      y_re[aarx][i] += x_re[aarx][i];
+      y_im[aarx][i] += x_im[aarx][i];
+    }
+  }
+}
+#else
+void add_rx_signals(float **y_re, float **y_im, float **x_re, float **x_im, int n_rx, int length)
+{
+  for (int aarx = 0; aarx < n_rx; aarx++) {
+    for (int i = 0; i < length; i++) {
+      y_re[aarx][i] += x_re[aarx][i];
+      y_im[aarx][i] += x_im[aarx][i];
+    }
+  }
+}
+#endif

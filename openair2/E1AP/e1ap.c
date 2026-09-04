@@ -457,12 +457,12 @@ int e1apCUCP_handle_BEARER_CONTEXT_RELEASE_COMPLETE(sctp_assoc_t assoc_id, e1ap_
   return 0;
 }
 
-static instance_t cuup_task_create_gtpu_instance_to_du(eth_params_t *IPaddrs)
+static instance_t cuup_task_create_gtpu_instance_to_du(const e1ap_net_config_t *c)
 {
   openAddr_t tmp = {0};
-  strncpy(tmp.originHost, IPaddrs->my_addr, sizeof(tmp.originHost) - 1);
-  sprintf(tmp.originService, "%d", IPaddrs->my_portd);
-  sprintf(tmp.destinationService, "%d", IPaddrs->remote_portd);
+  strncpy(tmp.originHost, c->localAddressF1U, sizeof(tmp.originHost) - 1);
+  sprintf(tmp.originService, "%d", c->localPortF1U);
+  sprintf(tmp.destinationService, "%d", c->remotePortF1U);
   return gtpv1Init(tmp);
 }
 
@@ -531,13 +531,8 @@ static void e1_task_handle_sctp_association_resp(E1_t type,
     e1ap_upcp_inst_t *inst = getCxtE1(instance);
     inst->cuup.assoc_id = sctp_new_association_resp->assoc_id;
 
-    e1ap_net_config_t *nc = &inst->net_config;
-    eth_params_t IPaddr = {0};
-    IPaddr.my_addr = nc->localAddressF1U;
-    IPaddr.my_portd = nc->localPortF1U;
-    IPaddr.remote_portd = nc->remotePortF1U;
     if (getCxtE1(instance)->gtpInstF1U < 0)
-      getCxtE1(instance)->gtpInstF1U = cuup_task_create_gtpu_instance_to_du(&IPaddr);
+      getCxtE1(instance)->gtpInstF1U = cuup_task_create_gtpu_instance_to_du(&inst->net_config);
     if (getCxtE1(instance)->gtpInstF1U < 0)
       LOG_E(E1AP, "Failed to create CUUP F1-U UDP listener\n");
     cuup_init_n3(instance);

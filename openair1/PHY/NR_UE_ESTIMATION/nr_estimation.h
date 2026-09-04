@@ -18,7 +18,6 @@ int nr_prs_channel_estimation(uint8_t gNB_id,
                               uint8_t rep_num,
                               PHY_VARS_NR_UE *ue,
                               const UE_nr_rxtx_proc_t *proc,
-                              NR_DL_FRAME_PARMS *frame_params,
                               c16_t rxdataF[][ue->frame_parms.samples_per_slot_wCP]);
 
 /* Generic function to find the peak of channel estimation buffer */
@@ -27,7 +26,7 @@ void peak_estimator(c16_t *buffer, int32_t buf_len, int32_t *peak_idx, int32_t *
 /*!
 \brief This function performs channel estimation including frequency and temporal interpolation
 */
-void nr_pdcch_channel_estimation(const PHY_VARS_NR_UE *ue,
+void nr_pdcch_channel_estimation(const NR_DL_FRAME_PARMS *frame_parms,
                                  int nb_rb,
                                  int rb_offset,
                                  int dmrs_ref,
@@ -35,26 +34,26 @@ void nr_pdcch_channel_estimation(const PHY_VARS_NR_UE *ue,
                                  uint16_t BWPStart,
                                  int32_t pdcch_est_size,
                                  c16_t pdcch_dl_ch_estimates[][pdcch_est_size],
-                                 c16_t rxdataF[ue->frame_parms.nb_antennas_rx][ue->frame_parms.ofdm_symbol_size],
+                                 c16_t rxdataF[frame_parms->nb_antennas_rx][frame_parms->ofdm_symbol_size],
                                  c16_t *pilot);
 
-c32_t nr_pbch_dmrs_correlation(const NR_DL_FRAME_PARMS *fp,
+c32_t nr_pbch_dmrs_correlation(const NR_DL_FRAME_PARMS *frame_parms,
                                const int symbol,
                                const int dmrss,
                                const int Nid_cell,
                                const int ssb_start_subcarrier,
                                const uint32_t nr_gold_pbch[NR_PBCH_DMRS_LENGTH_DWORD],
-                               const c16_t rxdataF[fp->nb_antennas_rx][fp->ofdm_symbol_size]);
+                               const c16_t rxdataF[frame_parms->nb_antennas_rx][frame_parms->ofdm_symbol_size]);
 
-int nr_pbch_channel_estimation(const NR_DL_FRAME_PARMS *fp,
+int nr_pbch_channel_estimation(const NR_DL_FRAME_PARMS *frame_parms,
                                const sl_nr_ue_phy_params_t *sl_phy_params,
-                               c16_t dl_ch_estimates[fp->ofdm_symbol_size],
+                               c16_t dl_ch_estimates[frame_parms->ofdm_symbol_size],
                                const UE_nr_rxtx_proc_t *proc,
                                int dmrss,
                                uint ssb_index,
                                uint n_hf,
                                int ssb_start_subcarrier,
-                               const c16_t rxdataF[fp->ofdm_symbol_size],
+                               const c16_t rxdataF[frame_parms->ofdm_symbol_size],
                                bool sidelink,
                                uint Nid);
 
@@ -81,6 +80,7 @@ int nr_adjust_synch_ue(const NR_DL_FRAME_PARMS *frame_parms,
 void nr_ue_measurements(PHY_VARS_NR_UE *ue,
                         const UE_nr_rxtx_proc_t *proc,
                         int number_rbs,
+                        uint16_t l,
                         uint32_t pdsch_est_size,
                         int32_t dl_ch_estimates[][pdsch_est_size]);
 
@@ -97,14 +97,13 @@ void nr_ue_ssb_rsrp_measurements(PHY_VARS_NR_UE *ue,
 typedef struct {
   UE_nr_rxtx_proc_t proc;
   PHY_VARS_NR_UE *ue;
-  c16_t **rxdata;
+  int nb_ant;
   uint32_t rxdata_size;
   c16_t rxdata_ant[];
 } nr_meas_task_args_t;
 
 void nr_ue_meas_neighboring_cell(void *arg);
-
-void do_neighboring_cell_measurements(UE_nr_rxtx_proc_t *proc, PHY_VARS_NR_UE *ue, c16_t **rxdata, uint32_t rxdata_size);
+void nr_ue_search_new_neighboring_cell(void *arg);
 
 void nr_ue_rrc_measurements(PHY_VARS_NR_UE *ue,
                             const UE_nr_rxtx_proc_t *proc,
@@ -117,9 +116,9 @@ void phy_adjust_gain_nr(PHY_VARS_NR_UE *ue,
 void nr_pdsch_ptrs_processing(int nbRx,
                               c16_t ptrs_phase_per_slot[][14],
                               int32_t ptrs_re_per_slot[][14],
-                              uint32_t rx_size_symbol,
+                              uint32_t pdsch_buf_size_max,
                               int nl,
-                              c16_t rxdataF_comp[][nl][rx_size_symbol],
+                              c16_t rxdataF_comp[][NR_MAX_NB_LAYERS][pdsch_buf_size_max],
                               NR_DL_FRAME_PARMS *frame_parms,
                               fapi_nr_dl_config_dlsch_pdu_rel15_t *dlsch_config,
                               uint8_t nr_slot_rx,

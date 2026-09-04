@@ -29,7 +29,7 @@ from cls_ci_helper import archiveArtifact
 # Helper functions used here and in other classes
 # (e.g., cls_cluster.py)
 #-----------------------------------------------------------
-IMAGES = ['oai-enb', 'oai-lte-ru', 'oai-lte-ue', 'oai-gnb', 'oai-nr-cuup', 'oai-gnb-aw2s', 'oai-nr-ue', 'oai-enb-asan', 'oai-gnb-asan', 'oai-lte-ue-asan', 'oai-nr-ue-asan', 'oai-nr-cuup-asan', 'oai-gnb-aerial', 'oai-gnb-fhi72', 'oai-gnb-fhi72-t2']
+IMAGES = ['oai-enb', 'oai-lte-ru', 'oai-lte-ue', 'oai-gnb', 'oai-nr-cuup', 'oai-gnb-aw2s', 'oai-nr-ue', 'oai-enb-asan', 'oai-gnb-asan', 'oai-lte-ue-asan', 'oai-nr-ue-asan', 'oai-nr-cuup-asan', 'oai-gnb-aerial', 'oai-gnb-fhi72', 'oai-gnb-fhi72-t2', 'oai-nr-oru']
 DEFAULT_REGISTRY = "gracehopper3-oai.sboai.cs.eurecom.fr"
 
 def CreateWorkspace(host, sourcePath, repository, branch):
@@ -53,7 +53,8 @@ def AnalyzeBuildLogs(image, lf):
 			# the OpenShift Cluster builder prepends image registry URL
 			lineHasCommit = re.search(r'COMMIT [a-zA-Z0-9\.:/\-]*' + image, str(line)) is not None
 			committed = committed or lineHasCommit
-			if re.search(r'error:|Errors|ERROR', line):
+			# ignore apt errors, if it installes, it's good
+			if re.search(r'error:|Errors|ERROR', line) and not re.search(r'update-alternatives: error: alternative', line):
 				errors.append(f"=> {line.strip()}")
 	status = (committed or tagged) and len(errors) == 0
 	logging.info(f"Analyzing {image}, file {lf}: {status=}, {len(errors)} errors")
@@ -178,9 +179,20 @@ class Containerize():
 	
 		dockerfileprefix = '.ubuntu'
 
+		baseImage = 'ran-base'
+		baseTag = 'develop'
+		buildImage = 'ran-build'
+		forceBaseImageBuild = False
+		imageTag = 'develop'
+
+		result = re.search('native_cuda_armv8', self.imageKind)
+		if result is not None:
+			baseImage = 'ran-base-cuda'
+			buildImage = 'ran-build-cuda'
+			dockerfileprefix = '.cuda.ubuntu'
 		# we always build the ran-build image with all targets
 		# Creating a tupple with the imageName, the DockerFile prefix pattern, targetName and sanitized option
-		imageNames = [('ran-build', 'build', 'ran-build', '')]
+		imageNames = [(buildImage, 'build', f'{buildImage}', '')]
 		result = re.search('eNB', self.imageKind)
 		if result is not None:
 			imageNames.append(('oai-enb', 'eNB', 'oai-enb', ''))
@@ -224,13 +236,13 @@ class Containerize():
 		if result is not None:
 			imageNames.append(('ran-build-fhi72-t2', 'build.fhi72.t2', 'ran-build-fhi72-t2', ''))
 			imageNames.append(('oai-gnb', 'gNB.fhi72.t2', 'oai-gnb-fhi72-t2', ''))
+		result = re.search('native_cuda_armv8', self.imageKind)
+		if result is not None:
+			imageNames.append(('oai-gnb', 'gNB', 'oai-gnb', ''))
+			imageNames.append(('oai-nr-ue', 'nrUE', 'oai-nr-ue', ''))
 
 		cmd.cd(lSourcePath)
 
-		baseImage = 'ran-base'
-		baseTag = 'develop'
-		forceBaseImageBuild = False
-		imageTag = 'develop'
 		if (self.merge):
 			imageTag = 'ci-temp'
 			if self.targetBranch == 'develop':
@@ -258,17 +270,17 @@ class Containerize():
 		# On when the base image docker file is being modified.
 		if forceBaseImageBuild:
 			cmd.run(f"docker image rm {baseImage}:{baseTag}")
-			logfile = f'{lSourcePath}/cmake_targets/log/ran-base.docker.log'
+			logfile = f'{lSourcePath}/cmake_targets/log/{baseImage}.docker.log'
 			option = f" --build-arg UBUNTU_IMAGE={DEFAULT_REGISTRY}/{ubuntuImage}"
 			cmd.run(f"docker build --target {baseImage} --tag {baseImage}:{baseTag} --file docker/Dockerfile.base{dockerfileprefix} {option} . &> {logfile}", timeout=1600)
-			t = ("ran-base", archiveArtifact(cmd, ctx, logfile))
+			t = (baseImage, archiveArtifact(cmd, ctx, logfile))
 			log_files.append(t)
 
-		# First verify if the base image was properly created.
 		ret = cmd.run(f"docker image inspect --format=\'Size = {{{{.Size}}}} bytes\' {baseImage}:{baseTag}")
+
 		allImagesSize = {}
 		if ret.returncode != 0:
-			logging.error('\u001B[1m Could not build properly ran-base\u001B[0m')
+			logging.error(f'\u001B[1m Could not build properly {baseImage}\u001B[0m')
 			# Recover the name of the failed container?
 			cmd.run(f"docker ps --quiet --filter \"status=exited\" -n1 | xargs --no-run-if-empty docker rm -f")
 			cmd.run(f"docker image prune --force")
@@ -281,10 +293,10 @@ class Containerize():
 			if result is not None:
 				size = float(result.group("size")) / 1000000
 				imageSizeStr = f'{size:.1f}'
-				logging.debug(f'\u001B[1m   ran-base size is {imageSizeStr} Mbytes\u001B[0m')
-				allImagesSize['ran-base'] = f'{imageSizeStr} Mbytes'
+				logging.debug(f'\u001B[1m {baseImage} size is {imageSizeStr} Mbytes\u001B[0m')
+				allImagesSize[baseImage] = f'{imageSizeStr} Mbytes'
 			else:
-				logging.debug('ran-base size is unknown')
+				logging.debug(f'{baseImage} size is unknown')
 
 		# Build the target image(s)
 		status = True
@@ -295,13 +307,13 @@ class Containerize():
 			cmd.run(f'sed -i -e "s#{baseImage}:latest#{baseImage}:{baseTag}#" docker/Dockerfile.{pattern}{dockerfileprefix}')
 			# target images should use the proper ran-build image
 			if image != 'ran-build' and "-asan" in name:
-				cmd.run(f'sed -i -e "s#ran-build:latest#ran-build-asan:{imageTag}#" docker/Dockerfile.{pattern}{dockerfileprefix}')
+				cmd.run(f'sed -i -e "s#{buildImage}:latest#{buildImage}-asan:{imageTag}#" docker/Dockerfile.{pattern}{dockerfileprefix}')
 			elif "fhi72" in name or name == "oai-nr-oru":
 				cmd.run(f'sed -i -e "s#ran-build-fhi72:latest#ran-build-fhi72:{imageTag}#" docker/Dockerfile.{pattern}{dockerfileprefix}')
 			elif image != 'ran-build':
-				cmd.run(f'sed -i -e "s#ran-build:latest#ran-build:{imageTag}#" docker/Dockerfile.{pattern}{dockerfileprefix}')
+				cmd.run(f'sed -i -e "s#{buildImage}:latest#{buildImage}:{imageTag}#" docker/Dockerfile.{pattern}{dockerfileprefix}')
 			if image == 'oai-gnb-aerial':
-				cmd.run('cp -f /opt/nvidia-ipc/nvipc_src.2026.01.07.tar.gz .')
+				cmd.run('cp -f /opt/nvidia-ipc/nvipc_src.2026.03.04.tar.gz .')
 			if image == 'ran-build-fhi72-t2':
 				cmd.run('cp -f /opt/t2-patch/AMD-T2-SDFEC_25-03-1.patch .')
 			if name == 'oai-gnb-fhi72-t2':
@@ -401,7 +413,7 @@ class Containerize():
 		# I would like to run it with --rm and mount the ctest result directory to avoid 'docker cp'
 		# below, but then permissions are messed up and we can't remove the directory without sudo
 		# making the next pipeline fail
-		ret = cmd.run(f'docker run -a STDOUT {runtime_opt} --workdir /oai-ran/build/ --env LD_LIBRARY_PATH=/oai-ran/build/ --name ran-unittests ran-unittests:{baseTag} ctest --no-label-summary -j$(nproc) {ctest_opt}')
+		ret = cmd.run(f'docker run -a STDOUT {runtime_opt} --shm-size=2g --workdir /oai-ran/build/ --env LD_LIBRARY_PATH=/oai-ran/build/ --name ran-unittests ran-unittests:{baseTag} ctest --no-label-summary -j$(nproc) {ctest_opt}')
 		cmd.run('docker cp ran-unittests:/oai-ran/build/Testing/Temporary/LastTest.log .')
 		archiveArtifact(cmd, ctx, f'{lSourcePath}/LastTest.log')
 		cmd.run('docker cp ran-unittests:/oai-ran/build/Testing/Temporary/LastTestsFailed.log .')
@@ -644,7 +656,7 @@ class Containerize():
 			logging.error('\u001B[1m Undeploying objects Failed\u001B[0m')
 		return success
 
-	def AnalyzeRTStatsObject(self, HTML, node, ctx, thresholds, service=None):
+	def AnalyzeRTStatsObject(self, HTML, node, ctx, thresholds, service=None, stats_files=None):
 		logging.info(f'Analyzing realtime stats from server: {node}')
 		yaml = self.yamlPath.strip('/')
 		wd = f'{self.workspace}/{yaml}'
@@ -660,12 +672,20 @@ class Containerize():
 				raise RuntimeError(f"Requested service {s} not found among services: {deployed_services}")
 			logging.info(f"Analyzing deployed service '{s}'")
 			# similar to BuildRunTests(), use docker cp to avoid problems with permissions
-			cmd.run(f'docker compose -f {wd_yaml} cp {s}:/opt/oai-gnb/nrL1_stats.log {wd}/')
-			l1_file = archiveArtifact(cmd, ctx, f"{wd}/nrL1_stats.log")
-			cmd.run(f'docker compose -f {wd_yaml} cp {s}:/opt/oai-gnb/nrMAC_stats.log {wd}/')
-			mac_file = archiveArtifact(cmd, ctx, f"{wd}/nrMAC_stats.log")
+			local_files = []
+			for sf in stats_files:
+				basename = os.path.basename(sf)
+				ret = cmd.run(f'docker compose -f {wd_yaml} cp {s}:{sf} {wd}/')
+				if ret.returncode != 0:
+					logging.error(f"Cannot retrieve {s}:{sf}")
+					return False
+				file = archiveArtifact(cmd, ctx, f"{wd}/{basename}")
+				if not file:
+					logging.error(f"Cannot retrieve file {basename}")
+					return False
+				local_files.append(file)
 
 		logging.info(f"check against thresholds from {thresholds}")
-		success, datalog_rt_stats = cls_analysis.Analysis.analyze_rt_stats(thresholds, l1_file, mac_file)
-		HTML.CreateHtmlDataLogTable(datalog_rt_stats)
+		success, datalog_rt_stats = cls_analysis.Analysis.analyze_rt_stats(thresholds, local_files)
+		HTML.CreateHtmlDataLogTable(datalog_rt_stats, thresholds)
 		return success

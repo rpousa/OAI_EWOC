@@ -330,7 +330,7 @@ static void nr_rx_pdcch_symbol(PHY_VARS_NR_UE *ue,
   // Note: pilot returned by the following function is already the complex conjugate of the transmitted DMRS
   const uint32_t *gold = nr_gold_pdcch(fp->N_RB_DL, fp->symbols_per_slot, scrambling_id, proc->nr_slot_rx, symbol);
   nr_pdcch_dmrs_ref(gold, pilot, n_rb + rb_offset + dmrs_ref);
-  nr_pdcch_channel_estimation(ue,
+  nr_pdcch_channel_estimation(fp,
                               n_rb,
                               rb_offset,
                               dmrs_ref,
@@ -360,7 +360,7 @@ static void nr_rx_pdcch_symbol(PHY_VARS_NR_UE *ue,
 
   LOG_D(NR_PHY_DCI, "in channel level function (dl_ch_estimates_ext -> dl_ch_estimates_ext)\n");
   int avg[fp->nb_antennas_rx];
-  nr_channel_level(0, rx_size, pdcch_dl_ch_estimates_ext, fp->nb_antennas_rx, 1, avg, n_rb * RE_PER_RB_OUT_DMRS);
+  nr_channel_level(0, rx_size, pdcch_dl_ch_estimates_ext, fp->nb_antennas_rx, avg, n_rb * RE_PER_RB_OUT_DMRS);
   int avgs = avg[0];
   for (int i = 1; i < fp->nb_antennas_rx; i++)
       avgs = cmax(avgs, avg[i]);
@@ -589,7 +589,6 @@ void nr_pdcch_dci_indication(const UE_nr_rxtx_proc_t *proc,
 {
   NR_UE_PDCCH_CONFIG *phy_pdcch_config = &phy_data->phy_pdcch_config;
 
-  nr_downlink_indication_t dl_indication;
   fapi_nr_dci_indication_t dci_ind = {.SFN = proc->frame_rx, .slot = proc->nr_slot_rx};
 
   for (int ss_idx = 0; ss_idx < phy_pdcch_config->nb_search_space; ss_idx++) {
@@ -632,7 +631,14 @@ void nr_pdcch_dci_indication(const UE_nr_rxtx_proc_t *proc,
   }
 
   /* Send to MAC */
-  nr_fill_dl_indication(&dl_indication, &dci_ind, NULL, proc, ue, phy_data);
+  nr_downlink_indication_t dl_indication = (nr_downlink_indication_t){.gNB_index = proc->gNB_id,
+                                                                      .module_id = ue->Mod_id,
+                                                                      .cc_id = ue->CC_id,
+                                                                      .hfn = proc->hfn_rx,
+                                                                      .frame = proc->frame_rx,
+                                                                      .slot = proc->nr_slot_rx,
+                                                                      .phy_data = phy_data,
+                                                                      .dci_ind = &dci_ind};
   ue->if_inst->dl_indication(&dl_indication);
   phy_pdcch_config->nb_search_space = 0;
 }

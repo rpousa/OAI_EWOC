@@ -11,6 +11,7 @@
 
 #include <common/utils/assertions.h>
 #include "common/platform_constants.h"
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include "NR_ARFCN-ValueNR.h"
@@ -36,6 +37,7 @@
 #include "NR_SIB2.h"
 #include "NR_SIB3.h"
 #include "NR_SIB4.h"
+#include "NR_PagingUE-Identity.h"
 #include "ds/seq_arr.h"
 #include "ds/byte_array.h"
 #include "openair2/LAYER2/nr_pdcp/nr_pdcp_configuration.h"
@@ -111,12 +113,13 @@ int do_RRCSetupRequest(uint8_t *buffer, size_t buffer_size, uint8_t *rv, uint64_
 
 int do_nrMeasurementReport_SA(long trigger_to_measid,
                               long trigger_quantity,
+                              bool report_rsrp,
                               long rs_type,
                               uint16_t Nid_cell,
                               int rsrp_index,
-                              bool neighbor_cell_valid,
-                              uint16_t neighbor_Nid_cell,
-                              int neighbor_rsrp_index,
+                              int num_neighbor_cells,
+                              const uint16_t *neighbor_Nid_cells,
+                              const int *neighbor_rsrp_indexes,
                               uint8_t *buffer,
                               size_t buffer_size);
 
@@ -124,11 +127,7 @@ int do_NR_RRCReconfigurationComplete_for_nsa(uint8_t *buffer, size_t buffer_size
 
 int do_NR_RRCReconfigurationComplete(uint8_t *buffer, size_t buffer_size, const uint8_t Transaction_id);
 
-int do_NR_DLInformationTransfer(uint8_t *buffer,
-                                size_t buffer_len,
-                                uint8_t transaction_id,
-                                uint32_t pdu_length,
-                                uint8_t *pdu_buffer);
+byte_array_t do_NR_DLInformationTransfer(uint8_t Transaction_id, uint32_t pdu_length, uint8_t *pdu_buffer);
 
 int do_NR_ULInformationTransfer(uint8_t **buffer,
                                 uint32_t pdu_length,
@@ -137,7 +136,8 @@ int do_NR_ULInformationTransfer(uint8_t **buffer,
 int do_RRCReestablishmentRequest(uint8_t *buffer,
                                  NR_ReestablishmentCause_t cause,
                                  uint32_t cell_id,
-                                 uint16_t c_rnti);
+                                 uint16_t c_rnti,
+                                 uint16_t short_mac_i);
 
 int do_RRCReestablishment(int8_t nh_ncc, uint8_t *const buffer, size_t buffer_size, const uint8_t Transaction_id);
 
@@ -152,7 +152,26 @@ NR_MeasConfig_t *get_MeasConfig(const NR_MeasTiming_t *mt,
                                 seq_arr_t *neigh_seq,
                                 int *neigh_a3_id);
 void free_MeasConfig(NR_MeasConfig_t *mc);
-int do_NR_Paging(uint8_t Mod_id, uint8_t *buffer, uint32_t tmsi);
+
+#define NR_PAGING_FULL_I_RNTI_SIZE 5 // 40 bits
+
+/** Paging parameters for do_NR_Paging */
+typedef struct {
+  /// UE Identity type (ng-5G-S-TMSI or fullI-RNTI)
+  NR_PagingUE_Identity_PR ue_identity_type;
+  union {
+    /// Full 48-bit 5G-S-TMSI (TS 23.003): AMF Set ID + AMF Pointer + 5G-TMSI
+    uint64_t fiveg_s_tmsi;
+    uint8_t full_i_rnti[NR_PAGING_FULL_I_RNTI_SIZE];
+  } ue_identity;
+  /// true = accessType non3GPP
+  bool access_type;
+  /// pagingCause voice
+  int *paging_cause;
+} nr_paging_params_t;
+
+byte_array_t do_NR_Paging(int count, const nr_paging_params_t *params);
+int nr_pcch_decode(const byte_array_t pcch, nr_paging_params_t *out_params, int *out_count);
 
 byte_array_t get_HandoverPreparationInformation(nr_rrc_reconfig_param_t *params);
 byte_array_t get_HandoverCommandMessage(nr_rrc_reconfig_param_t *params);

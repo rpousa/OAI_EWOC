@@ -142,7 +142,7 @@ void gNB_I0_measurements(PHY_VARS_gNB *gNB, int slot, int first_symb, int num_sy
     for (int rb = 0; rb < frame_parms->N_RB_UL; rb++) {
       if (rb_mask_ul[s][rb] == 0 && // check that rb was not used in this subframe
           !(I0_SKIP_DC && rb == frame_parms->N_RB_UL >> 1)) { // skip middle PRB because of artificial noise possibly created by FFT
-        int offset = offset0 + (frame_parms->first_carrier_offset + (rb*12))%frame_parms->ofdm_symbol_size;
+        int offset = offset0 + CIRCULAR_INC(frame_parms->first_carrier_offset, rb * NR_NB_SC_PER_RB, frame_parms->ofdm_symbol_size);
         nb_symb[rb]++;
         for (int aarx = 0; aarx < frame_parms->nb_antennas_rx; aarx++) {
           c16_t *ul_ch = &common_vars->rxdataF[aarx][offset];

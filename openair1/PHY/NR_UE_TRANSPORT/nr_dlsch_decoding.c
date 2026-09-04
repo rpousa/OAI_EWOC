@@ -147,9 +147,12 @@ void nr_dlsch_decoding(PHY_VARS_NR_UE *phy_vars_ue,
         TB_parameters.C,
         TB_parameters.Qm,
         TB_parameters.llr);
+  int E = nr_get_E(TB_parameters.G, TB_parameters.C, TB_parameters.Qm, TB_parameters.nb_layers, 0);
+  if (E < 0)
+    return;
   TB_parameters.c = harq_process->c;
   TB_parameters.d = harq_process->d;
-  TB_parameters.E = nr_get_E(TB_parameters.G, TB_parameters.C, TB_parameters.Qm, TB_parameters.nb_layers, 0);
+  TB_parameters.E = E;
   TB_parameters.E2 = TB_parameters.E;
   TB_parameters.first_rE2 = TB_parameters.C;
   for (int r = 1; r < TB_parameters.C; r++) {
@@ -169,9 +172,6 @@ void nr_dlsch_decoding(PHY_VARS_NR_UE *phy_vars_ue,
   TB_parameters.d_to_be_cleared = harq_process->first_rx == 1;
   for (int r = 0; r < TB_parameters.C; r++)
     TB_parameters.decodeSuccess[r] = false;
-  reset_meas(&TB_parameters.ts_deinterleave);
-  reset_meas(&TB_parameters.ts_rate_unmatch);
-  reset_meas(&TB_parameters.ts_seg_prep);
   reset_meas(&TB_parameters.ts_ldpc_decode);
 
   for (int r = 0; r < TB_parameters.C; r++) {
@@ -196,7 +196,6 @@ void nr_dlsch_decoding(PHY_VARS_NR_UE *phy_vars_ue,
     return;
   }
 
-  uint32_t offset = 0, r_offset = 0;
   bool crcok = true;
   for (int r = 0; r < TB_parameters.C; r++)
     if (TB_parameters.decodeSuccess[r] == false) {
@@ -204,22 +203,21 @@ void nr_dlsch_decoding(PHY_VARS_NR_UE *phy_vars_ue,
       crcok = false;
       break;
     }
+
   if (crcok) {
+    uint8_t *output = b;
+    const uint8_t *in = harq_process->c;
+    const int sz = (harq_process->K - harq_process->F) / 8 - (harq_process->C > 1 ? 3 : 0);
     for (int r = 0; r < TB_parameters.C; r++) {
-      memcpy(b + offset,
-             harq_process->c + r_offset,
-             (harq_process->K >> 3) - (harq_process->F >> 3) - ((harq_process->C > 1) ? 3 : 0));
-      offset += (harq_process->K >> 3) - (harq_process->F >> 3) - ((harq_process->C > 1) ? 3 : 0);
-      r_offset += (harq_process->K >> 3);
+      memcpy(output, in, sz);
+      output += sz;
+      in += harq_process->K / 8;
     }
   } else {
     LOG_D(PHY, "frame=%d, slot=%d, first_rx=%d, rv_index=%d\n", proc->frame_rx, proc->nr_slot_rx, harq_process->first_rx, cw_info->rv);
   }
 
-  merge_meas(&phy_vars_ue->phy_cpu_stats.cpu_time_stats[DLSCH_DEINTERLEAVING_STATS], &TB_parameters.ts_deinterleave);
-  merge_meas(&phy_vars_ue->phy_cpu_stats.cpu_time_stats[DLSCH_RATE_UNMATCHING_STATS], &TB_parameters.ts_rate_unmatch);
   merge_meas(&phy_vars_ue->phy_cpu_stats.cpu_time_stats[DLSCH_LDPC_DECODING_STATS], &TB_parameters.ts_ldpc_decode);
-  merge_meas(&phy_vars_ue->phy_cpu_stats.cpu_time_stats[DLSCH_SEG_PREP_STATS], &TB_parameters.ts_seg_prep);
 
   kpiStructure.nb_total++;
   kpiStructure.blockSize = cw_info->TBS;
@@ -233,10 +231,30 @@ void nr_dlsch_decoding(PHY_VARS_NR_UE *phy_vars_ue,
     // we have regrouped the transport block
     if (!check_crc(b, lenWithCrc(1, cw_info->TBS), crcType(1, cw_info->TBS))) {
       LOG_E(PHY,
-            " Frame %d.%d LDPC global CRC fails, but individual LDPC CRC succeeded. %d segs\n",
+            " Frame %d.%d LDPC global CRC fails, but individual LDPC CRC succeeded. %d segs "
+            "(harq_pid %d cw %d first_rx %d round %d rv %d clear %d | TBS %d A %d K %d Z %d F %d "
+            "| E %d E2 %d first_rE2 %d R %d R2 %d Qm %d Nl %d)\n",
             proc->frame_rx,
             proc->nr_slot_rx,
-            harq_process->C);
+            harq_process->C,
+            harq_pid,
+            cw_idx,
+            harq_process->first_rx,
+            harq_process->DLround,
+            cw_info->rv,
+            TB_parameters.d_to_be_cleared,
+            cw_info->TBS,
+            TB_parameters.A,
+            harq_process->K,
+            harq_process->Z,
+            harq_process->F,
+            TB_parameters.E,
+            TB_parameters.E2,
+            TB_parameters.first_rE2,
+            TB_parameters.R,
+            TB_parameters.R2,
+            TB_parameters.Qm,
+            TB_parameters.nb_layers);
       harq_process->decodeResult = false;
     }
   }

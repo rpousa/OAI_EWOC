@@ -28,7 +28,6 @@ ULSCH RNTI 1234, 389: ulsch_power[0] 41,5 ulsch_noise_power[0] 7.8, sync_pos 0
 UL segment deinterleaving:            5.063 us;          488870;          27.005 us;
  UL segment rate recovery:           11.554 us;          488870;         517.998 us;
      UL segments decoding:          134.035 us;          488870;         759.164 us;
-            UL Indication:            0.763 us;           38598;           9.588 us;
           Slot Indication:           17.891 us;          128667;          94.446 us;
      PUSCH inner-receiver:          307.193 us;           25730;         529.580 us;
                     feprx:          169.305 us;           38600;         310.489 us;

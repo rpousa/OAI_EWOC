@@ -28,7 +28,7 @@ void nr_rrc_going_to_IDLE(NR_UE_RRC_INST_t *rrc,
 
 void handle_RRCRelease(NR_UE_RRC_INST_t *rrc);
 
-void rrc_ue_generate_measurementReport(rrcPerNB_t *rrc, instance_t ue_id);
+void rrc_ue_generate_measurementReport(rrcPerNB_t *rrc, instance_t ue_id, int meas_id);
 
 void set_rlf_sib1_timers_and_constants(NR_UE_Timers_Constants_t *tac, NR_UE_TimersAndConstants_t *ue_TimersAndConstants);
 

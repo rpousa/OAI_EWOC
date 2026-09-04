@@ -233,10 +233,16 @@ bool e1_decode_qos_flow_to_setup(qos_flow_to_setup_t *out, const E1AP_QoS_Flow_Q
   const E1AP_QoSFlowLevelQoSParameters_t *qosParams = &in->qoSFlowLevelQoSParameters;
   const E1AP_QoS_Characteristics_t *qoS_Characteristics = &qosParams->qoS_Characteristics;
   switch (qoS_Characteristics->present) {
-    case E1AP_QoS_Characteristics_PR_non_Dynamic_5QI:
+    case E1AP_QoS_Characteristics_PR_non_Dynamic_5QI: {
+      const int fiveqi = qoS_Characteristics->choice.non_Dynamic_5QI->fiveQI;
+      if (fiveqi < MIN_FIVEQI || fiveqi > MAX_FIVEQI) {
+        PRINT_ERROR("non-dynamic fiveQI %d out of range %d..%d\n", fiveqi, MIN_FIVEQI, MAX_FIVEQI);
+        return false;
+      }
       qos_char->qos_type = NON_DYNAMIC;
-      qos_char->non_dynamic.fiveqi = qoS_Characteristics->choice.non_Dynamic_5QI->fiveQI;
+      qos_char->non_dynamic.fiveqi = fiveqi;
       break;
+    }
     case E1AP_QoS_Characteristics_PR_dynamic_5QI: {
       E1AP_Dynamic5QIDescriptor_t *dynamic5QI = qoS_Characteristics->choice.dynamic_5QI;
       qos_char->qos_type = DYNAMIC;

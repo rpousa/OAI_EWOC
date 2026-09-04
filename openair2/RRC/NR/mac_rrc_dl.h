@@ -25,6 +25,11 @@ typedef void (*ue_context_release_command_func_t)(sctp_assoc_t assoc_id, const f
 typedef void (*dl_rrc_message_transfer_func_t)(sctp_assoc_t assoc_id, const f1ap_dl_rrc_message_t *dl_rrc);
 typedef void (*f1_paging_transfer_func_t)(sctp_assoc_t assoc_id, const f1ap_paging_t *paging);
 
+typedef void (*trp_information_request_func_t)(sctp_assoc_t assoc_id, const f1ap_trp_information_req_t *req);
+typedef void (*positioning_information_request_func_t)(sctp_assoc_t assoc_id, const f1ap_positioning_information_req_t *req);
+typedef void (*positioning_activation_request_func_t)(sctp_assoc_t assoc_id, const f1ap_positioning_activation_req_t *req);
+typedef void (*positioning_measurement_request_func_t)(sctp_assoc_t assoc_id, const f1ap_positioning_measurement_req_t *req);
+
 struct nr_mac_rrc_dl_if_s;
 void mac_rrc_dl_direct_init(struct nr_mac_rrc_dl_if_s *mac_rrc);
 void mac_rrc_dl_f1ap_init(struct nr_mac_rrc_dl_if_s *mac_rrc);

@@ -24,13 +24,13 @@
 #define MAX_KBYTES_WRITTEN_PER_SESSION (1000 * 1000)
 
 ImScopeDataWrapper scope_array[EXTRA_SCOPE_TYPES];
-typedef struct alignas(hardware_destructive_interference_size) ImScopeDumpInstruction {
+typedef struct ImScopeDumpInstruction {
   int slot;
   int frame;
   const char *cause;
 } ImScopeDumpInstruction;
 
-std::atomic<ImScopeDumpInstruction> dump_instruction;
+alignas(hardware_destructive_interference_size) std::atomic<ImScopeDumpInstruction> dump_instruction;
 ImScopeDumpInstruction void_instruction({-1, -1, nullptr});
 
 extern "C" void imscope_record_autoinit(void *dataptr)

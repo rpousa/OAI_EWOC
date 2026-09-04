@@ -205,6 +205,8 @@ int oru_io_init(oru_io_t *io, oru_io_config_t *conf)
   // 3. Initialize Timer
   if (fh_timer_init(&io->timer, conf->numerology) < 0)
     return -1;
+  if (conf->clock_timebase == FH_CLOCK_TAI)
+    fh_timer_set_timebase(&io->timer, FH_CLOCK_TAI);
   fh_timer_register_cb(&io->timer, conf->timer_cb, conf->timer_user_data);
 
   // 4. Initialize Send (on primary port)

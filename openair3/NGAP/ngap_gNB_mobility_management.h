@@ -20,5 +20,8 @@ NGAP_NGAP_PDU_t *encode_ng_handover_notify(const ngap_handover_notify_t *msg);
 NGAP_NGAP_PDU_t *encode_ng_ul_ran_status_transfer(const ngap_ran_status_transfer_t *msg);
 NGAP_NGAP_PDU_t *encode_ng_handover_cancel(const ngap_handover_cancel_t *msg);
 int decode_ng_handover_cancel_ack(ngap_handover_cancel_ack_t *out, const NGAP_NGAP_PDU_t *pdu);
+NGAP_NGAP_PDU_t *encode_ng_path_switch_request(const ngap_path_switch_req_t *msg);
+int decode_ng_path_switch_request_acknowledge(ngap_path_switch_req_ack_t *msg, NGAP_NGAP_PDU_t *pdu);
+void free_ng_path_switch_req_ack(ngap_path_switch_req_ack_t *msg);
 
 #endif /* NGAP_GNB_MOBILITY_MANAGEMENT_H_ */

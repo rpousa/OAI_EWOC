@@ -41,6 +41,8 @@ pdusession_level_qos_parameter_t fill_qos(uint8_t qfi, const NGAP_QosFlowLevelQo
 void *decode_pdusession_transfer(const asn_TYPE_descriptor_t *td, const OCTET_STRING_t buf);
 bool decodePDUSessionResourceSetup(pdusession_transfer_t *out, const OCTET_STRING_t in);
 byte_array_t encode_ngap_pdusession_setup_response_transfer(const pdusession_setup_t *pdusession);
+byte_array_t encode_ngap_pdusession_setup_unsuccessful_transfer(const ngap_cause_t *cause);
+void encode_ngap_security_capabilities(NGAP_UESecurityCapabilities_t *out, const ngap_security_capabilities_t *in);
 
 bool eq_ngap_plmn(const plmn_id_t *a, const plmn_id_t *b);
 

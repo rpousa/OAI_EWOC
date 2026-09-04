@@ -172,6 +172,8 @@ void rrc_add_nsa_user(gNB_RRC_INST *rrc, x2ap_ENDC_sgnb_addition_req_t *m, sctp_
 
   /* all the 0 are DU-related info that we will fill later, see rrc_add_nsa_user_resp() below */
   rrc_gNB_ue_context_t *ue_context_p = rrc_gNB_create_ue_context(assoc_id, 0, rrc, 0, 0);
+  if (!ue_context_p)
+    return;
   gNB_RRC_UE_t *UE = &ue_context_p->ue_context;
 
   nr_pdcp_entity_security_keys_and_algos_t security_parameters = {0};

@@ -29,7 +29,7 @@
 
 // Default RI/PMI selector: reads rank and PMI from CSI feedback for new-tx,
 // or from HARQ process state for retx.
-void nr_dl_ri_pmi_select_default(const gNB_MAC_INST *mac, nr_dl_candidate_t *candidates, int n_candidates)
+void nr_dl_ri_pmi_select_default(const nr_cell_sched_t *cell, nr_dl_candidate_t *candidates, int n_candidates)
 {
   FOR_EACH_CANDIDATE(cand, candidates, n_candidates)
   {
@@ -38,7 +38,7 @@ void nr_dl_ri_pmi_select_default(const gNB_MAC_INST *mac, nr_dl_candidate_t *can
     if (cand->is_retx) {
       cand->sched_pdsch.nrOfLayers = sched_ctrl->harq_processes[cand->retx_harq_pid].sched_pdsch.nrOfLayers;
       cand->sched_pdsch.pm_index =
-          get_pm_index(mac, cand->UE, dl_bwp->dci_format, cand->sched_pdsch.nrOfLayers, mac->radio_config.pdsch_AntennaPorts.XP);
+          get_pm_index(cell, cand->UE, dl_bwp->dci_format, cand->sched_pdsch.nrOfLayers, cell->radio_config.pdsch_AntennaPorts.XP);
     } else {
       cand->sched_pdsch.nrOfLayers = cand->csi_ri + 1;
       cand->sched_pdsch.pm_index = cand->csi_pm_index;
@@ -49,11 +49,11 @@ void nr_dl_ri_pmi_select_default(const gNB_MAC_INST *mac, nr_dl_candidate_t *can
 // Default TDA selector: picks the slot-wide TDA index from get_dl_tda(),
 // then resolves tda_info per candidate using each UE's own BWP / search
 // space / coreset. Marks invalids with skipped=true.
-int nr_dl_tda_select_default(const gNB_MAC_INST *mac, nr_dl_candidate_t *candidates, int n_candidates, frame_t frame, slot_t slot)
+int nr_dl_tda_select_default(const gNB_MAC_INST *mac, const nr_cell_sched_t *cell, nr_dl_candidate_t *candidates, int n_candidates, frame_t frame, slot_t slot)
 {
-  int tda = get_dl_tda(mac, slot);
+  int tda = get_dl_tda(mac, cell, slot);
   AssertFatal(tda >= 0, "Unable to find PDSCH time domain allocation in list\n");
-  const NR_ServingCellConfigCommon_t *scc = mac->common_channels[0].ServingCellConfigCommon;
+  const NR_ServingCellConfigCommon_t *scc = cell->common_channels.ServingCellConfigCommon;
 
   int n_valid = 0;
   FOR_EACH_CANDIDATE(cand, candidates, n_candidates)
@@ -142,9 +142,9 @@ int nr_dl_beam_select_default(NR_beam_info_t *beam_info,
   return n_valid;
 }
 
-void nr_dl_mcs_select_default(const gNB_MAC_INST *mac, nr_dl_candidate_t *candidates, int n_candidates)
+void nr_dl_mcs_select_default(const nr_cell_sched_t *cell, nr_dl_candidate_t *candidates, int n_candidates)
 {
-  const NR_bler_options_t *bo = &mac->dl_bler;
+  const NR_bler_options_t *bo = &cell->dl_bler;
   FOR_EACH_CANDIDATE(cand, candidates, n_candidates)
   {
     int mcs;
@@ -239,28 +239,36 @@ int nr_dl_proportional_fair(const nr_dl_sched_params_t *params, nr_dl_candidate_
     COMMIT_ALLOC(params, cand, rbStart, min_rbSize, cand->sched_pdsch.mcs, n_scheduled);
   }
 
-  /* Phase 3: New data UEs — PF priority order, largest free block */
-  for (int j = 0; j < n_active; j++) {
+  /* BW is the same across all beams, just use beam 0 */
+  int max_rbSize = params->n_rb_avail[0];
+  DevAssert(max_rbSize >= min_rbSize);
+  int n_remain_ue = params->max_num_ue - n_scheduled;
+  // share RBs fairly between remaining allocatable UEs
+  int n_rb_per_ue = max(min_rbSize, max_rbSize / n_remain_ue);
+
+  /* Phase 3: New data UEs — PF priority order, count number of RBs required,
+   * store number of excess RBs for UEs. Check two additional UEs in case the
+   * first ones cannot be allocated (DCI alloc fail). This is only necessary
+   * because we use type-1 allocation, if we used type-0, we could fix the UEs,
+   * then iteratively give RBs as needed. */
+  uint16_t rbs_ue[MAX_MOBILES_PER_GNB] = {0};
+  int excess_total_rbs = max_rbSize;
+  for (int j = 0, n = 0; j < n_active && n < n_remain_ue + 2; j++) {
     nr_dl_candidate_t *cand = order[j];
     if (cand->is_retx || cand->pending_bytes == 0)
       continue;
 
-    int rbStart;
-    uint16_t *vrb_map = params->vrb_map[cand->alloc_beam_idx];
-    int max_rbSize = find_largest_free_block(vrb_map, cand->alloc_slbitmap, cand->bwp_start, cand->bwp_size, &rbStart);
-    if (max_rbSize < min_rbSize)
-      continue;
-
+    // calculate the number of RBs that UE would like to have
     int mcs = cand->sched_pdsch.mcs;
     uint8_t Qm = nr_get_Qm_dl(mcs, cand->mcs_table);
     uint16_t R = nr_get_code_rate_dl(mcs, cand->mcs_table);
-    NR_pdsch_dmrs_t dmrs = get_dl_dmrs_params(params->mac->common_channels->ServingCellConfigCommon,
+    const nr_cell_sched_t *cell = params->cell;
+    NR_pdsch_dmrs_t dmrs = get_dl_dmrs_params(cell->common_channels.ServingCellConfigCommon,
                                               &cand->UE->current_DL_BWP,
                                               &cand->sched_pdsch.tda_info,
                                               cand->sched_pdsch.nrOfLayers);
     const int oh = 3 * 4 + (cand->UE->UE_sched_ctrl.ta_apply ? 2 : 0);
     uint32_t tbs;
-    uint16_t rbSize;
     nr_find_nb_rb(Qm,
                   R,
                   1,
@@ -271,8 +279,38 @@ int nr_dl_proportional_fair(const nr_dl_sched_params_t *params, nr_dl_candidate_
                   min_rbSize,
                   max_rbSize,
                   &tbs,
-                  &rbSize);
+                  &rbs_ue[j]);
+    if (n < n_remain_ue) {
+      // for the first n_remain_ue UEs: account number of RBs
+      // so excess RBs not used by some UEs could be given to others
+      excess_total_rbs -= min(rbs_ue[j], n_rb_per_ue);
+      excess_total_rbs = max(excess_total_rbs, 0);
+    }
+    n++;
+  }
 
+  /* allocate up to all UEs checked above */
+  for (int j = 0; j < n_active; j++) {
+    nr_dl_candidate_t *cand = order[j];
+    if (cand->is_retx || cand->pending_bytes == 0 || rbs_ue[j] == 0)
+      continue;
+
+    // give every UE its chunk of data. If total_rbs indicates excess RBs, give
+    // additionally as appropriate.
+    int rb_req = min(rbs_ue[j], n_rb_per_ue);
+    int excess_req = max(rbs_ue[j] - rb_req, 0);
+    if (excess_total_rbs > 0 && excess_req > 0) {
+      int excess_ack = min(excess_total_rbs, excess_req);
+      rb_req += excess_ack;
+      excess_total_rbs -= excess_ack;
+      DevAssert(excess_total_rbs >= 0);
+    }
+    int rbStart, rbSize;
+    uint16_t *vrb_map = params->vrb_map[cand->alloc_beam_idx];
+    if (!get_rb_alloc(min_rbSize, rb_req, cand->bwp_start, cand->bwp_size, vrb_map, cand->alloc_slbitmap, &rbStart, &rbSize))
+      continue;
+
+    int mcs = cand->sched_pdsch.mcs;
     COMMIT_ALLOC(params, cand, rbStart, rbSize, mcs, n_scheduled);
   }
 

@@ -130,6 +130,10 @@ int check_nr_fapi_unpack_length(nfapi_nr_phy_msg_type_e msgId, uint32_t unpacked
       if (unpackedBufLen >= sizeof(nfapi_nr_srs_indication_t))
         retLen = sizeof(nfapi_nr_srs_indication_t);
       break;
+    case NFAPI_NR_PHY_MSG_TYPE_SRS_TOA_VENDOR_EXTENSION_INDICATION:
+      if (unpackedBufLen >= sizeof(nfapi_nr_srs_toa_vendor_ext_indication_t))
+        retLen = sizeof(nfapi_nr_srs_toa_vendor_ext_indication_t);
+      break;
     case NFAPI_NR_PHY_MSG_TYPE_DL_NODE_SYNC:
       if (unpackedBufLen >= sizeof(nfapi_nr_dl_node_sync_t))
         retLen = sizeof(nfapi_nr_dl_node_sync_t);
@@ -185,5 +189,7 @@ bool fapi_nr_message_header_unpack(void *pMessageBuf,
   int result =
       (pull8(&pReadPackedMessage, &fapi_msg.num_msg, end) && pull8(&pReadPackedMessage, &fapi_msg.opaque_handle, end)
        && pull16(&pReadPackedMessage, &header->message_id, end) && pull32(&pReadPackedMessage, &header->message_length, end));
+  // the SCF opaque handle byte carries the phy_id
+  header->phy_id = fapi_msg.opaque_handle;
   return result != 0;
 }

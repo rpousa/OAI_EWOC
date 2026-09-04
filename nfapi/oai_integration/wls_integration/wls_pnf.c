@@ -148,7 +148,7 @@ uint8_t phy_wls_init(const char *dev_name, uint64_t nWlsMacMemSize, uint64_t nWl
   pWls->nTotalDlBufAllocCnt = 0;
   pWls->nTotalDlBufFreeCnt = 0;
 
-  pWls->hWls = WLS_Open(dev_name, WLS_SLAVE_CLIENT, &nWlsMacMemSize, &nWlsPhyMemSize);
+  pWls->hWls = WLS_Open(dev_name, WLS_SLAVE_CLIENT, &nWlsMacMemSize, &nWlsPhyMemSize, WLS_UL_ENQUEUE_SIZE);
   if (pWls->hWls) {
     /* allocate chuck of memory */
     if (WLS_Alloc(pWls->hWls, nWlsMacMemSize + nWlsPhyMemSize) != NULL) {

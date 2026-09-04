@@ -1,22 +1,6 @@
 <!-- SPDX-License-Identifier: CC-BY-4.0 -->
 
-<table style="border-collapse: collapse; border: none;">
-  <tr style="border-collapse: collapse; border: none;">
-    <td style="border-collapse: collapse; border: none;">
-      <a href="http://www.openairinterface.org/">
-         <img src="../../../doc/images/oai_final_logo.png" alt="" border=3 height=50 width=150>
-         </img>
-      </a>
-    </td>
-    <td style="border-collapse: collapse; border: none; vertical-align: center;">
-      <b><font size = "5">OAI Full Stack 5G-NR RF simulation with containers</font></b>
-    </td>
-  </tr>
-</table>
-
-This page is only valid for an `Ubuntu 22` host.
-
-**NOTE: this version (2023-01-27) has been updated  for the `v1.5.0` version of the `OAI 5G CN`.**
+OAI Full Stack 5G-NR RF simulation with containers
 
 **Table of Contents**
 

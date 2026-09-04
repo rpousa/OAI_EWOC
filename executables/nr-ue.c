@@ -165,6 +165,9 @@ void init_nr_ue_vars(PHY_VARS_NR_UE *ue, uint8_t UE_id)
   // intialize transport
   init_nr_ue_transport(ue);
 
+  // Initialization of measurement variables
+  init_phy_nr_measurements(ue);
+
   ue->ta_frame = -1;
   ue->ta_slot = -1;
 }
@@ -215,9 +218,8 @@ static void UE_synch(void *arg) {
         ((ret.rx_offset << 1) / fp->samples_per_subframe * fp->slots_per_subframe)
         + round((float)((ret.rx_offset << 1) % fp->samples_per_subframe) / fp->samples_per_slot0);
 
-    if (get_nrUE_params()->cont_fo_comp) {
-      UE->freq_offset = freq_offset - UE->dl_Doppler_shift;
-    } else {
+    UE->freq_offset = freq_offset - UE->dl_Doppler_shift;
+    if (!get_nrUE_params()->cont_fo_comp) {
       // rerun with new cell parameters and frequency-offset
       nrue_ru_set_freq(UE, ul_carrier, dl_carrier, freq_offset);
     }
@@ -342,7 +344,7 @@ static void RU_write(nr_rxtx_thread_data_t *rxtxD, bool sl_tx_action, c16_t **tx
   while (writeBlockSize > maxWriteBlockSize) {
     const int dummyBlockSize = min(writeBlockSize - maxWriteBlockSize, maxWriteBlockSize);
     int tmp = nrue_ru_write_reorder(UE, writeTimestamp, (void **)txp, dummyBlockSize, fp->nb_antennas_tx, flags);
-    AssertFatal(tmp == dummyBlockSize, "");
+    AssertFatal(tmp == dummyBlockSize, "write samples to reorder function failed %d", tmp);
 
     writeTimestamp += dummyBlockSize;
     writeBlockSize -= dummyBlockSize;
@@ -365,7 +367,7 @@ static void RU_write(nr_rxtx_thread_data_t *rxtxD, bool sl_tx_action, c16_t **tx
   }
 
   int tmp = nrue_ru_write_reorder(UE, writeTimestamp, (void **)txp, writeBlockSize, fp->nb_antennas_tx, flags);
-  AssertFatal(tmp == writeBlockSize, "");
+  AssertFatal(tmp == writeBlockSize, "write to reorder function failed %d", tmp);
 }
 
 void processSlotTX(void *arg)
@@ -548,8 +550,15 @@ static int UE_dl_preprocessing(PHY_VARS_NR_UE *UE,
   if (proc->rx_slot_type == NR_DOWNLINK_SLOT || proc->rx_slot_type == NR_MIXED_SLOT) {
     dl_slot = true;
     if(UE->if_inst != NULL && UE->if_inst->dl_indication != NULL) {
-      nr_downlink_indication_t dl_indication;
-      nr_fill_dl_indication(&dl_indication, NULL, NULL, proc, UE, phy_data);
+      nr_downlink_indication_t dl_indication = (nr_downlink_indication_t){
+          .gNB_index = proc->gNB_id,
+          .module_id = UE->Mod_id,
+          .cc_id = UE->CC_id,
+          .hfn = proc->hfn_rx,
+          .frame = proc->frame_rx,
+          .slot = proc->nr_slot_rx,
+          .phy_data = phy_data,
+      };
       UE->if_inst->dl_indication(&dl_indication);
     }
 
@@ -626,7 +635,7 @@ void dummyWrite(PHY_VARS_NR_UE *UE, openair0_timestamp_t timestamp, int writeBlo
     dummy_tx[i] = dummy_tx_data;
 
   int tmp = nrue_ru_write(UE, timestamp, (void **)dummy_tx, writeBlockSize, fp->nb_antennas_tx, 4);
-  AssertFatal(writeBlockSize == tmp, "");
+  AssertFatal(writeBlockSize == tmp, "write to reorder function failed %d", tmp);
 }
 
 void readFrame(PHY_VARS_NR_UE *UE, openair0_timestamp_t *timestamp, int duration_rx_to_tx, bool toTrash)
@@ -656,7 +665,7 @@ void readFrame(PHY_VARS_NR_UE *UE, openair0_timestamp_t *timestamp, int duration
       int readBlockSize = get_samples_per_slot(slot_rx, fp);
       int tmp = nrue_ru_read(UE, timestamp, (void **)rxp, readBlockSize, fp->nb_antennas_rx);
       UEscopeCopy(UE, ueTimeDomainSamplesBeforeSync, rxp[0], sizeof(c16_t), 1, readBlockSize, 0);
-      AssertFatal(readBlockSize == tmp, "");
+      AssertFatal(readBlockSize == tmp, "read rf board failed %d", tmp);
 
       if (IS_SOFTMODEM_RFSIM) {
         int slot_tx = (slot_rx + duration_rx_to_tx) % fp->slots_per_frame;
@@ -709,6 +718,18 @@ static inline int get_readBlockSize(uint16_t slot, const NR_DL_FRAME_PARMS *fp)
   if (slot < (fp->slots_per_frame-1))
     next_slot_first_symbol = get_firstSymSamp(slot+1, fp);
   return rem_samples + next_slot_first_symbol;
+}
+
+void trs_freq_correction(PHY_VARS_NR_UE *ue, int cfo)
+{
+  if (abs(cfo) > TRS_CFO_THRESH) {
+    LOG_A(PHY, "CFO estimated (%d) from TRS exceeded threshold (%d). Adjusting radio CF\n", cfo, TRS_CFO_THRESH);
+    ue->freq_offset += cfo;
+    uint64_t dl_carrier;
+    uint64_t ul_carrier;
+    nr_get_carrier_frequencies(ue, &dl_carrier, &ul_carrier);
+    nrue_ru_set_freq(ue, ul_carrier, dl_carrier, ue->freq_offset);
+  }
 }
 
 void *UE_thread(void *arg)
@@ -770,7 +791,6 @@ void *UE_thread(void *arg)
       readFrame(UE, &tmp, duration_rx_to_tx, true);
   }
 
-  c16_t *rxp[fp->nb_antennas_rx];
   while (!oai_exit) {
     if (syncRunning) {
       notifiedFIFO_elt_t *res = pollNotifiedFIFO(&nf);
@@ -806,7 +826,7 @@ void *UE_thread(void *arg)
           /* For IQ recorder-player we force synchronization to happen in a fixed duration so that
              the replay runs in sync with recorded samples.
           */
-          openair0_config_t *cfg0 = &openair0_cfg[UE->rf_map.card];
+          openair0_config_t *cfg0 = &openair0_cfg_g[UE->rf_map.card];
           const unsigned int sync_in_frames = cfg0->recplay_conf->u_f_sync;
           while (trashed_frames != sync_in_frames) {
             readFrame(UE, &sync_timestamp, duration_rx_to_tx, true);
@@ -852,13 +872,12 @@ void *UE_thread(void *arg)
       shiftForNextFrame = -(UE->init_sync_frame + trashed_frames + 2) * UE->max_pos_acc * get_nrUE_params()->time_sync_I; // compensate for the time drift that happened during initial sync
       LOG_I(PHY, "max_pos_acc = %d, shiftForNextFrame = %d\n", UE->max_pos_acc, shiftForNextFrame);
       // read in first symbol
-      AssertFatal(fp->ofdm_symbol_size + fp->nb_prefix_samples0
-                      == nrue_ru_read(UE,
-                                      &sync_timestamp,
-                                      (void **)UE->common_vars.rxdata,
-                                      fp->ofdm_symbol_size + fp->nb_prefix_samples0,
-                                      fp->nb_antennas_rx),
-                  "");
+      int ret = nrue_ru_read(UE,
+                             &sync_timestamp,
+                             (void **)UE->common_vars.rxdata,
+                             fp->ofdm_symbol_size + fp->nb_prefix_samples0,
+                             fp->nb_antennas_rx);
+      AssertFatal(fp->ofdm_symbol_size + fp->nb_prefix_samples0 == ret, "read rf board failed %d", ret);
       // we have the decoded frame index in the return of the synch process
       // and we shifted above to the first slot of next frame
       decoded_frame_rx = (decoded_frame_rx + 1) % MAX_FRAME_NUMBER;
@@ -936,6 +955,7 @@ void *UE_thread(void *arg)
     }
 
     int firstSymSamp = get_firstSymSamp(slot_nr, fp);
+    c16_t *rxp[fp->nb_antennas_rx];
     for (int i = 0; i < fp->nb_antennas_rx; i++)
       rxp[i] = &UE->common_vars.rxdata[i][firstSymSamp + get_samples_slot_timestamp(fp, slot_nr)];
 
@@ -961,7 +981,7 @@ void *UE_thread(void *arg)
     int tmp = nrue_ru_read(UE, &rx_timestamp, (void **)rxp, readBlockSize, fp->nb_antennas_rx);
     metadata meta = {.slot =  curMsg.proc.nr_slot_rx, .frame =  curMsg.proc.frame_rx};
     UEscopeCopyWithMetadata(UE, ueTimeDomainSamples, rxp[0] - firstSymSamp, sizeof(c16_t), 1, readBlockSize, 0, &meta);
-    AssertFatal(readBlockSize == tmp, "");
+    AssertFatal(readBlockSize == tmp, "read to rf board failed %d", tmp);
     struct timespec current_time;
     if (clock_gettime(CLOCK_REALTIME, &current_time)) {
       LOG_E(PHY, "clock_gettime failed\n");
@@ -974,7 +994,7 @@ void *UE_thread(void *arg)
       if (first_symbols > 0) {
         openair0_timestamp_t ignore_timestamp;
         int tmp = nrue_ru_read(UE, &ignore_timestamp, (void **)UE->common_vars.rxdata, first_symbols, fp->nb_antennas_rx);
-        AssertFatal(first_symbols == tmp, "");
+        AssertFatal(first_symbols == tmp, "read to rf board failed %d", tmp);
 
       } else
         LOG_E(PHY,"can't compensate: diff =%d\n", first_symbols);

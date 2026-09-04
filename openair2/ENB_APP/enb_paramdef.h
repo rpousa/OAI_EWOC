@@ -64,8 +64,6 @@ typedef enum {
 #define CONFIG_STRING_RU_DO_PRECODING             "do_precoding"
 #define CONFIG_STRING_RU_SF_AHEAD                 "sf_ahead"
 #define CONFIG_STRING_RU_SL_AHEAD                 "sl_ahead"
-#define CONFIG_STRING_RU_NR_FLAG                  "nr_flag"
-#define CONFIG_STRING_RU_NR_SCS_FOR_RASTER        "nr_scs_for_raster"
 #define CONFIG_STRING_RU_TX_SUBDEV                "tx_subdev"
 #define CONFIG_STRING_RU_RX_SUBDEV                "rx_subdev"
 #define CONFIG_STRING_RU_RXFH_CORE_ID             "rxfh_core_id"
@@ -79,8 +77,6 @@ typedef enum {
 
 #define HLP_RU_SF_AHEAD "LTE TX processing advance"
 #define HLP_RU_SL_AHEAD "NR TX processing advance"
-#define HLP_RU_NR_FLAG "Use NR numerology (for AW2SORI)"
-#define HLP_RU_NR_SCS_FOR_RASTER "NR SCS for raster (for AW2SORI)"
 #define HLP_RU_RXFH_CORE_ID "Core ID for RX Fronthaul thread (ECPRI IF5)"
 #define HLP_RU_TXFH_CORE_ID "Core ID for TX Fronthaul thread (ECPRI IF5)"
 #define HLP_RU_TP_CORES "List of cores for RU ThreadPool"
@@ -121,18 +117,16 @@ typedef enum {
 #define RU_DO_PRECODING               28
 #define RU_SF_AHEAD                   29
 #define RU_SL_AHEAD                   30 
-#define RU_NR_FLAG                    31 
-#define RU_NR_SCS_FOR_RASTER          32
-#define RU_TX_SUBDEV                  33
-#define RU_RX_SUBDEV                  34
-#define RU_RXFH_CORE_ID               35
-#define RU_TXFH_CORE_ID               36
-#define RU_TP_CORES                   37
-#define RU_NUM_TP_CORES               38
-#define RU_NUM_INTERFACES             39
-#define RU_HALF_SLOT_PARALLELIZATION  40
-#define RU_RU_THREAD_CORE             41
-#define RU_GPIO_CONTROL               42
+#define RU_TX_SUBDEV                  31
+#define RU_RX_SUBDEV                  32
+#define RU_RXFH_CORE_ID               33
+#define RU_TXFH_CORE_ID               34
+#define RU_TP_CORES                   35
+#define RU_NUM_TP_CORES               36
+#define RU_NUM_INTERFACES             37
+#define RU_HALF_SLOT_PARALLELIZATION  38
+#define RU_RU_THREAD_CORE             39
+#define RU_GPIO_CONTROL               40
 /*-----------------------------------------------------------------------------------------------------------------------------------------*/
 /*                                            RU configuration parameters                                                                  */
 /*   optname                                   helpstr   paramflags    XXXptr          defXXXval                   type      numelt        */
@@ -170,8 +164,6 @@ typedef enum {
   {CONFIG_STRING_RU_DO_PRECODING,              NULL,                              0,       .iptr=NULL,       .defintval=0,                 TYPE_INT,         0}, \
   {CONFIG_STRING_RU_SF_AHEAD,                  HLP_RU_SF_AHEAD,                   0,       .iptr=NULL,       .defintval=4,                 TYPE_INT,         0}, \
   {CONFIG_STRING_RU_SL_AHEAD,                  HLP_RU_SL_AHEAD,                   0,       .iptr=NULL,       .defintval=6,                 TYPE_INT,         0}, \
-  {CONFIG_STRING_RU_NR_FLAG,                   HLP_RU_NR_FLAG,                    0,       .iptr=NULL,       .defintval=0,                 TYPE_INT,         0}, \
-  {CONFIG_STRING_RU_NR_SCS_FOR_RASTER,         HLP_RU_NR_SCS_FOR_RASTER,          0,       .iptr=NULL,       .defintval=1,                 TYPE_INT,         0}, \
   {CONFIG_STRING_RU_TX_SUBDEV,                 NULL,                              0,       .strptr=NULL,     .defstrval="",                TYPE_STRING,      0}, \
   {CONFIG_STRING_RU_RX_SUBDEV,                 NULL,                              0,       .strptr=NULL,     .defstrval="",                TYPE_STRING,      0}, \
   {CONFIG_STRING_RU_RXFH_CORE_ID,              HLP_RU_RXFH_CORE_ID,               0,       .uptr=NULL,       .defintval=0,                 TYPE_UINT,        0}, \

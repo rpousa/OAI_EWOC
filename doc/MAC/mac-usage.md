@@ -124,13 +124,10 @@ Example:
 
 ```
 UE RNTI 2460 CU-UE-ID 2 in-sync PH 28 dB PCMAX 24 dBm, average RSRP -74 (8 meas), average SINR 40.0 (32 meas)
-UE 2460: CQI 15, RI 2, PMI (14,1)
-UE 2460: UL-RI 2 TPMI 0
-UE 2460: dlsch_rounds 32917/5113/1504/560, dlsch_errors 211, pucch0_DTX 1385 (SNR 19.8+0.2 dB), BLER 0.19557 MCS (1) 23 CCE fail 3, goodput 120.50 Mbps
-UE 2460: ulsch_rounds 3756/353/182/179, ulsch_errors 170, ulsch_DTX 285, BLER 0.33021 MCS (1) 27 (Qm 8 deltaMCS 0 dB) NPRB 5 SNR 31.0 (-1.0) dB CCE fail 0, goodput 12.30 Mbps
-UE 2460: LCID 1: TX            651 RX           3031 bytes
-UE 2460: LCID 2: TX              0 RX              0 bytes
-UE 2460: LCID 4: TX     1526169592 RX          16152 bytes
+UE 2460: CSI [CQI 15 RI 2 PMI (14,1)] SRS [UL-RI 2 TPMI 0]
+UE 2460: dlsch_rounds 32917/5113/1504/560, dlsch_errors 211, pucch0_DTX 1385 (SNR 19.8+0.2) RSSI -44.2, BLER 0.19557 MCS (1) 23 (Qm 8) CCE fail 3
+UE 2460: ulsch_rounds 3756/353/182/179, ulsch_errors 170, ulsch_DTX 285, BLER 0.33021 MCS (1) 27 (Qm 8 deltaMCS 0) NPRB 5 SNR 31.0 (-1.0) RSSI -39.8 CCE fail 0
+UE 2460: LCID 1,2,4, goodput DL  120.50 UL   12.30 Mbps
 ```
 
 In the first line,
@@ -142,8 +139,9 @@ In the first line,
 * whether a UE is `in-sync` (actively being scheduled) or `out-of-sync` (the UE
   is not being scheduled, because it did not respond when being scheduled in UL
   or since it has radio-link failure
-* `PH` (`28`): Power Headroom, the amount of power the UE has left. If it is > 40 you
-  can achieve full UL throughput. `PCMAX` (`24 dBm`) is what the UE reported as
+* `PH` (`28`): Power Headroom (TS 38.133 section 10.1.17.1.1) normalized by
+  allocated RBs: the amount of power the UE has left. If it is > 40 you can
+  achieve full UL throughput. `PCMAX` (`24 dBm`) is what the UE reported as
   maximum UL transmit power it can output in the channel.
 * `RSRP` (`-74`): measured power of the DL reference signals at the UE. >-80dBm
   you should have full DL throughput. <-95 dBm, you are very limited in terms
@@ -151,9 +149,10 @@ In the first line,
 * `SINR` (`40.0`): measured signal to interference and noise ratio of the SSB
   received at the UE. Maximum value that can be reported by the UE is 40.0 dB.
 
-The second and third line reflect channel state information (CSI) as
+The second line reflects channel state information (CSI) as
 reported by the UE, and only appear if CSI-RS/SRS are enabled and _received_
-(for some bands, they cannot be enabled):
+(for some bands, they cannot be enabled). Note that these quantities reflect
+indications for the gNB, but it might deviate (e.g., use less layers).
 
 * `CQI` (`15`): the channel quality indicator is a number between 0 and 15. It
   indicates the achievable spectral efficiency of the UE. 15 means highest, 0
@@ -164,9 +163,10 @@ reported by the UE, and only appear if CSI-RS/SRS are enabled and _received_
   the gNBs transmit array as seen by the UE. It indicates the precoding that
   the gNB applies. It should be more or less stationary unless the UE is moving
   around quickly. It can jump when objects move around the UE
-* `UL-RI`, `TPMI`: same as DL.
+* `UL-RI`, `TPMI`: Uplink Rank indicator and transmit precoding matrix
+  indicator, as in DL.
 
-The fourth and fifth line show HARQ-related information:
+The third and fourth line show HARQ-related information:
 
 * `dlsch_rounds A/B/C/D` (`32917/5113/1504/560`). This is the number of
   transmissions by the gNB for each round of the HARQ protocol. `A` is the first
@@ -183,14 +183,17 @@ The fourth and fifth line show HARQ-related information:
   and ACK/NAK cannot be conveyed properly or DL DCIs are missed by the UE. This
   is also something that should be very small compared to `A` in
   `dlsch_rounds`.
-* `(SNR x+y dB)`: PUCCH SNR where `x` is the average PUCCH SNR and `y` the
+* `(SNR x+y)`: PUCCH SNR where `x` is the average PUCCH SNR and `y` the
   difference to the target (positive: above SNR, negative: below)
+* PUCCH `RSSI`: the received signal strength indicator, either in dBm or dBFs.
+  For OAI L1, this is in dBFs.
 * `DLSCH BLER` is the current measured block-error rate of the DLSCH. Basically
   a moving average of `B`/`A` in `dlsch_rounds`. This is something that should always
   be close to the target bler that the MAC scheduler uses. typically 10-30% if
   we want a high throughput scheduling policy.
 * `MCS (Q) M`: M (0-28) is the current MCS used by the MAC scheduler and Q is
   the mcs table: 0=64QAM, 1=256QAM, 2=low SE table for URLLC
+* `Qm X`: modulation order: 2=QPSK, 4=16QAM, 6=64QAM, 8=256QAM.
 * `ulsch_rounds`/`ulsch_errors`: same as DLSCH but for UL.
 * `ulsch_DTX` (`285`): number of PUSCH missed detection (i.e. signal energy below
   threshold in configuration file, `L1s.pusch_dtx_threshold`, which is 10 times the
@@ -199,7 +202,7 @@ The fourth and fifth line show HARQ-related information:
   or missed DCI 0\_x DCIs. It should be low compared to `A` in `ulsch_rounds`
   when things are working properly.
 * ULSCH `BLER/MCS`: same as DLSCH but for UL.
-* ULSCH `Qm X deltaMCS Y dB`: modulation order: 2=QPSK, 4=16QAM, 6=64QAM,
+* ULSCH `Qm X deltaMCS Y`: modulation order: 2=QPSK, 4=16QAM, 6=64QAM,
   8=256QAM and the dB offset for deltaMCS component in PUSCH power control law.
   If deltaMCS is disabled (this is the default) then it indicates 0. When
   deltaMCS is enabled it indicates the current power offset applied by the UE
@@ -211,18 +214,17 @@ The fourth and fifth line show HARQ-related information:
 * ULSCH `SNR`: the current SNR that the gNB receives the UE PUSCH signal with.
   This value should be close to the target SNR; in paranthesis, the difference
   to the target SNR.
+* ULSCH `RSSI`: as for PUCCH. Use `MACRLCs.[0].pusch_RSSI_Threshold` to limit.
 * Both ULSCH/DLSCH `CCE fail`: lists the number of failed CCE attempts. If this
   number gets high, it signifies that the scheduler tried to scheduled this UE,
   but could not allocate the DCI.
-* Both ULSCH/DLSCH `goodput`: smoothed (EWMA) goodput in Mbps, reflecting the
-  actual MAC-layer throughput achieved by the UE.
 
-In the last lines:
+In the last line:
 
-* `LCID X` shows the amount of MAC SDU/RLC PDU data for Logical Channel ID with
-  ID `X` in transmit and receive directions. LCIDs 1 and 2 are mapped to SRBs 1
-  and 2. LCIDs 4 and onward are mapped to DRBs 1 onward. If you have an LCID 4,
-  it means you have a PDU session.
+* `MAC goodput` for `DL` and `UL`: smoothed (EWMA) goodput in Mbps, reflecting
+  the actual MAC-layer throughput achieved by the UE excluding retransmissions,
+  i.e., only counting the amount of "new data". This might be much lower than
+  the maximum throughput if there are many retransmissions.
 
 ## Configuration of the MAC
 

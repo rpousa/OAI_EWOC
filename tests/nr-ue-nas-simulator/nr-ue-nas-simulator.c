@@ -11,8 +11,11 @@
 #include "openair2/GNB_APP/gnb_paramdef.h"
 #include "openair3/SCTP/sctp_default_values.h"
 #include "openair3/NAS/NR_UE/nr_nas_msg.h"
+#include "openair3/UTILS/conversions.h"
 #include "executables/nr-uesoftmodem.h"
 #include "openair3/ocp-gtpu/gtp_itf.h"
+#include "SIMULATION/TOOLS/sim.h"
+#include <stdlib.h>
 
 RAN_CONTEXT_t RC;
 THREAD_STRUCT thread_struct;
@@ -75,6 +78,46 @@ int nr_rlc_get_available_tx_space(const rnti_t rntiP, const logical_chan_id_t ch
 
 configmodule_interface_t *uniqCfg = NULL;
 
+static int identity_guti = 0;
+
+static paramdef_t nas_sim_params[] = {
+    BOOLPARAM("identity-guti",
+              "Registration with random 5G-GUTI to trigger AMF Identity Request (SUCI)\n",
+              PARAMFLAG_BOOL,
+              &identity_guti,
+              0),
+};
+
+/** Seed a 5G-GUTI unknown to the AMF (TS 23.502 step 6: AMF should request SUCI) */
+static void seed_unknown_guti(nr_ue_nas_t *nas, const plmn_id_t *plmn)
+{
+  nas->guti = calloc_or_fail(1, sizeof(*nas->guti));
+  Guti5GSMobileIdentity_t *guti = nas->guti;
+  guti->typeofidentity = FGS_MOBILE_IDENTITY_5G_GUTI;
+  guti->mccdigit1 = MCC_HUNDREDS(plmn->mcc);
+  guti->mccdigit2 = MCC_MNC_DECIMAL(plmn->mcc);
+  guti->mccdigit3 = MCC_MNC_DIGIT(plmn->mcc);
+  guti->mncdigit1 = MNC_HUNDREDS(plmn->mnc, plmn->mnc_digit_length);
+  guti->mncdigit2 = MCC_MNC_DECIMAL(plmn->mnc);
+  guti->mncdigit3 = MCC_MNC_DIGIT(plmn->mnc);
+  /* OAI CN5G served GUAMI */
+  guti->amfregionid = 0x01;
+  guti->amfsetid = 0x001;
+  guti->amfpointer = 0x01;
+  fill_random(&guti->tmsi, sizeof(guti->tmsi));
+  LOG_I(NAS,
+        "Unknown-GUTI test: Registration Request will use 5G-GUTI MCC=%u%u%u MNC=%u%u AMFRI=%u AMFSI=%u AMFPT=%u TMSI=0x%08x\n",
+        guti->mccdigit1,
+        guti->mccdigit2,
+        guti->mccdigit3,
+        guti->mncdigit1,
+        guti->mncdigit2,
+        guti->amfregionid,
+        guti->amfsetid,
+        guti->amfpointer,
+        guti->tmsi);
+}
+
 // Emulate registration request to register UE in the AMF
 void send_initial_ue_message(instance_t instance)
 {
@@ -82,9 +125,8 @@ void send_initial_ue_message(instance_t instance)
 
   NGAP_NAS_FIRST_REQ(msg_p).gNB_ue_ngap_id = 1; // Simulated UE ID
 
-  NGAP_NAS_FIRST_REQ(msg_p).plmn.mcc = mcc;
-  NGAP_NAS_FIRST_REQ(msg_p).plmn.mnc = mnc;
-  NGAP_NAS_FIRST_REQ(msg_p).plmn.mnc_digit_length = mnc_len;
+  plmn_id_t plmn = {.mcc = mcc, .mnc = mnc, .mnc_digit_length = mnc_len};
+  NGAP_NAS_FIRST_REQ(msg_p).plmn = plmn;
 
   NGAP_NAS_FIRST_REQ(msg_p).nr_cell_id = gnb_id;
 
@@ -95,15 +137,26 @@ void send_initial_ue_message(instance_t instance)
   // serving network name (snn)
   // Ideally snn should be filled from SIB1, but we operate at NAS/RRC level and we dont decode SIB1
   nr_ue_nas->sn_id = calloc(1, sizeof(plmn_id_t));
-  nr_ue_nas->sn_id->mcc = mcc;
-  nr_ue_nas->sn_id->mnc = mnc;
-  nr_ue_nas->sn_id->mnc_digit_length = mnc_len;
+  *nr_ue_nas->sn_id = plmn;
+  if (identity_guti) {
+    seed_unknown_guti(nr_ue_nas, &plmn);
+
+    ngap_ue_identity_t *ue_identity = &NGAP_NAS_FIRST_REQ(msg_p).ue_identity;
+    const Guti5GSMobileIdentity_t *guti = nr_ue_nas->guti;
+
+    ue_identity->presenceMask = NGAP_UE_IDENTITIES_FiveG_s_tmsi | NGAP_UE_IDENTITIES_guami;
+    ue_identity->s_tmsi.amf_set_id = guti->amfsetid;
+    ue_identity->s_tmsi.amf_pointer = guti->amfpointer;
+    ue_identity->s_tmsi.m_tmsi = guti->tmsi;
+    ue_identity->guami.plmn = plmn;
+    ue_identity->guami.amf_region_id = guti->amfregionid;
+    ue_identity->guami.amf_set_id = guti->amfsetid;
+    ue_identity->guami.amf_pointer = guti->amfpointer;
+  }
   generateRegistrationRequest(&initialNasMsg, nr_ue_nas, false);
 
   NGAP_NAS_FIRST_REQ(msg_p).nas_pdu.buf = initialNasMsg.nas_data;
   NGAP_NAS_FIRST_REQ(msg_p).nas_pdu.len = initialNasMsg.length;
-
-  NGAP_NAS_FIRST_REQ(msg_p).ue_identity.presenceMask = 0;
 
   itti_send_msg_to_task(TASK_NGAP, instance, msg_p);
 }
@@ -349,6 +402,8 @@ int main(int argc, char **argv)
   if ((uniqCfg = load_configmodule(argc, argv, CONFIG_ENABLECMDLINEONLY)) == NULL) {
     exit_fun("[SOFTMODEM] Error, configuration module init failed\n");
   }
+  config_get(uniqCfg, nas_sim_params, sizeofArray(nas_sim_params), NULL);
+
   logInit();
 
   nas_init_nrue(NB_UE_INST);

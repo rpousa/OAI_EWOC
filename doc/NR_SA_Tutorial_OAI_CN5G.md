@@ -13,7 +13,7 @@ Minimum hardware requirements:
 
 - Laptop/Desktop/Server for OAI CN5G and OAI gNB
 
-    - Operating System: [Ubuntu 24.04 LTS](https://releases.ubuntu.com/24.04/ubuntu-24.04.2-desktop-amd64.iso)
+    - Operating System: [Ubuntu Desktop 24.04.4 LTS, Intel or AMD 64-bit architecture](https://releases.ubuntu.com/24.04/ubuntu-24.04.4-desktop-amd64.iso)
     - CPU: 8 cores x86_64 @ 3.5 GHz
     - RAM: 32 GB
 
@@ -42,10 +42,11 @@ reboot
 ### 2.2 OAI CN5G configuration files
 Download and copy configuration files:
 ```bash
-wget -O ~/oai-cn5g.zip https://gitlab.eurecom.fr/oai/openairinterface5g/-/archive/develop/openairinterface5g-develop.zip?path=doc/tutorial_resources/oai-cn5g
-unzip ~/oai-cn5g.zip
-mv ~/openairinterface5g-develop-doc-tutorial_resources-oai-cn5g/doc/tutorial_resources/oai-cn5g ~/oai-cn5g
-rm -r ~/openairinterface5g-develop-doc-tutorial_resources-oai-cn5g ~/oai-cn5g.zip
+git clone --depth 1 --filter=blob:none --sparse https://github.com/duranta-project/openairinterface5g.git /tmp/openairinterface5g -b develop
+cd /tmp/openairinterface5g
+git sparse-checkout set doc/tutorial_resources/oai-cn5g
+mv doc/tutorial_resources/oai-cn5g ~/oai-cn5g
+cd && rm -rf /tmp/openairinterface5g
 ```
 
 ### 2.3 Pull OAI CN5G docker images

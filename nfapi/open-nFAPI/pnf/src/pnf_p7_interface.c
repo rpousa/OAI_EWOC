@@ -292,6 +292,18 @@ int nfapi_pnf_p7_nr_srs_ind(nfapi_pnf_p7_config_t* config, nfapi_nr_srs_indicati
 	return _this->_public.send_p7_msg(_this, (nfapi_nr_p7_message_header_t*)ind, sizeof(nfapi_nr_srs_indication_t));
 }
 
+int nfapi_pnf_p7_nr_srs_toa_vendor_ext_ind(nfapi_pnf_p7_config_t* config, nfapi_nr_srs_toa_vendor_ext_indication_t* ind)
+{
+  if (config == NULL || ind == NULL) {
+    NFAPI_TRACE(NFAPI_TRACE_ERROR, "%s: invalid input params\n", __FUNCTION__);
+    return -1;
+  }
+
+  pnf_p7_t* _this = (pnf_p7_t*)(config);
+  AssertFatal(_this->_public.send_p7_msg, "Function pointer must be configured|");
+  return _this->_public.send_p7_msg(_this, (nfapi_nr_p7_message_header_t*)ind, sizeof(nfapi_nr_srs_toa_vendor_ext_indication_t));
+}
+
 int nfapi_pnf_p7_nr_uci_ind(nfapi_pnf_p7_config_t* config, nfapi_nr_uci_indication_t* ind)
 {
 	if(config == NULL || ind == NULL)

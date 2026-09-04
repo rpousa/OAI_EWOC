@@ -216,7 +216,11 @@ You can further [tune your machine](../../doc/tuning_and_security.md)
 
 # Beam simulation
 
-RFsimulator supports beam domain simulation.
+RFsimulator supports beam domain simulation. Each antenna element (`nb_tx`/`nb_rx`) carries exactly one
+beam ID at a time — not a set of concurrent beams. Different antennas may be assigned the same beam ID
+(e.g. to form a wider physical beam out of several antennas), but a single antenna cannot carry more than
+one beam ID simultaneously. The beam vector sent alongside the samples therefore always has one entry per
+antenna, and there is no separate "concurrent beam count" to configure.
 
 ## Configuration
 
@@ -240,17 +244,17 @@ these values onto the diagonals, making it symmetric.
  Using the example above, if gNB is receiving in beam 1 and the UE is transmitting in beam 1, an additional
  2 dB pathloss will be applied on top of the pathloss from the channel model (if present).
 
-* `--rfsimulator.[0].beam_map <beam_map>` : where `<beam_map>` is a `uint64_t` value where each bit is an enabled TX/RX beam.
-   For gNB: Initial beam_map, i.e. which beams gNB transmits/receives before calling beam APIs.
-   For UE: Beam position in beam space in the simulation. The UE is not expected to use the beam APIs for now.
-* `--rfsimulator.[0].beam_ids <beam_ids>` : where `<beam_ids>` is a comma separated list. Same as above but added for convenience.
+* `--rfsimulator.[0].beam_ids <beam_ids>` : where `<beam_ids>` is a comma-separated list of initial beam IDs,
+   one per antenna/IQ stream (`nb_tx`/`nb_rx`).
+   For gNB: initial beam ID per antenna, i.e. which beam the gNB transmits/receives on before calling the beam API.
+   For UE: beam position in beam space in the simulation. The UE is not expected to use the beam API for now.
 
 ## Runtime commands
 
 ### Moving the UE in beam space
 
-Use telnet command `rfsimu setbeams <beam_map>` or `rfsimu setbeamids <beam_ids>`. They correspond to the CLI parameters described
-above and work the same way.
+Use telnet command `rfsimulator setbeamids <beam_id1,beam_id2,...>` (one beam ID per antenna). It corresponds to
+the `beam_ids` CLI parameter described above and works the same way, replacing the beam ID(s) currently in effect.
 
 ### Modifying the gNB beam
 
@@ -260,8 +264,10 @@ to modify the tx/rx beam of the gNB. The gNB does not need to be beam-aware and 
 ## Programming guide
 
 RFsimulator is attempting to simulate hardware device operation, but there are differences. Like with real hardware,
-it is expected that you provide the configured beams in `set_beams` function ahead of sample reception. This is due
-to the fact that a hardware device will buffer received samples before the driver requests them.
+it is expected that you provide the configured beams in the `trx_set_beams` function ahead of sample reception. This
+is due to the fact that a hardware device will buffer received samples before the driver requests them.
 
-For rfsimulator, as long as the call to `set_beams` with timestamp `n` is done before `trx_read` which is expected
-to return sample `n` the beam switch command will apply to the received samples.
+`trx_set_beams(device, uint16_t *beams, int num_beams, timestamp)` takes a beam ID array whose length (`num_beams`)
+must equal the number of antennas (`nb_tx` for TX, `nb_rx` for RX): `beams[a]` is the beam ID to apply on antenna `a`
+starting at `timestamp`. As long as the call to `trx_set_beams` with timestamp `n` is done before `trx_read` which is
+expected to return sample `n`, the beam switch command will apply to the received samples.

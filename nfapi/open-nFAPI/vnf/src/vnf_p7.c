@@ -1490,6 +1490,25 @@ void vnf_handle_nr_srs_indication(void *pRecvMsg, int recvMsgLen, vnf_p7_t* vnf_
 	}
 }
 
+void vnf_handle_nr_srs_toa_vendor_ext_indication(void* pRecvMsg, int recvMsgLen, vnf_p7_t* vnf_p7)
+{
+  // ensure it's valid
+  if (pRecvMsg == NULL || vnf_p7 == NULL) {
+    NFAPI_TRACE(NFAPI_TRACE_ERROR, "%s: NULL parameters\n", __FUNCTION__);
+  } else {
+    nfapi_nr_srs_toa_vendor_ext_indication_t ind;
+    const bool result = vnf_p7->_public.unpack_func(pRecvMsg, recvMsgLen, &ind, sizeof(ind), &vnf_p7->_public.codec_config);
+    if (!result) {
+      NFAPI_TRACE(NFAPI_TRACE_ERROR, "%s: Failed to unpack message\n", __FUNCTION__);
+    } else {
+      if (vnf_p7->_public.nr_srs_toa_vendor_ext_indication) {
+        (vnf_p7->_public.nr_srs_toa_vendor_ext_indication)(&ind);
+      }
+      free_srs_toa_vendor_ext_indication(&ind);
+    }
+  }
+}
+
 void vnf_handle_nr_uci_indication(void *pRecvMsg, int recvMsgLen, vnf_p7_t* vnf_p7)
 {
 	// ensure it's valid
@@ -2177,12 +2196,16 @@ void vnf_nr_handle_p7_message(void *pRecvMsg, int recvMsgLen, vnf_p7_t* vnf_p7)
 		case NFAPI_NR_PHY_MSG_TYPE_SRS_INDICATION:
 			vnf_handle_nr_srs_indication(pRecvMsg, recvMsgLen, vnf_p7);
 			break;
-	
-		case NFAPI_NR_PHY_MSG_TYPE_RACH_INDICATION:
-			vnf_handle_nr_rach_indication(pRecvMsg, recvMsgLen, vnf_p7);
-			break;
 
-		case NFAPI_UE_RELEASE_RESPONSE:
+                case NFAPI_NR_PHY_MSG_TYPE_SRS_TOA_VENDOR_EXTENSION_INDICATION:
+                        vnf_handle_nr_srs_toa_vendor_ext_indication(pRecvMsg, recvMsgLen, vnf_p7);
+                        break;
+   
+                case NFAPI_NR_PHY_MSG_TYPE_RACH_INDICATION:
+                        vnf_handle_nr_rach_indication(pRecvMsg, recvMsgLen, vnf_p7);
+                        break;
+   
+                case NFAPI_UE_RELEASE_RESPONSE:
 			vnf_handle_ue_release_resp(pRecvMsg, recvMsgLen, vnf_p7);
 			break;
 

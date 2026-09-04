@@ -35,7 +35,7 @@ uint32_t nr_get_G(uint16_t nb_rb,
                   uint8_t Qm,
                   uint8_t Nl);
 
-uint32_t nr_get_E(uint32_t G, uint8_t C, uint8_t Qm, uint8_t Nl, uint8_t r);
+int nr_get_E(uint32_t G, uint8_t C, uint8_t Qm, uint8_t Nl, uint8_t r);
 
 void compute_nr_prach_seq(uint8_t short_sequence, uint8_t num_sequences, uint8_t rootSequenceIndex, c16_t X_u[64][839]);
 

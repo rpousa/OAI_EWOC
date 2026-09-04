@@ -52,8 +52,6 @@
 #include "PHY/defs_common.h" // for PRACH_RESOURCES_t
 #include "PHY/LTE_TRANSPORT/transport_common.h"
 
-#include "radio/COMMON/common_lib.h"
-
 /** @defgroup _mac  MAC
  * @ingroup _oai2
  * @{
@@ -1269,8 +1267,6 @@ typedef struct {
 /*! \brief top level eNB MAC structure */
 
 typedef struct eNB_MAC_INST_s {
-  /// Ethernet parameters for fronthaul interface
-  eth_params_t eth_params_s;
   ///
   module_id_t Mod_id;
   /// frame counter

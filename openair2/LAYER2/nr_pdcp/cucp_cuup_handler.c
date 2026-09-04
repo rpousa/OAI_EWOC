@@ -427,9 +427,15 @@ void e1_bearer_context_modif(const e1ap_bearer_mod_req_t *req)
         DevAssert(to_modif->numQosFlowsMod <= E1AP_MAX_NUM_QOS_FLOWS);
         modified->numQosFlowSetup = to_modif->numQosFlowsMod;
 
-        uint8_t qfi_list[E1AP_MAX_NUM_QOS_FLOWS];
+        sdap_config_t sdap = {
+            .pdusession_id = req_pdu_mod->sessionId,
+            .drb_id = to_modif->id,
+            .mappedQFIs2AddCount = to_modif->numQosFlowsMod,
+        };
+
         for (int q = 0; q < to_modif->numQosFlowsMod; q++) {
-          modified->qosFlows[q].qfi = qfi_list[q] = to_modif->qosFlows[q].qfi;
+          sdap.mappedQFIs2Add[q] = to_modif->qosFlows[q].qfi;
+          modified->qosFlows[q].qfi = to_modif->qosFlows[q].qfi;
         }
 
         LOG_D(NR_RRC,
@@ -438,11 +444,7 @@ void e1_bearer_context_modif(const e1ap_bearer_mod_req_t *req)
               req_pdu_mod->sessionId,
               to_modif->id,
               to_modif->numQosFlowsMod);
-        nr_sdap_entity_update_qos_flows(req->gNB_cu_up_ue_id,
-                                        req_pdu_mod->sessionId,
-                                        to_modif->id,
-                                        qfi_list,
-                                        to_modif->numQosFlowsMod);
+        nr_sdap_entity_update_qos_flows(req->gNB_cu_up_ue_id, &sdap);
       }
 
       if (to_modif->pdcp_config && to_modif->pdcp_config->pDCP_Reestablishment) {

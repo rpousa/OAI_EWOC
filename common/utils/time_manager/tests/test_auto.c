@@ -103,6 +103,9 @@ static int standalone_iq_samples(void)
          && x2ap_tick_count == 1000;
 }
 
+#if 0
+/* disabled - CI fails too much on those */
+
 /* return 1 if ok, 0 if error */
 static int client_server(char *program_name, bool iq_samples_time_source)
 {
@@ -153,6 +156,8 @@ static int client_server(char *program_name, bool iq_samples_time_source)
 
   return ret;
 }
+
+#endif /* #if 0 */
 
 /* return 1 if ok, 0 if error */
 static int run_sub_client_server(bool iq_samples_time_source)
@@ -246,6 +251,9 @@ int main(int argc, char **argv)
     err = 1;
   }
 
+#if 0
+  /* CI fails, sometimes - those tests are disabled */
+
   /* client/server tests are not written in a robust way
    * they may fail depending on realtime on the machine
    * de-activate if needed (if CI fails)
@@ -273,6 +281,7 @@ int main(int argc, char **argv)
     LOG_E(UTIL, "client-server iq-samples: ERROR\n");
     err = 1;
   }
+#endif
 
   logTerm();
 

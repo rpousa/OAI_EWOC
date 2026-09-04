@@ -1820,9 +1820,9 @@ void nr_rlc_entity_am_recv_sdu(nr_rlc_entity_t *_entity,
 
   AssertFatal(size <= NR_SDU_MAX, "Fatal: SDU size too big (%d bytes)\n", size);
 
-  /* log SDUs rejected, at most once per second */
+  /* log SDUs rejected at most once per 1280 ms (128 frames @ 10 ms, to match MAC cadence) */
   if (entity->sdu_rejected != 0
-      && entity->t_current > entity->t_log_buffer_full + 1000) {
+      && entity->t_current > entity->t_log_buffer_full + 1280) {
     LOG_E(RLC, "%d SDU rejected, SDU buffer full\n", entity->sdu_rejected);
     entity->sdu_rejected = 0;
     entity->t_log_buffer_full = entity->t_current;

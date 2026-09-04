@@ -40,13 +40,14 @@
 #include <ring_buffer.h>
 #include <zmq.h>
 #include "zmq_imported.h"
+#include "zmq_simd.h"
 
 #define ZMQ_SECTION "zmq"
 #define ZMQ_TX_CHANNELS "tx_channels"
 #define ZMQ_RX_CHANNELS "rx_channels"
 
-#define ZMQ_PARAMS_DESC                                                                                                           \
-  {                                                                                                                               \
+#define ZMQ_PARAMS_DESC                                                                                                            \
+  {                                                                                                                                \
       STRINGLISTPARAM(ZMQ_TX_CHANNELS, "list of zmq addresses represeting tx channels_\n", PARAMFLAG_MANDATORY, nullptr, nullptr), \
       STRINGLISTPARAM(ZMQ_RX_CHANNELS, "list of zmq addresses represeting rx channels_\n", PARAMFLAG_MANDATORY, nullptr, nullptr), \
   };
@@ -54,114 +55,114 @@
 const size_t sample_size = sizeof(cf_t);
 const size_t rx_buffer_size = sample_size * 300000;
 
-typedef struct {
+struct zmq_state_t {
   void *context;
   zmq_tx_stream tx_stream;
   zmq_rx_stream rx_stream;
-  std::thread poll_thread;
+  std::vector<std::thread> tx_poll_threads;
+  std::vector<std::thread> rx_poll_threads;
   std::atomic<bool> poll_thread_running;
   bool stopped = false;
   double sample_rate;
-} zmq_state_t;
+};
 
-static void poll_thread(zmq_state_t *s)
+static void tx_poll_thread(zmq_tx_channel *chan, size_t i, std::atomic<bool> *poll_thread_running)
 {
-  s->poll_thread_running = true;
-  unsigned char *rx_buffer = static_cast<unsigned char *>(malloc(rx_buffer_size));
-  const auto num_tx_channels = s->tx_stream.channels_.size();
-  const auto num_rx_channels = s->rx_stream.channels_.size();
-  std::vector<zmq_pollitem_t> items(num_tx_channels + num_rx_channels);
-  std::vector<bool> reply_requested(num_tx_channels);
-  for (size_t i = 0; i < num_tx_channels; ++i) {
-    items[i] = {s->tx_stream.channels_[i]->socket_, 0, ZMQ_POLLIN, 0};
-    // wait for REQ
-    reply_requested[i] = false;
-  }
-  for (size_t i = 0; i < num_rx_channels; i++) {
-    items[i + num_tx_channels] = {s->rx_stream.channels_[i]->socket_, 0, ZMQ_POLLIN, 0};
-  }
+  zmq_pollitem_t item = {chan->socket_, 0, ZMQ_POLLIN, 0};
+  bool reply_requested = false;
 
-  const auto num_channels = num_tx_channels + num_rx_channels;
-  while (s->poll_thread_running) {
-    for (size_t i = 0; i < num_tx_channels; i++) {
-      auto chan = s->tx_stream.channels_[i];
-      if (!reply_requested[i]) {
-        continue;
+  while (*poll_thread_running) {
+    if (reply_requested) {
+      zmq_msg_t msg;
+      if (chan->pop_message(&msg)) {
+        int rc = zmq_msg_send(&msg, chan->socket_, 0);
+        if (rc < 0) {
+          LOG_E(HW, "[ZMQ] tx_poll_thread zmq_msg_send for TX antenna %d failed: %s\n", (int)i, zmq_strerror(errno));
+        }
+        zmq_msg_close(&msg);
+        reply_requested = false;
       }
-      std::vector<cf_t> samples(1024);
-      size_t num_popped = chan->buffer_.pop_samples(samples.data(), 1024);
-      if (num_popped == 0) {
-        continue;
-      }
-      int rc = zmq_send(chan->socket_, samples.data(), num_popped * sizeof(cf_t), 0);
-      if (rc < 0) {
-        LOG_E(HW, "[ZMQ] poll_thread zmq_send for TX antenna %d failed: %s\n", (int)i, zmq_strerror(errno));
-      }
-      reply_requested[i] = false;
     }
 
-    int rc = zmq_poll(items.data(), num_channels, 10); // 10ms timeout
+    int rc = zmq_poll(&item, 1, 10); // 10ms timeout
     if (rc < 0) {
       if (errno == EINTR)
         continue;
-      LOG_E(HW, "[ZMQ] poll_thread zmq_poll failed: %s\n", zmq_strerror(errno));
+      LOG_E(HW, "[ZMQ] tx_poll_thread zmq_poll failed for TX antenna %d: %s\n", (int)i, zmq_strerror(errno));
       break;
     }
     if (rc == 0) {
       continue; // timeout
     }
 
-    // --- TX Sockets (ZMQ_REP) ---
-    for (size_t i = 0; i < num_tx_channels; i++) {
-      if (items[i].revents & ZMQ_POLLIN) {
-        auto chan = s->tx_stream.channels_[i];
-        char dummy;
-        rc = zmq_recv(chan->socket_, &dummy, 1, 0);
-        if (rc < 0) {
-          LOG_E(HW, "[ZMQ] poll_thread zmq_recv for TX antenna %d failed: %s\n", (int)i, zmq_strerror(errno));
-          continue;
-        }
-        if (reply_requested[i]) {
-          LOG_E(HW, "[ZMQ] Error, unexpected REQ before REP on TX antenna %d\n", (int)i);
-        }
-        reply_requested[i] = true;
+    if (item.revents & ZMQ_POLLIN) {
+      char dummy;
+      rc = zmq_recv(chan->socket_, &dummy, 1, 0);
+      if (rc < 0) {
+        LOG_E(HW, "[ZMQ] tx_poll_thread zmq_recv for TX antenna %d failed: %s\n", (int)i, zmq_strerror(errno));
+        continue;
       }
+      if (reply_requested) {
+        LOG_E(HW, "[ZMQ] Error, unexpected REQ before REP on TX antenna %d\n", (int)i);
+      }
+      reply_requested = true;
+    }
+  }
+}
+
+static void rx_poll_thread(zmq_rx_channel *chan, size_t i, std::atomic<bool> *poll_thread_running)
+{
+  unsigned char *rx_buffer = static_cast<unsigned char *>(malloc(rx_buffer_size));
+  c16_t *rx_buffer_c16 = static_cast<c16_t *>(malloc(rx_buffer_size / sizeof(cf_t) * sizeof(c16_t)));
+  zmq_pollitem_t item = {chan->socket_, 0, ZMQ_POLLIN, 0};
+
+  while (*poll_thread_running) {
+    int rc = zmq_poll(&item, 1, 10); // 10ms timeout
+    if (rc < 0) {
+      if (errno == EINTR)
+        continue;
+      LOG_E(HW, "[ZMQ] rx_poll_thread zmq_poll failed for RX antenna %d: %s\n", (int)i, zmq_strerror(errno));
+      break;
+    }
+    if (rc == 0) {
+      continue; // timeout
     }
 
-    // --- RX Sockets (ZMQ_REQ) ---
-    for (size_t i = 0; i < num_rx_channels; i++) {
-      if (items[i + num_tx_channels].revents & ZMQ_POLLIN) {
-        auto chan = s->rx_stream.channels_[i];
-        rc = zmq_recv(chan->socket_, rx_buffer, rx_buffer_size, 0);
-        if (rc < 0) {
-          LOG_E(HW, "[ZMQ] poll_thread zmq_recv for RX antenna %d failed: %s\n", (int)i, zmq_strerror(errno));
-        } else {
-          size_t received_bytes = rc;
-          if (rx_buffer_size < received_bytes) {
-            LOG_W(HW,
-                  "[ZMQ] the RX buffer is too small! The received message size is %lu while the buffer is %lu. Message truncated\n",
-                  received_bytes,
-                  rx_buffer_size);
-          }
-          size_t num_samples_received = std::min(received_bytes, rx_buffer_size) / sizeof(cf_t);
-          cf_t *samples = reinterpret_cast<cf_t *>(rx_buffer);
-          size_t overflow = chan->buffer_.push_samples(samples, num_samples_received);
-          if (rx_buffer_size < received_bytes) {
-            overflow += chan->buffer_.push_zeros((received_bytes - rx_buffer_size) / sizeof(cf_t));
-          }
-          if (overflow) {
-            LOG_W(HW, "Overflow on receive\n");
-          }
-          // After receiving, send next request to keep the stream flowing
-          char dummy = 0;
-          if (zmq_send(chan->socket_, &dummy, 1, 0) != 1) {
-            LOG_E(HW, "[ZMQ] poll_thread zmq_send for RX antenna %d failed: %s\n", (int)i, zmq_strerror(errno));
-          }
+    if (item.revents & ZMQ_POLLIN) {
+      rc = zmq_recv(chan->socket_, rx_buffer, rx_buffer_size, 0);
+      if (rc < 0) {
+        LOG_E(HW, "[ZMQ] rx_poll_thread zmq_recv for RX antenna %d failed: %s\n", (int)i, zmq_strerror(errno));
+      } else {
+        size_t received_bytes = rc;
+        if (rx_buffer_size < received_bytes) {
+          LOG_W(HW,
+                "[ZMQ] the RX buffer is too small! The received message size is %lu while the buffer is %lu. Message truncated\n",
+                received_bytes,
+                rx_buffer_size);
+        }
+        size_t num_samples_received = std::min(received_bytes, rx_buffer_size) / sizeof(cf_t);
+        cf_t *samples = reinterpret_cast<cf_t *>(rx_buffer);
+        convert_samples_avx512_rx(reinterpret_cast<const float *>(samples),
+                                  reinterpret_cast<int16_t *>(rx_buffer_c16),
+                                  num_samples_received * 2,
+                                  c16_t_to_cf_t_factor);
+        size_t overflow = chan->buffer_.push_samples(rx_buffer_c16, num_samples_received);
+        if (rx_buffer_size < received_bytes) {
+          overflow += chan->buffer_.push_zeros((received_bytes - rx_buffer_size) / sizeof(cf_t));
+        }
+        if (overflow) {
+          LOG_W(HW, "Overflow on receive\n");
+        }
+        // After receiving, send next request to keep the stream flowing
+        char dummy = 0;
+        if (zmq_send(chan->socket_, &dummy, 1, 0) != 1) {
+          LOG_E(HW, "[ZMQ] rx_poll_thread zmq_send for RX antenna %d failed: %s\n", (int)i, zmq_strerror(errno));
         }
       }
     }
   }
   free(rx_buffer);
+  free(rx_buffer_c16);
 }
 
 static int zmq_write(openair0_device_t *device, openair0_timestamp_t timestamp, void **buff, int nsamps, int cc, int flags)
@@ -204,8 +205,15 @@ static void zmq_end(openair0_device_t *device)
   if (s) {
     if (s->poll_thread_running) {
       s->poll_thread_running = false;
-      if (s->poll_thread.joinable()) {
-        s->poll_thread.join();
+      for (auto &t : s->tx_poll_threads) {
+        if (t.joinable()) {
+          t.join();
+        }
+      }
+      for (auto &t : s->rx_poll_threads) {
+        if (t.joinable()) {
+          t.join();
+        }
       }
     }
     for (auto &chan : s->tx_stream.channels_) {
@@ -242,7 +250,13 @@ static int zmq_start(openair0_device_t *device)
       return -1;
     }
   }
-  s->poll_thread = std::thread(poll_thread, s);
+  s->poll_thread_running = true;
+  for (size_t i = 0; i < s->tx_stream.channels_.size(); ++i) {
+    s->tx_poll_threads.push_back(std::thread(tx_poll_thread, s->tx_stream.channels_[i], i, &s->poll_thread_running));
+  }
+  for (size_t i = 0; i < s->rx_stream.channels_.size(); ++i) {
+    s->rx_poll_threads.push_back(std::thread(rx_poll_thread, s->rx_stream.channels_[i], i, &s->poll_thread_running));
+  }
   return 0;
 }
 
@@ -250,6 +264,21 @@ static int zmq_stop(openair0_device_t *device)
 {
   zmq_state_t *s = static_cast<zmq_state_t *>(device->priv);
   s->rx_stream.stop();
+  // Stop and join the poll threads here so a stop->end sequence is idempotent:
+  // zmq_end() skips its join block once poll_thread_running is false.
+  if (s->poll_thread_running) {
+    s->poll_thread_running = false;
+    for (auto &t : s->tx_poll_threads) {
+      if (t.joinable()) {
+        t.join();
+      }
+    }
+    for (auto &t : s->rx_poll_threads) {
+      if (t.joinable()) {
+        t.join();
+      }
+    }
+  }
   return 0;
 }
 
@@ -301,6 +330,9 @@ extern "C" __attribute__((__visibility__("default"))) int device_init(openair0_d
       AssertFatal(socket != NULL, "zmq_socket(ZMQ_REP) for TX antenna %d failed", i);
       int linger = 0;
       zmq_setsockopt(socket, ZMQ_LINGER, &linger, sizeof(linger));
+      int timeout = 1000; // ms: bound socket calls so poll threads can exit on shutdown
+      zmq_setsockopt(socket, ZMQ_RCVTIMEO, &timeout, sizeof(timeout));
+      zmq_setsockopt(socket, ZMQ_SNDTIMEO, &timeout, sizeof(timeout));
       AssertFatal(zmq_bind(socket, tx_channels[i]) == 0, "zmq_bind for TX antenna %d failed on %s", i, tx_channels[i]);
       auto channel = new zmq_tx_channel(socket, openair0_cfg->sample_rate);
       LOG_I(HW, "[ZMQ] TX socket for antenna %d bound to %s\n", i, tx_channels[i]);
@@ -317,6 +349,9 @@ extern "C" __attribute__((__visibility__("default"))) int device_init(openair0_d
       AssertFatal(socket != NULL, "zmq_socket(ZMQ_REQ) for RX antenna %d failed", i);
       int linger = 0;
       zmq_setsockopt(socket, ZMQ_LINGER, &linger, sizeof(linger));
+      int timeout = 1000; // ms: bound socket calls so poll threads can exit on shutdown
+      zmq_setsockopt(socket, ZMQ_RCVTIMEO, &timeout, sizeof(timeout));
+      zmq_setsockopt(socket, ZMQ_SNDTIMEO, &timeout, sizeof(timeout));
       AssertFatal(zmq_connect(socket, rx_channels[i]) == 0, "zmq_connect for RX antenna %d failed on %s", i, rx_channels[i]);
       auto channel = new zmq_rx_channel(socket, openair0_cfg->sample_rate);
       LOG_I(HW, "[ZMQ] RX socket for antenna %d connected to %s\n", i, rx_channels[i]);

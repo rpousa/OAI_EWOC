@@ -75,7 +75,8 @@ typedef enum {
 
   NFAPI_NR_PHY_MSG_TYPE_UL_NODE_SYNC = 0x0180,
   NFAPI_NR_PHY_MSG_TYPE_DL_NODE_SYNC,
-  NFAPI_NR_PHY_MSG_TYPE_TIMING_INFO
+  NFAPI_NR_PHY_MSG_TYPE_TIMING_INFO,
+  NFAPI_NR_PHY_MSG_TYPE_SRS_TOA_VENDOR_EXTENSION_INDICATION = 0x0300 // vendor extension for positioning
 } nfapi_nr_phy_msg_type_e;
 
 // SCF222_5G-FAPI_PHY_SPI_Specificayion.pdf Section 3.3
@@ -822,7 +823,7 @@ typedef struct {
 //table 3-37 
 
 #define DCI_PAYLOAD_BYTE_LEN 8 // 12 ? TS38.212 sec 7.3.1
-#define MAX_DCI_CORESET 8
+#define MAX_DCI_CORESET 12
 
 typedef struct {
   // The RNTI used for identifying the UE when receiving the PDU Value: 1 -> 65535.
@@ -1924,13 +1925,23 @@ typedef struct {
 
 // Normalized channel I/Q matrix
 
+// Dimensioning of the SRS channel-estimate buffers: up to 64 gNB antenna
+// elements (Ng), 4 sampled UE SRS ports (Nu), 272 PRGs and 4-byte complex
+// samples (iqSize).
+#define NFAPI_NR_SRS_MAX_PRGS 272
+#define NFAPI_NR_SRS_MAX_GNB_ANTENNA_ELEMENTS 64
+#define NFAPI_NR_SRS_MAX_UE_SRS_PORTS 4
+#define NFAPI_NR_SRS_MAX_IQ_SAMPLE_SIZE 4
+#define NFAPI_NR_SRS_CHANNEL_MATRIX_SIZE \
+  (NFAPI_NR_SRS_MAX_PRGS * NFAPI_NR_SRS_MAX_UE_SRS_PORTS * NFAPI_NR_SRS_MAX_GNB_ANTENNA_ELEMENTS * NFAPI_NR_SRS_MAX_IQ_SAMPLE_SIZE)
+
 typedef struct {
   uint8_t normalized_iq_representation; // 0: 16-bit normalized complex number (iqSize = 2); 1: 32-bit normalized complex number (iqSize = 4)
   uint16_t num_gnb_antenna_elements;    // Ng: Number of gNB antenna elements. Value: 0511
   uint16_t num_ue_srs_ports;            // Nu: Number of sampled UE SRS ports. Value: 07
   uint16_t prg_size;                    // Size in RBs of a precoding resource block group (PRG) – to which the same digital beamforming gets applied. Value: 1->272
   uint16_t num_prgs;                    // Number of PRGs Np to be reported for this SRS PDU. Value: 0-> 272
-  uint8_t channel_matrix[272*2*8*4];    // Array of (numPRGs*Nu*Ng) entries of the type denoted by iqRepresentation H{PRG pI} [ueAntenna uI, gNB antenna gI] = array[uI*Ng*Np + gI*Np + pI]; uI: 0…Nu-1 (UE antenna index); gI: 0…Ng-1 (gNB antenna index); pI: 0…Np-1 (PRG index)
+  uint8_t channel_matrix[NFAPI_NR_SRS_CHANNEL_MATRIX_SIZE];    // Array of (numPRGs*Nu*Ng) entries of the type denoted by iqRepresentation H{PRG pI} [ueAntenna uI, gNB antenna gI] = array[uI*Ng*Np + gI*Np + pI]; uI: 0…Nu-1 (UE antenna index); gI: 0…Ng-1 (gNB antenna index); pI: 0…Np-1 (PRG index)
 } nfapi_nr_srs_normalized_channel_iq_matrix_t;
 
 // Beamforming report
@@ -1957,7 +1968,7 @@ typedef struct {
 typedef struct {
   uint16_t tag;                         // 0: Report is carried directly in the value field; 3: The offset from the end of the control portion of the message to the beginning of the report. Other values are reserved.
   uint32_t length;                      // Length of the actual report in bytes, without the padding bytes.
-  uint32_t value[16384];                // tag=0: Only the most significant bytes of the size indicated by ‘length’ field are valid. Remaining bytes are zero padded to the nearest 32-bit bit boundary; Tag=2 Offset from the end of the control portion of the message to the payload is in the value field. Occupies 32-bits.
+  uint32_t value[NFAPI_NR_SRS_CHANNEL_MATRIX_SIZE / 4];              // tag=0: Only the most significant bytes of the size indicated by ‘length’ field are valid. Remaining bytes are zero padded to the nearest 32-bit bit boundary; Tag=2 Offset from the end of the control portion of the message to the payload is in the value field. Occupies 32-bits.
 } nfapi_srs_report_tlv_t;
 
 typedef struct {
@@ -1979,6 +1990,15 @@ typedef struct {
   nfapi_nr_srs_indication_pdu_t *pdu_list;
 } nfapi_nr_srs_indication_t;
 
+#define NFAPI_NR_MAX_NUM_TA_NSEC 32
+typedef struct {
+  nfapi_nr_p7_message_header_t header;
+  uint16_t sfn; // SFN. Value: 0 -> 1023
+  uint16_t slot; // Slot. Value: 0 -> 159
+  uint16_t rnti;
+  uint8_t num_ta;
+  int16_t ta_offset_nsec[NFAPI_NR_MAX_NUM_TA_NSEC];
+} nfapi_nr_srs_toa_vendor_ext_indication_t;
 
 //3.4.11 rach_indication
 #define NFAPI_NR_RACH_IND_MAX_PDU 100

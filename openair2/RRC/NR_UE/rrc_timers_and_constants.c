@@ -111,38 +111,53 @@ void handle_meas_timers(NR_UE_RRC_INST_t *rrc)
     rrcPerNB_t *nb = &rrc->perNB[i];
     l3_measurements_t *l3_measurements = &nb->l3_measurements;
 
-    bool ta2_expired = nr_timer_tick(&l3_measurements->TA2);
-    bool ta3_expired = nr_timer_tick(&l3_measurements->TA3);
-    if (ta2_expired && l3_measurements->trigger_quantity > 0) {
-      rrc_ue_generate_measurementReport(nb, rrc->ue_id);
-      l3_measurements->reports_sent = 1;
+    for (int meas_id = 0; meas_id < MAX_MEAS_ID; meas_id++) {
+      meas_report_params_t *params = &l3_measurements->meas_report[meas_id];
 
-      if (l3_measurements->reports_sent < l3_measurements->max_reports
-          && !nr_timer_is_active(&l3_measurements->periodic_report_timer)) {
-        nr_timer_setup(&l3_measurements->periodic_report_timer, l3_measurements->report_interval_ms, 10);
-        nr_timer_start(&l3_measurements->periodic_report_timer);
+      // Check if this measId is configured
+      if (nb->MeasId[meas_id] == NULL)
+        continue;
+
+      // Handle Event A2 timer expiry
+      bool ta2_expired = nr_timer_tick(&params->TA2);
+      if (ta2_expired && params->trigger_quantity > 0) {
+        rrc_ue_generate_measurementReport(nb, rrc->ue_id, meas_id);
+        params->reports_sent = 1;
+
+        if (params->reports_sent < params->max_reports && !nr_timer_is_active(&params->periodic_report_timer)) {
+          nr_timer_setup(&params->periodic_report_timer, params->report_interval_ms, 10);
+          nr_timer_start(&params->periodic_report_timer);
+        }
       }
-    }
 
-    if (ta3_expired && l3_measurements->trigger_quantity > 0) {
-      rrc_ue_generate_measurementReport(nb, rrc->ue_id);
-      l3_measurements->reports_sent = 1;
+      // Handle Event A3 timer expiry
+      bool ta3_expired = nr_timer_tick(&params->TA3);
+      if (ta3_expired && params->trigger_quantity > 0) {
+        rrc_ue_generate_measurementReport(nb, rrc->ue_id, meas_id);
+        params->reports_sent = 1;
 
-      if (l3_measurements->reports_sent < l3_measurements->max_reports
-          && !nr_timer_is_active(&l3_measurements->periodic_report_timer)) {
-        nr_timer_setup(&l3_measurements->periodic_report_timer, l3_measurements->report_interval_ms, 10);
-        nr_timer_start(&l3_measurements->periodic_report_timer);
+        if (params->reports_sent < params->max_reports && !nr_timer_is_active(&params->periodic_report_timer)) {
+          nr_timer_setup(&params->periodic_report_timer, params->report_interval_ms, 10);
+          nr_timer_start(&params->periodic_report_timer);
+        }
       }
-    }
 
-    bool periodic_expired = nr_timer_tick(&l3_measurements->periodic_report_timer);
-    if (periodic_expired && l3_measurements->reports_sent < l3_measurements->max_reports) {
-      rrc_ue_generate_measurementReport(nb, rrc->ue_id);
-      l3_measurements->reports_sent++;
-
-      if (l3_measurements->reports_sent < l3_measurements->max_reports) {
-        nr_timer_setup(&l3_measurements->periodic_report_timer, l3_measurements->report_interval_ms, 10);
-        nr_timer_start(&l3_measurements->periodic_report_timer);
+      // Handle periodical report
+      // Per TS 38.331 Section 5.5.4.1, initiate measurement reporting immediately
+      // after the quantity to be reported becomes available for the NR SpCell
+      bool meas_available = (params->rs_type == NR_NR_RS_Type_ssb) ? l3_measurements->serving_cell.ss_rsrp_dBm.init
+                                                                   : l3_measurements->serving_cell.csi_rsrp_dBm.init;
+      bool initial_condition = meas_available && params->trigger_quantity == 0 && params->reports_sent == 0
+                               && nr_timer_is_active(&params->periodic_report_timer);
+      bool periodic_condition =
+          nr_timer_tick(&params->periodic_report_timer) && params->reports_sent > 0 && params->reports_sent < params->max_reports;
+      if (initial_condition || periodic_condition) {
+        params->reports_sent++;
+        rrc_ue_generate_measurementReport(nb, rrc->ue_id, meas_id);
+        if (params->reports_sent < params->max_reports) {
+          nr_timer_setup(&params->periodic_report_timer, params->report_interval_ms, 10);
+          nr_timer_start(&params->periodic_report_timer);
+        }
       }
     }
   }
@@ -158,7 +173,7 @@ void nr_rrc_handle_timers(NR_UE_RRC_INST_t *rrc)
 
   bool t300_expired = nr_timer_tick(&timers->T300);
   if(t300_expired) {
-    LOG_W(NR_RRC, "[UE %ld] Timer T300 expired! No timely response to RRCSetupRequest\n", rrc->ue_id);
+    RRCLOG_W("Timer T300 expired! No timely response to RRCSetupRequest\n");
     handle_t300_expiry(rrc);
   }
 
@@ -166,7 +181,7 @@ void nr_rrc_handle_timers(NR_UE_RRC_INST_t *rrc)
   // Upon T301 expiry, the UE shall perform the actions upon going to RRC_IDLE
   // with release cause 'RRC connection failure'
   if(t301_expired) {
-    LOG_W(NR_RRC, "[UE %ld] Timer T301 expired! No timely response to RRCReestabilshmentRequest\n", rrc->ue_id);
+    RRCLOG_W("Timer T301 expired! No timely response to RRCReestabilshmentRequest\n");
     nr_rrc_going_to_IDLE(rrc, RRC_CONNECTION_FAILURE, NULL);
   }
 
@@ -174,13 +189,13 @@ void nr_rrc_handle_timers(NR_UE_RRC_INST_t *rrc)
   // 5.3.14.4 in 38.331
   // consider the barring for this Access Category to be alleviated
   if (t302_expired) {
-    LOG_W(NR_RRC, "[UE %ld] Timer T302 expired! Access barring alleviated!\n", rrc->ue_id);
+    RRCLOG_W("Timer T302 expired! Access barring alleviated!\n");
     handle_302_expired_stopped(rrc);
   }
 
   bool t304_expired = nr_timer_tick(&timers->T304);
   if(t304_expired) {
-    LOG_W(NR_RRC, "[UE %ld] Timer T304 expired\n", rrc->ue_id);
+    RRCLOG_W("Timer T304 expired\n");
     // TODO
     // For T304 of MCG, in case of the handover from NR or intra-NR
     // handover, initiate the RRC re-establishment procedure;
@@ -190,7 +205,7 @@ void nr_rrc_handle_timers(NR_UE_RRC_INST_t *rrc)
 
   bool t310_expired = nr_timer_tick(&timers->T310);
   if(t310_expired) {
-    LOG_W(NR_RRC, "[UE %ld] Timer T310 expired\n", rrc->ue_id);
+    RRCLOG_W("Timer T310 expired\n");
     // handle detection of radio link failure
     // as described in 5.3.10.3 of 38.331
     handle_rlf_detection(rrc);
@@ -198,7 +213,7 @@ void nr_rrc_handle_timers(NR_UE_RRC_INST_t *rrc)
 
   bool t311_expired = nr_timer_tick(&timers->T311);
   if (t311_expired) {
-    LOG_W(NR_RRC, "[UE %ld] Timer T311 expired! No suitable cell found in time after initiation of re-establishment\n", rrc->ue_id);
+    RRCLOG_W("Timer T311 expired! No suitable cell found in time after initiation of re-establishment\n");
     // Upon T311 expiry, the UE shall perform the actions upon going to RRC_IDLE
     // with release cause 'RRC connection failure'
     nr_rrc_going_to_IDLE(rrc, RRC_CONNECTION_FAILURE, NULL);
@@ -206,7 +221,7 @@ void nr_rrc_handle_timers(NR_UE_RRC_INST_t *rrc)
 
   bool t430_expired = nr_timer_tick(&rrc->timers_and_constants.T430);
   if (t430_expired && rrc->nrRrcState == RRC_STATE_CONNECTED_NR && rrc->is_NTN_UE) {
-    LOG_W(NR_RRC, "[UE %ld] Timer T430 expired! Indicate UL SYNC LOSS to MAC\n", rrc->ue_id);
+    RRCLOG_W("Timer T430 expired! Indicate UL SYNC LOSS to MAC\n");
     // Upon T430 expiry, the UE shall reacquire SIB19 and re-obtain UL-SYNC
     // Spec 38.331 Section 5.2.2.6
     handle_t430_expiry(rrc);

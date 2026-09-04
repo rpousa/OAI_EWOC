@@ -43,7 +43,7 @@ int64_t uplink_frequency_offset[MAX_NUM_CCs][4];
 double cpuf;
 
 // needed for some functions
-openair0_config_t openair0_cfg[MAX_CARDS];
+openair0_config_t openair0_cfg_g[MAX_CARDS] = {};
 
 uint8_t const nr_rv_round_map[4] = {0, 2, 3, 1};
 
@@ -72,24 +72,14 @@ void init_downlink_harq_status(NR_DL_UE_HARQ_t *dl_harq) {}
 NR_IF_Module_t *NR_IF_Module_init(int Mod_id) { return (NULL); }
 nfapi_mode_t nfapi_getmode(void) { return NFAPI_MODE_UNKNOWN; }
 
-void nr_fill_dl_indication(nr_downlink_indication_t *dl_ind,
-                           fapi_nr_dci_indication_t *dci_ind,
-                           fapi_nr_rx_indication_t *rx_ind,
-                           const UE_nr_rxtx_proc_t *proc,
-                           PHY_VARS_NR_UE *ue,
-                           void *phy_data)
-{
-}
 void nr_fill_rx_indication(fapi_nr_rx_indication_t *rx_ind,
                            uint8_t pdu_type,
                            PHY_VARS_NR_UE *ue,
                            int cw_idx,
                            int harq_pid,
                            NR_UE_DLSCH_t *dlsch,
-                           uint16_t n_pdus,
                            const UE_nr_rxtx_proc_t *proc,
-                           void *typeSpecific,
-                           uint8_t *b)
+                           void *typeSpecific)
 {
 }
 
@@ -675,6 +665,7 @@ int main(int argc, char **argv)
         proc.nr_slot_rx = ssb_slot;
         proc.gNB_id = 0;
         int16_t pbch_e_rx[NR_POLAR_PBCH_E];
+        uint8_t log2_maxh = 0;
         for (int i = UE->symbol_offset + 1; i < UE->symbol_offset + 4; i++) {
           nr_slot_fep(UE,
                       frame_parms,
@@ -712,7 +703,8 @@ int main(int argc, char **argv)
                                frame_parms->ssb_start_subcarrier,
                                rxdataF_symb,
                                dl_ch_estimates,
-                               pbch_e_rx);
+                               pbch_e_rx,
+                               &log2_maxh);
         }
         fapiPbch_t result;
         int ret_ssb_idx;

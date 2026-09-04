@@ -258,8 +258,6 @@ static void do_pdcp_data_ind(const protocol_ctxt_t *const ctxt_pP,
   }
 
   nr_pdcp_manager_unlock(nr_pdcp_ue_manager);
-
-  free(sdu_buffer);
 }
 
 static void *pdcp_data_ind_thread(void *_)
@@ -279,6 +277,7 @@ static void *pdcp_data_ind_thread(void *_)
                      pq.q[i].rb_id,
                      pq.q[i].sdu_buffer_size,
                      pq.q[i].sdu_buffer);
+    free(pq.q[i].sdu_buffer);
 
     if (pthread_mutex_lock(&pq.m) != 0) abort();
 
@@ -316,7 +315,17 @@ static void enqueue_pdcp_data_ind(const protocol_ctxt_t *const ctxt_pP,
   while (pq.length == PDCP_DATA_IND_QUEUE_SIZE) {
     if (!logged) {
       logged = 1;
-      LOG_W(PDCP, "%s: pdcp_data_ind queue is full\n", __FUNCTION__);
+      static unsigned int queue_full_count = 0;
+      static uint64_t t_log_queue_full = 0;
+      uint64_t now = nr_pdcp_current_time();
+
+      /* 1280 ms = 128 frames @ 10 ms, to match MAC cadence */
+      if (queue_full_count != 0 && now > t_log_queue_full + 1280) {
+        LOG_W(PDCP, "%s: pdcp_data_ind queue is full (%u times)\n", __FUNCTION__, queue_full_count);
+        queue_full_count = 0;
+        t_log_queue_full = now;
+      }
+      queue_full_count++;
     }
     if (pthread_cond_wait(&pq.c, &pq.m) != 0) abort();
   }
@@ -960,21 +969,10 @@ bool cu_f1u_data_req(protocol_ctxt_t  *ctxt_pP,
                      unsigned char *const sdu_buffer,
                      const pdcp_transmission_mode_t mode,
                      const uint32_t *const sourceL2Id,
-                     const uint32_t *const destinationL2Id) {
-  //Force instance id to 0, OAI incoherent instance management
-  ctxt_pP->instance=0;
-  uint8_t *memblock = malloc16(sdu_buffer_size);
-  if (memblock == NULL) {
-    LOG_E(RLC, "%s:%d:%s: ERROR: malloc16 failed\n", __FILE__, __LINE__, __FUNCTION__);
-    exit(1);
-  }
-  memcpy(memblock, sdu_buffer, sdu_buffer_size);
-  int ret = nr_pdcp_data_ind(ctxt_pP, srb_flagP, rb_id, sdu_buffer_size, memblock);
-  if (!ret) {
-    LOG_E(RLC, "%s:%d:%s: ERROR: pdcp_data_ind failed\n", __FILE__, __LINE__, __FUNCTION__);
-    /* what to do in case of failure? for the moment: nothing */
-  }
-  return ret;
+                     const uint32_t *const destinationL2Id)
+{
+  do_pdcp_data_ind(ctxt_pP, srb_flagP, rb_id, sdu_buffer_size, sdu_buffer);
+  return true;
 }
 
 /*

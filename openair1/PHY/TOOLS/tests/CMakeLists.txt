@@ -12,6 +12,12 @@ add_dependencies(tests benchmark_rotate_vector)
 add_test(NAME benchmark_rotate_vector
   COMMAND ./benchmark_rotate_vector)
 
+add_executable(benchmark_dot_product benchmark_dot_product.cpp)
+target_link_libraries(benchmark_dot_product PRIVATE benchmark::benchmark UTIL PHY_NR)
+add_dependencies(tests benchmark_dot_product)
+add_test(NAME benchmark_dot_product
+  COMMAND ./benchmark_dot_product)
+
 add_executable(test_log2_approx test_log2_approx.cpp ../log2_approx.c)
 target_link_libraries(test_log2_approx PRIVATE GTest::gtest LOG minimal_lib)
 add_dependencies(tests test_log2_approx)

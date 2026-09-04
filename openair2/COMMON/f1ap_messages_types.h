@@ -53,6 +53,17 @@
 
 #define F1AP_PAGING(mSGpTR)                        (mSGpTR)->ittiMsg.f1ap_paging
 
+#define F1AP_TRP_INFORMATION_REQ(mSGpTR) (mSGpTR)->ittiMsg.f1ap_trp_information_req
+#define F1AP_TRP_INFORMATION_RESP(mSGpTR) (mSGpTR)->ittiMsg.f1ap_trp_information_resp
+#define F1AP_TRP_INFORMATION_FAILURE(mSGpTR) (mSGpTR)->ittiMsg.f1ap_trp_information_failure
+#define F1AP_POSITIONING_INFORMATION_REQ(mSGpTR) (mSGpTR)->ittiMsg.f1ap_positioning_information_req
+#define F1AP_POSITIONING_INFORMATION_RESP(mSGpTR) (mSGpTR)->ittiMsg.f1ap_positioning_information_resp
+#define F1AP_POSITIONING_ACTIVATION_REQ(mSGpTR) (mSGpTR)->ittiMsg.f1ap_positioning_activation_req
+#define F1AP_POSITIONING_ACTIVATION_RESP(mSGpTR) (mSGpTR)->ittiMsg.f1ap_positioning_activation_resp
+#define F1AP_POSITIONING_MEASUREMENT_REQ(mSGpTR) (mSGpTR)->ittiMsg.f1ap_positioning_measurement_req
+#define F1AP_POSITIONING_MEASUREMENT_RESP(mSGpTR) (mSGpTR)->ittiMsg.f1ap_positioning_measurement_resp
+#define F1AP_POSITIONING_MEASUREMENT_FAILURE(mSGpTR) (mSGpTR)->ittiMsg.f1ap_positioning_measurement_failure
+
 /* Length of the transport layer address string
  * 160 bits / 8 bits by char.
  */
@@ -67,7 +78,10 @@
 /* 9.3.1.42 of 3GPP TS 38.473 - gNB-CU System Information */
 #define F1AP_MAX_NO_SIB_TYPES 32
 
-typedef struct f1ap_net_config_s {
+/* 9.2.12.3 of 3GPP TS 38.473 V16.21.0*/
+#define MAX_NUM_MEASURE_TRPS 64
+
+typedef struct f1ap_net_config_t {
   char *CU_f1_ip_address;
   char *DU_f1c_ip_address;
   char *DU_f1u_ip_address;

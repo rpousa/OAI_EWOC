@@ -20,7 +20,6 @@
 #include "sctp_eNB_task.h"
 #include "openair3/ocp-gtpu/gtp_itf.h"
 #include "PHY/INIT/phy_init.h" 
-#include "f1ap_cu_task.h"
 #include "f1ap_du_task.h"
 #include "nfapi/oai_integration/vendor_ext.h"
 #include <openair2/LAYER2/nr_pdcp/nr_pdcp.h>
@@ -95,17 +94,6 @@ void *gNB_app_task(void *args_p)
   ngran_node_t node_type = get_node_type();
 
   if (RC.nb_nr_inst > 0) {
-    if (node_type == ngran_gNB_CUCP ||
-        node_type == ngran_gNB_CU ||
-        node_type == ngran_eNB_CU ||
-        node_type == ngran_ng_eNB_CU) {
-
-      if (itti_create_task(TASK_CU_F1, F1AP_CU_task, NULL) < 0) {
-        LOG_E(F1AP, "Create task for F1AP CU failed\n");
-        AssertFatal(1==0,"exiting");
-      }
-    }
-
     if (node_type == ngran_gNB_CUCP) {
       if (itti_create_task(TASK_CUCP_E1, E1AP_CUCP_task, NULL) < 0)
         AssertFatal(false, "Create task for E1AP CP failed\n");

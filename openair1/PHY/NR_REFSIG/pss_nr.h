@@ -58,13 +58,18 @@ typedef struct {
   int nb_antennas_rx;
   int rxdata_length;
   int ofdm_symbol_size;
+  int nb_prefix_samples;
   int subcarrier_spacing;
   bool fo_flag;
   int target_Nid_cell;
   c16_t *pssTime;
 } pss_search_t;
 
-pss_detection_result_t pss_search_time_nr(const pss_search_t *p);
+typedef struct {
+  pss_detection_result_t pss_elem_info[NUMBER_PSS_SEQUENCE];
+} nr_pss_info_t;
+
+nr_pss_info_t pss_search_time_nr(const pss_search_t *p);
 
 void generate_pss_nr_time(int ofdm_symbol_size,
                           int first_carrier_offset,

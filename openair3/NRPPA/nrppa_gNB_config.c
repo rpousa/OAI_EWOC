@@ -4,15 +4,14 @@
 
 #include "nrppa_gNB_config.h"
 #include "assertions.h"
-#include "openair1/PHY/defs_nr_common.h"
-#include "openair1/PHY/defs_gNB.h"
 #include "common/ran_context.h"
 #include "positioning_nr_paramdef.h"
 #include "common/config/config_userapi.h"
+#include "common/utils/LOG/log.h"
 
-positioning_config_t RCconfig_nr_positioning(void)
+positioning_config_t *RCconfig_nr_positioning(void)
 {
-  positioning_config_t positioning_config = {0};
+  positioning_config_t *positioning_config = NULL;
   paramdef_t positioning_params_desc[] = POSITIONING_PARAMS_DESC;
   int num_params = sizeofArray(positioning_params_desc);
   GET_PARAMS_LIST(POSITIONING_ParamList, POSITIONING_Params, POSITIONING_PARAMS_DESC, CONFIG_STRING_POSITIONING_CONFIG, NULL);
@@ -22,8 +21,7 @@ positioning_config_t RCconfig_nr_positioning(void)
 
     uint8_t num_trp = *gpd(params, num_params, CONFIG_STRING_POSITIONING_NUM_TRPS)->uptr;
     if (num_trp == 0) {
-      LOG_E(NR_PHY, "No TRP configuration found..!!!\n");
-      return positioning_config;
+      return NULL;
     } else if (num_trp > MAX_NUM_TRPs) {
       AssertFatal(false, "Exceeded MAX number of TRPs\n");
     }
@@ -38,13 +36,14 @@ positioning_config_t RCconfig_nr_positioning(void)
       AssertFatal(false, "Mismatch in the number of TRPs with the number of ids, x-axis, y-axis, z-axis, units\n");
     }
 
-    positioning_config.num_trp = num_trp;
+    positioning_config = calloc_or_fail(1, sizeof(positioning_config_t));
+    positioning_config->num_trp = num_trp;
     for (int l = 0; l < num_trp; l++) {
-      positioning_config.trps[l].id = gpd(params, num_params, CONFIG_STRING_POSITIONING_TRP_IDS_LIST)->uptr[l];
-      positioning_config.trps[l].x_axis = gpd(params, num_params, CONFIG_STRING_POSITIONING_TRP_X_AXIS_LIST)->uptr[l];
-      positioning_config.trps[l].y_axis = gpd(params, num_params, CONFIG_STRING_POSITIONING_TRP_Y_AXIS_LIST)->uptr[l];
-      positioning_config.trps[l].z_axis = gpd(params, num_params, CONFIG_STRING_POSITIONING_TRP_Z_AXIS_LIST)->uptr[l];
-      positioning_config.trps[l].unit = gpd(params, num_params, CONFIG_STRING_POSITIONING_TRP_UNIT_LIST)->uptr[l];
+      positioning_config->trps[l].id = gpd(params, num_params, CONFIG_STRING_POSITIONING_TRP_IDS_LIST)->uptr[l];
+      positioning_config->trps[l].x_axis = gpd(params, num_params, CONFIG_STRING_POSITIONING_TRP_X_AXIS_LIST)->uptr[l];
+      positioning_config->trps[l].y_axis = gpd(params, num_params, CONFIG_STRING_POSITIONING_TRP_Y_AXIS_LIST)->uptr[l];
+      positioning_config->trps[l].z_axis = gpd(params, num_params, CONFIG_STRING_POSITIONING_TRP_Z_AXIS_LIST)->uptr[l];
+      positioning_config->trps[l].unit = gpd(params, num_params, CONFIG_STRING_POSITIONING_TRP_UNIT_LIST)->uptr[l];
       }
   } else {
     LOG_I(NR_PHY, "No " CONFIG_STRING_POSITIONING_CONFIG " configuration found..!!\n");

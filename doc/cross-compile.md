@@ -62,9 +62,9 @@ versions of gcc defined in the cmake cross-compilation file (`cross-arm.cmake`).
 
 ### Build code generation tools for host
 
-Use the x86 compiler to build the `ldpc_generators` and generate the header
-file in the `ran_build/build` folder.  They are necessary during a build for
-code generation, and therefore need to be created for the x86 architecture.
+Use the x86 compiler to generate the T header file in the `ran_build/build`
+folder.  This is necessary during a build for code generation, and therefore
+need to be created for the x86 architecture.
 
 ```shell
 rm -r ran_build
@@ -74,7 +74,7 @@ mkdir ran_build/build-cross
 
 cd ran_build/build
 cmake ../../..
-make -j`nproc` ldpc_generators generate_T
+make -j`nproc` generate_T
 ```
 
 ### Build executables for ARM64

@@ -682,7 +682,7 @@ void decode_srs_carrier_list(nrppa_srs_carrier_list_t *out_list, const NRPPA_SRS
   }
 }
 
-void free_measurement_request(nrppa_measurement_req_t *msg)
+void free_nrppa_measurement_request(nrppa_measurement_req_t *msg)
 {
   free(msg->trp_measurement_request_list.trp_measurement_request_item);
   if (msg->measurement_quantities.measurement_quantities_item) {
@@ -692,7 +692,7 @@ void free_measurement_request(nrppa_measurement_req_t *msg)
   /* SRS Configuration (O) */
   if (msg->srs_configuration) {
     nrppa_srs_carrier_list_t *srs_carrier_list = &msg->srs_configuration->srs_carrier_list;
-    free_srs_carrier_list(srs_carrier_list);
+    free_nrppa_srs_carrier_list(srs_carrier_list);
     free(msg->srs_configuration);
   }
 }
@@ -846,7 +846,7 @@ NRPPA_TRP_MeasurementResponseList_t encode_trp_measurement_reponse_list(nrppa_me
   return out_list;
 }
 
-void free_measurement_resp(nrppa_measurement_resp_t *msg)
+void free_nrppa_measurement_resp(nrppa_measurement_resp_t *msg)
 {
   if (msg->measurement_response_list) {
     nrppa_measurement_response_list_t *list = msg->measurement_response_list;
@@ -1038,7 +1038,7 @@ int nrppa_gNB_measurement_response(instance_t instance, MessageDef *msg_p)
 
   if (ue_info->gNB_ue_ngap_id != 0 && ue_info->amf_ue_ngap_id != 0) {
     LOG_E(NRPPA, "Illegal gNB_ue_ngap_id %d and amf_ue_ngap_id %ld\n", ue_info->gNB_ue_ngap_id, ue_info->amf_ue_ngap_id);
-    free_measurement_resp(resp);
+    free_nrppa_measurement_resp(resp);
     nrppa_free_ue_context(ue_info);
     return -1;
   }
@@ -1091,7 +1091,7 @@ int nrppa_gNB_measurement_response(instance_t instance, MessageDef *msg_p)
     }
   }
 
-  free_measurement_resp(resp);
+  free_nrppa_measurement_resp(resp);
 
   LOG_I(NRPPA, "Calling encoder for Measurement Response \n");
 
@@ -1104,6 +1104,87 @@ int nrppa_gNB_measurement_response(instance_t instance, MessageDef *msg_p)
   uint32_t length = 0;
   if (nrppa_gNB_encode_pdu(&pdu, &buffer, &length) < 0) {
     LOG_E(NRPPA, "Failed to encode Uplink NRPPa Measurement Response\n");
+    nrppa_free_ue_context(ue_info);
+    ASN_STRUCT_FREE_CONTENTS_ONLY(asn_DEF_NRPPA_NRPPA_PDU, &pdu);
+    return -1;
+  }
+
+  MessageDef *msg = itti_alloc_new_message(TASK_NRPPA, 0, NGAP_UPLINKNONUEASSOCIATEDNRPPA);
+  ngap_uplink_non_ue_associated_nrppa_t *ULNRPPA = &NGAP_UPLINKNONUEASSOCIATEDNRPPA(msg);
+
+  // Routing ID
+  ULNRPPA->routing_id = create_byte_array(ue_info->routing_id.len, ue_info->routing_id.buf);
+
+  // NRPPa PDU
+  ULNRPPA->nrppa_pdu = create_byte_array(length, buffer);
+
+  // Forward the NRPPA PDU to NGAP
+  itti_send_msg_to_task(TASK_NGAP, instance, msg);
+  nrppa_free_ue_context(ue_info);
+  free(buffer);
+  return length;
+}
+
+int nrppa_gNB_measurement_failure(instance_t instance, MessageDef *msg_p)
+{
+  DevAssert(msg_p);
+  nrppa_measurement_failure_t *fail = &NRPPA_MEASUREMENT_FAILURE(msg_p);
+  nrppa_gNB_ue_context_t *ue_info = nrppa_detach_ue_context(fail->transaction_id);
+
+  if (ue_info->gNB_ue_ngap_id != 0 && ue_info->amf_ue_ngap_id != 0) {
+    LOG_E(NRPPA, "Illegal gNB_ue_ngap_id %d and amf_ue_ngap_id %ld\n", ue_info->gNB_ue_ngap_id, ue_info->amf_ue_ngap_id);
+    nrppa_free_ue_context(ue_info);
+    return -1;
+  }
+
+  LOG_I(NRPPA,
+        "Received measurement failure info from RRC with transaction_id %u and gNB_ue_ngap_id %u\n",
+        ue_info->transaction_id,
+        ue_info->gNB_ue_ngap_id);
+
+  // Prepare NRPPA TRP Information transfer Response
+  NRPPA_NRPPA_PDU_t pdu = {0};
+
+  // IE: 9.2.3 Message Type : mandatory
+  pdu.present = NRPPA_NRPPA_PDU_PR_unsuccessfulOutcome;
+  asn1cCalloc(pdu.choice.unsuccessfulOutcome, head);
+  head->procedureCode = NRPPA_ProcedureCode_id_Measurement;
+  head->criticality = NRPPA_Criticality_reject;
+  head->value.present = NRPPA_UnsuccessfulOutcome__value_PR_MeasurementFailure;
+
+  // IE 9.2.4 nrppatransactionID : mandatory
+  head->nrppatransactionID = fail->transaction_id;
+  NRPPA_MeasurementFailure_t *out = &head->value.choice.MeasurementFailure;
+
+  // IE LMF Measurement ID : mandatory
+  {
+    asn1cSequenceAdd(out->protocolIEs.list, NRPPA_MeasurementFailure_IEs_t, ie);
+    ie->id = NRPPA_ProtocolIE_ID_id_LMF_Measurement_ID;
+    ie->criticality = NRPPA_Criticality_reject;
+    ie->value.present = NRPPA_MeasurementFailure_IEs__value_PR_Measurement_ID;
+    ie->value.choice.Measurement_ID = fail->lmf_measurement_id;
+  }
+
+  // IE Cause : mandatory
+  {
+    asn1cSequenceAdd(out->protocolIEs.list, NRPPA_MeasurementFailure_IEs_t, ie);
+    ie->id = NRPPA_ProtocolIE_ID_id_Cause;
+    ie->criticality = NRPPA_Criticality_reject;
+    ie->value.present = NRPPA_MeasurementFailure_IEs__value_PR_Cause;
+    ie->value.choice.Cause = encode_nrppa_cause(fail->cause);
+  }
+
+  LOG_I(NRPPA, "Calling encoder for Measurement Failure \n");
+
+  if (LOG_DEBUGFLAG(DEBUG_ASN1)) {
+    xer_fprint(stdout, &asn_DEF_NRPPA_NRPPA_PDU, &pdu);
+  }
+
+  // Encode NRPPA message
+  uint8_t *buffer = NULL;
+  uint32_t length = 0;
+  if (nrppa_gNB_encode_pdu(&pdu, &buffer, &length) < 0) {
+    LOG_E(NRPPA, "Failed to encode Uplink NRPPa Measurement Failure\n");
     nrppa_free_ue_context(ue_info);
     ASN_STRUCT_FREE_CONTENTS_ONLY(asn_DEF_NRPPA_NRPPA_PDU, &pdu);
     return -1;

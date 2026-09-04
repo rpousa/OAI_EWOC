@@ -17,6 +17,7 @@
 #include "lib/f1ap_rrc_message_transfer.h"
 #include "lib/f1ap_interface_management.h"
 #include "lib/f1ap_ue_context.h"
+#include "lib/f1ap_positioning.h"
 
 static void f1_reset_cu_initiated_f1ap(sctp_assoc_t assoc_id, const f1ap_reset_t *reset)
 {
@@ -87,7 +88,7 @@ static void ue_context_modification_confirm_f1ap(sctp_assoc_t assoc_id, const f1
   f1ap_msg->rrc_container = NULL;
   f1ap_msg->rrc_container_length = 0;
   if (confirm->rrc_container != NULL) {
-    f1ap_msg->rrc_container = calloc(1, sizeof(*f1ap_msg->rrc_container));
+    f1ap_msg->rrc_container = calloc(confirm->rrc_container_length, sizeof(*f1ap_msg->rrc_container));
     AssertFatal(f1ap_msg->rrc_container != NULL, "out of memory\n");
     memcpy(f1ap_msg->rrc_container, confirm->rrc_container, confirm->rrc_container_length);
     f1ap_msg->rrc_container_length = confirm->rrc_container_length;
@@ -132,6 +133,38 @@ static void paging_f1ap(sctp_assoc_t assoc_id, const f1ap_paging_t *paging)
   itti_send_msg_to_task(TASK_CU_F1, 0, message_p);
 }
 
+static void trp_information_request_f1ap(sctp_assoc_t assoc_id, const f1ap_trp_information_req_t *req)
+{
+  MessageDef *message_p = itti_alloc_new_message(TASK_RRC_GNB, 0, F1AP_TRP_INFORMATION_REQ);
+  message_p->ittiMsgHeader.originInstance = assoc_id;
+  F1AP_TRP_INFORMATION_REQ(message_p) = cp_trp_information_req(req);
+  itti_send_msg_to_task(TASK_CU_F1, 0, message_p);
+}
+
+static void positioning_information_request_f1ap(sctp_assoc_t assoc_id, const f1ap_positioning_information_req_t *req)
+{
+  MessageDef *message_p = itti_alloc_new_message(TASK_RRC_GNB, 0, F1AP_POSITIONING_INFORMATION_REQ);
+  message_p->ittiMsgHeader.originInstance = assoc_id;
+  F1AP_POSITIONING_INFORMATION_REQ(message_p) = cp_positioning_information_req(req);
+  itti_send_msg_to_task(TASK_CU_F1, 0, message_p);
+}
+
+static void positioning_activation_request_f1ap(sctp_assoc_t assoc_id, const f1ap_positioning_activation_req_t *req)
+{
+  MessageDef *message_p = itti_alloc_new_message(TASK_RRC_GNB, 0, F1AP_POSITIONING_ACTIVATION_REQ);
+  message_p->ittiMsgHeader.originInstance = assoc_id;
+  F1AP_POSITIONING_ACTIVATION_REQ(message_p) = cp_positioning_activation_req(req);
+  itti_send_msg_to_task(TASK_CU_F1, 0, message_p);
+}
+
+static void positioning_measurement_request_f1ap(sctp_assoc_t assoc_id, const f1ap_positioning_measurement_req_t *req)
+{
+  MessageDef *message_p = itti_alloc_new_message(TASK_RRC_GNB, 0, F1AP_POSITIONING_MEASUREMENT_REQ);
+  message_p->ittiMsgHeader.originInstance = assoc_id;
+  F1AP_POSITIONING_MEASUREMENT_REQ(message_p) = cp_positioning_measurement_req(req);
+  itti_send_msg_to_task(TASK_CU_F1, 0, message_p);
+}
+
 void mac_rrc_dl_f1ap_init(nr_mac_rrc_dl_if_t *mac_rrc)
 {
   mac_rrc->f1_reset = f1_reset_cu_initiated_f1ap;
@@ -146,4 +179,8 @@ void mac_rrc_dl_f1ap_init(nr_mac_rrc_dl_if_t *mac_rrc)
   mac_rrc->ue_context_release_command = ue_context_release_command_f1ap;
   mac_rrc->dl_rrc_message_transfer = dl_rrc_message_transfer_f1ap;
   mac_rrc->paging_transfer = paging_f1ap;
+  mac_rrc->trp_information_request = trp_information_request_f1ap;
+  mac_rrc->positioning_information_request = positioning_information_request_f1ap;
+  mac_rrc->positioning_activation_request = positioning_activation_request_f1ap;
+  mac_rrc->positioning_measurement_request = positioning_measurement_request_f1ap;
 }

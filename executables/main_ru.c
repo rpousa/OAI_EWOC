@@ -22,7 +22,6 @@
 #include "common/utils/load_module_shlib.h"
 
 
-#include "radio/COMMON/common_lib.h"
 #include "radio/ETHERNET/if_defs.h"
 
 #include "PHY/phy_vars.h"
@@ -217,41 +216,41 @@ int main ( int argc, char **argv )
     if ( !(config_isparamset(RUParamList.paramarray[j],RU_LOCAL_IF_NAME_IDX)) ) {
       AssertFatal(1==0,"IF_NAME is required\n");
     } else {
-      ru->eth_params.local_if_name            = strdup(*(RUParamList.paramarray[j][RU_LOCAL_IF_NAME_IDX].strptr));
-      ru->eth_params.my_addr                  = strdup(*(RUParamList.paramarray[j][RU_LOCAL_ADDRESS_IDX].strptr));
-      ru->eth_params.remote_addr              = strdup(*(RUParamList.paramarray[j][RU_REMOTE_ADDRESS_IDX].strptr));
-      ru->eth_params.my_portd                 = *(RUParamList.paramarray[j][RU_LOCAL_PORTD_IDX].uptr);
-      ru->eth_params.remote_portd             = *(RUParamList.paramarray[j][RU_REMOTE_PORTD_IDX].uptr);
+      ru->ifdevice.eth_params.local_if_name            = strdup(*(RUParamList.paramarray[j][RU_LOCAL_IF_NAME_IDX].strptr));
+      ru->ifdevice.eth_params.my_addr                  = strdup(*(RUParamList.paramarray[j][RU_LOCAL_ADDRESS_IDX].strptr));
+      ru->ifdevice.eth_params.remote_addr              = strdup(*(RUParamList.paramarray[j][RU_REMOTE_ADDRESS_IDX].strptr));
+      ru->ifdevice.eth_params.my_portd                 = *(RUParamList.paramarray[j][RU_LOCAL_PORTD_IDX].uptr);
+      ru->ifdevice.eth_params.remote_portd             = *(RUParamList.paramarray[j][RU_REMOTE_PORTD_IDX].uptr);
 
       // Check if control port set
       if  (!(config_isparamset(RUParamList.paramarray[j],RU_REMOTE_PORTC_IDX)) ) {
 	printf("Removing control port for RU %d\n",j);
 	ru->has_ctrl_prt            = 0;
       } else {
-	ru->eth_params.my_portc                 = *(RUParamList.paramarray[j][RU_LOCAL_PORTC_IDX].uptr);
-	ru->eth_params.remote_portc             = *(RUParamList.paramarray[j][RU_REMOTE_PORTC_IDX].uptr);
-	printf(" Control port %u \n",ru->eth_params.my_portc);
+	ru->ifdevice.eth_params.my_portc                 = *(RUParamList.paramarray[j][RU_LOCAL_PORTC_IDX].uptr);
+	ru->ifdevice.eth_params.remote_portc             = *(RUParamList.paramarray[j][RU_REMOTE_PORTC_IDX].uptr);
+	printf(" Control port %u \n",ru->ifdevice.eth_params.my_portc);
       }
 
       if (strcmp(*(RUParamList.paramarray[j][RU_TRANSPORT_PREFERENCE_IDX].strptr), "udp") == 0) {
 	ru->if_south                        = LOCAL_RF;
 	ru->function                        = NGFI_RRU_IF5;
-	ru->eth_params.transp_preference    = ETH_UDP_MODE;
+	ru->ifdevice.eth_params.transp_preference    = ETH_UDP_MODE;
 	printf("Setting function for RU %d to NGFI_RRU_IF5 (udp)\n",j);
       } else if (strcmp(*(RUParamList.paramarray[j][RU_TRANSPORT_PREFERENCE_IDX].strptr), "raw") == 0) {
 	ru->if_south                        = LOCAL_RF;
 	ru->function                        = NGFI_RRU_IF5;
-	ru->eth_params.transp_preference    = ETH_RAW_MODE;
+	ru->ifdevice.eth_params.transp_preference    = ETH_RAW_MODE;
 	printf("Setting function for RU %d to NGFI_RRU_IF5 (raw)\n",j);
       } else if (strcmp(*(RUParamList.paramarray[j][RU_TRANSPORT_PREFERENCE_IDX].strptr), "udp_if4p5") == 0) {
 	ru->if_south                        = LOCAL_RF;
 	ru->function                        = NGFI_RRU_IF4p5;
-	ru->eth_params.transp_preference    = ETH_UDP_IF4p5_MODE;
+	ru->ifdevice.eth_params.transp_preference    = ETH_UDP_IF4p5_MODE;
 	printf("Setting function for RU %d to NGFI_RRU_IF4p5 (udp)\n",j);
       } else if (strcmp(*(RUParamList.paramarray[j][RU_TRANSPORT_PREFERENCE_IDX].strptr), "raw_if4p5") == 0) {
 	ru->if_south                        = LOCAL_RF;
 	ru->function                        = NGFI_RRU_IF4p5;
-	ru->eth_params.transp_preference    = ETH_RAW_IF4p5_MODE;
+	ru->ifdevice.eth_params.transp_preference    = ETH_RAW_IF4p5_MODE;
 	printf("Setting function for RU %d to NGFI_RRU_IF4p5 (raw)\n",j);
       }
 
@@ -276,30 +275,30 @@ int main ( int argc, char **argv )
   } //strcmp(local_rf, "yes") == 0
   else {
     printf("RU %d: Transport %s\n",j,*(RUParamList.paramarray[j][RU_TRANSPORT_PREFERENCE_IDX].strptr));
-    ru->eth_params.local_if_name      = strdup(*(RUParamList.paramarray[j][RU_LOCAL_IF_NAME_IDX].strptr));
-    ru->eth_params.my_addr            = strdup(*(RUParamList.paramarray[j][RU_LOCAL_ADDRESS_IDX].strptr));
-    ru->eth_params.remote_addr        = strdup(*(RUParamList.paramarray[j][RU_REMOTE_ADDRESS_IDX].strptr));
-    ru->eth_params.my_portc           = *(RUParamList.paramarray[j][RU_LOCAL_PORTC_IDX].uptr);
-    ru->eth_params.remote_portc       = *(RUParamList.paramarray[j][RU_REMOTE_PORTC_IDX].uptr);
-    ru->eth_params.my_portd           = *(RUParamList.paramarray[j][RU_LOCAL_PORTD_IDX].uptr);
-    ru->eth_params.remote_portd       = *(RUParamList.paramarray[j][RU_REMOTE_PORTD_IDX].uptr);
+    ru->ifdevice.eth_params.local_if_name      = strdup(*(RUParamList.paramarray[j][RU_LOCAL_IF_NAME_IDX].strptr));
+    ru->ifdevice.eth_params.my_addr            = strdup(*(RUParamList.paramarray[j][RU_LOCAL_ADDRESS_IDX].strptr));
+    ru->ifdevice.eth_params.remote_addr        = strdup(*(RUParamList.paramarray[j][RU_REMOTE_ADDRESS_IDX].strptr));
+    ru->ifdevice.eth_params.my_portc           = *(RUParamList.paramarray[j][RU_LOCAL_PORTC_IDX].uptr);
+    ru->ifdevice.eth_params.remote_portc       = *(RUParamList.paramarray[j][RU_REMOTE_PORTC_IDX].uptr);
+    ru->ifdevice.eth_params.my_portd           = *(RUParamList.paramarray[j][RU_LOCAL_PORTD_IDX].uptr);
+    ru->ifdevice.eth_params.remote_portd       = *(RUParamList.paramarray[j][RU_REMOTE_PORTD_IDX].uptr);
 
     if (strcmp(*(RUParamList.paramarray[j][RU_TRANSPORT_PREFERENCE_IDX].strptr), "udp") == 0) {
       ru->if_south                     = REMOTE_IF5;
       ru->function                     = NGFI_RAU_IF5;
-      ru->eth_params.transp_preference = ETH_UDP_MODE;
+      ru->ifdevice.eth_params.transp_preference = ETH_UDP_MODE;
     } else if (strcmp(*(RUParamList.paramarray[j][RU_TRANSPORT_PREFERENCE_IDX].strptr), "raw") == 0) {
       ru->if_south                     = REMOTE_IF5;
       ru->function                     = NGFI_RAU_IF5;
-      ru->eth_params.transp_preference = ETH_RAW_MODE;
+      ru->ifdevice.eth_params.transp_preference = ETH_RAW_MODE;
     } else if (strcmp(*(RUParamList.paramarray[j][RU_TRANSPORT_PREFERENCE_IDX].strptr), "udp_if4p5") == 0) {
       ru->if_south                     = REMOTE_IF4p5;
       ru->function                     = NGFI_RAU_IF4p5;
-      ru->eth_params.transp_preference = ETH_UDP_IF4p5_MODE;
+      ru->ifdevice.eth_params.transp_preference = ETH_UDP_IF4p5_MODE;
     } else if (strcmp(*(RUParamList.paramarray[j][RU_TRANSPORT_PREFERENCE_IDX].strptr), "raw_if4p5") == 0) {
       ru->if_south                     = REMOTE_IF4p5;
       ru->function                     = NGFI_RAU_IF4p5;
-      ru->eth_params.transp_preference = ETH_RAW_IF4p5_MODE;
+      ru->ifdevice.eth_params.transp_preference = ETH_RAW_IF4p5_MODE;
     }
 
     if (strcmp(*(RUParamList.paramarray[j][RU_IS_SLAVE_IDX].strptr), "yes") == 0) ru->is_slave=1;

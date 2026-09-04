@@ -18,6 +18,8 @@
 #include <sys/wait.h>
 #include "nfapi_vnf.h"
 
+#include <rte_log.h>
+
 static WLS_MAC_CTX wls_mac_iface;
 vnf_t *_vnf = NULL;
 
@@ -246,7 +248,8 @@ static bool mac_wls_init()
   pWls->nTotalDlBufFreeCnt = 0;
 
   /* Start by opening the WLS instance with WLS_MASTER_CLIENT */
-  if ((pWls->hWls = WLS_Open(WLS_DEV_NAME, WLS_MASTER_CLIENT, &nWlsMacMemorySize, &nWlsPhyMemorySize)) == NULL) {
+  if ((pWls->hWls = WLS_Open(WLS_DEV_NAME, WLS_MASTER_CLIENT, &nWlsMacMemorySize, &nWlsPhyMemorySize, WLS_UL_ENQUEUE_SIZE))
+      == NULL) {
     NFAPI_TRACE(NFAPI_TRACE_ERROR, "\nCould not open WLS Interface \n");
     return false;
   }

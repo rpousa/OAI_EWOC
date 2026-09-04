@@ -428,6 +428,10 @@ typedef struct nr_mac_rrc_dl_if_s {
   ue_context_release_command_func_t ue_context_release_command;
   dl_rrc_message_transfer_func_t dl_rrc_message_transfer;
   f1_paging_transfer_func_t paging_transfer;
+  trp_information_request_func_t trp_information_request;
+  positioning_information_request_func_t positioning_information_request;
+  positioning_activation_request_func_t positioning_activation_request;
+  positioning_measurement_request_func_t positioning_measurement_request;
 } nr_mac_rrc_dl_if_t;
 
 typedef struct cucp_cuup_if_s {
@@ -599,6 +603,9 @@ typedef struct sib2_config_s {
   bool deriveSSB_IndexFromCell;
 } sib2_config_t;
 
+/* MR.NRScSSSINR histogram dimension (3GPP TS 28.552 §5.1.1.32). */
+#define NR_KPM_SS_SINR_NB_LEVELS 128 /* SS-SINR report level: 0..127, TS 38.133 Table 10.1.16.1-1 */
+
 //---NR---(completely change)---------------------
 typedef struct gNB_RRC_INST_s {
 
@@ -606,7 +613,6 @@ typedef struct gNB_RRC_INST_s {
   uint32_t                                            node_id;
   char                                               *node_name;
   int                                                 module_id;
-  eth_params_t                                        eth_params_s;
   uid_allocator_t                                     uid_allocator;
   RB_HEAD(rrc_nr_ue_tree_s, rrc_gNB_ue_context_s) rrc_ue_head; // ue_context tree key search by rnti
 
@@ -645,6 +651,13 @@ typedef struct gNB_RRC_INST_s {
   // PDCP configuration parameters loaded during startup
   nr_pdcp_configuration_t pdcp_config;
   nr_rlc_configuration_t rlc_config;
+
+  /// cell-wide NR serving-cell SS-SINR distribution, see 28.552 5.1.1.32
+  /// 0-127 SS-SINR report level (TS 38.133)
+  uint32_t ss_sinr_cell_dist[NR_KPM_SS_SINR_NB_LEVELS];
+
+  uint64_t rrc_conn_count_sum;
+  uint64_t rrc_conn_count_samples;
 } gNB_RRC_INST;
 
 /** Forward declaration for UE log macros */

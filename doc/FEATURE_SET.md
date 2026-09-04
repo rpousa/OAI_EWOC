@@ -138,13 +138,18 @@ These modes of operation are supported:
   - HARQ procedures for uplink
   - MCS adaption from HARQ BLER or PUSCH SINR
 - Scheduler procedures for SRS reception
-  - Periodic SRS reception
+  - Periodic and aperiodic SRS reception
   - Channel rank computation up to 2x2 scenario
   - TPMI computation based on SRS up 4 antenna ports and 2 layers
 - MAC procedures to handle CSI measurement report
   - evalution of RSRP report
   - evaluation of CQI report
 - MAC scheduling of SR reception
+- Paging (PCCH/P-RNTI)
+  - CN paging records queued
+  - PF/PO dequeue from SIB1 PCCH-Config
+  - PCCH encoded at the UE's PO
+  - Type2 common search-space based P-RNTI PDCCH + PDSCH scheduling for PCCH
 - Intra-frequency handover
 - Inter-frequency handover
     - Measurement gaps are automatically computed at the DU if the CU has neighbor information and the configured
@@ -230,9 +235,12 @@ These modes of operation are supported:
   - NGAP Initial UE message
   - NGAP Initial context setup request/response
   - NGAP Downlink/Uplink NAS transfer
-  - NGAP UE context release request/complete
+  - NGAP Paging
+  - NGAP UE context release request/command/complete
   - NGAP UE radio capability info indication
   - NGAP PDU session resource setup request/response
+  - NGAP PDU session resource modify request/response
+  - NGAP PDU session resource release command/response
   - NGAP Mobility Management Procedures:
     * NGAP Handover Required
     * NGAP Handover Request
@@ -243,6 +251,11 @@ These modes of operation are supported:
     * NGAP Handover Cancel Acknowledge
     * NGAP Uplink RAN Status Transfer
     * NGAP Downlink RAN Status Transfer
+  - NGAP NRPPa Transport Procedures:
+    * Downlink UE Associated NRPPa Transport
+    * Uplink UE Associated NRPPa Transport
+    * Downlink Non UE Associated NRPPa Transport
+    * Uplink Non UE Associated NRPPa Transport
 - Interface with RRC
 
 ### gNB F1AP
@@ -259,11 +272,17 @@ These modes of operation are supported:
     * F1 UE Context modification request/response
     * F1 UE Context modification required
     * F1 UE Context release req/cmd/complete
+  - F1 Paging
   - F1 gNB CU configuration update
   - F1 gNB DU configuration update
   - F1 Reset (handled at DU only, full reset only)
   - F1 Mobility Management Procedures:
     * F1 Intra-CU Handover (Inter-DU mobility)
+  - F1 Positioning Procedures:
+    * F1 TRP Information Request/Response
+    * F1 Positioning Information Request/Response
+    * F1 Positioning Activation Request/Response
+    * F1 Positioning Measurement Request/Response
 - Interface with RRC
 - Interface with GTP-u (tunnel creation/handling for F1-U interface)
 - One CU(-CP) can handle multiple DUs
@@ -279,12 +298,38 @@ These modes of operation are supported:
   - E1 Bearer Context Setup (gNB-CU-CP initiated)
       - E1 Bearer Context Setup Request
       - E1 Bearer Context Setup Response
+      - E1 Bearer Context Setup Failure
   - Bearer Context Modification (gNB-CU-CP initiated)
       - E1 Bearer Context Modification Request
       - E1 Bearer Context Modification Response
-  - E1 Reset
+      - E1 Bearer Context Modification Failure
+  - Bearer Context Release (gNB-CU-CP initiated)
+      - E1 Bearer Context Release Command
+      - E1 Bearer Context Release Complete
 - Interface with RRC and PDCP/SDAP
 - One CU-CP can handle multiple CU-UPs
+
+### gNB NRPPA
+
+- Integration of NRPPa (NR Positioning Protocol A) messages and procedures for
+  location services via the AMF and LMF according to TS 38.455
+  - TRP Information Exchange:
+     - TRP Information Request
+     - TRP Information Response
+  - Positioning Information Exchange:
+     - Positioning Information Request (SRS Configuration)
+     - Positioning Information Response
+  - Positioning Activation:
+     - Positioning Activation Request
+     - Positioning Activation Response
+  - Measurement Information Transfer:
+     - Measurement Request (UL-RTOA measurement)
+     - Measurement Response
+- Support for Uplink Time Difference of Arrival (UL-TDOA) based positioning
+- Support for distributed antenna systems, where a single DU manages multiple
+  antennas acting as individual Transmission and Reception Points (TRPs)
+- Interface with NGAP and RRC for UE-associated and Non-UE-associated
+  positioning contexts
 
 ### gNB GTP-U
 
@@ -312,7 +357,7 @@ These modes of operation are supported:
 *  Reception of NR-PSS/NR-SSS
 *  NR-PBCH supports multiple SSBs and flexible periodicity
    - RSRP measurement for the strongest SSB
-   - RSRP measurement for neighboring cell at same SSB frequency with serving cell
+   - RSRP measurement for up to 8 neighboring cell at same SSB frequency with serving cell
 *  Reception of NR-PDCCH (including reception of DCI, polar decoding, de-scrambling, de-modulation, RB de-mapping, etc)
    - common search space configured by MIB
    - user-specific search space configured by RRC
@@ -356,9 +401,9 @@ These modes of operation are supported:
 * NR-PRACH
    - Formats 0,1,2,3, A1-A3, B1-B3
 * NTN
-   - TA adjustemt based on ntn-Config-r17 information
-   - Different TA adjustemt algorithms between SIB19 receptions:
-      - Autonomous TA adjustemt based on DL time tracking
+   - TA adjustment based on ntn-Config-r17 information
+   - Different TA adjustment algorithms between SIB19 receptions:
+      - Autonomous TA adjustment based on DL time tracking
       - Standard compliant epoch time based TA adjustment including orbital propagation
    - DL Doppler compensation based on ntn-Config-r17 information
    - UL Doppler pre-compensation based on ntn-Config-r17 information and residual DL FO estimation
@@ -395,9 +440,12 @@ These modes of operation are supported:
       - Fallback not supported
 * DCI processing
    - format 10 (RA-RNTI, C-RNTI, SI-RNTI, TC-RNTI)
+   - format 10 with P-RNTI
    - format 00 (C-RNTI, TC-RNTI)
    - format 11 (C-RNTI)
    - format 01 (C-RNTI)
+* Paging monitoring and reception
+   - PF/PO-based paging PDCCH monitoring in IDLE/non-connected states
 * UCI processing
    - ACK/NACK processing
    - Scheduling request procedures
@@ -461,7 +509,8 @@ These modes of operation are supported:
    - RRCReestablishmentRequest/RRC Reestablishment/Reestablishment complete
    - Support for master cell group configuration
    - Reception of UECapabilityEnquiry, encoding and transmission of UECapability
-   - Support for measurement report of Event A2/A3
+   - Support for measurement report type of Event A2/A3 and periodical (only RSRP in the report)
+   - Paging: PCCH reception
 * NTN according to 38.331 Rel.17
    - Reception of ntn-Config-r17 from SIB19 or reconfigurationWithSync
    - Handling of ntn-UlSyncValidityDuration-r17 in SIB19
@@ -472,7 +521,8 @@ These modes of operation are supported:
 
 * Transfer of NAS messages between the AMF and the UE supporting the UE registration with the core network and the PDU session establishment according to 24.501 Rel.16
 * 5GMM (5G Mobility Management) messages:
-  - Service Request/Accept/Reject (enc/dec library only)
+  - Service Request/Accept/Reject (Network-triggered Service Request TS 23.502 §4.2.3.3,
+    UE-Triggered Service Request after paging, TS 23.502 §4.2.3.2)
   - Identity Request/Response
   - Authentication Request/Response
   - Security Mode Command/Complete

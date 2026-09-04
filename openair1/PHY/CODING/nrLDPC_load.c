@@ -32,14 +32,17 @@ int load_LDPClib(char *version, ldpc_interface_t *itf)
   loader_shlibfunc_t shlib_fdesc[] = {{.fname = "LDPCinit"},
                                       {.fname = "LDPCshutdown"},
                                       {.fname = "LDPCdecoder"},
-                                      {.fname = "LDPCencoder"}};
+                                      {.fname = "LDPCencoder"},
+                                      {.fname = "LDPCencoder32"}};
   int ret;
   ret = load_module_version_shlib(libname, version, shlib_fdesc, sizeofArray(shlib_fdesc), NULL);
   AssertFatal((ret >= 0), "Error loading ldpc decoder");
+  LOG_I(NR_PHY,"loading LDPC version %s\n",version);
   itf->LDPCinit = (LDPC_initfunc_t *)shlib_fdesc[0].fptr;
   itf->LDPCshutdown = (LDPC_shutdownfunc_t *)shlib_fdesc[1].fptr;
   itf->LDPCdecoder = (LDPC_decoderfunc_t *)shlib_fdesc[2].fptr;
   itf->LDPCencoder = (LDPC_encoderfunc_t *)shlib_fdesc[3].fptr;
+  itf->LDPCencoder32 = (LDPC_encoderfunc32_t *)shlib_fdesc[4].fptr;
 
   AssertFatal(itf->LDPCinit() == 0, "error starting LDPC library %s %s\n", libname, version);
 

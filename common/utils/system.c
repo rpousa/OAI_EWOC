@@ -251,7 +251,7 @@ void threadCreate(pthread_t* t, void * (*func)(void*), void * param, char* name,
                 priority,
                 sched_get_priority_min(SCHED_OAI),
                 sched_get_priority_max(SCHED_OAI));
-    AssertFatal(priority <= sched_get_priority_max(SCHED_OAI), "");
+    AssertFatal(priority <= sched_get_priority_max(SCHED_OAI), "not possible priority %d", priority);
     struct sched_param sparam = {0};
     sparam.sched_priority = priority;
     ret = pthread_attr_setschedparam(&attr, &sparam);
@@ -263,6 +263,15 @@ void threadCreate(pthread_t* t, void * (*func)(void*), void * param, char* name,
     LOG_I(UTIL, "%s() for %s: creating thread (no affinity, default priority)\n", __func__, name);
   }
 
+  if (affinity != -1) {
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    CPU_SET(affinity, &cpuset);
+    /* Pin before create; post-create setaffinity can hang on a busy RT thread. */
+    ret = pthread_attr_setaffinity_np(&attr, sizeof(cpu_set_t), &cpuset);
+    AssertFatal(ret == 0, "Error in pthread_attr_setaffinity_np(): ret: %d, errno: %d\n", ret, errno);
+  }
+
   ret=pthread_create(t, &attr, func, param);
   AssertFatal(ret == 0, "Error in pthread_create(): ret: %d, errno: %d\n", ret, errno);
 
@@ -272,13 +281,6 @@ void threadCreate(pthread_t* t, void * (*func)(void*), void * param, char* name,
   ret = pthread_setname_np(*t, short_name);
   AssertFatal(ret == 0, "Error in pthread_setname_np(): ret: %d, errno: %d\n", ret, errno);
 
-  if (affinity != -1 ) {
-    cpu_set_t cpuset;
-    CPU_ZERO(&cpuset);
-    CPU_SET(affinity, &cpuset);
-    ret = pthread_setaffinity_np(*t, sizeof(cpu_set_t), &cpuset);
-    AssertFatal(ret == 0, "Error in pthread_getaffinity_np(): ret: %d, errno: %d", ret, errno);
-  }
   pthread_attr_destroy(&attr);
 }
 

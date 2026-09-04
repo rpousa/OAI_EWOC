@@ -31,11 +31,11 @@ void nr_ul_ri_tpmi_select_default(gNB_MAC_INST *mac, nr_ul_candidate_t *cands, i
   }
 }
 
-static NR_tda_info_t *get_new_tda_for_srs(gNB_MAC_INST *nrmac, const NR_tda_info_t *tda_info)
+static NR_tda_info_t *get_new_tda_for_srs(nr_cell_sched_t *cell, const NR_tda_info_t *tda_info)
 {
   // by current design, the next TDA would be the one for SRS with one less symbol
-  NR_tda_info_t *next = seq_arr_next(&nrmac->ul_tda, tda_info);
-  if (next == seq_arr_end(&nrmac->ul_tda))
+  NR_tda_info_t *next = seq_arr_next(&cell->ul_tda, tda_info);
+  if (next == seq_arr_end(&cell->ul_tda))
     return NULL;
   AssertFatal(next->k2 == tda_info->k2,
               "K2 in TDA information for SRS %ld doesn't match with current one %ld\n",
@@ -58,6 +58,7 @@ static NR_tda_info_t *get_new_tda_for_srs(gNB_MAC_INST *nrmac, const NR_tda_info
  * TDA when it is among the valid candidates for this slot; otherwise falls back to the
  * per-beam best TDA with TBS refit. */
 int nr_ul_tda_select_default(gNB_MAC_INST *mac,
+                             nr_cell_sched_t *cell,
                              nr_ul_candidate_t *cands,
                              int n_cand,
                              frame_t sched_frame,
@@ -65,11 +66,11 @@ int nr_ul_tda_select_default(gNB_MAC_INST *mac,
                              int k2)
 {
   const NR_tda_info_t *tda_list = NULL;
-  int n_tda = get_num_ul_tda(mac, sched_slot, k2, &tda_list);
+  int n_tda = get_num_ul_tda(mac, cell, sched_slot, k2, &tda_list);
   if (n_tda == 0)
     return 0;
 
-  NR_ServingCellConfigCommon_t *scc = mac->common_channels[0].ServingCellConfigCommon;
+  NR_ServingCellConfigCommon_t *scc = cell->common_channels.ServingCellConfigCommon;
 
   int n_valid = 0;
   FOR_EACH_CANDIDATE(cand, cands, n_cand)
@@ -79,14 +80,14 @@ int nr_ul_tda_select_default(gNB_MAC_INST *mac,
 
     int beam = cand->alloc_beam_idx;
     int rb_start = 0, rb_len = cand->bwp_size;
-    const NR_tda_info_t *best = get_best_ul_tda(mac, beam, tda_list, n_tda, sched_frame, sched_slot, &rb_start, &rb_len);
+    const NR_tda_info_t *best = get_best_ul_tda(cell, beam, tda_list, n_tda, sched_frame, sched_slot, &rb_start, &rb_len);
     DevAssert(best->valid_tda);
 
     if (cand->is_retx) {
       /* Try to reuse the original TDA if it is among the valid candidates for this slot */
       const NR_sched_pusch_t *retInfo = &cand->UE->UE_sched_ctrl.ul_harq_processes[cand->retx_harq_pid].sched_pusch;
       /* Check exact TDA index, not just K2 — same K2 doesn't guarantee valid symbols in mixed slots */
-      const NR_tda_info_t *orig = seq_arr_at(&mac->ul_tda, retInfo->time_domain_allocation);
+      const NR_tda_info_t *orig = seq_arr_at(&cell->ul_tda,retInfo->time_domain_allocation);
       ptrdiff_t offset = orig - tda_list;
       if (offset >= 0 && offset < n_tda) {
         /* Original TDA is valid — reuse it directly */
@@ -98,7 +99,7 @@ int nr_ul_tda_select_default(gNB_MAC_INST *mac,
         continue;
       }
       /* Original TDA not available — try the per-beam best TDA with TBS refit */
-      int tda = seq_arr_dist(&mac->ul_tda, seq_arr_front(&mac->ul_tda), best);
+      int tda = seq_arr_dist(&cell->ul_tda, seq_arr_front(&cell->ul_tda),best);
       AssertFatal(tda >= 0 && tda < 16, "illegal TDA index %d\n", tda);
       uint16_t needed = check_ul_retx_feasibility(cand, tda, best, scc, cand->bwp_size);
       if (needed == 0) {
@@ -113,12 +114,12 @@ int nr_ul_tda_select_default(gNB_MAC_INST *mac,
     } else {
       NR_tda_info_t *srs_best = NULL;
       if (cand->sched_srs > 0) {
-        srs_best = get_new_tda_for_srs(mac, best);
+        srs_best = get_new_tda_for_srs(cell, best);
         if (!srs_best)
           cand->sched_srs = 0;
       }
       const NR_tda_info_t *new_best = srs_best ? srs_best : best;
-      int tda = seq_arr_dist(&mac->ul_tda, seq_arr_front(&mac->ul_tda), new_best);
+      int tda = seq_arr_dist(&cell->ul_tda, seq_arr_front(&cell->ul_tda),new_best);
       AssertFatal(tda >= 0 && tda < 16, "illegal TDA index %d\n", tda);
       cand->sched_pusch.time_domain_allocation = tda;
       cand->sched_pusch.tda_info = *new_best;
@@ -187,9 +188,9 @@ int nr_ul_beam_select_default(NR_beam_info_t *beam_info,
   return n_valid;
 }
 
-void nr_ul_mcs_select_default(const gNB_MAC_INST *mac, nr_ul_candidate_t *candidates, int n_candidates)
+void nr_ul_mcs_select_default(const nr_cell_sched_t *cell, nr_ul_candidate_t *candidates, int n_candidates)
 {
-  const NR_bler_options_t *bo = &mac->ul_bler;
+  const NR_bler_options_t *bo = &cell->ul_bler;
   FOR_EACH_CANDIDATE(cand, candidates, n_candidates)
   {
     int mcs;
@@ -227,6 +228,29 @@ static int compare_ul_pf_rb_ptrs(const void *a, const void *b)
   return (wa < wb) - (wa > wb);
 }
 
+static void nr_ul_port_select_default(const nr_ul_sched_params_t *params, nr_ul_candidate_t *cand)
+{
+  if (cand->is_retx) {
+    const NR_sched_pusch_t *retInfo = &cand->UE->UE_sched_ctrl.ul_harq_processes[cand->retx_harq_pid].sched_pusch;
+    cand->sched_pusch.dmrs_info = retInfo->dmrs_info;
+  } else {
+    int layers = cand->sched_pusch.nrOfLayers;
+    NR_UE_UL_BWP_t *current_BWP = &cand->UE->current_UL_BWP;
+    NR_tda_info_t *tda_info = &cand->sched_pusch.tda_info;
+    uint8_t cdm_groups;
+    if (current_BWP->transform_precoding == NR_PUSCH_Config__transformPrecoder_enabled) {
+      cdm_groups = 2;
+    } else if (current_BWP->dci_format == NR_UL_DCI_FORMAT_0_0) {
+      cdm_groups = (tda_info->nrOfSymbols <= 2) ? 1 : 2;
+    } else {
+      cdm_groups = (layers < 3) ? 1 : 2;
+    }
+    cand->sched_pusch.dmrs_info.dmrs_ports = (uint16_t)((1 << layers) - 1);
+    cand->sched_pusch.dmrs_info =
+        get_ul_dmrs_params(params->scc, current_BWP, tda_info, layers, cand->sched_pusch.dmrs_info.dmrs_ports, cdm_groups);
+  }
+}
+
 int nr_ul_proportional_fair(const nr_ul_sched_params_t *params, nr_ul_candidate_t *candidates, int n_candidates)
 {
   int n_scheduled = 0;
@@ -246,6 +270,8 @@ int nr_ul_proportional_fair(const nr_ul_sched_params_t *params, nr_ul_candidate_
     if (!cand->is_retx)
       continue;
 
+    nr_ul_port_select_default(params, cand);
+
     int rbStart;
     uint16_t *vrb_map = params->vrb_map_UL[cand->alloc_beam_idx];
     int block_len = find_largest_free_block(vrb_map, cand->alloc_slbitmap, cand->bwp_start, cand->bwp_size, &rbStart);
@@ -261,6 +287,8 @@ int nr_ul_proportional_fair(const nr_ul_sched_params_t *params, nr_ul_candidate_
     if (cand->is_retx || !cand->sched_inactive)
       continue;
 
+    nr_ul_port_select_default(params, cand);
+
     uint16_t *vrb_map = params->vrb_map_UL[cand->alloc_beam_idx];
     int rbStart;
     int block_len = find_largest_free_block(vrb_map, cand->alloc_slbitmap, cand->bwp_start, cand->bwp_size, &rbStart);
@@ -270,37 +298,35 @@ int nr_ul_proportional_fair(const nr_ul_sched_params_t *params, nr_ul_candidate_
     COMMIT_UL_ALLOC(params, cand, rbStart, min_rb, cand->sched_pusch.mcs, n_scheduled);
   }
 
-  /* Phase 3: New data UEs — PF priority order, largest free block */
-  for (int j = 0; j < n_active; j++) {
+  /* BW is the same across all beams, just use beam 0 */
+  int max_rbSize = params->n_rb_avail[0];
+  DevAssert(max_rbSize >= min_rb);
+  int n_remain_ue = params->max_num_ue - n_scheduled;
+  // share RBs fairly between remaining allocatable UEs
+  int n_rb_per_ue = max(min_rb, max_rbSize / n_remain_ue);
+
+  /* Phase 3: New data UEs — PF priority order, count number of RBs required,
+   * store number of excess RBs. Check two additional UEs in case the first
+   * ones cannot be allocated (DCI alloc fail). This is only necessary because
+   * we use type-1 allocate; if we used type-0, we could fix the UEs, then give
+   * iteratively the RBs as needed*/
+  uint16_t rbs_ue[MAX_MOBILES_PER_GNB] = {0};
+  int excess_total_rbs = max_rbSize;
+  for (int j = 0, n = 0; j < n_active && n < n_remain_ue + 2; j++) {
     nr_ul_candidate_t *cand = order[j];
     if (cand->is_retx || cand->sched_inactive)
       continue;
 
-    int block_start;
-    uint16_t *vrb_map = params->vrb_map_UL[cand->alloc_beam_idx];
-    int block_len = find_largest_free_block(vrb_map, cand->alloc_slbitmap, cand->bwp_start, cand->bwp_size, &block_start);
-    if (block_len < min_rb)
-      continue;
+    nr_ul_port_select_default(params, cand);
 
-    uint16_t rbSize = block_len;
-    uint8_t mcs = cand->sched_pusch.mcs;
-
-    if (cand->pcmax != 0 || cand->ph != 0) {
-      nr_ul_phr_advice_t advice;
-      if (!nr_ul_check_phr(params, cand, rbSize, mcs, &advice)) {
-        rbSize = advice.max_mcs_min_rb.rbSize;
-        mcs = advice.max_mcs_min_rb.mcs;
-      }
-    }
-
+    // calculate the number of RBs that UE would like to have. Power limitation
+    // is later
+    NR_pusch_dmrs_t dmrs_info = cand->sched_pusch.dmrs_info;
     NR_UE_UL_BWP_t *current_BWP = &cand->UE->current_UL_BWP;
-    NR_pusch_dmrs_t dmrs_info =
-        get_ul_dmrs_params(params->scc, current_BWP, &cand->sched_pusch.tda_info, cand->sched_pusch.nrOfLayers);
     uint16_t Rt;
     uint8_t Qt;
-    update_ul_ue_R_Qm(mcs, current_BWP->mcs_table, current_BWP->pusch_Config, &Rt, &Qt);
+    update_ul_ue_R_Qm(cand->sched_pusch.mcs, current_BWP->mcs_table, current_BWP->pusch_Config, &Rt, &Qt);
     uint32_t tb_size;
-    uint16_t final_rbSize;
     nr_find_nb_rb(Qt,
                   Rt,
                   current_BWP->transform_precoding,
@@ -309,11 +335,55 @@ int nr_ul_proportional_fair(const nr_ul_sched_params_t *params, nr_ul_candidate_
                   dmrs_info.N_PRB_DMRS * dmrs_info.num_dmrs_symb,
                   cand->pending_bytes,
                   min_rb,
-                  rbSize,
+                  max_rbSize,
                   &tb_size,
-                  &final_rbSize);
+                  &rbs_ue[j]);
+    if (n < n_remain_ue) {
+      // for the first n_remain_ue UEs: account number of RBs
+      // so excess RBs not used by some UEs could be given to others
+      excess_total_rbs -= min(rbs_ue[j], n_rb_per_ue);
+      excess_total_rbs = max(excess_total_rbs, 0);
+    }
+    n++;
+  }
 
-    COMMIT_UL_ALLOC(params, cand, block_start, final_rbSize, mcs, n_scheduled);
+  /* allocate up to all UEs checked above */
+  for (int j = 0; j < n_active; j++) {
+    nr_ul_candidate_t *cand = order[j];
+    if (cand->is_retx || cand->sched_inactive || rbs_ue[j] == 0)
+      continue;
+
+    // give every UE its chunk of data. If total_rbs indicates excess RBs, give
+    // additionally as appropriate.
+    int rb_req = min(rbs_ue[j], n_rb_per_ue);
+    int excess_req = max(rbs_ue[j] - rb_req, 0);
+    uint8_t mcs = cand->sched_pusch.mcs;
+    // check if power is enough for rb_req + excess_req if actually received a
+    // PHR (PCmax > 0, otherwise nothing is scheduled)
+    nr_ul_phr_advice_t advice;
+    if (cand->pcmax != 0 && !nr_ul_check_phr(params, cand, rb_req + excess_req, mcs, &advice)) {
+      int lim_rb = advice.max_mcs_min_rb.rbSize;
+      if (lim_rb > rb_req) {
+        // enough for rb_req, but not excess_req
+        excess_req = lim_rb - rb_req;
+      } else {
+        // not enough for rb_req
+        excess_req = 0;
+        rb_req = lim_rb;
+      }
+      mcs = advice.max_mcs_min_rb.mcs;
+    }
+    if (excess_total_rbs > 0 && excess_req > 0) {
+      int excess_ack = min(excess_total_rbs, excess_req);
+      rb_req += excess_ack;
+      excess_total_rbs -= excess_ack;
+      DevAssert(excess_total_rbs >= 0);
+    }
+    int rbStart, rbSize;
+    uint16_t *vrb_map = params->vrb_map_UL[cand->alloc_beam_idx];
+    if (!get_rb_alloc(min_rb, rb_req, cand->bwp_start, cand->bwp_size, vrb_map, cand->alloc_slbitmap, &rbStart, &rbSize))
+      continue;
+    COMMIT_UL_ALLOC(params, cand, rbStart, rbSize, mcs, n_scheduled);
   }
 
   return n_scheduled;

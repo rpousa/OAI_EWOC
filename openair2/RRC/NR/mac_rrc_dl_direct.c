@@ -81,11 +81,31 @@ static void dl_rrc_message_transfer_direct(sctp_assoc_t assoc_id, const f1ap_dl_
 static void f1_paging_transfer_direct(sctp_assoc_t assoc_id, const f1ap_paging_t *paging)
 {
   AssertFatal(assoc_id == -1, "illegal assoc_id %d\n", assoc_id);
-  /** @todo Build PCCH-Message (Paging) at DU per TS 38.331 §5.3.2; apply
-   *  RRC padding per §8.5; deliver as RLC SDU per §8.2. For each
-   *  cell in Paging Cell List that belongs to this DU, queue for MAC;
-   *  MAC schedules at PF/PO per TS 38.304 §7. */
-  (void)paging;
+  f1_paging(paging);
+}
+
+static void trp_information_request_direct(sctp_assoc_t assoc_id, const f1ap_trp_information_req_t *req)
+{
+  AssertFatal(assoc_id == -1, "illegal assoc_id %d\n", assoc_id);
+  trp_information_request(req);
+}
+
+static void positioning_information_request_direct(sctp_assoc_t assoc_id, const f1ap_positioning_information_req_t *req)
+{
+  AssertFatal(assoc_id == -1, "illegal assoc_id %d\n", assoc_id);
+  positioning_information_request(req);
+}
+
+static void positioning_activation_request_direct(sctp_assoc_t assoc_id, const f1ap_positioning_activation_req_t *req)
+{
+  AssertFatal(assoc_id == -1, "illegal assoc_id %d\n", assoc_id);
+  positioning_activation_request(req);
+}
+
+static void positioning_measurement_request_direct(sctp_assoc_t assoc_id, const f1ap_positioning_measurement_req_t *req)
+{
+  AssertFatal(assoc_id == -1, "illegal assoc_id %d\n", assoc_id);
+  positioning_measurement_request(req);
 }
 
 void mac_rrc_dl_direct_init(nr_mac_rrc_dl_if_t *mac_rrc)
@@ -102,4 +122,8 @@ void mac_rrc_dl_direct_init(nr_mac_rrc_dl_if_t *mac_rrc)
   mac_rrc->ue_context_release_command = ue_context_release_command_direct;
   mac_rrc->dl_rrc_message_transfer = dl_rrc_message_transfer_direct;
   mac_rrc->paging_transfer = f1_paging_transfer_direct;
+  mac_rrc->trp_information_request = trp_information_request_direct;
+  mac_rrc->positioning_information_request = positioning_information_request_direct;
+  mac_rrc->positioning_activation_request = positioning_activation_request_direct;
+  mac_rrc->positioning_measurement_request = positioning_measurement_request_direct;
 }

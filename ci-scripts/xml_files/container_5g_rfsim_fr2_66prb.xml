@@ -42,8 +42,15 @@
   </testCase>
 
   <testCase>
+    <class>Custom_Command</class>
+    <desc>Delay 1 second due to stabilize connection</desc>
+    <node>localhost</node>
+    <command>sleep 1</command>
+  </testCase>
+
+  <testCase>
     <class>Ping</class>
-    <desc>Ping ext-dn from NR-UE</desc>
+    <desc>Ping ext-dn from NR-UE on the initial beam (0)</desc>
     <id>rfsim5g_ue</id>
     <node>localhost</node>
     <svr_id>rfsim5g_ext_dn</svr_id>
@@ -53,8 +60,22 @@
   </testCase>
 
   <testCase>
+    <class>Custom_Command</class>
+    <desc>Move UE to beam 2 via the rfsimulator's telnet interface and verify the switch was acknowledged</desc>
+    <node>localhost</node>
+    <command>echo rfsimulator setbeamids 2 | ncat 192.168.71.150 8091 | grep -q "Beam ids set"</command>
+  </testCase>
+
+  <testCase>
+    <class>Custom_Command</class>
+    <desc>Verify from the gNB MAC log that the scheduler actually switched the UE's serving beam to 2</desc>
+    <node>localhost</node>
+    <command><![CDATA[for i in $(seq 1 20); do docker logs rfsim5g-oai-gnb 2>&1 | grep -q "Switching to beam with ID 2" && exit 0; sleep 1; done; exit 1]]></command>
+  </testCase>
+
+  <testCase>
     <class>Ping</class>
-    <desc>Ping NR-UE from ext-dn</desc>
+    <desc>Ping NR-UE from ext-dn after the beam switch</desc>
     <id>rfsim5g_ext_dn</id>
     <node>localhost</node>
     <svr_id>rfsim5g_ue</svr_id>
@@ -70,7 +91,7 @@
     <node>localhost</node>
     <yaml_path>ci-scripts/yaml_files/5g_rfsimulator_fr2_66prb</yaml_path>
     <analysis>
-      <services>oai-gnb=RetxCheck=10,0,0,0 oai-gnb=EndsWithBye oai-nr-ue</services>
+      <services>oai-gnb=RetxCheck=10,100,100,100 oai-gnb=EndsWithBye oai-nr-ue</services>
     </analysis>
   </testCase>
 

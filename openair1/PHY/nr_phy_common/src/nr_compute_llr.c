@@ -2757,11 +2757,12 @@ static void nr_construct_HhH_elements(c16_t *conjch00_ch00,
 // MMSE Rx function: nr_mmse_2layers()
 uint8_t nr_mmse_2layers(c16_t **rxdataF_comp,
                         uint32_t buffer_length,
+                        uint32_t pdsch_buf_size_max,
                         int nb_rx_ant,
                         int nb_layers,
-                        c16_t ch_mag[nb_layers][buffer_length],
-                        c16_t ch_magb[nb_layers][buffer_length],
-                        c16_t ch_magc[nb_layers][buffer_length],
+                        c16_t ch_mag[nb_layers][pdsch_buf_size_max],
+                        c16_t ch_magb[nb_layers][pdsch_buf_size_max],
+                        c16_t ch_magc[nb_layers][pdsch_buf_size_max],
                         c16_t ch_estimates_ext[][nb_rx_ant][buffer_length],
                         unsigned short nb_rb,
                         unsigned char mod_order,
@@ -2924,7 +2925,7 @@ uint8_t nr_mmse_2layers(c16_t **rxdataF_comp,
 
   // Add noise_var such that: H^h * H + noise_var * I
   if (noise_var != 0) {
-    simde__m128i nvar_128i = simde_mm_set1_epi32(noise_var);
+    simde__m128i nvar_128i = simde_mm_set1_epi32(noise_var >> shift);
     simde__m128i *af_mf_00_128i = (simde__m128i *)af_mf_00;
     simde__m128i *af_mf_11_128i = (simde__m128i *)af_mf_11;
     for (int k = 0; k < 3 * nb_rb_0; k++) {

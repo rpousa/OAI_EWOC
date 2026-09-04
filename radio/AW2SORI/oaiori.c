@@ -410,7 +410,8 @@ int aw2s_startstreaming(openair0_device_t *device)
     printf("ORI_ObjectStateModify: %s\n", ORI_Result_Print(RE_result));
   }
 
-  device->fhstate.active = 1;
+  eth_state_t *eth = device->priv;
+  eth->fhstate.active = 1;
   return (0);
 }
 
@@ -424,8 +425,6 @@ int aw2s_oriinit(openair0_device_t *device)
   ORI_Object_s * 	objects[100];
   uint32_t 		numObjects;
   uint32_t		i;
-
-  eth_params_t *eth_params = device->eth_params;
 
   openair0_config_t *openair0_cfg = device->openair0_cfg;
 
@@ -448,8 +447,8 @@ int aw2s_oriinit(openair0_device_t *device)
   ori->indicationCallback = cb;
 	
   /* Connect... */
-  printf("Trying to connect to AW2S device on %s : %d\n",eth_params->remote_addr, eth_params->remote_portc);
-  result = ORI_Connect(ori, eth_params->remote_addr, eth_params->remote_portc, 3000, 0);
+  printf("Trying to connect to AW2S device on %s : %d\n", device->eth_params.remote_addr, device->eth_params.remote_portc);
+  result = ORI_Connect(ori, device->eth_params.remote_addr, device->eth_params.remote_portc, 3000, 0);
   if(result != ORI_Result_SUCCESS)
     {
       printf("ORI_Connect failed with error: %s\n", ORI_Result_Print(result));
@@ -785,11 +784,11 @@ int aw2s_oriinit(openair0_device_t *device)
   ORI_Result_e linkParamResult[3];
 
   ORI_Object_s *link= ORI_FindObject(ori, ORI_ObjectType_ORILink, 0, NULL);
-  linkParams.ORILink.AWS_remoteUdpPort = eth_params->my_portd;
+  linkParams.ORILink.AWS_remoteUdpPort = device->eth_params.my_portd;
 
 
-  if (get_mac_addr(eth_params->local_if_name,linkParams.ORILink.AWS_remoteMAC) < 0) return(-1);
-  inet_pton(AF_INET,eth_params->my_addr,(struct in_addr*)linkParams.ORILink.AWS_remoteIP);
+  if (get_mac_addr(device->eth_params.local_if_name,linkParams.ORILink.AWS_remoteMAC) < 0) return(-1);
+  inet_pton(AF_INET,device->eth_params.my_addr,(struct in_addr*)linkParams.ORILink.AWS_remoteIP);
   result = ORI_ObjectParamModify(ori,link,linkParams,linkParamList,3,linkParamResult,&RE_result);
   if(result != ORI_Result_SUCCESS)
     {
@@ -884,9 +883,10 @@ int aw2s_oriinit(openair0_device_t *device)
   return 0;
 }
 
-int transport_init(openair0_device_t *device, openair0_config_t *openair0_cfg, eth_params_t *eth_params)
+int transport_init(openair0_device_t *device, openair0_config_t *openair0_cfg)
 {
   printf("Initializing AW2S (%p,%p,%p)\n",aw2s_oriinit,aw2s_oricleanup,aw2s_startstreaming); 
+  device->host_type = RAU_HOST;
   device->thirdparty_init           = aw2s_oriinit;
   device->thirdparty_cleanup        = aw2s_oricleanup;
   device->thirdparty_startstreaming = aw2s_startstreaming;
