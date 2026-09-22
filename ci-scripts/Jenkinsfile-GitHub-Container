@@ -48,11 +48,11 @@ def nsaTDDB200Status = ''
 def saTDDB200Status = ''
 def phytestLDPCoffloadStatus = ''
 def saAW2SStatus = ''
-def cn5gCOTSUESanityCheck = ''
 def saAERIALStatus = ''
 def saMultiAntennaStatus = ''
 def saFHI72Status = ''
 def saFHI72MplaneStatus = ''
+def saORUStatus = ''
 def saHandoverStatus = ''
 def saAERIALOAIUEStatus = ''
 def saOAIUEStatus = ''
@@ -644,7 +644,7 @@ pipeline {
           }
         }
         stage ("gNB-N300-Timing-Phytest-LDPC") {
-          when { expression {do5Gtest} }
+          when { expression {do5Gtest || do5GUeTest} }
           steps {
             script {
               triggerDownstreamJob ('RAN-gNB-N300-Timing-Phytest-LDPC')
@@ -708,29 +708,6 @@ pipeline {
               script {
                 currentBuild.result = 'FAILURE'
                 failingStages += saAW2SStatus
-              }
-            }
-          }
-        }
-        stage ("Sanity-Check OAI-CN5G") {
-          when { expression {do5Gtest} }
-          steps {
-            script {
-              triggerCN5GDownstreamJob ('OAI-CN5G-COTS-UE-Test')
-            }
-          }
-          post {
-            always {
-              script {
-                // Using a unique variable name for each test stage to avoid overwriting on a global variable
-                // due to parallel-time concurrency
-                cn5gCOTSUESanityCheck = finalizeDownstreamJob('OAI-CN5G-COTS-UE-Test')
-              }
-            }
-            failure {
-              script {
-                currentBuild.result = 'FAILURE'
-                failingStages += cn5gCOTSUESanityCheck
               }
             }
           }
@@ -823,6 +800,52 @@ pipeline {
               script {
                 currentBuild.result = 'FAILURE'
                 failingStages += saFHI72MplaneStatus
+              }
+            }
+          }
+        }
+        stage ("SA-FHI72-FR2-CN5G") {
+          when { expression {do5Gtest} }
+          steps {
+            script {
+              triggerDownstreamJob ('RAN-SA-FHI72-FR2-CN5G')
+            }
+          }
+          post {
+            always {
+              script {
+                // Using a unique variable name for each test stage to avoid overwriting on a global variable
+                // due to parallel-time concurrency
+                saFHI72FR2Status = finalizeDownstreamJob('RAN-SA-FHI72-FR2-CN5G')
+              }
+            }
+            failure {
+              script {
+                currentBuild.result = 'FAILURE'
+                failingStages += saFHI72FR2Status
+              }
+            }
+          }
+        }
+        stage ("SA-ORU-CN5G") {
+          when { expression {do5Gtest} }
+          steps {
+            script {
+              triggerDownstreamJob ('RAN-SA-ORU-CN5G')
+            }
+          }
+          post {
+            always {
+              script {
+                // Using a unique variable name for each test stage to avoid overwriting on a global variable
+                // due to parallel-time concurrency
+                saORUStatus = finalizeDownstreamJob('RAN-SA-ORU-CN5G')
+              }
+            }
+            failure {
+              script {
+                currentBuild.result = 'FAILURE'
+                failingStages += saORUStatus
               }
             }
           }

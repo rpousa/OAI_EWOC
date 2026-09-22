@@ -19,8 +19,6 @@ int rrc_gNB_compare_ue_rnti_id(rrc_gNB_ue_context_t* c1_pP, rrc_gNB_ue_context_t
 
 RB_PROTOTYPE(rrc_nr_ue_tree_s, rrc_gNB_ue_context_s, entries, rrc_gNB_compare_ue_rnti_id);
 
-rrc_gNB_ue_context_t* rrc_gNB_allocate_new_ue_context(gNB_RRC_INST* rrc_instance_pP);
-
 rrc_gNB_ue_context_t* rrc_gNB_get_ue_context(gNB_RRC_INST* rrc_instance_pP, ue_id_t ue);
 rrc_gNB_ue_context_t* rrc_gNB_get_ue_context_by_rnti(gNB_RRC_INST* rrc_instance_pP, sctp_assoc_t assoc_id, rnti_t rntiP);
 rrc_gNB_ue_context_t* rrc_gNB_get_ue_context_by_rnti_any_du(gNB_RRC_INST* rrc_instance_pP, rnti_t rntiP);

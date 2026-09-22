@@ -20,7 +20,6 @@
 #define SDAP_HDR_UL_CTRL_PDU        (0)
 #define SDAP_HDR_LENGTH             (1)
 #define SDAP_MAX_QFI                (64)
-#define SDAP_MAP_RULE_EMPTY         (0)
 #define SDAP_NO_MAPPING_RULE        (0)
 #define SDAP_REFLECTIVE_MAPPING     (1)
 #define SDAP_RQI_HANDLING           (1)
@@ -78,18 +77,16 @@ typedef struct sdap_configuration_s {
 
 typedef struct nr_sdap_entity_s {
   ue_id_t ue_id;
-  int default_drb;
   /// sdap_tun_read_thread needs to know if we are gNB/UE, so for noS1 mode,
   /// store which one we are
   bool is_gnb;
-  bool enable_sdap;
   int pdusession_id;
   int pdusession_sock;
-  char *pdusession_if_name;
   pthread_t pdusession_thread;
   bool stop_thread;
   int qfi;
 
+  qfi2drb_t default_drb;
   qfi2drb_t qfi2drb_table[SDAP_MAX_QFI];
 
   void (*qfi2drb_map_update)(struct nr_sdap_entity_s *entity, const sdap_config_t *sdap);
@@ -98,7 +95,7 @@ typedef struct nr_sdap_entity_s {
                           const uint8_t qfi,
                           const uint8_t drb_id,
                           const uint8_t role);
-  int (*qfi2drb_map)(struct nr_sdap_entity_s *entity, uint8_t qfi);
+  const qfi2drb_t *(*qfi2drb_map)(const struct nr_sdap_entity_s *entity, uint8_t qfi);
 
   nr_sdap_ul_hdr_t (*sdap_construct_ctrl_pdu)(uint8_t qfi);
   int (*sdap_map_ctrl_pdu)(struct nr_sdap_entity_s *entity, int map_type, uint8_t dl_qfi);
@@ -117,13 +114,7 @@ typedef struct nr_sdap_entity_s {
                     const uint8_t qfi,
                     const bool rqi);
 
-  void (*rx_entity)(struct nr_sdap_entity_s *entity,
-                    int pdcp_entity,
-                    int is_gnb,
-                    int pdusession_id,
-                    ue_id_t ue_id,
-                    char *buf,
-                    int size);
+  void (*rx_entity)(struct nr_sdap_entity_s *entity, int drb_id, int is_gnb, int pdusession_id, ue_id_t ue_id, char *buf, int size);
 
   /* List of entities */
   struct nr_sdap_entity_s *next_entity;
@@ -183,8 +174,7 @@ bool nr_sdap_delete_ue_entities(ue_id_t ue_id);
  */
 void nr_reconfigure_sdap_entity(NR_SDAP_Config_t *sdap_config, ue_id_t ue_id, int pdusession_id, int drb_id);
 
-void nr_sdap_entity_update_qos_flows(ue_id_t ue_id, int pdusession_id, int drb_id, const uint8_t *qfis, int n_qfis);
+void nr_sdap_entity_update_qos_flows(ue_id_t ue_id, sdap_config_t *sdap);
 
 void set_qfi(uint8_t qfi, uint8_t pduid, ue_id_t ue_id);
-void remove_ip_if(nr_sdap_entity_t *entity);
 #endif

@@ -34,6 +34,11 @@ int oai_nfapi_nr_srs_indication(nfapi_nr_srs_indication_t *ind)
   UNUSED(ind);
   return (0);
 }
+int oai_nfapi_nr_srs_toa_vendor_ext_indication(nfapi_nr_srs_toa_vendor_ext_indication_t *ind)
+{
+  UNUSED(ind);
+  return (0);
+}
 int oai_nfapi_nr_uci_indication(nfapi_nr_uci_indication_t *ind)
 {
   UNUSED(ind);
@@ -67,4 +72,8 @@ void configure_nr_nfapi_pnf(char *vnf_ip_addr, int vnf_p5_port, char *pnf_ip_add
 void configure_nr_nfapi_vnf(eth_params_t params)
 {
   UNUSED(params);
+}
+
+void trs_freq_correction(PHY_VARS_NR_UE *ue, int cfo)
+{
 }

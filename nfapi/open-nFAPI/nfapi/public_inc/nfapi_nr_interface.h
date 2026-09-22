@@ -64,7 +64,8 @@ typedef enum {
   NFAPI_NR_SRS_BEAMMANAGEMENT = 0,
   NFAPI_NR_SRS_CODEBOOK = 1,
   NFAPI_NR_SRS_NONCODEBOOK = 2,
-  NFAPI_NR_SRS_ANTENNASWITCH = 3
+  NFAPI_NR_SRS_ANTENNASWITCH = 3,
+  NFAPI_NR_SRS_POSITIONING = 4
 } nfapi_nr_srs_usage_e;
 
 /*! \brief Encodes an NFAPI P5 message to a buffer

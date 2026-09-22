@@ -134,7 +134,7 @@ Alternatively, you can use the config files `ci-scripts/conf_files/gnb-cucp.sa.f
 
 ### 2.2 Steps to Run the Split in rfsimulator with OAI UE
 
-Note: A 5G core must be running at this point. Steps to start the OAI 5G core can be found [in the oai-cn5g-fed repository](https://gitlab.eurecom.fr/oai/cn5g/oai-cn5g-fed/-/blob/master/docs/DEPLOY_HOME.md) or [here](../NR_SA_Tutorial_OAI_CN5G.md).
+Note: A 5G core must be running at this point. Steps to start the OAI 5G core can be found [in the oai-cn5g-fed repository](https://github.com/openairinterface/oai-cn5g-fed/blob/develop/docs/DEPLOY_HOME.md) or [here](../NR_SA_Tutorial_OAI_CN5G.md).
 
 0. Open wireshark to capture the E1AP messages. You might set the capture filter
    to `sctp` to limit the number of captured packages.

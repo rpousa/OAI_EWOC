@@ -26,9 +26,8 @@ class TestAnalysis(unittest.TestCase):
 		rtsf = "datalog_rt_stats.100.2x2.yaml"
 		l1f = "tests/analysis/gnb_phytest.success.nrL1.log"
 		macf = "tests/analysis/gnb_phytest.success.nrMAC.log"
-		status, s = cls_analysis.Analysis.analyze_rt_stats(rtsf, l1f, macf)
+		status, s = cls_analysis.Analysis.analyze_rt_stats(rtsf, [l1f, macf])
 		self.assertTrue(status)
-		self.assertEqual(s['Title'], "Processing Time (us) from datalog_rt_stats.100.2x2.yaml")
 		self.assertEqual(s['ColNames'], ["Metric", "Average; Max; Count", "Average vs Reference Deviation (Reference Value; Acceptability Deviation Threshold)"])
 		with open(rtsf, 'r') as f:
 			rt_stats = yaml.load(f, Loader=yaml.FullLoader)
@@ -46,7 +45,6 @@ class TestAnalysis(unittest.TestCase):
 		self.assertEqual(s['Data']['L1 Tx processing'], ['476', '872', '102933', '1.00'])
 		self.assertEqual(s['Data']['DLSCH encoding'], ['216', '544', '77201', '1.08'])
 		self.assertEqual(s['Data']['L1 Rx processing'], ['488', '868', '38598', '0.92'])
-		self.assertEqual(s['Data']['UL Indication'], ['1', '10', '38598', '0.76'])
 		self.assertEqual(s['Data']['Slot Indication'], ['18', '94', '128667', '1.38'])
 		self.assertEqual(s['Data']['PUSCH inner-receiver'], ['307', '530', '25730', '0.85'])
 		self.assertEqual(s['Data']['feprx'], ['169', '310', '38600', '1.12'])

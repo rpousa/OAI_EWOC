@@ -18,6 +18,7 @@
 #include "common/platform_types.h"
 #include "openair2/LAYER2/NR_MAC_gNB/nr_mac_gNB.h"
 #include "openair2/LAYER2/nr_rlc/nr_rlc_configuration.h"
+#include "openair2/LAYER2/NR_MAC_COMMON/nr_mac.h"
 struct NR_MeasurementTimingConfiguration;
 struct NR_PDSCH_TimeDomainResourceAllocationList;
 
@@ -26,17 +27,20 @@ typedef struct nr_mac_config_s nr_mac_config_t;
 typedef enum nr_srs_type_e nr_srs_type_t;
 typedef struct nr_mac_timers nr_mac_timers_t;
 typedef struct measgap_config measgap_config_t;
+typedef struct gNB_MAC_INST_s gNB_MAC_INST;
+typedef struct nr_cell_sched_s nr_cell_sched_t;
 
 void nr_rrc_config_dl_tda(NR_PDSCH_TimeDomainResourceAllocationList_t *pdsch_TimeDomainAllocationList,
                           frame_type_t frame_type,
-                          NR_TDD_UL_DL_ConfigCommon_t *tdd_UL_DL_ConfigurationCommon,
+                          const NR_TDD_UL_DL_ConfigCommon_t *tdd_UL_DL_ConfigurationCommon,
+                          int csi_symbols,
                           int len_coreset);
 void nr_rrc_config_ul_tda(NR_ServingCellConfigCommon_t *scc, int min_fb_delay, nr_srs_type_t do_SRS);
 NR_SearchSpace_t *rrc_searchspace_config(bool is_common,
                                          int searchspaceid,
                                          int coresetid,
                                          const int num_agg_level_candidates[NUM_PDCCH_AGG_LEVELS]);
-
+int csi_symbols_in_slot(const NR_ServingCellConfigCommon_t *scc);
 void prepare_sim_uecap(NR_UE_NR_Capability_t *cap,
                        NR_ServingCellConfigCommon_t *scc,
                        int numerology,
@@ -72,14 +76,15 @@ void add_sib_to_systeminformation(NR_SystemInformation_IEs_t *si, struct NR_Syst
 NR_SIB19_r17_t *get_SIB19_NR(const NR_ServingCellConfigCommon_t *scc);
 
 NR_CellGroupConfig_t *get_initial_cellGroupConfig(int uid,
+                                                  bool redcap,
                                                   const NR_ServingCellConfigCommon_t *scc,
-                                                  const nr_mac_config_t *configuration,
+                                                  const nr_cell_sched_t *cell,
                                                   const nr_rlc_configuration_t *default_rlc_config,
                                                   int ssb_index);
 void update_cellGroupConfig(NR_CellGroupConfig_t *cellGroupConfig,
                             const int uid,
                             const NR_UE_NR_Capability_t *uecap,
-                            const nr_mac_config_t *configuration,
+                            const nr_cell_sched_t *cell,
                             const NR_ServingCellConfigCommon_t *scc);
 int encode_cellGroupConfig(NR_CellGroupConfig_t *cellGroupConfig, uint8_t *buffer, int max_buffer_size);
 
@@ -91,6 +96,7 @@ NR_CellGroupConfig_t *get_default_secondaryCellGroup(const NR_ServingCellConfigC
                                                      int scg_id,
                                                      int servCellIndex,
                                                      const nr_mac_config_t *configuration,
+                                                     const nr_cell_sched_t *cell,
                                                      int uid,
                                                      int ssb_index);
 
@@ -108,24 +114,22 @@ NR_RLC_BearerConfig_t *get_DRB_RLC_BearerConfig(long lcChannelId,
                                                 NR_RLC_Config_PR rlc_conf,
                                                 long priority,
                                                 const nr_rlc_configuration_t *default_rlc_config);
-NR_CellGroupConfig_t *update_cellGroupConfig_for_BWP_switch(NR_CellGroupConfig_t *cellGroupConfig,
-                                                            const nr_mac_config_t *configuration,
-                                                            const NR_UE_NR_Capability_t *uecap,
-                                                            const NR_ServingCellConfigCommon_t *scc,
-                                                            int uid,
-                                                            int old_bwp,
-                                                            int new_bwp,
-                                                            int ssb_index);
-NR_CellGroupConfig_t *update_cellGroupConfig_for_beam_switch(NR_CellGroupConfig_t *cellGroupConfig,
-                                                            const nr_mac_config_t *configuration,
-                                                            const NR_UE_NR_Capability_t *uecap,
-                                                            const NR_ServingCellConfigCommon_t *scc,
-                                                            int uid,
-                                                            int bwp,
-                                                            int ssb_index);
+NR_CellGroupConfig_t *update_cellGroupConfig_for_reconfig(NR_CellGroupConfig_t *cellGroupConfig,
+                                                          const nr_cell_sched_t *cell,
+                                                          const NR_UE_NR_Capability_t *uecap,
+                                                          const NR_ServingCellConfigCommon_t *scc,
+                                                          int uid,
+                                                          int old_bwp,
+                                                          int new_bwp,
+                                                          int ssb_index);
 NR_MeasurementTimingConfiguration_t *get_nr_mtc(uint8_t *buf, uint32_t len);
 measgap_config_t create_measgap_config(const NR_MeasurementTimingConfiguration_t *mtc, int scs, int min_rxtxtime);
 int encode_measgap_config(const measgap_config_t *c, uint8_t *buf);
 long ue_supported_ul_layers(const NR_UE_NR_Capability_t *uecap);
 long ue_supported_dl_layers(const NR_ServingCellConfigCommon_t *scc, const NR_UE_NR_Capability_t *uecap);
+void create_trp_info_item(const f1ap_trp_information_req_t *req,
+                          f1ap_trp_information_t *trp_info_item,
+                          positioning_config_t *positioning_config,
+                          int trp_idx);
+f1ap_srs_configuration_t cp_rrc_to_f1ap_srs_configuration(NR_UE_UL_BWP_t *current_UL_BWP, NR_ServingCellConfigCommon_t *scc);
 #endif

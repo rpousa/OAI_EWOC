@@ -36,6 +36,7 @@
 #include "openair2/LAYER2/nr_pdcp/nr_pdcp_configuration.h"
 #include "openair2/LAYER2/nr_rlc/nr_rlc_configuration.h"
 #include "openair2/SDAP/nr_sdap/nr_sdap_configuration.h"
+#include "openair2/RRC/NR/nrdc_configuration.h"
 
 typedef enum {
   NR_RRC_OK=0,
@@ -44,10 +45,6 @@ typedef enum {
   NR_RRC_Handover_failed,
   NR_RRC_HO_STARTED
 } NR_RRC_status_t;
-
-#define MAX_MEAS_OBJ                                  7
-#define MAX_MEAS_CONFIG                               7
-#define MAX_MEAS_ID                                   7
 
 #define UNDEF_SECURITY_MODE                           0xff
 #define NO_SECURITY_MODE                              0x20
@@ -73,7 +70,8 @@ typedef enum pdu_session_satus_e {
   PDU_SESSION_STATUS_ESTABLISHED,
   PDU_SESSION_STATUS_TOMODIFY, // ENDC NSA
   PDU_SESSION_STATUS_FAILED,
-  PDU_SESSION_STATUS_TORELEASE, // to release DRB between eNB and UE
+  PDU_SESSION_STATUS_TORELEASE, // PDU Session Release
+  PDU_SESSION_STATUS_NOTIFYONRELEASE, // N3 GTP-U Error Indication triggers Resource Notify
 } pdu_session_status_t;
 
 typedef struct pdusession_s {
@@ -122,7 +120,9 @@ typedef enum {
   RRC_PDUSESSION_ESTABLISH,
   RRC_PDUSESSION_MODIFY,
   RRC_PDUSESSION_RELEASE,
+  RRC_PDUSESSION_RESOURCE_NOTIFY,
   RRC_UECAPABILITY_ENQUIRY,
+  RRC_F1_NRDC_IN_PROGRESS,
 } rrc_action_t;
 
 typedef struct nr_rrc_config {
@@ -265,6 +265,14 @@ typedef struct gNB_RRC_UE_s {
   delayed_action_state_t delayed_action;
 
   nr_redcap_ue_cap_t *redcap_cap;
+
+  /* measurement IDs */
+  uint64_t measurement_object_ids;       /* bitfield, 64 possible values */
+  uint64_t measurement_ids;              /* bitfield, 64 possible values */
+  uint64_t report_config_ids;            /* bitfield, 64 possible values */
+
+  /* opaque pointer to store NR-DC state (NULL when no NR-DC) */
+  void *nrdc;
 } gNB_RRC_UE_t;
 
 typedef struct rrc_gNB_ue_context_s {
@@ -378,6 +386,13 @@ typedef struct {
   nr_neighbour_cell_sib4_freq_t freq_cfg;
 } nr_inter_freq_cfg_t;
 
+typedef struct {
+  // Number of F1 and N2 handovers successfully completed to this neighbour cell
+  uint16_t ho_success_count;
+  // Shall be incremented with each neighbour information change
+  uint16_t version;
+} nr_neighbour_cell_stats_t;
+
 /** @brief Neighbor cell configuration structure
  * Single source of truth for neighbor cell information, used across multiple protocols/scopes:
  * - Handover (NGAP/XnAP): for target gNB (ID, plmn, tac, nrcell_id, physicalCellId)
@@ -408,6 +423,7 @@ typedef struct {
   nr_neighbour_cell_sib3_t sib3;
   // SIB4 (inter-frequency neighbor cell-specific parameters)
   nr_neighbour_cell_sib4_t sib4;
+  nr_neighbour_cell_stats_t stats;
 } nr_neighbour_cell_t;
 
 typedef struct neighbour_cell_configuration_s {
@@ -428,11 +444,16 @@ typedef struct nr_mac_rrc_dl_if_s {
   ue_context_release_command_func_t ue_context_release_command;
   dl_rrc_message_transfer_func_t dl_rrc_message_transfer;
   f1_paging_transfer_func_t paging_transfer;
+  trp_information_request_func_t trp_information_request;
+  positioning_information_request_func_t positioning_information_request;
+  positioning_activation_request_func_t positioning_activation_request;
+  positioning_measurement_request_func_t positioning_measurement_request;
 } nr_mac_rrc_dl_if_t;
 
 typedef struct cucp_cuup_if_s {
   cucp_cuup_bearer_context_setup_func_t bearer_context_setup;
   cucp_cuup_bearer_context_mod_func_t bearer_context_mod;
+  cucp_cuup_bearer_context_mod_confirm_func_t bearer_context_mod_confirm;
   cucp_cuup_bearer_context_release_func_t bearer_context_release;
 } cucp_cuup_if_t;
 
@@ -599,6 +620,21 @@ typedef struct sib2_config_s {
   bool deriveSSB_IndexFromCell;
 } sib2_config_t;
 
+/* MR.NRScSSSINR histogram dimension (3GPP TS 28.552 §5.1.1.32). */
+#define NR_KPM_SS_SINR_NB_LEVELS 128 /* SS-SINR report level: 0..127, TS 38.133 Table 10.1.16.1-1 */
+
+/** Peer gNB with an active Xn interface, used during measurement-report
+ *  processing to decide between Xn-HO and N2-HO. */
+typedef struct rrc_xn_candidate_s {
+  RB_ENTRY(rrc_xn_candidate_s) entry;
+  /* remote gNB identity (tree key) */
+  uint32_t gnb_id;
+  /* SCTP association to that gNB */
+  sctp_assoc_t assoc_id;
+} rrc_xn_candidate_t;
+
+int rrc_xn_candidate_cmp(struct rrc_xn_candidate_s *a, struct rrc_xn_candidate_s *b);
+
 //---NR---(completely change)---------------------
 typedef struct gNB_RRC_INST_s {
 
@@ -606,7 +642,6 @@ typedef struct gNB_RRC_INST_s {
   uint32_t                                            node_id;
   char                                               *node_name;
   int                                                 module_id;
-  eth_params_t                                        eth_params_s;
   uid_allocator_t                                     uid_allocator;
   RB_HEAD(rrc_nr_ue_tree_s, rrc_gNB_ue_context_s) rrc_ue_head; // ue_context tree key search by rnti
 
@@ -642,9 +677,22 @@ typedef struct gNB_RRC_INST_s {
   RB_HEAD(rrc_cuup_tree, nr_rrc_cuup_container_t) cuups; // CU-UPs, indexed by assoc_id
   size_t num_cuups;
 
+  /* Peer gNBs reachable over an active Xn interface, indexed by gnb_id.
+   * Populated by XNAP_SETUP_IND; consulted during measurement-report
+   * processing to prefer Xn-HO over N2-HO when a Xn link is available. */
+  RB_HEAD(rrc_xn_cand_tree, rrc_xn_candidate_s) xn_candidates;
+
   // PDCP configuration parameters loaded during startup
   nr_pdcp_configuration_t pdcp_config;
   nr_rlc_configuration_t rlc_config;
+  nrdc_configuration_t nrdc_config;
+
+  /// cell-wide NR serving-cell SS-SINR distribution, see 28.552 5.1.1.32
+  /// 0-127 SS-SINR report level (TS 38.133)
+  uint32_t ss_sinr_cell_dist[NR_KPM_SS_SINR_NB_LEVELS];
+
+  uint64_t rrc_conn_count_sum;
+  uint64_t rrc_conn_count_samples;
 } gNB_RRC_INST;
 
 /** Forward declaration for UE log macros */

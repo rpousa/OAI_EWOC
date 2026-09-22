@@ -9,6 +9,10 @@
 #ifndef __NR_LDPC_BNPROC__H__
 #define __NR_LDPC_BNPROC__H__
 #include "PHY/sse_intrin.h"
+#if defined(__AVX512BW__)
+#include <simde/x86/avx512.h>
+#endif
+
 /**
    \brief Performs first part of BN processing on the BN processing buffer and stores the results in the LLR results buffer.
           At every BN, the sum of the returned LLRs from the connected CNs and the LLR of the receiver input is computed.
@@ -17,227 +21,76 @@
 */
 static inline void nrLDPC_bnProcPc(t_nrLDPC_lut* p_lut, int8_t* bnProcBuf, int8_t* bnProcBufRes, int8_t* llrProcBuf, int8_t* llrRes, uint16_t Z)
 {
-    const uint8_t*  lut_numBnInBnGroups = p_lut->numBnInBnGroups;
-    const uint32_t* lut_startAddrBnGroups = p_lut->startAddrBnGroups;
+    const uint8_t*  lut_numBnInBnGroups      = p_lut->numBnInBnGroups;
+    const uint32_t* lut_startAddrBnGroups    = p_lut->startAddrBnGroups;
     const uint16_t* lut_startAddrBnGroupsLlr = p_lut->startAddrBnGroupsLlr;
-
-#if 1 /*def __AVX2__*/    
-    simde__m128i* p_bnProcBuf;
-    simde__m256i* p_bnProcBufRes;
-    simde__m128i* p_llrProcBuf;
-    simde__m256i* p_llrProcBuf256;
-    simde__m256i* p_llrRes;
-#else
-    simde__m128i* p_bnProcBuf;
-    simde__m128i* p_bnProcBufRes;
-    simde__m128i* p_llrProcBuf;
-    simde__m128i* p_llrRes;
-#endif   
-    // Number of BNs in Groups
-    uint32_t M;
-    //uint32_t M32rem;
-    uint32_t i;
-    uint32_t k;
-    // Offset to each bit within a group in terms of 32 Byte
-    uint32_t cnOffsetInGroup;
     uint8_t idxBnGroup = 0;
-#if 1 /*def __AVX2__*/
-    uint32_t j;
-    simde__m256i ymm0, ymm1, ymmRes0, ymmRes1;
 
-    // =====================================================================
-    // Process group with 1 CN
-
-    // There is always a BN group with 1 CN
-    // Number of groups of 32 BNs for parallel processing
-    M = (lut_numBnInBnGroups[0]*Z + 31)>>5;
-
-    p_bnProcBuf     = (simde__m128i*) &bnProcBuf    [lut_startAddrBnGroups   [idxBnGroup]];
-    p_bnProcBufRes  = (simde__m256i*) &bnProcBufRes [lut_startAddrBnGroups   [idxBnGroup]];
-    p_llrProcBuf    = (simde__m128i*) &llrProcBuf   [lut_startAddrBnGroupsLlr[idxBnGroup]];
-    p_llrProcBuf256 = (simde__m256i*) &llrProcBuf   [lut_startAddrBnGroupsLlr[idxBnGroup]];
-    p_llrRes        = (simde__m256i*) &llrRes       [lut_startAddrBnGroupsLlr[idxBnGroup]];
-
-    // Loop over BNs
-    for (i=0,j=0; i<M; i++,j+=2)
-    {
-        // Store results in bnProcBufRes of first CN for further processing for next iteration
-        // In case parity check fails
-        p_bnProcBufRes[i] = p_llrProcBuf256[i];
-
-        // First 16 LLRs of first CN
-        ymm0 = simde_mm256_cvtepi8_epi16(p_bnProcBuf [j]);
-        ymm1 = simde_mm256_cvtepi8_epi16(p_llrProcBuf[j]);
-
-        ymmRes0 = simde_mm256_adds_epi16(ymm0, ymm1);
-
-        // Second 16 LLRs of first CN
-        ymm0 = simde_mm256_cvtepi8_epi16(p_bnProcBuf [j+1]);
-        ymm1 = simde_mm256_cvtepi8_epi16(p_llrProcBuf[j+1]);
-
-        ymmRes1 = simde_mm256_adds_epi16(ymm0, ymm1);
-
-        // Pack results back to epi8
-        ymm0 = simde_mm256_packs_epi16(ymmRes0, ymmRes1);
-        // ymm0     = [ymmRes1[255:128] ymmRes0[255:128] ymmRes1[127:0] ymmRes0[127:0]]
-        // p_llrRes = [ymmRes1[255:128] ymmRes1[127:0] ymmRes0[255:128] ymmRes0[127:0]]
-        *p_llrRes = simde_mm256_permute4x64_epi64(ymm0, 0xD8);
-
-        // Next result
-        p_llrRes++;
-    }
-
-    for (uint32_t cnidx=1;cnidx<NR_LDPC_NUM_BN_GROUPS_BG1_R13;cnidx++) {
-    // =====================================================================
-    // Process group with 2 CNs
-
-      if (lut_numBnInBnGroups[cnidx] > 0)
-      {
-        // If elements in group move to next address
+    for (uint32_t grp = 0; grp < NR_LDPC_NUM_BN_GROUPS_BG1_R13; grp++) {
+        uint32_t numBN = lut_numBnInBnGroups[grp];
+        if (numBN == 0) continue;
+        uint32_t numCN    = grp + 1;
+        uint32_t bnStart  = lut_startAddrBnGroups[idxBnGroup];
+        uint32_t llrStart = lut_startAddrBnGroupsLlr[idxBnGroup];
         idxBnGroup++;
 
-        // Number of groups of 32 BNs for parallel processing
-        M = (lut_numBnInBnGroups[cnidx]*Z + 31)>>5;
-
-        // Set the offset to each CN within a group in terms of 16 Byte
-        cnOffsetInGroup = (lut_numBnInBnGroups[cnidx]*NR_LDPC_ZMAX)>>4;
-
-        // Set pointers to start of group 2
-        p_bnProcBuf  = (simde__m128i*) &bnProcBuf  [lut_startAddrBnGroups   [idxBnGroup]];
-        p_llrProcBuf = (simde__m128i*) &llrProcBuf [lut_startAddrBnGroupsLlr[idxBnGroup]];
-        p_llrRes     = (simde__m256i*) &llrRes     [lut_startAddrBnGroupsLlr[idxBnGroup]];
-
-        // Loop over BNs
-        for (i=0,j=0; i<M; i++,j+=2)
+#if defined(__AVX512BW__)
         {
-            // First 16 LLRs of first CN
-            ymmRes0 = simde_mm256_cvtepi8_epi16(p_bnProcBuf[j]);
-            ymmRes1 = simde_mm256_cvtepi8_epi16(p_bnProcBuf[j+1]);
-
-            // Loop over CNs
-            for (k=1; k<=cnidx; k++)
-            {
-                ymm0 = simde_mm256_cvtepi8_epi16(p_bnProcBuf[k*cnOffsetInGroup + j]);
-                ymmRes0 = simde_mm256_adds_epi16(ymmRes0, ymm0);
-
-                ymm1 = simde_mm256_cvtepi8_epi16(p_bnProcBuf[k*cnOffsetInGroup + j+1]);
-                ymmRes1 = simde_mm256_adds_epi16(ymmRes1, ymm1);
+            /* Load 256-bit int8 chunks, accumulate in 512-bit int16, store 256-bit int8. */
+            simde__m256i *buf256 = (simde__m256i *) &bnProcBuf[bnStart];
+            simde__m256i *llr256 = (simde__m256i *) &llrProcBuf[llrStart];
+            simde__m256i *res256 = (simde__m256i *) &llrRes[llrStart];
+            uint32_t off = (numBN * NR_LDPC_ZMAX) >> 5;
+            uint32_t M   = (numBN * Z + 31) >> 5;
+            for (uint32_t i = 0; i < M; i++) {
+                simde__m512i acc = simde_mm512_cvtepi8_epi16(buf256[i]);
+                for (uint32_t k = 1; k < numCN; k++)
+                    acc = simde_mm512_adds_epi16(acc, simde_mm512_cvtepi8_epi16(buf256[k * off + i]));
+                acc = simde_mm512_adds_epi16(acc, simde_mm512_cvtepi8_epi16(llr256[i]));
+                res256[i] = simde_mm512_cvtsepi16_epi8(acc);
             }
-
-            // Add LLR from receiver input
-            ymm0    = simde_mm256_cvtepi8_epi16(p_llrProcBuf[j]);
-            ymmRes0 = simde_mm256_adds_epi16(ymmRes0, ymm0);
-
-            ymm1    = simde_mm256_cvtepi8_epi16(p_llrProcBuf[j+1]);
-            ymmRes1 = simde_mm256_adds_epi16(ymmRes1, ymm1);
-
-            // Pack results back to epi8
-            ymm0 = simde_mm256_packs_epi16(ymmRes0, ymmRes1);
-            // ymm0     = [ymmRes1[255:128] ymmRes0[255:128] ymmRes1[127:0] ymmRes0[127:0]]
-            // p_llrRes = [ymmRes1[255:128] ymmRes1[127:0] ymmRes0[255:128] ymmRes0[127:0]]
-            *p_llrRes = simde_mm256_permute4x64_epi64(ymm0, 0xD8);
-
-            // Next result
-            p_llrRes++;
         }
-      }
-    }
+#elif defined(__AVX2__)
+        {
+            simde__m128i *buf    = (simde__m128i *) &bnProcBuf[bnStart];
+            simde__m128i *llr    = (simde__m128i *) &llrProcBuf[llrStart];
+            simde__m256i *res    = (simde__m256i *) &llrRes[llrStart];
+            uint32_t off128 = (numBN * NR_LDPC_ZMAX) >> 4;
+            uint32_t M      = (numBN * Z + 31) >> 5;
+            for (uint32_t i = 0, j = 0; i < M; i++, j += 2) {
+                simde__m256i res0 = simde_mm256_cvtepi8_epi16(buf[j]);
+                simde__m256i res1 = simde_mm256_cvtepi8_epi16(buf[j + 1]);
+                for (uint32_t k = 1; k < numCN; k++) {
+                    res0 = simde_mm256_adds_epi16(res0, simde_mm256_cvtepi8_epi16(buf[k * off128 + j]));
+                    res1 = simde_mm256_adds_epi16(res1, simde_mm256_cvtepi8_epi16(buf[k * off128 + j + 1]));
+                }
+                res0 = simde_mm256_adds_epi16(res0, simde_mm256_cvtepi8_epi16(llr[j]));
+                res1 = simde_mm256_adds_epi16(res1, simde_mm256_cvtepi8_epi16(llr[j + 1]));
+                simde__m256i packed = simde_mm256_packs_epi16(res0, res1);
+                res[i] = simde_mm256_permute4x64_epi64(packed, 0xD8);
+            }
+        }
 #else
-
-    simde__m128i ymm0, ymm1, ymmRes0, ymmRes1;
-
-    // =====================================================================
-    // Process group with 1 CN
-
-    // There is always a BN group with 1 CN
-    // Number of groups of 32 BNs for parallel processing
-    M = (lut_numBnInBnGroups[0]*Z + 15)>>4;
-
-    p_bnProcBuf     = (simde__m128i*) &bnProcBuf    [lut_startAddrBnGroups   [idxBnGroup]];
-    p_bnProcBufRes  = (simde__m128i*) &bnProcBufRes [lut_startAddrBnGroups   [idxBnGroup]];
-    p_llrProcBuf    = (simde__m128i*) &llrProcBuf   [lut_startAddrBnGroupsLlr[idxBnGroup]];
-    p_llrRes        = (simde__m128i*) &llrRes       [lut_startAddrBnGroupsLlr[idxBnGroup]];
-
-    // Loop over BNs
-    for (i=0; i<M; i++)
-    {
-        // Store results in bnProcBufRes of first CN for further processing for next iteration
-        // In case parity check fails
-        p_bnProcBufRes[i] = p_llrProcBuf[i];
-
-        // First 16 LLRs of first CN
-        ymm0 = simde_mm_cvtepi8_epi16(p_bnProcBuf [i]);
-        ymm1 = simde_mm_cvtepi8_epi16(p_llrProcBuf[i]);
-
-        ymmRes0 = simde_mm_adds_epi16(ymm0, ymm1);
-
-        // Second 16 LLRs of first CN
-        ymm0 = simde_mm_cvtepi8_epi16(simde_mm_srli_si128(p_bnProcBuf [i],8));
-        ymm1 = simde_mm_cvtepi8_epi16(simde_mm_srli_si128(p_llrProcBuf[i],8));
-
-        ymmRes1 = simde_mm_adds_epi16(ymm0, ymm1);
-
-        // Pack results back to epi8
-        *p_llrRes = simde_mm_packs_epi16(ymmRes0, ymmRes1);
-
-        // Next result
-        p_llrRes++;
-    }
-
-    for (uint32_t cnidx=1;cnidx<NR_LDPC_NUM_BN_GROUPS_BG1_R13;cnidx++) {
-    // =====================================================================
-    // Process group with 2 CNs
-
-      if (lut_numBnInBnGroups[cnidx] > 0)
-      {
-        // If elements in group move to next address
-        idxBnGroup++;
-
-        // Number of groups of 32 BNs for parallel processing
-        M = (lut_numBnInBnGroups[cnidx]*Z + 15)>>4;
-
-        // Set the offset to each CN within a group in terms of 16 Byte
-        cnOffsetInGroup = (lut_numBnInBnGroups[cnidx]*NR_LDPC_ZMAX)>>4;
-
-        // Set pointers to start of group 2
-        p_bnProcBuf  = (simde__m128i*) &bnProcBuf  [lut_startAddrBnGroups   [idxBnGroup]];
-        p_llrProcBuf = (simde__m128i*) &llrProcBuf [lut_startAddrBnGroupsLlr[idxBnGroup]];
-        p_llrRes     = (simde__m128i*) &llrRes     [lut_startAddrBnGroupsLlr[idxBnGroup]];
-
-        // Loop over BNs
-        for (i=0; i<M; i++)
         {
-            // First 16 LLRs of first CN
-            ymmRes0 = simde_mm_cvtepi8_epi16(p_bnProcBuf[i]);
-            ymmRes1 = simde_mm_cvtepi8_epi16(simde_mm_srli_si128(p_bnProcBuf[i],8));
-
-            // Loop over CNs
-            for (k=1; k<=cnidx; k++)
-            {
-                ymm0 = simde_mm_cvtepi8_epi16(p_bnProcBuf[k*cnOffsetInGroup + i]);
-                ymmRes0 = simde_mm_adds_epi16(ymmRes0, ymm0);
-
-                ymm1 = simde_mm_cvtepi8_epi16(simde_mm_srli_si128(p_bnProcBuf[k*cnOffsetInGroup + i],8));
-                ymmRes1 = simde_mm_adds_epi16(ymmRes1, ymm1);
+            simde__m128i *buf = (simde__m128i *) &bnProcBuf[bnStart];
+            simde__m128i *llr = (simde__m128i *) &llrProcBuf[llrStart];
+            simde__m128i *res = (simde__m128i *) &llrRes[llrStart];
+            uint32_t off = (numBN * NR_LDPC_ZMAX) >> 4;
+            uint32_t M   = (numBN * Z + 15) >> 4;
+            for (uint32_t i = 0; i < M; i++) {
+                simde__m128i lo = simde_mm_cvtepi8_epi16(buf[i]);
+                simde__m128i hi = simde_mm_cvtepi8_epi16(simde_mm_srli_si128(buf[i], 8));
+                for (uint32_t k = 1; k < numCN; k++) {
+                    lo = simde_mm_adds_epi16(lo, simde_mm_cvtepi8_epi16(buf[k * off + i]));
+                    hi = simde_mm_adds_epi16(hi, simde_mm_cvtepi8_epi16(simde_mm_srli_si128(buf[k * off + i], 8)));
+                }
+                lo = simde_mm_adds_epi16(lo, simde_mm_cvtepi8_epi16(llr[i]));
+                hi = simde_mm_adds_epi16(hi, simde_mm_cvtepi8_epi16(simde_mm_srli_si128(llr[i], 8)));
+                res[i] = simde_mm_packs_epi16(lo, hi);
             }
-
-            // Add LLR from receiver input
-            ymm0    = simde_mm_cvtepi8_epi16(p_llrProcBuf[i]);
-            ymmRes0 = simde_mm_adds_epi16(ymmRes0, ymm0);
-
-            ymm1    = simde_mm_cvtepi8_epi16(simde_mm_srli_si128(p_llrProcBuf[i],8));
-            ymmRes1 = simde_mm_adds_epi16(ymmRes1, ymm1);
-
-            // Pack results back to epi8
-            *p_llrRes = simde_mm_packs_epi16(ymmRes0, ymmRes1);
-
-            // Next result
-            p_llrRes++;
         }
-      }
-    }
-
 #endif
+    }
 }
 
 /**
@@ -248,1112 +101,115 @@ static inline void nrLDPC_bnProcPc(t_nrLDPC_lut* p_lut, int8_t* bnProcBuf, int8_
 */
 static inline void nrLDPC_bnProc(t_nrLDPC_lut* p_lut, int8_t* bnProcBuf, int8_t* bnProcBufRes, int8_t* llrRes, uint16_t Z)
 {
-    // BN Processing calculating the values to send back to the CNs for next iteration
-    // bnProcBufRes contains the sum of all edges to each BN at the start of each group
-
-    const uint8_t*  lut_numBnInBnGroups = p_lut->numBnInBnGroups;
-    const uint32_t* lut_startAddrBnGroups = p_lut->startAddrBnGroups;
+    const uint8_t*  lut_numBnInBnGroups      = p_lut->numBnInBnGroups;
+    const uint32_t* lut_startAddrBnGroups    = p_lut->startAddrBnGroups;
     const uint16_t* lut_startAddrBnGroupsLlr = p_lut->startAddrBnGroupsLlr;
-
-    simde__m256i* p_bnProcBuf;
-    simde__m256i* p_bnProcBufRes;
-    simde__m256i* p_llrRes;
-    simde__m256i* p_res;
-
-    // Number of BNs in Groups
-    uint32_t M;
-    //uint32_t M32rem;
-    uint32_t i;
-    uint32_t k;
-    // Offset to each bit within a group in terms of 32 Byte
-    uint32_t cnOffsetInGroup;
     uint8_t idxBnGroup = 0;
 
-    // =====================================================================
-    // Process group with 1 CN
-    // Already done in bnProcBufPc
-
-    // =====================================================================
-    // Process group with 2 CNs
-
-    if (lut_numBnInBnGroups[1] > 0)
-    {
-        // If elements in group move to next address
+    for (uint32_t grp = 0; grp < NR_LDPC_NUM_BN_GROUPS_BG1_R13; grp++) {
+        uint32_t numBN = lut_numBnInBnGroups[grp];
+        if (numBN == 0) continue;
+        uint32_t numCN    = grp + 1;
+        uint32_t bnStart  = lut_startAddrBnGroups[idxBnGroup];
+        uint32_t llrStart = lut_startAddrBnGroupsLlr[idxBnGroup];
         idxBnGroup++;
 
-        // Number of groups of 32 BNs for parallel processing
-        M = (lut_numBnInBnGroups[1]*Z + 31)>>5;
-
-        // Set the offset to each CN within a group in terms of 32 Byte
-        cnOffsetInGroup = (lut_numBnInBnGroups[1]*NR_LDPC_ZMAX)>>5;
-
-        // Set pointers to start of group 2
-        p_bnProcBuf    = (simde__m256i*) &bnProcBuf   [lut_startAddrBnGroups[idxBnGroup]];
-        p_bnProcBufRes = (simde__m256i*) &bnProcBufRes[lut_startAddrBnGroups[idxBnGroup]];
-
-        // Loop over CNs
-        for (k=0; k<2; k++)
+#if defined(__AVX512BW__)
         {
-            p_res = &p_bnProcBufRes[k*cnOffsetInGroup];
-            p_llrRes = (simde__m256i*) &llrRes[lut_startAddrBnGroupsLlr[idxBnGroup]];
-
-            // Loop over BNs
-            for (i=0; i<M; i++)
-            {
-                *p_res = simde_mm256_subs_epi8(*p_llrRes, p_bnProcBuf[k*cnOffsetInGroup + i]);
-
-                p_res++;
-                p_llrRes++;
+            simde__m512i *buf = (simde__m512i *) &bnProcBuf[bnStart];
+            simde__m512i *res = (simde__m512i *) &bnProcBufRes[bnStart];
+            simde__m512i *llr = (simde__m512i *) &llrRes[llrStart];
+            uint32_t off = (numBN * NR_LDPC_ZMAX) >> 6;
+            uint32_t M   = (numBN * Z + 63) >> 6;
+            for (uint32_t k = 0; k < numCN; k++) {
+                simde__m512i *p_res = &res[k * off];
+                for (uint32_t i = 0; i < M; i++)
+                    p_res[i] = simde_mm512_subs_epi8(llr[i], buf[k * off + i]);
             }
         }
-    }
-
-    // =====================================================================
-    // Process group with 3 CNs
-
-    if (lut_numBnInBnGroups[2] > 0)
-    {
-        // If elements in group move to next address
-        idxBnGroup++;
-
-        // Number of groups of 32 BNs for parallel processing
-        M = (lut_numBnInBnGroups[2]*Z + 31)>>5;
-
-        // Set the offset to each CN within a group in terms of 32 Byte
-        cnOffsetInGroup = (lut_numBnInBnGroups[2]*NR_LDPC_ZMAX)>>5;
-
-        // Set pointers to start of group 3
-        p_bnProcBuf    = (simde__m256i*) &bnProcBuf   [lut_startAddrBnGroups[idxBnGroup]];
-        p_bnProcBufRes = (simde__m256i*) &bnProcBufRes[lut_startAddrBnGroups[idxBnGroup]];
-
-        // Loop over CNs
-        for (k=0; k<3; k++)
+#elif defined(__AVX2__)
         {
-            p_res = &p_bnProcBufRes[k*cnOffsetInGroup];
-            p_llrRes = (simde__m256i*) &llrRes[lut_startAddrBnGroupsLlr[idxBnGroup]];
-
-            // Loop over BNs
-            for (i=0; i<M; i++)
-            {
-                *p_res = simde_mm256_subs_epi8(*p_llrRes, p_bnProcBuf[k*cnOffsetInGroup + i]);
-
-                p_res++;
-                p_llrRes++;
+            simde__m256i *buf = (simde__m256i *) &bnProcBuf[bnStart];
+            simde__m256i *res = (simde__m256i *) &bnProcBufRes[bnStart];
+            simde__m256i *llr = (simde__m256i *) &llrRes[llrStart];
+            uint32_t off = (numBN * NR_LDPC_ZMAX) >> 5;
+            uint32_t M   = (numBN * Z + 31) >> 5;
+            for (uint32_t k = 0; k < numCN; k++) {
+                simde__m256i *p_res = &res[k * off];
+                for (uint32_t i = 0; i < M; i++)
+                    p_res[i] = simde_mm256_subs_epi8(llr[i], buf[k * off + i]);
             }
         }
-    }
-
-    // =====================================================================
-    // Process group with 4 CNs
-
-    if (lut_numBnInBnGroups[3] > 0)
-    {
-        // If elements in group move to next address
-        idxBnGroup++;
-
-        // Number of groups of 32 BNs for parallel processing
-        M = (lut_numBnInBnGroups[3]*Z + 31)>>5;
-
-        // Set the offset to each CN within a group in terms of 32 Byte
-        cnOffsetInGroup = (lut_numBnInBnGroups[3]*NR_LDPC_ZMAX)>>5;
-
-        // Set pointers to start of group 4
-        p_bnProcBuf    = (simde__m256i*) &bnProcBuf   [lut_startAddrBnGroups[idxBnGroup]];
-        p_bnProcBufRes = (simde__m256i*) &bnProcBufRes[lut_startAddrBnGroups[idxBnGroup]];
-
-        // Loop over CNs
-        for (k=0; k<4; k++)
+#else
         {
-            p_res = &p_bnProcBufRes[k*cnOffsetInGroup];
-            p_llrRes = (simde__m256i*) &llrRes[lut_startAddrBnGroupsLlr[idxBnGroup]];
-
-            // Loop over BNs
-            for (i=0; i<M; i++)
-            {
-                *p_res = simde_mm256_subs_epi8(*p_llrRes, p_bnProcBuf[k*cnOffsetInGroup + i]);
-
-                p_res++;
-                p_llrRes++;
+            simde__m128i *buf = (simde__m128i *) &bnProcBuf[bnStart];
+            simde__m128i *res = (simde__m128i *) &bnProcBufRes[bnStart];
+            simde__m128i *llr = (simde__m128i *) &llrRes[llrStart];
+            uint32_t off = (numBN * NR_LDPC_ZMAX) >> 4;
+            uint32_t M   = (numBN * Z + 15) >> 4;
+            for (uint32_t k = 0; k < numCN; k++) {
+                simde__m128i *p_res = &res[k * off];
+                for (uint32_t i = 0; i < M; i++)
+                    p_res[i] = simde_mm_subs_epi8(llr[i], buf[k * off + i]);
             }
         }
+#endif
     }
-
-    // =====================================================================
-    // Process group with 5 CNs
-
-    if (lut_numBnInBnGroups[4] > 0)
-    {
-        // If elements in group move to next address
-        idxBnGroup++;
-
-        // Number of groups of 32 BNs for parallel processing
-        M = (lut_numBnInBnGroups[4]*Z + 31)>>5;
-
-        // Set the offset to each CN within a group in terms of 32 Byte
-        cnOffsetInGroup = (lut_numBnInBnGroups[4]*NR_LDPC_ZMAX)>>5;
-
-        // Set pointers to start of group 5
-        p_bnProcBuf    = (simde__m256i*) &bnProcBuf   [lut_startAddrBnGroups[idxBnGroup]];
-        p_bnProcBufRes = (simde__m256i*) &bnProcBufRes[lut_startAddrBnGroups[idxBnGroup]];
-
-        // Loop over CNs
-        for (k=0; k<5; k++)
-        {
-            p_res = &p_bnProcBufRes[k*cnOffsetInGroup];
-            p_llrRes = (simde__m256i*) &llrRes [lut_startAddrBnGroupsLlr[idxBnGroup]];
-
-            // Loop over BNs
-            for (i=0; i<M; i++)
-            {
-                *p_res = simde_mm256_subs_epi8(*p_llrRes, p_bnProcBuf[k*cnOffsetInGroup + i]);
-
-                p_res++;
-                p_llrRes++;
-            }
-        }
-    }
-
-    // =====================================================================
-    // Process group with 6 CNs
-
-    if (lut_numBnInBnGroups[5] > 0)
-    {
-        // If elements in group move to next address
-        idxBnGroup++;
-
-        // Number of groups of 32 BNs for parallel processing
-        M = (lut_numBnInBnGroups[5]*Z + 31)>>5;
-
-        // Set the offset to each CN within a group in terms of 32 Byte
-        cnOffsetInGroup = (lut_numBnInBnGroups[5]*NR_LDPC_ZMAX)>>5;
-
-        // Set pointers to start of group 6
-        p_bnProcBuf    = (simde__m256i*) &bnProcBuf   [lut_startAddrBnGroups[idxBnGroup]];
-        p_bnProcBufRes = (simde__m256i*) &bnProcBufRes[lut_startAddrBnGroups[idxBnGroup]];
-
-        // Loop over CNs
-        for (k=0; k<6; k++)
-        {
-            p_res = &p_bnProcBufRes[k*cnOffsetInGroup];
-            p_llrRes = (simde__m256i*) &llrRes[lut_startAddrBnGroupsLlr[idxBnGroup]];
-
-            // Loop over BNs
-            for (i=0; i<M; i++)
-            {
-                *p_res = simde_mm256_subs_epi8(*p_llrRes, p_bnProcBuf[k*cnOffsetInGroup + i]);
-
-                p_res++;
-                p_llrRes++;
-            }
-        }
-    }
-
-    // =====================================================================
-    // Process group with 7 CNs
-
-    if (lut_numBnInBnGroups[6] > 0)
-    {
-        // If elements in group move to next address
-        idxBnGroup++;
-
-        // Number of groups of 32 BNs for parallel processing
-        M = (lut_numBnInBnGroups[6]*Z + 31)>>5;
-
-        // Set the offset to each CN within a group in terms of 32 Byte
-        cnOffsetInGroup = (lut_numBnInBnGroups[6]*NR_LDPC_ZMAX)>>5;
-
-        // Set pointers to start of group 7
-        p_bnProcBuf    = (simde__m256i*) &bnProcBuf   [lut_startAddrBnGroups[idxBnGroup]];
-        p_bnProcBufRes = (simde__m256i*) &bnProcBufRes[lut_startAddrBnGroups[idxBnGroup]];
-
-        // Loop over CNs
-        for (k=0; k<7; k++)
-        {
-            p_res = &p_bnProcBufRes[k*cnOffsetInGroup];
-            p_llrRes = (simde__m256i*) &llrRes [lut_startAddrBnGroupsLlr[idxBnGroup]];
-
-            // Loop over BNs
-            for (i=0; i<M; i++)
-            {
-                *p_res = simde_mm256_subs_epi8(*p_llrRes, p_bnProcBuf[k*cnOffsetInGroup + i]);
-
-                p_res++;
-                p_llrRes++;
-            }
-        }
-    }
-
-    // =====================================================================
-    // Process group with 8 CNs
-
-    if (lut_numBnInBnGroups[7] > 0)
-    {
-        // If elements in group move to next address
-        idxBnGroup++;
-
-        // Number of groups of 32 BNs for parallel processing
-        M = (lut_numBnInBnGroups[7]*Z + 31)>>5;
-
-        // Set the offset to each CN within a group in terms of 32 Byte
-        cnOffsetInGroup = (lut_numBnInBnGroups[7]*NR_LDPC_ZMAX)>>5;
-
-        // Set pointers to start of group 8
-        p_bnProcBuf    = (simde__m256i*) &bnProcBuf   [lut_startAddrBnGroups[idxBnGroup]];
-        p_bnProcBufRes = (simde__m256i*) &bnProcBufRes[lut_startAddrBnGroups[idxBnGroup]];
-
-        // Loop over CNs
-        for (k=0; k<8; k++)
-        {
-            p_res = &p_bnProcBufRes[k*cnOffsetInGroup];
-            p_llrRes = (simde__m256i*) &llrRes [lut_startAddrBnGroupsLlr[idxBnGroup]];
-
-            // Loop over BNs
-            for (i=0; i<M; i++)
-            {
-                *p_res = simde_mm256_subs_epi8(*p_llrRes, p_bnProcBuf[k*cnOffsetInGroup + i]);
-
-                p_res++;
-                p_llrRes++;
-            }
-        }
-    }
-
-    // =====================================================================
-    // Process group with 9 CNs
-
-    if (lut_numBnInBnGroups[8] > 0)
-    {
-        // If elements in group move to next address
-        idxBnGroup++;
-
-        // Number of groups of 32 BNs for parallel processing
-        M = (lut_numBnInBnGroups[8]*Z + 31)>>5;
-
-        // Set the offset to each CN within a group in terms of 32 Byte
-        cnOffsetInGroup = (lut_numBnInBnGroups[8]*NR_LDPC_ZMAX)>>5;
-
-        // Set pointers to start of group 9
-        p_bnProcBuf    = (simde__m256i*) &bnProcBuf   [lut_startAddrBnGroups[idxBnGroup]];
-        p_bnProcBufRes = (simde__m256i*) &bnProcBufRes[lut_startAddrBnGroups[idxBnGroup]];
-
-        // Loop over CNs
-        for (k=0; k<9; k++)
-        {
-            p_res = &p_bnProcBufRes[k*cnOffsetInGroup];
-            p_llrRes = (simde__m256i*) &llrRes [lut_startAddrBnGroupsLlr[idxBnGroup]];
-
-            // Loop over BNs
-            for (i=0; i<M; i++)
-            {
-                *p_res = simde_mm256_subs_epi8(*p_llrRes, p_bnProcBuf[k*cnOffsetInGroup + i]);
-
-                p_res++;
-                p_llrRes++;
-            }
-        }
-    }
-
-    // =====================================================================
-    // Process group with 10 CNs
-
-    if (lut_numBnInBnGroups[9] > 0)
-    {
-        // If elements in group move to next address
-        idxBnGroup++;
-
-        // Number of groups of 32 BNs for parallel processing
-        M = (lut_numBnInBnGroups[9]*Z + 31)>>5;
-
-        // Set the offset to each CN within a group in terms of 32 Byte
-        cnOffsetInGroup = (lut_numBnInBnGroups[9]*NR_LDPC_ZMAX)>>5;
-
-        // Set pointers to start of group 10
-        p_bnProcBuf    = (simde__m256i*) &bnProcBuf   [lut_startAddrBnGroups[idxBnGroup]];
-        p_bnProcBufRes = (simde__m256i*) &bnProcBufRes[lut_startAddrBnGroups[idxBnGroup]];
-
-        // Loop over CNs
-        for (k=0; k<10; k++)
-        {
-            p_res = &p_bnProcBufRes[k*cnOffsetInGroup];
-            p_llrRes = (simde__m256i*) &llrRes [lut_startAddrBnGroupsLlr[idxBnGroup]];
-
-            // Loop over BNs
-            for (i=0; i<M; i++)
-            {
-                *p_res = simde_mm256_subs_epi8(*p_llrRes, p_bnProcBuf[k*cnOffsetInGroup + i]);
-
-                p_res++;
-                p_llrRes++;
-            }
-        }
-    }
-
-    // =====================================================================
-    // Process group with 11 CNs
-
-    if (lut_numBnInBnGroups[10] > 0)
-    {
-        // If elements in group move to next address
-        idxBnGroup++;
-
-        // Number of groups of 32 BNs for parallel processing
-        M = (lut_numBnInBnGroups[10]*Z + 31)>>5;
-
-        // Set the offset to each CN within a group in terms of 32 Byte
-        cnOffsetInGroup = (lut_numBnInBnGroups[10]*NR_LDPC_ZMAX)>>5;
-
-        // Set pointers to start of group 10
-        p_bnProcBuf    = (simde__m256i*) &bnProcBuf   [lut_startAddrBnGroups[idxBnGroup]];
-        p_bnProcBufRes = (simde__m256i*) &bnProcBufRes[lut_startAddrBnGroups[idxBnGroup]];
-
-        // Loop over CNs
-        for (k=0; k<11; k++)
-        {
-            p_res = &p_bnProcBufRes[k*cnOffsetInGroup];
-            p_llrRes = (simde__m256i*) &llrRes [lut_startAddrBnGroupsLlr[idxBnGroup]];
-
-            // Loop over BNs
-            for (i=0; i<M; i++)
-            {
-                *p_res = simde_mm256_subs_epi8(*p_llrRes, p_bnProcBuf[k*cnOffsetInGroup + i]);
-
-                p_res++;
-                p_llrRes++;
-            }
-        }
-    }
-
-    // =====================================================================
-    // Process group with 12 CNs
-
-    if (lut_numBnInBnGroups[11] > 0)
-    {
-        // If elements in group move to next address
-        idxBnGroup++;
-
-        // Number of groups of 32 BNs for parallel processing
-        M = (lut_numBnInBnGroups[11]*Z + 31)>>5;
-
-        // Set the offset to each CN within a group in terms of 32 Byte
-        cnOffsetInGroup = (lut_numBnInBnGroups[11]*NR_LDPC_ZMAX)>>5;
-
-        // Set pointers to start of group 12
-        p_bnProcBuf    = (simde__m256i*) &bnProcBuf   [lut_startAddrBnGroups[idxBnGroup]];
-        p_bnProcBufRes = (simde__m256i*) &bnProcBufRes[lut_startAddrBnGroups[idxBnGroup]];
-
-        // Loop over CNs
-        for (k=0; k<12; k++)
-        {
-            p_res = &p_bnProcBufRes[k*cnOffsetInGroup];
-            p_llrRes = (simde__m256i*) &llrRes [lut_startAddrBnGroupsLlr[idxBnGroup]];
-
-        // Loop over BNs
-            for (i=0; i<M; i++)
-            {
-                *p_res = simde_mm256_subs_epi8(*p_llrRes, p_bnProcBuf[k*cnOffsetInGroup + i]);
-
-                p_res++;
-                p_llrRes++;
-            }
-        }
-    }
-
-    // =====================================================================
-    // Process group with 13 CNs
-
-    if (lut_numBnInBnGroups[12] > 0)
-    {
-        // If elements in group move to next address
-        idxBnGroup++;
-
-        // Number of groups of 32 BNs for parallel processing
-        M = (lut_numBnInBnGroups[12]*Z + 31)>>5;
-
-        // Set the offset to each CN within a group in terms of 32 Byte
-        cnOffsetInGroup = (lut_numBnInBnGroups[12]*NR_LDPC_ZMAX)>>5;
-
-        // Set pointers to start of group 13
-        p_bnProcBuf    = (simde__m256i*) &bnProcBuf   [lut_startAddrBnGroups[idxBnGroup]];
-        p_bnProcBufRes = (simde__m256i*) &bnProcBufRes[lut_startAddrBnGroups[idxBnGroup]];
-
-        // Loop over CNs
-        for (k=0; k<13; k++)
-        {
-            p_res = &p_bnProcBufRes[k*cnOffsetInGroup];
-            p_llrRes = (simde__m256i*) &llrRes [lut_startAddrBnGroupsLlr[idxBnGroup]];
-
-            // Loop over BNs
-            for (i=0; i<M; i++)
-            {
-                *p_res = simde_mm256_subs_epi8(*p_llrRes, p_bnProcBuf[k*cnOffsetInGroup + i]);
-
-                p_res++;
-                p_llrRes++;
-            }
-        }
-    }
-
-    // =====================================================================
-    // Process group with 14 CNs
-
-    if (lut_numBnInBnGroups[13] > 0)
-    {
-        // If elements in group move to next address
-        idxBnGroup++;
-
-        // Number of groups of 32 BNs for parallel processing
-        M = (lut_numBnInBnGroups[13]*Z + 31)>>5;
-
-        // Set the offset to each CN within a group in terms of 32 Byte
-        cnOffsetInGroup = (lut_numBnInBnGroups[13]*NR_LDPC_ZMAX)>>5;
-
-        // Set pointers to start of group 14
-        p_bnProcBuf    = (simde__m256i*) &bnProcBuf   [lut_startAddrBnGroups[idxBnGroup]];
-        p_bnProcBufRes = (simde__m256i*) &bnProcBufRes[lut_startAddrBnGroups[idxBnGroup]];
-
-        // Loop over CNs
-        for (k=0; k<14; k++)
-        {
-            p_res = &p_bnProcBufRes[k*cnOffsetInGroup];
-            p_llrRes = (simde__m256i*) &llrRes [lut_startAddrBnGroupsLlr[idxBnGroup]];
-
-            // Loop over BNs
-            for (i=0; i<M; i++)
-            {
-                *p_res = simde_mm256_subs_epi8(*p_llrRes, p_bnProcBuf[k*cnOffsetInGroup + i]);
-
-                p_res++;
-                p_llrRes++;
-            }
-        }
-    }
-
-    // =====================================================================
-    // Process group with 15 CNs
-
-    if (lut_numBnInBnGroups[14] > 0)
-    {
-        // If elements in group move to next address
-        idxBnGroup++;
-
-        // Number of groups of 32 BNs for parallel processing
-        M = (lut_numBnInBnGroups[14]*Z + 31)>>5;
-
-        // Set the offset to each CN within a group in terms of 32 Byte
-        cnOffsetInGroup = (lut_numBnInBnGroups[14]*NR_LDPC_ZMAX)>>5;
-
-        // Set pointers to start of group 15
-        p_bnProcBuf    = (simde__m256i*) &bnProcBuf   [lut_startAddrBnGroups[idxBnGroup]];
-        p_bnProcBufRes = (simde__m256i*) &bnProcBufRes[lut_startAddrBnGroups[idxBnGroup]];
-
-        // Loop over CNs
-        for (k=0; k<15; k++)
-        {
-            p_res = &p_bnProcBufRes[k*cnOffsetInGroup];
-            p_llrRes = (simde__m256i*) &llrRes [lut_startAddrBnGroupsLlr[idxBnGroup]];
-
-            // Loop over BNs
-            for (i=0; i<M; i++)
-            {
-                *p_res = simde_mm256_subs_epi8(*p_llrRes, p_bnProcBuf[k*cnOffsetInGroup + i]);
-
-                p_res++;
-                p_llrRes++;
-            }
-        }
-    }
-
-    // =====================================================================
-    // Process group with 16 CNs
-
-    if (lut_numBnInBnGroups[15] > 0)
-    {
-        // If elements in group move to next address
-        idxBnGroup++;
-
-        // Number of groups of 32 BNs for parallel processing
-        M = (lut_numBnInBnGroups[15]*Z + 31)>>5;
-
-        // Set the offset to each CN within a group in terms of 32 Byte
-        cnOffsetInGroup = (lut_numBnInBnGroups[15]*NR_LDPC_ZMAX)>>5;
-
-        // Set pointers to start of group 16
-        p_bnProcBuf    = (simde__m256i*) &bnProcBuf   [lut_startAddrBnGroups[idxBnGroup]];
-        p_bnProcBufRes = (simde__m256i*) &bnProcBufRes[lut_startAddrBnGroups[idxBnGroup]];
-
-        // Loop over CNs
-        for (k=0; k<16; k++)
-        {
-            p_res = &p_bnProcBufRes[k*cnOffsetInGroup];
-            p_llrRes = (simde__m256i*) &llrRes [lut_startAddrBnGroupsLlr[idxBnGroup]];
-
-            // Loop over BNs
-            for (i=0; i<M; i++)
-            {
-                *p_res = simde_mm256_subs_epi8(*p_llrRes, p_bnProcBuf[k*cnOffsetInGroup + i]);
-
-                p_res++;
-                p_llrRes++;
-            }
-        }
-    }
-
-    // =====================================================================
-    // Process group with 17 CNs
-
-    if (lut_numBnInBnGroups[16] > 0)
-    {
-        // If elements in group move to next address
-        idxBnGroup++;
-
-        // Number of groups of 32 BNs for parallel processing
-        M = (lut_numBnInBnGroups[16]*Z + 31)>>5;
-
-        // Set the offset to each CN within a group in terms of 32 Byte
-        cnOffsetInGroup = (lut_numBnInBnGroups[16]*NR_LDPC_ZMAX)>>5;
-
-        // Set pointers to start of group 17
-        p_bnProcBuf    = (simde__m256i*) &bnProcBuf   [lut_startAddrBnGroups[idxBnGroup]];
-        p_bnProcBufRes = (simde__m256i*) &bnProcBufRes[lut_startAddrBnGroups[idxBnGroup]];
-
-        // Loop over CNs
-        for (k=0; k<17; k++)
-        {
-            p_res = &p_bnProcBufRes[k*cnOffsetInGroup];
-            p_llrRes = (simde__m256i*) &llrRes [lut_startAddrBnGroupsLlr[idxBnGroup]];
-
-            // Loop over BNs
-            for (i=0; i<M; i++)
-            {
-                *p_res = simde_mm256_subs_epi8(*p_llrRes, p_bnProcBuf[k*cnOffsetInGroup + i]);
-
-                p_res++;
-                p_llrRes++;
-            }
-        }
-    }
-
-    // =====================================================================
-    // Process group with 18 CNs
-
-    if (lut_numBnInBnGroups[17] > 0)
-    {
-        // If elements in group move to next address
-        idxBnGroup++;
-
-        // Number of groups of 32 BNs for parallel processing
-        M = (lut_numBnInBnGroups[17]*Z + 31)>>5;
-
-        // Set the offset to each CN within a group in terms of 32 Byte
-        cnOffsetInGroup = (lut_numBnInBnGroups[17]*NR_LDPC_ZMAX)>>5;
-
-        // Set pointers to start of group 18
-        p_bnProcBuf    = (simde__m256i*) &bnProcBuf   [lut_startAddrBnGroups[idxBnGroup]];
-        p_bnProcBufRes = (simde__m256i*) &bnProcBufRes[lut_startAddrBnGroups[idxBnGroup]];
-
-        // Loop over CNs
-        for (k=0; k<18; k++)
-        {
-            p_res = &p_bnProcBufRes[k*cnOffsetInGroup];
-            p_llrRes = (simde__m256i*) &llrRes [lut_startAddrBnGroupsLlr[idxBnGroup]];
-
-            // Loop over BNs
-            for (i=0; i<M; i++)
-            {
-                *p_res = simde_mm256_subs_epi8(*p_llrRes, p_bnProcBuf[k*cnOffsetInGroup + i]);
-
-                p_res++;
-                p_llrRes++;
-            }
-        }
-    }
-
-    // =====================================================================
-    // Process group with 19 CNs
-
-    if (lut_numBnInBnGroups[18] > 0)
-    {
-        // If elements in group move to next address
-        idxBnGroup++;
-
-        // Number of groups of 32 BNs for parallel processing
-        M = (lut_numBnInBnGroups[18]*Z + 31)>>5;
-
-        // Set the offset to each CN within a group in terms of 32 Byte
-        cnOffsetInGroup = (lut_numBnInBnGroups[18]*NR_LDPC_ZMAX)>>5;
-
-        // Set pointers to start of group 19
-        p_bnProcBuf    = (simde__m256i*) &bnProcBuf   [lut_startAddrBnGroups[idxBnGroup]];
-        p_bnProcBufRes = (simde__m256i*) &bnProcBufRes[lut_startAddrBnGroups[idxBnGroup]];
-
-        // Loop over CNs
-        for (k=0; k<19; k++)
-        {
-            p_res = &p_bnProcBufRes[k*cnOffsetInGroup];
-            p_llrRes = (simde__m256i*) &llrRes [lut_startAddrBnGroupsLlr[idxBnGroup]];
-
-            // Loop over BNs
-            for (i=0; i<M; i++)
-            {
-                *p_res = simde_mm256_subs_epi8(*p_llrRes, p_bnProcBuf[k*cnOffsetInGroup + i]);
-
-                p_res++;
-                p_llrRes++;
-            }
-        }
-    }
-
-    // =====================================================================
-    // Process group with 20 CNs
-
-    if (lut_numBnInBnGroups[19] > 0)
-    {
-        // If elements in group move to next address
-        idxBnGroup++;
-
-        // Number of groups of 32 BNs for parallel processing
-        M = (lut_numBnInBnGroups[19]*Z + 31)>>5;
-
-        // Set the offset to each CN within a group in terms of 32 Byte
-        cnOffsetInGroup = (lut_numBnInBnGroups[19]*NR_LDPC_ZMAX)>>5;
-
-        // Set pointers to start of group 20
-        p_bnProcBuf    = (simde__m256i*) &bnProcBuf   [lut_startAddrBnGroups[idxBnGroup]];
-        p_bnProcBufRes = (simde__m256i*) &bnProcBufRes[lut_startAddrBnGroups[idxBnGroup]];
-
-        // Loop over CNs
-        for (k=0; k<20; k++)
-        {
-            p_res = &p_bnProcBufRes[k*cnOffsetInGroup];
-            p_llrRes = (simde__m256i*) &llrRes [lut_startAddrBnGroupsLlr[idxBnGroup]];
-
-            // Loop over BNs
-            for (i=0; i<M; i++)
-            {
-                *p_res = simde_mm256_subs_epi8(*p_llrRes, p_bnProcBuf[k*cnOffsetInGroup + i]);
-
-                p_res++;
-                p_llrRes++;
-            }
-        }
-    }
-
-    // =====================================================================
-    // Process group with 21 CNs
-
-    if (lut_numBnInBnGroups[20] > 0)
-    {
-        // If elements in group move to next address
-        idxBnGroup++;
-
-        // Number of groups of 32 BNs for parallel processing
-        M = (lut_numBnInBnGroups[20]*Z + 31)>>5;
-
-        // Set the offset to each CN within a group in terms of 32 Byte
-        cnOffsetInGroup = (lut_numBnInBnGroups[20]*NR_LDPC_ZMAX)>>5;
-
-        // Set pointers to start of group 21
-        p_bnProcBuf    = (simde__m256i*) &bnProcBuf   [lut_startAddrBnGroups[idxBnGroup]];
-        p_bnProcBufRes = (simde__m256i*) &bnProcBufRes[lut_startAddrBnGroups[idxBnGroup]];
-
-        // Loop over CNs
-        for (k=0; k<21; k++)
-        {
-            p_res = &p_bnProcBufRes[k*cnOffsetInGroup];
-            p_llrRes = (simde__m256i*) &llrRes [lut_startAddrBnGroupsLlr[idxBnGroup]];
-
-            // Loop over BNs
-            for (i=0; i<M; i++)
-            {
-                *p_res = simde_mm256_subs_epi8(*p_llrRes, p_bnProcBuf[k*cnOffsetInGroup + i]);
-
-                p_res++;
-                p_llrRes++;
-            }
-        }
-    }
-
-    // =====================================================================
-    // Process group with 22 CNs
-
-    if (lut_numBnInBnGroups[21] > 0)
-    {
-        // If elements in group move to next address
-        idxBnGroup++;
-
-        // Number of groups of 32 BNs for parallel processing
-        M = (lut_numBnInBnGroups[21]*Z + 31)>>5;
-
-        // Set the offset to each CN within a group in terms of 32 Byte
-        cnOffsetInGroup = (lut_numBnInBnGroups[21]*NR_LDPC_ZMAX)>>5;
-
-        // Set pointers to start of group 22
-        p_bnProcBuf    = (simde__m256i*) &bnProcBuf   [lut_startAddrBnGroups[idxBnGroup]];
-        p_bnProcBufRes = (simde__m256i*) &bnProcBufRes[lut_startAddrBnGroups[idxBnGroup]];
-
-        // Loop over CNs
-        for (k=0; k<22; k++)
-        {
-            p_res = &p_bnProcBufRes[k*cnOffsetInGroup];
-            p_llrRes = (simde__m256i*) &llrRes [lut_startAddrBnGroupsLlr[idxBnGroup]];
-
-            // Loop over BNs
-            for (i=0; i<M; i++)
-            {
-                *p_res = simde_mm256_subs_epi8(*p_llrRes, p_bnProcBuf[k*cnOffsetInGroup + i]);
-
-                p_res++;
-                p_llrRes++;
-            }
-        }
-    }
-
-    // =====================================================================
-    // Process group with 23 CNs
-
-    if (lut_numBnInBnGroups[22] > 0)
-    {
-        // If elements in group move to next address
-        idxBnGroup++;
-
-        // Number of groups of 32 BNs for parallel processing
-        M = (lut_numBnInBnGroups[22]*Z + 31)>>5;
-
-        // Set the offset to each CN within a group in terms of 32 Byte
-        cnOffsetInGroup = (lut_numBnInBnGroups[22]*NR_LDPC_ZMAX)>>5;
-
-        // Set pointers to start of group 23
-        p_bnProcBuf    = (simde__m256i*) &bnProcBuf   [lut_startAddrBnGroups[idxBnGroup]];
-        p_bnProcBufRes = (simde__m256i*) &bnProcBufRes[lut_startAddrBnGroups[idxBnGroup]];
-
-        // Loop over CNs
-        for (k=0; k<23; k++)
-        {
-            p_res = &p_bnProcBufRes[k*cnOffsetInGroup];
-            p_llrRes = (simde__m256i*) &llrRes [lut_startAddrBnGroupsLlr[idxBnGroup]];
-
-            // Loop over BNs
-            for (i=0; i<M; i++)
-            {
-                *p_res = simde_mm256_subs_epi8(*p_llrRes, p_bnProcBuf[k*cnOffsetInGroup + i]);
-
-                p_res++;
-                p_llrRes++;
-            }
-        }
-    }
-
-    // =====================================================================
-    // Process group with 24 CNs
-
-    if (lut_numBnInBnGroups[23] > 0)
-    {
-        // If elements in group move to next address
-        idxBnGroup++;
-
-        // Number of groups of 32 BNs for parallel processing
-        M = (lut_numBnInBnGroups[23]*Z + 31)>>5;
-
-        // Set the offset to each CN within a group in terms of 32 Byte
-        cnOffsetInGroup = (lut_numBnInBnGroups[23]*NR_LDPC_ZMAX)>>5;
-
-        // Set pointers to start of group 24
-        p_bnProcBuf    = (simde__m256i*) &bnProcBuf   [lut_startAddrBnGroups[idxBnGroup]];
-        p_bnProcBufRes = (simde__m256i*) &bnProcBufRes[lut_startAddrBnGroups[idxBnGroup]];
-
-        // Loop over CNs
-        for (k=0; k<24; k++)
-        {
-            p_res = &p_bnProcBufRes[k*cnOffsetInGroup];
-            p_llrRes = (simde__m256i*) &llrRes [lut_startAddrBnGroupsLlr[idxBnGroup]];
-
-            // Loop over BNs
-            for (i=0; i<M; i++)
-            {
-                *p_res = simde_mm256_subs_epi8(*p_llrRes, p_bnProcBuf[k*cnOffsetInGroup + i]);
-
-                p_res++;
-                p_llrRes++;
-            }
-        }
-    }
-
-    // =====================================================================
-    // Process group with 25 CNs
-
-    if (lut_numBnInBnGroups[24] > 0)
-    {
-        // If elements in group move to next address
-        idxBnGroup++;
-
-        // Number of groups of 32 BNs for parallel processing
-        M = (lut_numBnInBnGroups[24]*Z + 31)>>5;
-
-        // Set the offset to each CN within a group in terms of 32 Byte
-        cnOffsetInGroup = (lut_numBnInBnGroups[24]*NR_LDPC_ZMAX)>>5;
-
-        // Set pointers to start of group 25
-        p_bnProcBuf    = (simde__m256i*) &bnProcBuf   [lut_startAddrBnGroups[idxBnGroup]];
-        p_bnProcBufRes = (simde__m256i*) &bnProcBufRes[lut_startAddrBnGroups[idxBnGroup]];
-
-        // Loop over CNs
-        for (k=0; k<25; k++)
-        {
-            p_res = &p_bnProcBufRes[k*cnOffsetInGroup];
-            p_llrRes = (simde__m256i*) &llrRes [lut_startAddrBnGroupsLlr[idxBnGroup]];
-
-            // Loop over BNs
-            for (i=0; i<M; i++)
-            {
-                *p_res = simde_mm256_subs_epi8(*p_llrRes, p_bnProcBuf[k*cnOffsetInGroup + i]);
-
-                p_res++;
-                p_llrRes++;
-            }
-        }
-    }
-
-    // =====================================================================
-    // Process group with 26 CNs
-
-    if (lut_numBnInBnGroups[25] > 0)
-    {
-        // If elements in group move to next address
-        idxBnGroup++;
-
-        // Number of groups of 32 BNs for parallel processing
-        M = (lut_numBnInBnGroups[25]*Z + 31)>>5;
-
-        // Set the offset to each CN within a group in terms of 32 Byte
-        cnOffsetInGroup = (lut_numBnInBnGroups[25]*NR_LDPC_ZMAX)>>5;
-
-        // Set pointers to start of group 26
-        p_bnProcBuf    = (simde__m256i*) &bnProcBuf   [lut_startAddrBnGroups[idxBnGroup]];
-        p_bnProcBufRes = (simde__m256i*) &bnProcBufRes[lut_startAddrBnGroups[idxBnGroup]];
-
-        // Loop over CNs
-        for (k=0; k<26; k++)
-        {
-            p_res = &p_bnProcBufRes[k*cnOffsetInGroup];
-            p_llrRes = (simde__m256i*) &llrRes [lut_startAddrBnGroupsLlr[idxBnGroup]];
-
-            // Loop over BNs
-            for (i=0; i<M; i++)
-            {
-                *p_res = simde_mm256_subs_epi8(*p_llrRes, p_bnProcBuf[k*cnOffsetInGroup + i]);
-
-                p_res++;
-                p_llrRes++;
-            }
-        }
-    }
-
-    // =====================================================================
-    // Process group with 27 CNs
-
-    if (lut_numBnInBnGroups[26] > 0)
-    {
-        // If elements in group move to next address
-        idxBnGroup++;
-
-        // Number of groups of 32 BNs for parallel processing
-        M = (lut_numBnInBnGroups[26]*Z + 31)>>5;
-
-        // Set the offset to each CN within a group in terms of 32 Byte
-        cnOffsetInGroup = (lut_numBnInBnGroups[26]*NR_LDPC_ZMAX)>>5;
-
-        // Set pointers to start of group 27
-        p_bnProcBuf    = (simde__m256i*) &bnProcBuf   [lut_startAddrBnGroups[idxBnGroup]];
-        p_bnProcBufRes = (simde__m256i*) &bnProcBufRes[lut_startAddrBnGroups[idxBnGroup]];
-
-        // Loop over CNs
-        for (k=0; k<27; k++)
-        {
-            p_res = &p_bnProcBufRes[k*cnOffsetInGroup];
-            p_llrRes = (simde__m256i*) &llrRes [lut_startAddrBnGroupsLlr[idxBnGroup]];
-
-            // Loop over BNs
-            for (i=0; i<M; i++)
-            {
-                *p_res = simde_mm256_subs_epi8(*p_llrRes, p_bnProcBuf[k*cnOffsetInGroup + i]);
-
-                p_res++;
-                p_llrRes++;
-            }
-        }
-    }
-
-    // =====================================================================
-    // Process group with 28 CNs
-
-    if (lut_numBnInBnGroups[27] > 0)
-    {
-        // If elements in group move to next address
-        idxBnGroup++;
-
-        // Number of groups of 32 BNs for parallel processing
-        M = (lut_numBnInBnGroups[27]*Z + 31)>>5;
-
-        // Set the offset to each CN within a group in terms of 32 Byte
-        cnOffsetInGroup = (lut_numBnInBnGroups[27]*NR_LDPC_ZMAX)>>5;
-
-        // Set pointers to start of group 28
-        p_bnProcBuf    = (simde__m256i*) &bnProcBuf   [lut_startAddrBnGroups[idxBnGroup]];
-        p_bnProcBufRes = (simde__m256i*) &bnProcBufRes[lut_startAddrBnGroups[idxBnGroup]];
-
-        // Loop over CNs
-        for (k=0; k<28; k++)
-        {
-            p_res = &p_bnProcBufRes[k*cnOffsetInGroup];
-            p_llrRes = (simde__m256i*) &llrRes [lut_startAddrBnGroupsLlr[idxBnGroup]];
-
-            // Loop over BNs
-            for (i=0; i<M; i++)
-            {
-                *p_res = simde_mm256_subs_epi8(*p_llrRes, p_bnProcBuf[k*cnOffsetInGroup + i]);
-
-                p_res++;
-                p_llrRes++;
-            }
-        }
-    }
-
-    // =====================================================================
-    // Process group with 29 CNs
-
-    if (lut_numBnInBnGroups[28] > 0)
-    {
-        // If elements in group move to next address
-        idxBnGroup++;
-
-        // Number of groups of 32 BNs for parallel processing
-        M = (lut_numBnInBnGroups[28]*Z + 31)>>5;
-
-        // Set the offset to each CN within a group in terms of 32 Byte
-        cnOffsetInGroup = (lut_numBnInBnGroups[28]*NR_LDPC_ZMAX)>>5;
-
-        // Set pointers to start of group 29
-        p_bnProcBuf    = (simde__m256i*) &bnProcBuf   [lut_startAddrBnGroups[idxBnGroup]];
-        p_bnProcBufRes = (simde__m256i*) &bnProcBufRes[lut_startAddrBnGroups[idxBnGroup]];
-
-        // Loop over CNs
-        for (k=0; k<29; k++)
-        {
-            p_res = &p_bnProcBufRes[k*cnOffsetInGroup];
-            p_llrRes = (simde__m256i*) &llrRes [lut_startAddrBnGroupsLlr[idxBnGroup]];
-
-            // Loop over BNs
-            for (i=0; i<M; i++)
-            {
-                *p_res = simde_mm256_subs_epi8(*p_llrRes, p_bnProcBuf[k*cnOffsetInGroup + i]);
-
-                p_res++;
-                p_llrRes++;
-            }
-        }
-    }
-
-    // =====================================================================
-    // Process group with 30 CNs
-
-    if (lut_numBnInBnGroups[29] > 0)
-    {
-        // If elements in group move to next address
-        idxBnGroup++;
-
-        // Number of groups of 32 BNs for parallel processing
-        M = (lut_numBnInBnGroups[29]*Z + 31)>>5;
-
-        // Set the offset to each CN within a group in terms of 32 Byte
-        cnOffsetInGroup = (lut_numBnInBnGroups[29]*NR_LDPC_ZMAX)>>5;
-
-        // Set pointers to start of group 30
-        p_bnProcBuf    = (simde__m256i*) &bnProcBuf   [lut_startAddrBnGroups[idxBnGroup]];
-        p_bnProcBufRes = (simde__m256i*) &bnProcBufRes[lut_startAddrBnGroups[idxBnGroup]];
-
-        // Loop over CNs
-        for (k=0; k<30; k++)
-        {
-            p_res = &p_bnProcBufRes[k*cnOffsetInGroup];
-            p_llrRes = (simde__m256i*) &llrRes [lut_startAddrBnGroupsLlr[idxBnGroup]];
-
-            // Loop over BNs
-            for (i=0; i<M; i++)
-            {
-                *p_res = simde_mm256_subs_epi8(*p_llrRes, p_bnProcBuf[k*cnOffsetInGroup + i]);
-
-                p_res++;
-                p_llrRes++;
-            }
-        }
-    }
-
 }
 
 /**
-   \brief Performs hard-decision on output LLRs
-   \param out Pointer hard-decision output, every int8_t contains 0 or 1
-   \param llrOut Pointer to output LLRs
+   \brief Performs hard-decision on output LLRs, one bit per byte.
+   \param out   Output buffer (one uint8 per bit)
+   \param llrOut Input LLR buffer
    \param numLLR Number of LLRs
 */
 static inline void nrLDPC_llr2bit(uint8_t* out, int8_t* llrOut, uint16_t numLLR)
 {
     simde__m256i* p_llrOut = (simde__m256i*) llrOut;
     simde__m256i* p_out    = (simde__m256i*) out;
-    const uint32_t M  = numLLR>>5;
-    const uint32_t Mr = numLLR&31;
-
+    const uint32_t M  = numLLR >> 5;
+    const uint32_t Mr = numLLR & 31;
     const simde__m256i* p_zeros = (simde__m256i*) zeros256_epi8;
     const simde__m256i* p_ones  = (simde__m256i*) ones256_epi8;
 
-  for (uint32_t i = 0; i < M; i++) {
-    *p_out++ = simde_mm256_and_si256(*p_ones, simde_mm256_cmpgt_epi8(*p_zeros, *p_llrOut));
-    p_llrOut++;
-  }
-
-  // Remaining LLRs that do not fit in multiples of 32 bytes
-  int8_t* p_llrOut8 = (int8_t*)p_llrOut;
-  uint8_t* p_out8 = (uint8_t*)p_out;
-
-  for (uint32_t i = 0; i < Mr; i++)
-    p_out8[i] = p_llrOut8[i] < 0;
+    for (uint32_t i = 0; i < M; i++) {
+        *p_out++ = simde_mm256_and_si256(*p_ones, simde_mm256_cmpgt_epi8(*p_zeros, *p_llrOut));
+        p_llrOut++;
+    }
+    int8_t* p_llrOut8 = (int8_t*) p_llrOut;
+    uint8_t* p_out8   = (uint8_t*) p_out;
+    for (uint32_t i = 0; i < Mr; i++)
+        p_out8[i] = p_llrOut8[i] < 0;
 }
 
 /**
-   \brief Performs hard-decision on output LLRs and packs the output in byte aligned output according to TS 38.321 Section 6.1.1.
-   i = 0,1,2,...
-   IN[i] : a0, a1, a2, ..., a_{A-1}
-   OUT[i]: a7,a6,a5,a4,a3,a2,a1,a0|a15,14,...,a8|a23,a22,...,a16|a31,a30,...,a24|...
-   \param out Pointer hard-decision output, every int8_t contains 8 bits
-   \param llrOut Pointer to output LLRs
+   \brief Performs hard-decision on output LLRs and packs the output byte-aligned per TS 38.321 Section 6.1.1.
+   OUT byte i: bit7=a[8i], bit6=a[8i+1], ..., bit0=a[8i+7]
+   \param out   Output buffer (packed bits)
+   \param llrOut Input LLR buffer
    \param numLLR Number of LLRs
 */
 static inline void nrLDPC_llr2bitPacked(uint8_t* out, int8_t* llrOut, uint16_t numLLR)
 {
-    /** Vector of indices for shuffling input */
-    const uint8_t constShuffle_256_epi8[32] __attribute__ ((aligned(32))) = {7,6,5,4,3,2,1,0,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,0,15,14,13,12,11,10,9,8};
-    const simde__m256i* p_shuffle = (simde__m256i*) constShuffle_256_epi8;
-
-    simde__m256i*  p_llrOut = (simde__m256i*)  llrOut;
-    uint32_t* p_bits   = (uint32_t*) out;
-    const uint32_t M = numLLR >> 5;
+    const uint8_t constShuffle[32] __attribute__((aligned(32))) =
+        {7,6,5,4,3,2,1,0, 15,14,13,12,11,10,9,8, 7,6,5,4,3,2,1,0, 15,14,13,12,11,10,9,8};
+    const simde__m256i* p_shuffle = (simde__m256i*) constShuffle;
+    simde__m256i* p_llrOut = (simde__m256i*) llrOut;
+    uint32_t* p_bits = (uint32_t*) out;
+    const uint32_t M  = numLLR >> 5;
     const uint32_t Mr = numLLR & 31;
 
     for (uint32_t i = 0; i < M; i++) {
-      // Move LSB to MSB on 8 bits
-      const simde__m256i inPerm = simde_mm256_shuffle_epi8(*p_llrOut, *p_shuffle);
-      // Hard decision
-      *p_bits++ = simde_mm256_movemask_epi8(inPerm);
-      p_llrOut++;
+        const simde__m256i inPerm = simde_mm256_shuffle_epi8(*p_llrOut, *p_shuffle);
+        *p_bits++ = simde_mm256_movemask_epi8(inPerm);
+        p_llrOut++;
     }
-
-    // Remaining LLRs that do not fit in multiples of 32 bytes
     if (Mr) {
-      const int8_t* p_llrOut8 = (int8_t*)p_llrOut;
-      uint32_t bitsTmp = 0;
-      for (uint32_t i = 0; i < Mr; i++)
-        bitsTmp |= (p_llrOut8[i] < 0) << ((7 - i) + (16 * (i / 8)));
-      *p_bits = bitsTmp;
+        const int8_t* p_llrOut8 = (int8_t*) p_llrOut;
+        uint32_t bitsTmp = 0;
+        for (uint32_t i = 0; i < Mr; i++)
+            bitsTmp |= (uint32_t)(p_llrOut8[i] < 0) << ((7 - i) + (16 * (i / 8)));
+        *p_bits = bitsTmp;
     }
 }
 

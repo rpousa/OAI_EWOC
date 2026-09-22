@@ -706,8 +706,6 @@ typedef struct {
 
 
 typedef struct eNB_RRC_INST_s {
-  /// southbound midhaul configuration
-  eth_params_t                    eth_params_s;
   char                            *node_name;
   uint32_t                        node_id;
   rrc_eNB_carrier_data_t          carrier[MAX_NUM_CCs];

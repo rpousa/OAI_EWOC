@@ -9,6 +9,13 @@
 #include "common/utils/ds/byte_array.h"
 #include "common/platform_types.h"
 #include "common/platform_constants.h"
+#include "openair2/COMMON/sctp_messages_types.h"
+
+#define XNAP_MAX_NB_CANDIDATES 8
+
+#define XNAP_REGISTER_GNB_REQ(mSGpTR)     (mSGpTR)->ittiMsg.xnap_register_gnb_req
+#define XNAP_SETUP_IND(mSGpTR)            (mSGpTR)->ittiMsg.xnap_setup_ind
+#define XNAP_PEER_SHUTDOWN_IND(mSGpTR)    (mSGpTR)->ittiMsg.xnap_peer_shutdown_ind
 
 typedef struct {
   // PLMN Identity (M)
@@ -59,6 +66,32 @@ typedef struct {
   uint16_t num_tai;
   xnap_tai_support_t *tai_support;
 } xnap_setup_resp_t;
+
+typedef struct xnap_sctp_s {
+  uint16_t sctp_in_streams;
+  uint16_t sctp_out_streams;
+} xnap_sctp_t;
+
+typedef struct xnap_net_config_t {
+  char *gnb_xn_interface_ip_address;
+  uint8_t nb_of_candidate_gNBs;
+  char *candidate_gnb_address_for_xnc[XNAP_MAX_NB_CANDIDATES];
+  xnap_sctp_t sctp_streams;
+} xnap_net_config_t;
+
+typedef struct xnap_register_gnb_req_s {
+  xnap_setup_req_t ng_setup_info;
+  xnap_net_config_t net_config;
+} xnap_register_gnb_req_t;
+
+typedef struct xnap_setup_ind_s {
+  uint32_t gnb_id;
+  sctp_assoc_t assoc_id;
+} xnap_setup_ind_t;
+
+typedef struct xnap_peer_shutdown_ind_s {
+  uint32_t gnb_id;
+} xnap_peer_shutdown_ind_t;
 
 typedef enum xnap_cause_radio_network_e {
     XNAP_CAUSE_RADIO_NETWORK_LAYER_CELL_NOT_AVAILABLE,
@@ -381,5 +414,73 @@ typedef struct {
   /* Target NG-RAN node UE XnAP ID (M) */
   uint32_t t_ng_node_ue_xnap_id;
 } xnap_ue_context_release_t;
+
+/* 3GPP TS 38.423 9.1.1.6 – Handover Cancel */
+typedef struct {
+  /* Source NG-RAN node UE XnAP ID (M) */
+  uint32_t s_ng_node_ue_xnap_id;
+  /* Cause (M) */
+  xnap_cause_t cause;
+} xnap_handover_cancel_t;
+
+/* 3GPP TS 38.423 9.1.1.12 – Handover Success */
+typedef struct {
+  /* Source NG-RAN node UE XnAP ID (M) */
+  uint32_t s_ng_node_ue_xnap_id;
+  /* Target NG-RAN node UE XnAP ID (M) */
+  uint32_t t_ng_node_ue_xnap_id;
+  /* Requested Target Cell Global ID (M) */
+  xnap_ngran_cgi_t target_cgi;
+} xnap_handover_success_t;
+
+/* 3GPP TS 38.423 9.2.3.66 – Paging DRX */
+typedef enum {
+  XNAP_PAGING_DRX_32 = 0,
+  XNAP_PAGING_DRX_64,
+  XNAP_PAGING_DRX_128,
+  XNAP_PAGING_DRX_256,
+  XNAP_PAGING_DRX_512,
+  XNAP_PAGING_DRX_1024,
+} xnap_paging_drx_t;
+
+typedef enum {
+  XNAP_RAN_PAGING_AREA_CELL_LIST = 0,
+  XNAP_RAN_PAGING_AREA_RAN_AREA_ID,
+} xnap_ran_paging_area_choice_t;
+
+/* RAN Area ID entry: TAC (M) + optional RANAC */
+typedef struct {
+  uint32_t tac;        /* 24-bit Tracking Area Code (M) */
+  bool ranac_present;
+  uint8_t ranac;       /* RAN Area Code 0..255 (O) */
+} xnap_ran_area_id_t;
+
+/* 3GPP TS 38.423 9.2.3.38 – RAN Paging Area */
+typedef struct {
+  plmn_id_t plmn;
+  xnap_ran_paging_area_choice_t choice;
+  union {
+    struct {
+      uint8_t num_cells;
+      uint64_t *cell_ids; /* NR-Cell-Identity, 36-bit values */
+    };
+    struct {
+      uint8_t num_ran_area_ids;
+      xnap_ran_area_id_t *ran_area_ids;
+    };
+  };
+} xnap_ran_paging_area_t;
+
+/* 3GPP TS 38.423 9.1.1.7 – RAN Paging */
+typedef struct {
+  /* UE Identity Index Value – 10-bit index (M) */
+  uint16_t ue_identity_index_value;
+  /* UE RAN Paging Identity – I-RNTI, 40-bit (M) */
+  uint64_t ue_ran_paging_identity;
+  /* Paging DRX (M) */
+  xnap_paging_drx_t paging_drx;
+  /* RAN Paging Area (M) */
+  xnap_ran_paging_area_t ran_paging_area;
+} xnap_ran_paging_t;
 
 #endif /* XNAP_MESSAGES_TYPES_H_ */

@@ -10,10 +10,15 @@
 #include "PHY/NR_TRANSPORT/nr_ulsch.h"
 #include "PHY/NR_TRANSPORT/nr_dci.h"
 #include "PHY/NR_ESTIMATION/nr_ul_estimation.h"
+#include "PHY/nr_phy_common/inc/nr_phy_meas.h"
 #include "nfapi/open-nFAPI/nfapi/public_inc/nfapi_interface.h"
 #include "common/utils/LOG/log.h"
 #include "PHY/INIT/nr_phy_init.h"
 #include "PHY/MODULATION/nr_modulation.h"
+#include "PHY/nr_phy_common/inc/nr_phy_common.h"
+#include "PHY/nr_phy_common/inc/nr_phy_common_csi_rs.h"
+#include "PHY/nr_phy_common/inc/nr_phy_common_srs.h"
+#include "PHY/NR_REFSIG/ss_pbch_nr.h"
 #include "T.h"
 #include "T_messages_creator.h"
 #include "executables/nr-softmodem.h"
@@ -25,8 +30,20 @@
 #include <stdint.h>
 #include <openair1/PHY/TOOLS/phy_scope_interface.h>
 
+#ifdef E3_AGENT
+#include "openair2/E3AP/service_models/l1_kpm_sm/e3_ran_buffers.h"
+#include "openair2/E3AP/service_models/l1_kpm_sm/l1_kpm_sm.h"
+#endif // E3_AGENT
+
 //#define DEBUG_RXDATA
 //#define SRS_IND_DEBUG
+
+typedef struct {
+  int jobs[MAX_UL_PDUS_PER_SLOT][MAX_UL_PDUS_PER_SLOT];
+  uint8_t size[MAX_UL_PDUS_PER_SLOT];
+  int16_t active_groups[MAX_UL_PDUS_PER_SLOT];
+  int n_active_groups;
+} NR_MU_MIMO_job_groups_t;
 
 static void nr_fill_indication(const PHY_VARS_gNB *gNB,
                                int frame,
@@ -38,6 +55,65 @@ static void nr_fill_indication(const PHY_VARS_gNB *gNB,
                                int dtx_flag,
                                nfapi_nr_crc_t *crc,
                                nfapi_nr_rx_data_pdu_t *pdu);
+
+static inline bool prb_is_rotated(const uint64_t *prb_mask, int prb)
+{
+  return (prb_mask[prb >> 6] >> (prb & 63)) & 0x1;
+}
+
+static inline void mark_prb(uint64_t *prb_mask, int prb_mask_words, int symbol, int prb)
+{
+  uint64_t *symbol_mask = prb_mask + symbol * prb_mask_words;
+  symbol_mask[prb >> 6] |= UINT64_C(1) << (prb & 63);
+}
+
+static inline void mark_prb_range(uint64_t *prb_mask, int prb_mask_words, int symbol, int first_prb, int nb_prb)
+{
+  for (int prb = first_prb; prb < first_prb + nb_prb; prb++)
+    mark_prb(prb_mask, prb_mask_words, symbol, prb);
+}
+
+static inline void apply_nr_rotation_TX_segment(const NR_DL_FRAME_PARMS *fp,
+                                                c16_t *txdataF,
+                                                const c16_t *symbol_rotation,
+                                                int slot,
+                                                int symbol,
+                                                int first_prb,
+                                                int nb_prb)
+{
+  const int symb_offset = (slot % fp->slots_per_subframe) * fp->symbols_per_slot;
+  const c16_t rot = symbol_rotation[symb_offset + symbol];
+  c16_t *this_symbol = txdataF + symbol * fp->ofdm_symbol_size + first_prb * NR_NB_SC_PER_RB;
+  rotate_cpx_vector(this_symbol, rot, this_symbol, nb_prb * NR_NB_SC_PER_RB, 15);
+}
+
+static void apply_nr_rotation_TX_masked(const NR_DL_FRAME_PARMS *fp,
+                                        c16_t **txdataF,
+                                        int num_tx_buffers,
+                                        const c16_t *symbol_rotation,
+                                        int slot,
+                                        const uint64_t *local_prb_mask,
+                                        int prb_mask_words)
+{
+  for (int aa = 0; aa < num_tx_buffers; aa++) {
+    if (!txdataF[aa])
+      continue;
+    for (int symbol = 0; symbol < fp->symbols_per_slot; symbol++) {
+      const uint64_t *local_symbol_mask = local_prb_mask + symbol * prb_mask_words;
+      int prb = 0;
+      while (prb < fp->N_RB_DL) {
+        while (prb < fp->N_RB_DL && !prb_is_rotated(local_symbol_mask, prb))
+          prb++;
+        const int start_prb = prb;
+        while (prb < fp->N_RB_DL && prb_is_rotated(local_symbol_mask, prb))
+          prb++;
+        if (prb > start_prb) {
+          apply_nr_rotation_TX_segment(fp, txdataF[aa], symbol_rotation, slot, symbol, start_prb, prb - start_prb);
+        }
+      }
+    }
+  }
+}
 
 void beam_index_allocation(uint16_t fapi_beam_index,
                            int ant,
@@ -70,7 +146,7 @@ uint16_t get_first_ant_idx(bool das, uint16_t num_ports_beams, uint16_t beam_id,
   return ((das) ? (beam_id & 0x7fff) * num_ports_beams : fapi_start_port);
 }
 
-void nr_common_signal_procedures(PHY_VARS_gNB *gNB, int frame, int slot, const nfapi_nr_dl_tti_ssb_pdu *ssb_pdu)
+void nr_common_signal_procedures(PHY_VARS_gNB *gNB, int frame, int slot, const nfapi_nr_dl_tti_ssb_pdu *ssb_pdu, int prb_mask_words)
 {
   NR_DL_FRAME_PARMS *fp = &gNB->frame_parms;
   const nfapi_nr_dl_tti_ssb_pdu_rel15_t *pdu = &ssb_pdu->ssb_pdu_rel15;
@@ -149,6 +225,20 @@ void nr_common_signal_procedures(PHY_VARS_gNB *gNB, int frame, int slot, const n
 #endif
 
   nr_generate_pbch(gNB, ssb_pdu, txdataF[ant_port], ssb_start_symbol, n_hf, frame, cfg, fp);
+
+  if (!gNB->phase_comp)
+    return;
+
+  uint64_t local_phase_comp_prb_mask[fp->symbols_per_slot][prb_mask_words];
+  memset(local_phase_comp_prb_mask, 0, sizeof(local_phase_comp_prb_mask));
+  const int ssb_start_prb = fp->ssb_start_subcarrier / NR_NB_SC_PER_RB;
+  const int ssb_nb_prb = (fp->ssb_start_subcarrier % NR_NB_SC_PER_RB + 240 + NR_NB_SC_PER_RB - 1) / NR_NB_SC_PER_RB;
+  for (int symbol = ssb_start_symbol; symbol < ssb_start_symbol + NR_N_SYMBOLS_SSB; symbol++)
+    mark_prb_range(&local_phase_comp_prb_mask[0][0], prb_mask_words, symbol, ssb_start_prb, ssb_nb_prb);
+
+  /* the SSB was written to txdataF[ant_port] above, so rotate that port -- not port 0 */
+  c16_t *ssb_txdataF[] = {txdataF[ant_port]};
+  apply_nr_rotation_TX_masked(fp, ssb_txdataF, 1, fp->symbol_rotation[0], slot, &local_phase_comp_prb_mask[0][0], prb_mask_words);
 }
 
 // clearing beam information to be provided to RU for all slots (DL and UL)
@@ -163,7 +253,7 @@ void clear_slot_beamid(PHY_VARS_gNB *gNB, int slot)
     }
 }
 
-static void nr_generate_csi_rs_gNB(PHY_VARS_gNB *gNB, int slot, const nfapi_nr_dl_tti_csi_rs_pdu *csi_rs_pdu)
+static void nr_generate_csi_rs_gNB(PHY_VARS_gNB *gNB, int slot, const nfapi_nr_dl_tti_csi_rs_pdu *csi_rs_pdu, int prb_mask_words)
 {
   const nfapi_nr_dl_tti_csi_rs_pdu_rel15_t *csi_params = &csi_rs_pdu->csi_rs_pdu_rel15;
   if (csi_params->csi_type == 2) // ZP-CSI
@@ -213,6 +303,47 @@ static void nr_generate_csi_rs_gNB(PHY_VARS_gNB *gNB, int slot, const nfapi_nr_d
                      csi_params->power_control_offset_ss,
                      csi_params->cdm_type,
                      gNB->common_vars.txdataF + ant_port_offset);
+
+  if (!gNB->phase_comp)
+    return;
+
+  uint64_t local_phase_comp_prb_mask[gNB->frame_parms.symbols_per_slot][prb_mask_words];
+  memset(local_phase_comp_prb_mask, 0, sizeof(local_phase_comp_prb_mask));
+  for (int rb = csi_params->start_rb; rb < csi_params->start_rb + csi_params->nr_of_rbs; rb++) {
+    if ((csi_params->freq_density <= 1) && (csi_params->freq_density != (rb % 2)))
+      continue;
+    for (int j = 0; j < mapping_parms.size; j++) {
+      for (int lp = 0; lp <= mapping_parms.lprime; lp++) {
+        const int symbol = mapping_parms.loverline[j] + lp;
+        mark_prb(&local_phase_comp_prb_mask[0][0], prb_mask_words, symbol, rb);
+      }
+    }
+  }
+
+  apply_nr_rotation_TX_masked(&gNB->frame_parms,
+                              gNB->common_vars.txdataF,
+                              min(mapping_parms.ports, gNB->gNB_config.carrier_config.num_tx_ant.value),
+                              gNB->frame_parms.symbol_rotation[0],
+                              slot,
+                              &local_phase_comp_prb_mask[0][0],
+                              prb_mask_words);
+}
+
+static void nr_generate_prs_gNB(PHY_VARS_gNB *gNB, int slot, int slot_prs, prs_config_t *prs_config, int prb_mask_words)
+{
+  const NR_DL_FRAME_PARMS *fp = &gNB->frame_parms;
+  nr_generate_prs(slot_prs, gNB->common_vars.txdataF[0], AMP, prs_config, fp);
+
+  if (!gNB->phase_comp)
+    return;
+
+  uint64_t local_phase_comp_prb_mask[fp->symbols_per_slot][prb_mask_words];
+  memset(local_phase_comp_prb_mask, 0, sizeof(local_phase_comp_prb_mask));
+  for (int symbol = prs_config->SymbolStart; symbol < prs_config->SymbolStart + prs_config->NumPRSSymbols; symbol++)
+    mark_prb_range(&local_phase_comp_prb_mask[0][0], prb_mask_words, symbol, prs_config->RBOffset, prs_config->NumRB);
+
+  c16_t *prs_txdataF[] = {gNB->common_vars.txdataF[0]};
+  apply_nr_rotation_TX_masked(fp, prs_txdataF, 1, fp->symbol_rotation[0], slot, &local_phase_comp_prb_mask[0][0], prb_mask_words);
 }
 
 void phy_procedures_gNB_TX(PHY_VARS_gNB *gNB,
@@ -227,6 +358,8 @@ void phy_procedures_gNB_TX(PHY_VARS_gNB *gNB,
 
   if ((cfg->cell_config.frame_duplex_type.value == TDD) && (nr_slot_select(cfg,frame,slot) == NR_UPLINK_SLOT))
     return;
+
+  const int prb_mask_words = (fp->N_RB_DL + 63) >> 6;
 
   // clear the transmit data array and beam index for the current slot
   for (int aa = 0; aa < fp->nb_antennas_tx; aa++) {
@@ -243,26 +376,26 @@ void phy_procedures_gNB_TX(PHY_VARS_gNB *gNB,
       {
         int slot_prs = (slot - i * prs_config->PRSResourceTimeGap + fp->slots_per_frame) % fp->slots_per_frame;
         LOG_D(PHY,"gNB_TX: frame %d, slot %d, slot_prs %d, PRS Resource ID %d\n",frame, slot, slot_prs, rsc_id);
-        nr_generate_prs(slot_prs, gNB->common_vars.txdataF[0], AMP, prs_config, fp);
+        nr_generate_prs_gNB(gNB, slot, slot_prs, prs_config, prb_mask_words);
       }
     }
   }
 
   for (int i = 0; i < UL_dci_req->numPdus; ++i)
-    nr_generate_dci(gNB, &UL_dci_req->ul_dci_pdu_list[i].pdcch_pdu.pdcch_pdu_rel15, &gNB->frame_parms, slot);
+    nr_generate_dci(gNB, &UL_dci_req->ul_dci_pdu_list[i].pdcch_pdu.pdcch_pdu_rel15, &gNB->frame_parms, slot, prb_mask_words);
 
   int num_pdsch = 0;
   for (int i = 0; i < DL_req->dl_tti_request_body.nPDUs; ++i) {
     const nfapi_nr_dl_tti_request_pdu_t *dl_tti_pdu = &DL_req->dl_tti_request_body.dl_tti_pdu_list[i];
     switch (dl_tti_pdu->PDUType) {
       case NFAPI_NR_DL_TTI_SSB_PDU_TYPE:
-        nr_common_signal_procedures(gNB, frame, slot, &dl_tti_pdu->ssb_pdu);
+        nr_common_signal_procedures(gNB, frame, slot, &dl_tti_pdu->ssb_pdu, prb_mask_words);
         break;
       case NFAPI_NR_DL_TTI_PDCCH_PDU_TYPE:
-        nr_generate_dci(gNB, &dl_tti_pdu->pdcch_pdu.pdcch_pdu_rel15, &gNB->frame_parms, slot);
+        nr_generate_dci(gNB, &dl_tti_pdu->pdcch_pdu.pdcch_pdu_rel15, &gNB->frame_parms, slot, prb_mask_words);
         break;
       case NFAPI_NR_DL_TTI_CSI_RS_PDU_TYPE:
-        nr_generate_csi_rs_gNB(gNB, slot, &dl_tti_pdu->csi_rs_pdu);
+        nr_generate_csi_rs_gNB(gNB, slot, &dl_tti_pdu->csi_rs_pdu, prb_mask_words);
         break;
       case NFAPI_NR_DL_TTI_PDSCH_PDU_TYPE: {
         int tx_data_idx = dl_tti_pdu->pdsch_pdu.pdsch_pdu_rel15.pduIndex;
@@ -270,7 +403,8 @@ void phy_procedures_gNB_TX(PHY_VARS_gNB *gNB,
           // reuse dlsch variables, as there are multiple very large memory
           // buffers
           gNB->dlsch[num_pdsch].pdsch_pdu = &dl_tti_pdu->pdsch_pdu;
-          gNB->dlsch[num_pdsch].pdu = (uint8_t *)TX_req->pdu_list[tx_data_idx].TLVs[0].value.direct;
+          const nfapi_nr_tx_data_request_tlv_t *tlv = &TX_req->pdu_list[tx_data_idx].TLVs[0];
+          gNB->dlsch[num_pdsch].pdu = tlv->tag == 0 ? (uint8_t *)tlv->value.direct : (uint8_t *)tlv->value.ptr;
           DevAssert(num_pdsch < gNB->max_nb_pdsch);
           num_pdsch++;
         } else {
@@ -290,19 +424,7 @@ void phy_procedures_gNB_TX(PHY_VARS_gNB *gNB,
     nr_generate_pdsch(gNB, num_pdsch, gNB->dlsch, frame, slot);
   }
 
-  //apply the OFDM symbol rotation here
-  start_meas(&gNB->phase_comp_stats);
   for (int aa = 0; aa < fp->nb_antennas_tx; aa++) {
-    if (gNB->phase_comp) {
-      apply_nr_rotation_TX(fp,
-                           gNB->common_vars.txdataF[aa],
-                           true,
-                           fp->symbol_rotation[0],
-                           slot,
-                           fp->N_RB_DL,
-                           0,
-                           fp->Ncp == NR_EXTENDED ? 12 : 14);
-    }
     T(T_GNB_PHY_DL_OUTPUT_SIGNAL,
       T_INT(0),
       T_INT(frame),
@@ -310,7 +432,6 @@ void phy_procedures_gNB_TX(PHY_VARS_gNB *gNB,
       T_INT(aa),
       T_BUFFER(gNB->common_vars.txdataF[aa], fp->samples_per_slot_wCP * sizeof(int32_t)));
   }
-  stop_meas(&gNB->phase_comp_stats);
 }
 
 static int nr_ulsch_procedures(PHY_VARS_gNB *gNB, int frame_rx, int slot_rx, int *ulsch_to_decode, int nb_pusch, NR_UL_IND_t *UL_INFO)
@@ -422,37 +543,42 @@ static void nr_fill_indication(const PHY_VARS_gNB *gNB,
 {
   // Get estimated timing advance for MAC
   const int sync_pos = pusch->delay.est_delay;
+  int timing_advance_update = 0xffff;
 
   // scale the 16 factor in N_TA calculation in 38.213 section 4.2 according to the used FFT size
   uint16_t bw_scaling = 16 * gNB->frame_parms.ofdm_symbol_size / 2048;
 
-  // do some integer rounding to improve TA accuracy
-  int sync_pos_rounded;
-  if (sync_pos > 0)
-    sync_pos_rounded = sync_pos + (bw_scaling / 2) - 1;
-  else
-    sync_pos_rounded = sync_pos - (bw_scaling / 2) + 1;
   if (stats)
     stats->ulsch_stats.sync_pos = sync_pos;
 
-  int timing_advance_update = sync_pos_rounded / bw_scaling;
+  if (pusch->delay.valid) {
+    // do some integer rounding to improve TA accuracy
+    int sync_pos_rounded;
+    if (sync_pos > 0)
+      sync_pos_rounded = sync_pos + (bw_scaling / 2) - 1;
+    else
+      sync_pos_rounded = sync_pos - (bw_scaling / 2) + 1;
 
-  // put timing advance command in 0..63 range
-  timing_advance_update += 31;
-  timing_advance_update = max(timing_advance_update, 0);
-  timing_advance_update = min(timing_advance_update, 63);
+    timing_advance_update = sync_pos_rounded / bw_scaling;
+
+    // put timing advance command in 0..63 range
+    timing_advance_update += 31;
+    timing_advance_update = max(timing_advance_update, 0);
+    timing_advance_update = min(timing_advance_update, 63);
+  }
 
   // estimate UL_CQI for MAC
   int SNRtimes10 = dB_fixed_x10(pusch->ulsch_power_tot) - dB_fixed_x10(pusch->ulsch_noise_power_tot);
 
   LOG_D(PHY,
-        "%d.%d: Estimated SNR for PUSCH is = %f dB (ulsch_power %f, noise %f) delay %d\n",
+        "%d.%d: Estimated SNR for PUSCH is = %f dB (ulsch_power %f, noise %f) delay %d%s\n",
         frame,
         slot_rx,
         SNRtimes10 / 10.0,
         dB_fixed_x10(pusch->ulsch_power_tot) / 10.0,
         dB_fixed_x10(pusch->ulsch_noise_power_tot) / 10.0,
-        sync_pos);
+        sync_pos,
+        pusch->delay.valid ? "" : " (invalid)");
 
   int cqi;
   if      (SNRtimes10 < -640) cqi=0;
@@ -467,7 +593,9 @@ static void nr_fill_indication(const PHY_VARS_gNB *gNB,
   crc->ul_cqi = cqi;
   crc->timing_advance = timing_advance_update;
   // in terms of dBFS range -128 to 0 with 0.1 step
-  crc->rssi = (dtx_flag == 0) ? 1280 - (10 * dB_fixed(32767 * 32767) - dB_fixed_times10(pusch->ulsch_power[0])) : 0;
+  int n_rx = pusch_pdu->param_v4.numSpatialStreamIndices;
+  uint16_t rssi = 1280 - (10 * dB_fixed(32767 * 32767) - dB_fixed_times10(pusch->ulsch_power_tot / n_rx));
+  crc->rssi = (dtx_flag == 0) ? rssi : 0;
 
   pdu->handle = pusch_pdu->handle;
   pdu->rnti = pusch_pdu->rnti;
@@ -696,7 +824,6 @@ nr_srs_info_t nr_srs_rx_procedures(PHY_VARS_gNB *gNB,
         nr_srs_ls_channel_estimation(ant_rx_ind,
                                      p_ind,
                                      ofdm_symbol_size,
-                                     frame_parms->first_carrier_offset,
                                      N_symb_SRS,
                                      srs_pdu,
                                      &nr_srs_info,
@@ -768,7 +895,6 @@ nr_srs_info_t nr_srs_rx_procedures(PHY_VARS_gNB *gNB,
     for (int ant_rx_ind = 0; ant_rx_ind < nb_antennas_rx; ant_rx_ind++) {
       uint32_t noise_power_per_ant = 0;
       nr_srs_noise_power_estimation(ofdm_symbol_size,
-                                    frame_parms->first_carrier_offset,
                                     N_symb_SRS,
                                     srs_pdu,
                                     &nr_srs_info,
@@ -818,7 +944,11 @@ nr_srs_info_t nr_srs_rx_procedures(PHY_VARS_gNB *gNB,
   return nr_srs_info;
 }
 
-static void handle_srs(fsn_t now, PHY_VARS_gNB *gNB, const NR_gNB_SRS_job_t *srs, nfapi_nr_srs_indication_pdu_t *srs_indication)
+static void handle_srs(fsn_t now,
+                       PHY_VARS_gNB *gNB,
+                       const NR_gNB_SRS_job_t *srs,
+                       nfapi_nr_srs_indication_pdu_t *srs_indication,
+                       nfapi_nr_srs_toa_vendor_ext_indication_t *srs_toa_v_ext)
 {
   const NR_DL_FRAME_PARMS *frame_parms = &gNB->frame_parms;
   const nfapi_nr_srs_pdu_t *srs_pdu = &srs->srs_pdu;
@@ -875,6 +1005,9 @@ static void handle_srs(fsn_t now, PHY_VARS_gNB *gNB, const NR_gNB_SRS_job_t *srs
     case 1 << NFAPI_NR_SRS_ANTENNASWITCH:
       srs_indication->srs_usage = NFAPI_NR_SRS_ANTENNASWITCH;
       break;
+    case 1 << NFAPI_NR_SRS_POSITIONING:
+      srs_indication->srs_usage = NFAPI_NR_SRS_POSITIONING;
+      break;
     default:
       LOG_E(NR_PHY, "Invalid srs_pdu->srs_parameters_v4.usage %i\n", srs_pdu->srs_parameters_v4.usage);
   }
@@ -923,6 +1056,18 @@ static void handle_srs(fsn_t now, PHY_VARS_gNB *gNB, const NR_gNB_SRS_job_t *srs
       LOG_W(NR_PHY, "PHY procedures for this SRS usage are not implemented yet!\n");
       break;
 
+    case NFAPI_NR_SRS_POSITIONING: {
+      nfapi_nr_srs_toa_vendor_ext_indication_t *srs_toa_vendor_ext_ind = srs_toa_v_ext;
+      srs_toa_vendor_ext_ind->sfn = now.f;
+      srs_toa_vendor_ext_ind->slot = now.s;
+      srs_toa_vendor_ext_ind->rnti = srs_pdu->rnti;
+      srs_toa_vendor_ext_ind->num_ta = nb_antennas_rx;
+      for (int ta_idx = 0; ta_idx < nb_antennas_rx; ta_idx++) {
+        srs_toa_vendor_ext_ind->ta_offset_nsec[ta_idx] = timing_advance_offset_nsec[ta_idx];
+      }
+      break;
+    }
+
     default:
       AssertFatal(1 == 0, "Invalid SRS usage\n");
   }
@@ -938,104 +1083,102 @@ static void handle_pucch(PHY_VARS_gNB *gNB, c16_t **rxdataF, const NR_gNB_PUCCH_
       uci->pdu_type = NFAPI_NR_UCI_FORMAT_0_1_PDU_TYPE;
       uci->pdu_size = sizeof(nfapi_nr_uci_pucch_pdu_format_0_1_t);
       nfapi_nr_uci_pucch_pdu_format_0_1_t *uci_pdu_format0 = &uci->pucch_pdu_format_0_1;
+      start_meas(&gNB->pucch01_proc_rx);
       nr_decode_pucch0(gNB, rxdataF, pucch->frame, pucch->slot, uci_pdu_format0, pucch_pdu);
+      stop_meas(&gNB->pucch01_proc_rx);
       break;
     case 2:
       uci->pdu_type = NFAPI_NR_UCI_FORMAT_2_3_4_PDU_TYPE;
       uci->pdu_size = sizeof(nfapi_nr_uci_pucch_pdu_format_2_3_4_t);
       nfapi_nr_uci_pucch_pdu_format_2_3_4_t *uci_pdu_format2 = &uci->pucch_pdu_format_2_3_4;
+      start_meas(&gNB->pucch23_proc_rx);
       nr_decode_pucch2(gNB, rxdataF, pucch->frame, pucch->slot, uci_pdu_format2, pucch_pdu);
+      stop_meas(&gNB->pucch23_proc_rx);
       break;
     default:
       AssertFatal(1 == 0, "Only PUCCH formats 0 and 2 are currently supported\n");
   }
 }
 
-static bool handle_pusch_decode_trigger(PHY_VARS_gNB *gNB, NR_gNB_PUSCH *pusch_vars, NR_gNB_ULSCH_t *ulsch, NR_UL_IND_t *UL_INFO, int *pusch_DTX)
-{
-  NR_UL_gNB_HARQ_t *ulsch_harq = ulsch->harq_process;
-  AssertFatal(ulsch_harq != NULL, "harq_pid %d is not allocated\n", ulsch->harq_pid);
-  const nfapi_nr_pusch_pdu_t *pdu = &ulsch_harq->ulsch_pdu;
-
 #ifdef DEBUG_RXDATA
+static void dump_pusch_rx_data(PHY_VARS_gNB *gNB, const nfapi_nr_pusch_pdu_t *pdu, uint8_t slot, int ue_idx)
+{
+  NR_DL_FRAME_PARMS *frame_parms = &gNB->frame_parms;
   RU_t *ru = gNB->RU_list[0];
-  int slot_offset = frame_parms->get_samples_slot_timestamp(ulsch->slot, frame_parms, 0);
+  int slot_offset = get_samples_slot_timestamp(frame_parms, slot);
   slot_offset -= ru->N_TA_offset;
   int32_t sample_offset = gNB->common_vars.debugBuff_sample_offset;
-  int16_t buf = (int16_t *)&gNB->common_vars.debugBuff[offset];
-  buf[0] = (int16_t)ulsch->rnti;
+  int16_t *buf = (int16_t *)&gNB->common_vars.debugBuff[sample_offset];
+  buf[0] = (int16_t)pdu->rnti;
   buf[1] = (int16_t)pdu->rb_size;
   buf[2] = (int16_t)pdu->rb_start;
   buf[3] = (int16_t)pdu->nr_of_symbols;
   buf[4] = (int16_t)pdu->start_symbol_index;
   buf[5] = (int16_t)pdu->mcs_index;
   buf[6] = (int16_t)pdu->pusch_data.rv_index;
-  buf[7] = (int16_t)ulsch->harq_pid;
+  buf[7] = (int16_t)pdu->pusch_data.harq_process_id;
   memcpy(&gNB->common_vars.debugBuff[gNB->common_vars.debugBuff_sample_offset + 4],
          &ru->common.rxdata[0][slot_offset],
-         frame_parms->get_samples_per_slot(ulsch->slot, frame_parms) * sizeof(int32_t));
-  gNB->common_vars.debugBuff_sample_offset += (frame_parms->get_samples_per_slot(ulsch->slot, frame_parms) + 1000 + 4);
-  if (gNB->common_vars.debugBuff_sample_offset > ((frame_parms->get_samples_per_slot(ulsch->slot, frame_parms) + 1000 + 2) * 20)) {
-    FILE *f;
-    f = fopen("rxdata_buff.raw", "w");
+         get_samples_per_slot(slot, frame_parms) * sizeof(int32_t));
+  gNB->common_vars.debugBuff_sample_offset += (get_samples_per_slot(slot, frame_parms) + 1000 + 4);
+  if (gNB->common_vars.debugBuff_sample_offset > ((get_samples_per_slot(slot, frame_parms) + 1000 + 2) * 20)) {
+    char fname[64];
+    snprintf(fname, sizeof(fname), "rxdata_buff_ue%d.raw", ue_idx);
+    FILE *f = fopen(fname, "w");
     if (f == NULL)
       exit(1);
-    fwrite((int16_t *)gNB->common_vars.debugBuff,
-           2,
-           (frame_parms->get_samples_per_slot(ulsch->slot, frame_parms) + 1000 + 4) * 20 * 2,
-           f);
+    fwrite((int16_t *)gNB->common_vars.debugBuff, 2, (get_samples_per_slot(slot, frame_parms) + 1000 + 4) * 20 * 2, f);
     fclose(f);
     exit(-1);
   }
+}
+#endif
+
+static void handle_pusch_rx_group_trigger(PHY_VARS_gNB *gNB,
+                                          NR_gNB_PUSCH **pusch_vars_group,
+                                          const nfapi_nr_pusch_pdu_t **ulsch_pdu_group,
+                                          uint32_t **ret_unav_res_group,
+                                          int group_size,
+                                          uint32_t frame,
+                                          uint8_t slot)
+{
+#ifdef DEBUG_RXDATA
+  // Dumping only ue index 0 for now
+  int ue_idx = 0;
+  const nfapi_nr_pusch_pdu_t *pdu = ulsch_pdu_group[ue_idx];
+  dump_pusch_rx_data(gNB, pdu, slot, ue_idx);
 #endif
 
   start_meas(&gNB->rx_pusch_stats);
-  nr_rx_pusch_tp(gNB, pusch_vars, pdu, &ulsch->unav_res, ulsch->frame, ulsch->slot);
-  pusch_vars->ulsch_power_tot = 0;
-  pusch_vars->ulsch_noise_power_tot = 0;
-  const uint8_t num_sp_streams = pdu->param_v4.numSpatialStreamIndices;
-  for (int aarx = 0; aarx < num_sp_streams; aarx++) {
-    pusch_vars->ulsch_power_tot += pusch_vars->ulsch_power[aarx];
-    pusch_vars->ulsch_noise_power_tot += pusch_vars->ulsch_noise_power[aarx];
-  }
-  if (dB_fixed_x10(pusch_vars->ulsch_power_tot) < dB_fixed_x10(pusch_vars->ulsch_noise_power_tot) + gNB->pusch_thres) {
-    NR_gNB_PHY_STATS_t *stats = get_phy_stats(gNB, ulsch->rnti);
+  nr_rx_pusch_group_tp(gNB, pusch_vars_group, ulsch_pdu_group, ret_unav_res_group, group_size, frame, slot);
+  stop_meas(&gNB->rx_pusch_stats);
+}
 
-    LOG_D(PHY,
-          "PUSCH not detected in %d.%d (%d,%d,%d)\n",
-          ulsch->frame,
-          ulsch->slot,
-          dB_fixed_x10(pusch_vars->ulsch_power_tot),
-          dB_fixed_x10(pusch_vars->ulsch_noise_power_tot),
-          gNB->pusch_thres);
+static bool pusch_signal_detected(PHY_VARS_gNB *gNB, NR_gNB_PUSCH *pusch_vars, NR_gNB_ULSCH_t *ulsch)
+{
+  const bool detected =
+      dB_fixed_x10(pusch_vars->ulsch_power_tot) >= dB_fixed_x10(pusch_vars->ulsch_noise_power_tot) + gNB->pusch_thres;
+
+  LOG_D(NR_PHY,
+        "PUSCH %s in %d.%d (%d,%d,%d)\n",
+        detected ? "detected" : "not detected",
+        ulsch->frame,
+        ulsch->slot,
+        dB_fixed_x10(pusch_vars->ulsch_power_tot),
+        dB_fixed_x10(pusch_vars->ulsch_noise_power_tot),
+        gNB->pusch_thres);
+
+  if (detected) {
+    pusch_vars->DTX = 0;
+  } else {
+    NR_gNB_PHY_STATS_t *stats = get_phy_stats(gNB, ulsch->rnti);
     pusch_vars->ulsch_power_tot = pusch_vars->ulsch_noise_power_tot;
     pusch_vars->DTX = 1;
     if (stats)
       stats->ulsch_stats.DTX++;
-    if (!get_softmodem_params()->phy_test) {
-      /* in case of phy_test mode, we still want to decode to measure execution time.
-         Therefore, we don't yet call nr_fill_indication, it will be called later */
-      nfapi_nr_crc_t *crc = &UL_INFO->crc_ind.crc_list[UL_INFO->crc_ind.number_crcs++];
-      nfapi_nr_rx_data_pdu_t *rx = &UL_INFO->rx_ind.pdu_list[UL_INFO->rx_ind.number_of_pdus++];
-      nr_fill_indication(gNB, ulsch->frame, ulsch->slot, pusch_vars, pdu, stats, NULL, 1, crc, rx);
-      (*pusch_DTX)++;
-      gNBdumpScopeData(gNB, ulsch->slot, ulsch->frame, "ULSCH_DTX");
-      return false;
-    }
-  } else {
-    LOG_D(PHY,
-          "PUSCH detected in %d.%d (%d,%d,%d)\n",
-          ulsch->frame,
-          ulsch->slot,
-          dB_fixed_x10(pusch_vars->ulsch_power_tot),
-          dB_fixed_x10(pusch_vars->ulsch_noise_power_tot),
-          gNB->pusch_thres);
-
-    pusch_vars->DTX = 0;
   }
-  stop_meas(&gNB->rx_pusch_stats);
 
-  return true;
+  return detected;
 }
 
 static bool drop_old_pucch(const void *data, void *user)
@@ -1140,6 +1283,24 @@ static int handle_pusch_job_trigger(PHY_VARS_gNB *gNB, const NR_gNB_PUSCH_job_t 
   return ULSCH_id;
 }
 
+static NR_MU_MIMO_job_groups_t group_pusch_jobs(PHY_VARS_gNB *gNB, NR_gNB_PUSCH_job_t *pusch, int n_pusch_jobs)
+{
+  NR_MU_MIMO_job_groups_t groups = {0};
+  for (int i = 0; i < n_pusch_jobs; ++i) {
+    int ULSCH_id = handle_pusch_job_trigger(gNB, &pusch[i]);
+    if (ULSCH_id < 0) {
+      continue;
+    }
+    int g = pusch[i].mu_group_idx;
+    AssertFatal(g >= 0, "Ungrouped ULSCH_id %d\n", ULSCH_id);
+    if (groups.size[g] == 0) {
+      groups.active_groups[groups.n_active_groups++] = g;
+    }
+    groups.jobs[g][groups.size[g]++] = ULSCH_id;
+  }
+  return groups;
+}
+
 int phy_procedures_gNB_uespec_RX(PHY_VARS_gNB *gNB, int frame_rx, int slot_rx, NR_UL_IND_t *UL_INFO)
 {
   /* those variables to log T_GNB_PHY_PUCCH_PUSCH_IQ only when we try to decode */
@@ -1184,7 +1345,8 @@ int phy_procedures_gNB_uespec_RX(PHY_VARS_gNB *gNB, int frame_rx, int slot_rx, N
     gNB_I0_measurements(gNB, slot_rx, first_symb, num_symb, rb_mask_ul);
   }
 
-  start_meas(&gNB->phy_proc_rx);
+  int slot_type = nr_slot_select(&gNB->gNB_config, frame_rx, slot_rx);
+  START_MEAS_FULL_SLOT(&gNB->phy_proc_rx, slot_type, NR_UPLINK_SLOT);
   UL_INFO->uci_ind.uci_list = UL_INFO->uci_pdu_list;
   UL_INFO->uci_ind.sfn = frame_rx;
   UL_INFO->uci_ind.slot = slot_rx;
@@ -1200,6 +1362,7 @@ int phy_procedures_gNB_uespec_RX(PHY_VARS_gNB *gNB, int frame_rx, int slot_rx, N
     handle_pucch(gNB, rxdataF, &pucch[i], uci++);
   }
 
+
   UL_INFO->crc_ind.sfn = frame_rx;
   UL_INFO->crc_ind.slot = slot_rx;
   UL_INFO->crc_ind.crc_list = UL_INFO->crc_pdu_list;
@@ -1208,35 +1371,54 @@ int phy_procedures_gNB_uespec_RX(PHY_VARS_gNB *gNB, int frame_rx, int slot_rx, N
   UL_INFO->rx_ind.pdu_list = UL_INFO->rx_pdu_list;
   int ulsch_idx_to_decode[MAX_UL_PDUS_PER_SLOT];
   int num_pusch = 0;
-  for (int i = 0; i < n_pusch_jobs; ++i) {
-    int ULSCH_id = handle_pusch_job_trigger(gNB, &pusch[i]);
-    if (ULSCH_id < 0)
-      continue;
-    NR_gNB_PUSCH *pusch_vars = &gNB->pusch_vars[ULSCH_id];
-    NR_gNB_ULSCH_t *ulsch = &gNB->ulsch[ULSCH_id];
-    if (handle_pusch_decode_trigger(gNB, pusch_vars, ulsch, UL_INFO, &pusch_DTX))
-      ulsch_idx_to_decode[num_pusch++] = ULSCH_id;
-  }
 
-  /* Do ULSCH decoding time measurement only when number of PUSCH is limited to 1
-   * (valid for unitary physical simulators). ULSCH processing lopp is then executed
-   * only once, which ensures exactly one start and stop of the ULSCH decoding time
-   * measurement per processed TB.*/
-  if (gNB->max_nb_pusch == 1)
-    start_meas(&gNB->ulsch_decoding_stats);
+  // Group the jobs using group index
+  NR_MU_MIMO_job_groups_t pusch_groups = group_pusch_jobs(gNB, pusch, n_pusch_jobs);
+
+  for (int i = 0; i < pusch_groups.n_active_groups; i++) {
+    int g = pusch_groups.active_groups[i];
+    int gsz = pusch_groups.size[g];
+    AssertFatal(gsz <= NR_MAX_NB_LAYERS, "Cannot handle group size > %d\n", NR_MAX_NB_LAYERS);
+    NR_gNB_PUSCH *pusch_vars_group[gsz];
+    const nfapi_nr_pusch_pdu_t *ulsch_pdu_group[gsz];
+    uint32_t *unav_res_group[gsz];
+    // store pusch vars and ulsch pdu for group based processing
+    for (int u = 0; u < gsz; u++) {
+      int ulsch_id = pusch_groups.jobs[g][u];
+      pusch_vars_group[u] = &gNB->pusch_vars[ulsch_id];
+      ulsch_pdu_group[u] = &gNB->ulsch[ulsch_id].harq_process->ulsch_pdu;
+      unav_res_group[u] = &gNB->ulsch[ulsch_id].unav_res;
+    }
+
+    handle_pusch_rx_group_trigger(gNB, pusch_vars_group, ulsch_pdu_group, unav_res_group, gsz, frame_rx, slot_rx);
+
+    for (int u = 0; u < gsz; u++) {
+      int ULSCH_id = pusch_groups.jobs[g][u];
+      NR_gNB_PUSCH *pusch_vars = &gNB->pusch_vars[ULSCH_id];
+      NR_gNB_ULSCH_t *ulsch = &gNB->ulsch[ULSCH_id];
+
+      if (pusch_signal_detected(gNB, pusch_vars, ulsch) || get_softmodem_params()->phy_test) {
+        ulsch_idx_to_decode[num_pusch++] = ULSCH_id;
+      } else {
+        AssertFatal(ulsch->harq_process != NULL, "harq_pid %d is not allocated\n", ulsch->harq_pid);
+        const nfapi_nr_pusch_pdu_t *pdu = &ulsch->harq_process->ulsch_pdu;
+        NR_gNB_PHY_STATS_t *stats = get_phy_stats(gNB, ulsch->rnti);
+        nfapi_nr_crc_t *crc = &UL_INFO->crc_ind.crc_list[UL_INFO->crc_ind.number_crcs++];
+        nfapi_nr_rx_data_pdu_t *rx = &UL_INFO->rx_ind.pdu_list[UL_INFO->rx_ind.number_of_pdus++];
+        nr_fill_indication(gNB, ulsch->frame, ulsch->slot, pusch_vars, pdu, stats, NULL, 1, crc, rx);
+        pusch_DTX++;
+        gNBdumpScopeData(gNB, ulsch->slot, ulsch->frame, "ULSCH_DTX");
+      }
+    }
+  }
 
   if (num_pusch > 0) {
+    START_MEAS_FULL_SLOT(&gNB->ulsch_decoding_stats, slot_type, NR_UPLINK_SLOT);
     int ret_nr_ulsch_procedures = nr_ulsch_procedures(gNB, frame_rx, slot_rx, ulsch_idx_to_decode, num_pusch, UL_INFO);
     if (ret_nr_ulsch_procedures != 0)
-      LOG_E(PHY,"Error in nr_ulsch_procedures, returned %d\n",ret_nr_ulsch_procedures);
+      LOG_E(NR_PHY, "Error in nr_ulsch_procedures, returned %d\n", ret_nr_ulsch_procedures);
+    STOP_MEAS_FULL_SLOT(&gNB->ulsch_decoding_stats, slot_type, NR_UPLINK_SLOT);
   }
-
-  /* Do ULSCH decoding time measurement only when number of PUSCH is limited to 1
-   * (valid for unitary physical simulators). ULSCH processing loop is then executed
-   * only once, which ensures exactly one start and stop of the ULSCH decoding time
-   * measurement per processed TB.*/
-  if (gNB->max_nb_pusch == 1)
-    stop_meas(&gNB->ulsch_decoding_stats);
 
   UL_INFO->srs_ind.sfn = frame_rx;
   UL_INFO->srs_ind.slot = slot_rx;
@@ -1244,11 +1426,11 @@ int phy_procedures_gNB_uespec_RX(PHY_VARS_gNB *gNB, int frame_rx, int slot_rx, N
   UL_INFO->srs_ind.number_of_pdus = n_srs;
   for (int i = 0; i < n_srs; ++i) {
     start_meas(&gNB->rx_srs_stats);
-    handle_srs(now, gNB, &srs[i], &UL_INFO->srs_ind.pdu_list[i]);
+    handle_srs(now, gNB, &srs[i], &UL_INFO->srs_ind.pdu_list[i], &UL_INFO->srs_toa_vendor_ext_ind);
     stop_meas(&gNB->rx_srs_stats);
   }
 
-  stop_meas(&gNB->phy_proc_rx);
+  STOP_MEAS_FULL_SLOT(&gNB->phy_proc_rx, slot_type, NR_UPLINK_SLOT);
 
   if (n_pucch > 0 || num_pusch > 0) {
     UNUSED(ofdm_symbol_size); // only used if T activated
@@ -1257,6 +1439,15 @@ int phy_procedures_gNB_uespec_RX(PHY_VARS_gNB *gNB, int frame_rx, int slot_rx, N
       T_INT(slot_rx),
       T_BUFFER(&gNB->common_vars.rxdataF[0][0], frame_parms->symbols_per_slot * ofdm_symbol_size * 4));
   }
+
+#ifdef E3_AGENT
+  /* Hand this slot's IQ to the L1-KPM SM (RF=2) via /e3_ran_buffers. rx_func()
+   * only reaches here on UL and mixed slots, so the subscription is the only
+   * thing left to check. */
+  if (l1_kpm_sm_has_subscribers()) {
+    e3_ran_buffers_push_rxdataF(gNB, frame_rx, slot_rx);
+  }
+#endif // E3_AGENT
 
   return pusch_DTX;
 }
@@ -1269,6 +1460,19 @@ void nr_save_ul_tti_req(PHY_VARS_gNB *gNB, nfapi_nr_ul_tti_request_t *UL_tti_req
   int frame = UL_tti_req->SFN;
   int slot = UL_tti_req->Slot;
 
+  int16_t pdu_group_idx[MAX_UL_PDUS_PER_SLOT] = {[0 ... MAX_UL_PDUS_PER_SLOT - 1] = -1};
+  uint8_t pdu_group_size[MAX_UL_PDUS_PER_SLOT] = {0};
+  for (int g = 0; g < UL_tti_req->n_group; g++) {
+    const nfapi_nr_ul_tti_request_number_of_groups_t *grp = &UL_tti_req->groups_list[g];
+    for (int u = 0; u < grp->n_ue; u++) {
+      int pdu_idx = grp->ue_list[u].pdu_idx;
+      if (pdu_idx >= 0 && pdu_idx < UL_tti_req->n_pdus) {
+        pdu_group_idx[pdu_idx] = g;
+        pdu_group_size[pdu_idx] = grp->n_ue;
+      }
+    }
+  }
+
   for (int i = 0; i < UL_tti_req->n_pdus; i++) {
     int type = UL_tti_req->pdus_list[i].pdu_type;
     LOG_D(NR_PHY,
@@ -1280,7 +1484,12 @@ void nr_save_ul_tti_req(PHY_VARS_gNB *gNB, nfapi_nr_ul_tti_request_t *UL_tti_req
           UL_tti_req->Slot);
     switch (type) {
       case NFAPI_NR_UL_CONFIG_PUSCH_PDU_TYPE:
-        nr_fill_ulsch(gNB, UL_tti_req->SFN, UL_tti_req->Slot, &UL_tti_req->pdus_list[i].pusch_pdu);
+        nr_fill_ulsch(gNB,
+                      UL_tti_req->SFN,
+                      UL_tti_req->Slot,
+                      &UL_tti_req->pdus_list[i].pusch_pdu,
+                      pdu_group_idx[i],
+                      pdu_group_size[i]);
         break;
       case NFAPI_NR_UL_CONFIG_PUCCH_PDU_TYPE:
         nr_fill_pucch(gNB, UL_tti_req->SFN, UL_tti_req->Slot, &UL_tti_req->pdus_list[i].pucch_pdu);

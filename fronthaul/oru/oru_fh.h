@@ -7,6 +7,8 @@
 
 #include "oru_io.h"
 #include <stdint.h>
+#include "fh_compression.h"
+#include "oru_packet_processor.h"
 
 typedef struct {
   char *dpdk_devices[MAX_RU_PORTS];
@@ -24,8 +26,7 @@ typedef struct {
 } oru_fh_tdd_pattern_t;
 
 typedef struct {
-  // Compression configuration
-  bool enable_compression;
+  fh_comp_method_t comp_type;
   int numerology;
   uint16_t num_prbs;
   // MTU configuration
@@ -41,8 +42,11 @@ typedef struct {
   uint32_t T2a_up_max_uS;
   uint32_t T2a_cp_min_uS;
   uint32_t T2a_cp_max_uS;
+  /* CLOCK_REALTIME timescale: FH_CLOCK_UTC (default) or FH_CLOCK_TAI. */
+  fh_clock_timebase_t clock_timebase;
   oru_fh_tdd_pattern_t tdd_pattern;
   int prach_eaxc_offset;
+  int prach_kbar;
 } oru_fh_config_t;
 
 /**
@@ -74,23 +78,25 @@ int oru_fh_get_ready_jobs(void *handle);
  * @param handle Pointer to the fronthaul handle.
  * @param txdataF Array of pointers to buffers to store the received frequency-domain IQ samples (per TX antenna).
  * @param nb_tx Number of TX antennas.
+ * @param hyper_frame Absolute GPS hyper-frame number
  * @param frame Pointer to store the frame number of the read symbol.
  * @param slot Pointer to store the slot number of the read symbol.
  * @param symbol Pointer to store the symbol number.
  * @return 0 on success or -1 on failure
  */
-int oru_fh_tx_read_symbol(void *handle, uint32_t **txdataF, int nb_tx, int *frame, int *slot, int *symbol);
+int oru_fh_tx_read_symbol(void *handle, uint32_t **txdataF, int nb_tx, uint64_t *hyper_frame, int *frame, int *slot, int *symbol);
 
 /**
  * @brief Get the UTC anchor point mapping between 5G time and system time.
  *
  * @param handle Pointer to the fronthaul handle.
  * @param frame Pointer to store the reference frame number.
+ * @param hyper_frame Pointer to store the reference hyperframe number (1024 frames each)
  * @param slot Pointer to store the reference slot number.
  * @param ts Pointer to a timespec structure to store the corresponding system time.
  * @return 0 on success, negative on error.
  */
-int oru_fh_get_utc_anchor_point(void *handle, uint32_t* frame, uint32_t* slot, struct timespec *ts);
+int oru_fh_get_utc_anchor_point(void *handle, uint64_t *hyper_frame, uint32_t* frame, uint32_t* slot, struct timespec *ts);
 
 /**
  * @brief Send PRACH symbol data (U-Plane) over the Fronthaul interface.
@@ -105,16 +111,33 @@ int oru_fh_get_utc_anchor_point(void *handle, uint32_t* frame, uint32_t* slot, s
 void oru_fh_rx_send_prach(void *handle, uint32_t **prachF, int nb_rx, int frame, int slot, int symbol);
 
 /**
+ * @brief Poll for pending UL jobs
+ *
+ * @param handle Pointer to the fronthaul handle.
+ * @param job Job descriptor
+ *
+ * @returns 0 if successful, -1 otherwise
+ */
+int oru_fh_poll_ul_job(void *handle, ul_job_t *job);
+
+/**
+ * @brief Get the DL-direction symbol bitmask for the configured TDD pattern.
+ *
+ * @param handle Pointer to the fronthaul handle.
+ * @param bitmask Pointer to store the (read-only, internally owned) bitmask buffer.
+ * @param bit_length Pointer to store the bitmask length in bits (one repeating TDD period).
+ */
+void oru_fh_get_dl_symbol_bitmask(void *handle, const uint8_t **bitmask, uint16_t *bit_length);
+
+/**
  * @brief Send PUSCH symbol data (U-Plane) over the Fronthaul interface.
  *
  * @param handle Pointer to the fronthaul handle.
  * @param puschF Array of pointers to buffers containing the frequency-domain PUSCH IQ samples.
- * @param nb_rx Number of RX antennas.
- * @param frame Target frame number.
- * @param slot Target slot number.
- * @param symbol Target symbol number.
+ * @param symbol Absolute symbol index within slot (0–13); must be within the job's symbol range
+ * @param job Job descriptor
  */
-void oru_fh_rx_send_pusch(void *handle, uint32_t **puschF, int nb_rx, int frame, int slot, int symbol);
+void oru_fh_rx_send_pusch(void *handle, uint32_t *puschF, int symbol, const ul_job_t *job);
 
 /**
  * @brief Start the O-RU Fronthaul processing threads and loops.

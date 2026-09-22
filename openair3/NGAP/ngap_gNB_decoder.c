@@ -104,10 +104,10 @@ static int ngap_gNB_decode_initiating_message(NGAP_NGAP_PDU_t *pdu) {
       break;
 
     default:
+      /* Unknown or wrong-direction initiating procedure: fail closed without
+       * aborting the process (TS 38.413 §10.3.4.1). TODO: Send Error Indication */
       NGAP_ERROR("Unknown procedure ID (%d) for initiating message\n",
                  (int)pdu->choice.initiatingMessage->procedureCode);
-      AssertFatal( 0, "Unknown procedure ID (%d) for initiating message\n",
-                   (int)pdu->choice.initiatingMessage->procedureCode);
       return -1;
   }
 

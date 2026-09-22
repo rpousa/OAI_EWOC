@@ -12,6 +12,7 @@
 #include "fgs_service_request.h"
 #include "fgmm_service_accept.h"
 #include "fgmm_service_reject.h"
+#include "fgmm_registration_reject.h"
 #include "fgmm_authentication_failure.h"
 #include "FGSNASSecurityModeReject.h"
 #include "fgmm_authentication_reject.h"
@@ -258,6 +259,33 @@ static void test_service_reject(void)
   free_fgs_service_reject(&orig);
 }
 
+/** @brief Test NAS Registration Reject enc/dec (plain AMF reject: cause only) */
+static void test_registration_reject(void)
+{
+  fgs_registration_reject_msg_t orig = {
+      .cause = Illegal_UE,
+  };
+
+  uint8_t expected_enc[] = {0x03};
+
+  uint8_t buf[64] = {0};
+  byte_array_t buffer = {.buf = buf, .len = sizeof(expected_enc)};
+
+  int encoded_length = encode_fgs_registration_reject(&buffer, &orig);
+  AssertFatal(encoded_length == sizeofArray(expected_enc),
+              "encode_fgs_registration_reject() failed: %d != %ld\n",
+              encoded_length,
+              sizeofArray(expected_enc));
+  AssertFatal(memcmp(buffer.buf, expected_enc, buffer.len) == 0, "Encoding mismatch!\n");
+
+  fgs_registration_reject_msg_t dec = {0};
+  int decoded_length = decode_fgs_registration_reject(&dec, &buffer);
+  AssertFatal(decoded_length >= 0, "decode_fgs_registration_reject() failed\n");
+  AssertFatal(eq_registration_reject(&orig, &dec),
+              "test_registration_reject() failed: original and decoded messages do not match\n");
+  free_fgs_registration_reject(&dec);
+}
+
 /** @brief Test NAS Authentication Failure enc/dec */
 static void test_auth_failure(void)
 {
@@ -373,6 +401,7 @@ int main()
   test_service_request();
   test_service_accept();
   test_service_reject();
+  test_registration_reject();
   test_auth_failure();
   test_auth_reject();
   test_security_mode_reject();

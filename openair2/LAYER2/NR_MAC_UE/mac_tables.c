@@ -81,155 +81,6 @@ static const uint8_t table_7_3_1_1_2_2_3_4_5[64][20] = {
   {0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0}
 };
 
-static const uint8_t table_7_3_1_1_2_12[14][3] = {
-  {1,0,1},
-  {1,1,1},
-  {2,0,1},
-  {2,1,1},
-  {2,2,1},
-  {2,3,1},
-  {2,0,2},
-  {2,1,2},
-  {2,2,2},
-  {2,3,2},
-  {2,4,2},
-  {2,5,2},
-  {2,6,2},
-  {2,7,2}
-};
-
-static const uint8_t table_7_3_1_1_2_13[10][4] = {
-  {1,0,1,1},
-  {2,0,1,1},
-  {2,2,3,1},
-  {2,0,2,1},
-  {2,0,1,2},
-  {2,2,3,2},
-  {2,4,5,2},
-  {2,6,7,2},
-  {2,0,4,2},
-  {2,2,6,2}
-};
-
-static const uint8_t table_7_3_1_1_2_14[3][5] = {
-  {2,0,1,2,1},
-  {2,0,1,4,2},
-  {2,2,3,6,2}
-};
-
-static const uint8_t table_7_3_1_1_2_15[4][6] = {
-  {2,0,1,2,3,1},
-  {2,0,1,4,5,2},
-  {2,2,3,6,7,2},
-  {2,0,2,4,6,2}
-};
-
-static const uint8_t table_7_3_1_1_2_16[12][2] = {
-  {1,0},
-  {1,1},
-  {2,0},
-  {2,1},
-  {2,2},
-  {2,3},
-  {3,0},
-  {3,1},
-  {3,2},
-  {3,3},
-  {3,4},
-  {3,5}
-};
-
-static const uint8_t table_7_3_1_1_2_17[7][3] = {
-  {1,0,1},
-  {2,0,1},
-  {2,2,3},
-  {3,0,1},
-  {3,2,3},
-  {3,4,5},
-  {2,0,2}
-};
-
-static const uint8_t table_7_3_1_1_2_18[3][4] = {
-  {2,0,1,2},
-  {3,0,1,2},
-  {3,3,4,5}
-};
-
-static const uint8_t table_7_3_1_1_2_19[2][5] = {
-  {2,0,1,2,3},
-  {3,0,1,2,3}
-};
-
-static const uint8_t table_7_3_1_1_2_20[28][3] = {
-  {1,0,1},
-  {1,1,1},
-  {2,0,1},
-  {2,1,1},
-  {2,2,1},
-  {2,3,1},
-  {3,0,1},
-  {3,1,1},
-  {3,2,1},
-  {3,3,1},
-  {3,4,1},
-  {3,5,1},
-  {3,0,2},
-  {3,1,2},
-  {3,2,2},
-  {3,3,2},
-  {3,4,2},
-  {3,5,2},
-  {3,6,2},
-  {3,7,2},
-  {3,8,2},
-  {3,9,2},
-  {3,10,2},
-  {3,11,2},
-  {1,0,2},
-  {1,1,2},
-  {1,6,2},
-  {1,7,2}
-};
-
-static const uint8_t table_7_3_1_1_2_21[19][4] = {
-  {1,0,1,1},
-  {2,0,1,1},
-  {2,2,3,1},
-  {3,0,1,1},
-  {3,2,3,1},
-  {3,4,5,1},
-  {2,0,2,1},
-  {3,0,1,2},
-  {3,2,3,2},
-  {3,4,5,2},
-  {3,6,7,2},
-  {3,8,9,2},
-  {3,10,11,2},
-  {1,0,1,2},
-  {1,6,7,2},
-  {2,0,1,2},
-  {2,2,3,2},
-  {2,6,7,2},
-  {2,8,9,2}
-};
-
-static const uint8_t table_7_3_1_1_2_22[6][5] = {
-  {2,0,1,2,1},
-  {3,0,1,2,1},
-  {3,3,4,5,1},
-  {3,0,1,6,2},
-  {3,2,3,8,2},
-  {3,4,5,10,2}
-};
-
-static const uint8_t table_7_3_1_1_2_23[5][6] = {
-  {2,0,1,2,3,1},
-  {3,0,1,2,3,1},
-  {3,0,1,6,7,2},
-  {3,2,3,8,9,2},
-  {3,4,5,10,11,2}
-};
-
 static const uint8_t table_7_3_2_3_3_1[12][5] = {
   {1,1,0,0,0},
   {1,0,1,0,0},
@@ -475,107 +326,23 @@ void ul_ports_config(NR_UE_MAC_INST_t *mac,
         dmrs_type ? "type2" : "type1",
         val);
 
-  if ((transformPrecoder == NR_PUSCH_Config__transformPrecoder_enabled)
-       && (dmrs_type == NULL)
-       && (max_length == NULL)) { // tables 7.3.1.1.2-6
-    pusch_config_pdu->num_dmrs_cdm_grps_no_data = 2;
-    pusch_config_pdu->dmrs_ports = 1 << val;
+  int ret = decode_dci_antenna_ports_val(rank,
+                                         dmrs_type,
+                                         transformPrecoder,
+                                         val,
+                                         &pusch_config_pdu->num_dmrs_cdm_grps_no_data,
+                                         &pusch_config_pdu->dmrs_ports,
+                                         n_front_load_symb);
+  if (ret < 0) {
+    LOG_E(NR_MAC,
+          "invalid DCI antenna_ports val %d (rank %d type %d tp %s)\n",
+          val,
+          rank,
+          dmrs_type ? 2 : 1,
+          transformPrecoder == NR_PUSCH_Config__transformPrecoder_disabled ? "disabled" : "enabled");
+    return;
   }
-  if ((transformPrecoder == NR_PUSCH_Config__transformPrecoder_enabled)
-      && (dmrs_type == NULL)
-      && (max_length != NULL)) { // tables 7.3.1.1.2-7
-    pusch_config_pdu->num_dmrs_cdm_grps_no_data = 2; //TBC
-    pusch_config_pdu->dmrs_ports = 1 << ((val > 3) ? (val - 4) : (val));
-    *n_front_load_symb = (val > 3) ? 2 : 1;
-  }
-  if ((transformPrecoder == NR_PUSCH_Config__transformPrecoder_disabled)
-      && (dmrs_type == NULL)
-      && (max_length == NULL)) { // tables 7.3.1.1.2-8/9/10/11
-    if (rank == 1) {
-      pusch_config_pdu->num_dmrs_cdm_grps_no_data = (val > 1) ? 2 : 1;
-      pusch_config_pdu->dmrs_ports = 1 << ((val > 1) ? (val - 2) : (val));
-    }
-    if (rank == 2) {
-      pusch_config_pdu->num_dmrs_cdm_grps_no_data = (val > 0) ? 2 : 1;
-      pusch_config_pdu->dmrs_ports = (val > 1) ? ((val > 2) ? 0x5 : 0xc) : 0x3;
-    }
-    if (rank == 3) {
-      pusch_config_pdu->num_dmrs_cdm_grps_no_data = 2;
-      pusch_config_pdu->dmrs_ports = 0x7;  // ports 0-2
-    }
-    if (rank == 4) {
-      pusch_config_pdu->num_dmrs_cdm_grps_no_data = 2;
-      pusch_config_pdu->dmrs_ports = 0xf;  // ports 0-3
-    }
-  }
-  if ((transformPrecoder == NR_PUSCH_Config__transformPrecoder_disabled)
-      && (dmrs_type == NULL)
-      && (max_length != NULL)) { // tables 7.3.1.1.2-12/13/14/15
-    if (rank == 1) {
-      pusch_config_pdu->num_dmrs_cdm_grps_no_data = table_7_3_1_1_2_12[val][0];
-      pusch_config_pdu->dmrs_ports = 1 << table_7_3_1_1_2_12[val][1];
-      *n_front_load_symb = table_7_3_1_1_2_12[val][2];
-    }
-    if (rank == 2) {
-      pusch_config_pdu->num_dmrs_cdm_grps_no_data = table_7_3_1_1_2_13[val][0];
-      pusch_config_pdu->dmrs_ports = packBits(&table_7_3_1_1_2_13[val][1], 2);
-      *n_front_load_symb = table_7_3_1_1_2_13[val][3];
-    }
-    if (rank == 3) {
-      pusch_config_pdu->num_dmrs_cdm_grps_no_data = table_7_3_1_1_2_14[val][0];
-      pusch_config_pdu->dmrs_ports = packBits(&table_7_3_1_1_2_14[val][1], 3);
-      *n_front_load_symb = table_7_3_1_1_2_14[val][4];
-    }
-    if (rank == 4) {
-      pusch_config_pdu->num_dmrs_cdm_grps_no_data = table_7_3_1_1_2_15[val][0];
-      pusch_config_pdu->dmrs_ports = packBits(&table_7_3_1_1_2_15[val][1], 4);
-      *n_front_load_symb = table_7_3_1_1_2_15[val][5];
-    }
-  }
-  if ((transformPrecoder == NR_PUSCH_Config__transformPrecoder_disabled)
-      && (dmrs_type != NULL)
-      && (max_length == NULL)) { // tables 7.3.1.1.2-16/17/18/19
-    if (rank == 1) {
-      pusch_config_pdu->num_dmrs_cdm_grps_no_data = table_7_3_1_1_2_16[val][0];
-      pusch_config_pdu->dmrs_ports = 1 << table_7_3_1_1_2_16[val][1];
-    }
-    if (rank == 2) {
-      pusch_config_pdu->num_dmrs_cdm_grps_no_data = table_7_3_1_1_2_17[val][0];
-      pusch_config_pdu->dmrs_ports = packBits(&table_7_3_1_1_2_17[val][1], 2);
-    }
-    if (rank == 3) {
-      pusch_config_pdu->num_dmrs_cdm_grps_no_data = table_7_3_1_1_2_18[val][0];
-      pusch_config_pdu->dmrs_ports = packBits(&table_7_3_1_1_2_18[val][1], 3);
-    }
-    if (rank == 4) {
-      pusch_config_pdu->num_dmrs_cdm_grps_no_data = table_7_3_1_1_2_19[val][0];
-      pusch_config_pdu->dmrs_ports = packBits(&table_7_3_1_1_2_19[val][1], 4);
-    }
-  }
-  if ((transformPrecoder == NR_PUSCH_Config__transformPrecoder_disabled)
-      && (dmrs_type != NULL)
-      && (max_length != NULL)) { // tables 7.3.1.1.2-20/21/22/23
-    if (rank == 1) {
-      pusch_config_pdu->num_dmrs_cdm_grps_no_data = table_7_3_1_1_2_20[val][0];
-      pusch_config_pdu->dmrs_ports = 1 << table_7_3_1_1_2_20[val][1];
-      *n_front_load_symb = table_7_3_1_1_2_20[val][2];
-    }
-    if (rank == 2) {
-      pusch_config_pdu->num_dmrs_cdm_grps_no_data = table_7_3_1_1_2_21[val][0];
-      pusch_config_pdu->dmrs_ports = packBits(&table_7_3_1_1_2_21[val][1], 2);
-      *n_front_load_symb = table_7_3_1_1_2_21[val][3];
-    }
-    if (rank == 3) {
-      pusch_config_pdu->num_dmrs_cdm_grps_no_data = table_7_3_1_1_2_22[val][0];
-      pusch_config_pdu->dmrs_ports = packBits(&table_7_3_1_1_2_22[val][1], 3);
-      *n_front_load_symb = table_7_3_1_1_2_22[val][4];
-    }
-    if (rank == 4) {
-      pusch_config_pdu->num_dmrs_cdm_grps_no_data = table_7_3_1_1_2_23[val][0];
-      pusch_config_pdu->dmrs_ports = packBits(&table_7_3_1_1_2_23[val][1], 4);
-      *n_front_load_symb = table_7_3_1_1_2_23[val][5];
-    }
-  }
+
   LOG_D(NR_MAC,
         "num_dmrs_cdm_grps_no_data %d, dmrs_ports %d\n",
         pusch_config_pdu->num_dmrs_cdm_grps_no_data,

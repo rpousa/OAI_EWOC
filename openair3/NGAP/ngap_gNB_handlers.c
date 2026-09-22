@@ -23,6 +23,7 @@
 #include "ngap_common.h"
 #include "ngap_gNB_decoder.h"
 #include "ngap_gNB_defs.h"
+#include "ngap_gNB_encoder.h"
 #include "ngap_gNB_nnsf.h"
 #include "ngap_gNB_management_procedures.h"
 #include "ngap_gNB_mobility_management.h"
@@ -35,6 +36,10 @@
 #include "oai_asn1.h"
 #include "queue.h"
 
+#ifdef E2_AGENT
+#include "openair2/E2AP/RAN_FUNCTION/setup_msg_store.h"
+#endif
+
 char *ngap_direction2String(int ngap_dir) {
   static char *ngap_direction_String[] = {
     "", /* Nothing */
@@ -44,6 +49,46 @@ char *ngap_direction2String(int ngap_dir) {
   };
   return(ngap_direction_String[ngap_dir]);
 }
+
+static void ngap_send_register_gnb_cnf(ngap_gNB_instance_t *inst)
+{
+  MessageDef *message_p = itti_alloc_new_message(TASK_NGAP, 0, NGAP_REGISTER_GNB_CNF);
+  ngap_register_gnb_cnf_t *cnf = &NGAP_REGISTER_GNB_CNF(message_p);
+
+  cnf->nb_amf = inst->ngap_amf_associated_nb;
+  cnf->gNB_id = inst->gNB_id;
+  cnf->tac = inst->tac;
+  cnf->num_plmn = inst->num_plmn;
+  memcpy(cnf->plmn, inst->plmn, inst->num_plmn * sizeof(*inst->plmn));
+
+  int r = 0;
+  ngap_gNB_amf_data_t *amf_node;
+  struct served_guami_s *guami;
+  struct plmn_identity_s *plmn;
+  struct served_region_id_s *region;
+  RB_FOREACH(amf_node, ngap_amf_map, &inst->ngap_amf_head) {
+    STAILQ_FOREACH(guami, &amf_node->served_guami, next) {
+      if (r >= NGAP_MAX_NB_AMF_REGIONS)
+        break;
+      ngap_amf_region_info_t *amf_region = &cnf->amf_region_info[r];
+      STAILQ_FOREACH(plmn, &guami->served_plmns, next) {
+        amf_region->plmn.mcc = plmn->mcc;
+        amf_region->plmn.mnc = plmn->mnc;
+        amf_region->plmn.mnc_digit_length = plmn->mnc_digit_length;
+        break;
+      }
+      STAILQ_FOREACH(region, &guami->served_region_ids, next) {
+        amf_region->amf_region_id = region->amf_region_id;
+        break;
+      }
+      r++;
+    }
+  }
+  cnf->num_amf_regions = r;
+
+  itti_send_msg_to_task(TASK_GNB_APP, inst->instance, message_p);
+}
+
 void ngap_handle_ng_setup_message(ngap_gNB_amf_data_t *amf_desc_p, int sctp_shutdown) {
   if (sctp_shutdown) {
     /* A previously connected AMF has been shutdown */
@@ -70,7 +115,6 @@ void ngap_handle_ng_setup_message(ngap_gNB_amf_data_t *amf_desc_p, int sctp_shut
     if (amf_desc_p->t_reconnect != -1 && amf_desc_p->ngap_gNB_instance->ngap_amf_associated_nb > 0) {
       timer_remove(amf_desc_p->t_reconnect);
       amf_desc_p->t_reconnect = -1;
-      NGAP_INFO("reconnected to AMF\n");
     }
 
     /* Check that at least one setup message is pending */
@@ -86,9 +130,7 @@ void ngap_handle_ng_setup_message(ngap_gNB_amf_data_t *amf_desc_p, int sctp_shut
 
     /* If there are no more pending messages, inform gNB app */
     if (amf_desc_p->ngap_gNB_instance->ngap_amf_pending_nb == 0) {
-      MessageDef *message_p = itti_alloc_new_message(TASK_NGAP, 0, NGAP_REGISTER_GNB_CNF);
-      NGAP_REGISTER_GNB_CNF(message_p).nb_amf = amf_desc_p->ngap_gNB_instance->ngap_amf_associated_nb;
-      itti_send_msg_to_task(TASK_GNB_APP, amf_desc_p->ngap_gNB_instance->instance, message_p);
+      ngap_send_register_gnb_cnf(amf_desc_p->ngap_gNB_instance);
     }
   }
 }
@@ -165,6 +207,13 @@ static int ngap_gNB_handle_ng_setup_response(sctp_assoc_t assoc_id, uint32_t str
   ngap_gNB_amf_data_t       *amf_desc_p;
   int i;
   DevAssert(pdu != NULL);
+#ifdef E2_AGENT
+  uint8_t *buffer = NULL;
+  uint32_t len = 0;
+  if (ngap_gNB_encode_pdu(pdu, &buffer, &len) == 0)
+    e2ap_store_setup_resp(E2AP_SETUP_MSG_NGAP, buffer, len);
+  free(buffer);
+#endif
   container = &pdu->choice.successfulOutcome->value.choice.NGSetupResponse;
 
   /* NG Setup Response == Non UE-related procedure -> stream 0 */
@@ -701,7 +750,6 @@ static int ngap_gNB_handle_handover_request(sctp_assoc_t assoc_id, uint32_t stre
 
   MessageDef *message_p = itti_alloc_new_message(TASK_NGAP, 0, NGAP_HANDOVER_REQUEST);
   ngap_handover_request_t *msg = &NGAP_HANDOVER_REQUEST(message_p);
-  memset(msg, 0, sizeof(*msg));
 
   if (decode_ng_handover_request(msg, pdu) < 0) {
     NGAP_ERROR("Failed to decode NG Handover Request\n");
@@ -772,7 +820,6 @@ static int ngap_gNB_handle_initial_context_request(sctp_assoc_t assoc_id, uint32
   
   MessageDef *message_p = itti_alloc_new_message(TASK_NGAP, 0, NGAP_INITIAL_CONTEXT_SETUP_REQ);
   ngap_initial_context_setup_req_t * msg=&NGAP_INITIAL_CONTEXT_SETUP_REQ(message_p);
-  memset(msg, 0, sizeof(*msg));
   msg->gNB_ue_ngap_id = ue_desc_p->gNB_ue_ngap_id;
   msg->amf_ue_ngap_id = ue_desc_p->amf_ue_ngap_id;
   /* id-UEAggregateMaximumBitRate */
@@ -959,7 +1006,6 @@ static int ngap_gNB_handle_pdusession_setup_request(sctp_assoc_t assoc_id, uint3
 
   MessageDef * message_p = itti_alloc_new_message(TASK_NGAP, 0, NGAP_PDUSESSION_SETUP_REQ);
   ngap_pdusession_setup_req_t * msg=&NGAP_PDUSESSION_SETUP_REQ(message_p);
-  memset(msg, 0, sizeof(*msg));
   msg->gNB_ue_ngap_id = ue_desc_p->gNB_ue_ngap_id;
   msg->amf_ue_ngap_id = ue_desc_p->amf_ue_ngap_id;
 
@@ -1016,7 +1062,6 @@ static int ngap_gNB_handle_handover_command(sctp_assoc_t assoc_id, uint32_t stre
 
   MessageDef *message_p = itti_alloc_new_message(TASK_NGAP, 0, NGAP_HANDOVER_COMMAND);
   ngap_handover_command_t *msg = &NGAP_HANDOVER_COMMAND(message_p);
-  memset(msg, 0, sizeof(*msg));
   if (decode_ng_handover_command(msg, pdu) < 0) {
     NGAP_ERROR("Failed to decode NG Handover Command");
     free_ng_handover_command(msg);
@@ -1089,6 +1134,54 @@ static int ngap_gNB_handle_handover_cancel_ack(sctp_assoc_t assoc_id, uint32_t s
 
   // cancel was already handled at RRC level, do not forward
 
+  return 0;
+}
+
+/** @brief Handler for NGAP Path Switch Request Acknowledge
+ *   AMF -> NG-RAN Node */
+static int ngap_gNB_handle_ng_path_switch_request_ack(sctp_assoc_t assoc_id, uint32_t stream, NGAP_NGAP_PDU_t *pdu)
+{
+  NGAP_INFO("Received NG Path Switch Request Acknowledge\n");
+  ngap_gNB_amf_data_t *amf_desc_p = NULL;
+  DevAssert(pdu != NULL);
+
+  if ((amf_desc_p = ngap_gNB_get_AMF(NULL, assoc_id, 0)) == NULL) {
+    NGAP_ERROR("[SCTP %u] Received Path Switch Request "
+               "Acknowledge for non existing AMF context\n", assoc_id);
+    return -1;
+  }
+  MessageDef *message_p = itti_alloc_new_message(TASK_NGAP, 0, NGAP_PATH_SWITCH_REQ_ACK);
+  ngap_path_switch_req_ack_t *msg = &NGAP_PATH_SWITCH_REQ_ACK(message_p);
+  memset(msg, 0, sizeof(*msg));
+  if (decode_ng_path_switch_request_acknowledge(msg, pdu) < 0) {
+    NGAP_ERROR("Failed to decode NG Path Switch Request Acknowledge\n");
+    free_ng_path_switch_req_ack(msg);
+    itti_free(TASK_NGAP, message_p);
+    return -1;
+  }
+
+  ngap_gNB_ue_context_t *ue_desc_p = ngap_get_ue_context(msg->gNB_ue_ngap_id);
+  if (!ue_desc_p) {
+    NGAP_ERROR("[SCTP %u] Received Path Switch Request Acknowledge for non "
+               "existing UE context (gNB_ue_ngap_id %d)\n",
+               assoc_id,
+               msg->gNB_ue_ngap_id);
+    free_ng_path_switch_req_ack(msg);
+    itti_free(TASK_NGAP, message_p);
+    return -1;
+  }
+
+  ue_desc_p->rx_stream = stream;
+  if (ue_desc_p->amf_ue_ngap_id != msg->amf_ue_ngap_id) {
+    NGAP_ERROR("UE context amf_ue_ngap_id is different from that of the message (%ld != %ld)",
+               ue_desc_p->amf_ue_ngap_id,
+               msg->amf_ue_ngap_id);
+    free_ng_path_switch_req_ack(msg);
+    itti_free(TASK_NGAP, message_p);
+    return -1;
+  }
+
+  itti_send_msg_to_task(TASK_RRC_GNB, amf_desc_p->ngap_gNB_instance->instance, message_p);
   return 0;
 }
 
@@ -1275,7 +1368,6 @@ static int ngap_gNB_handle_pdusession_modify_request(sctp_assoc_t assoc_id, uint
               (uint64_t)ue_desc_p->amf_ue_ngap_id, amf_ue_ngap_id);
     MessageDef *message_p = itti_alloc_new_message (TASK_RRC_GNB, 0, NGAP_PDUSESSION_MODIFY_RESP);
     ngap_pdusession_modify_resp_t* msg=&NGAP_PDUSESSION_MODIFY_RESP(message_p);
-    memset(msg, 0, sizeof(*msg));
     msg->gNB_ue_ngap_id = gnb_ue_ngap_id;
     for (int nb_of_pdusessions_failed = 0; nb_of_pdusessions_failed < ie->value.choice.PDUSessionResourceModifyListModReq.list.count; nb_of_pdusessions_failed++) {
         NGAP_PDUSessionResourceModifyItemModReq_t *item_p;
@@ -1293,7 +1385,6 @@ static int ngap_gNB_handle_pdusession_modify_request(sctp_assoc_t assoc_id, uint
 
   MessageDef *message_p = itti_alloc_new_message(TASK_NGAP, 0, NGAP_PDUSESSION_MODIFY_REQ);
   ngap_pdusession_modify_req_t * msg=&NGAP_PDUSESSION_MODIFY_REQ(message_p);
-  memset(msg, 0, sizeof(*msg));
   msg->amf_ue_ngap_id  = amf_ue_ngap_id;
   msg->gNB_ue_ngap_id = gnb_ue_ngap_id;
 
@@ -1378,7 +1469,6 @@ static int ngap_gNB_handle_pdusession_release_command(sctp_assoc_t assoc_id, uin
              assoc_id, gnb_ue_ngap_id, amf_ue_ngap_id);
   MessageDef * message_p = itti_alloc_new_message(TASK_NGAP, 0, NGAP_PDUSESSION_RELEASE_COMMAND);
   ngap_pdusession_release_command_t * msg=&NGAP_PDUSESSION_RELEASE_COMMAND(message_p);
-  memset(msg, 0, sizeof(*msg));
 
   msg->gNB_ue_ngap_id = gnb_ue_ngap_id;
   msg->amf_ue_ngap_id = amf_ue_ngap_id;
@@ -1461,7 +1551,6 @@ static int ngap_gNB_handle_dl_ran_status_transfer(sctp_assoc_t assoc_id, uint32_
 
   MessageDef *message_p = itti_alloc_new_message(TASK_NGAP, 0, NGAP_DL_RAN_STATUS_TRANSFER);
   ngap_ran_status_transfer_t *msg = &NGAP_DL_RAN_STATUS_TRANSFER(message_p);
-  memset(msg, 0, sizeof(*msg));
 
   msg->amf_ue_ngap_id = amf_ue_ngap_id;
   msg->gnb_ue_ngap_id = gnb_ue_ngap_id;
@@ -1542,7 +1631,7 @@ const ngap_message_decoded_callback ngap_messages_callback[][3] = {
     {0, 0, 0}, /* OverloadStart */
     {0, 0, 0}, /* OverloadStop */
     {ngap_gNB_handle_paging, 0, 0}, /* Paging */
-    {0, 0, 0}, /* PathSwitchRequest */
+    {0, ngap_gNB_handle_ng_path_switch_request_ack, 0}, /* PathSwitchRequest */
     {ngap_gNB_handle_pdusession_modify_request, 0, 0}, /* PDUSessionResourceModify */
     {0, 0, 0}, /* PDUSessionResourceModifyIndication */
     {ngap_gNB_handle_pdusession_release_command, 0, 0}, /* PDUSessionResourceRelease */

@@ -23,7 +23,6 @@
 #include <sys/sysinfo.h>
 #include <sys/types.h>
 #include <unistd.h>
-#include "radio/COMMON/common_lib.h"
 #include "assertions.h"
 #include "PHY/types.h"
 #include "PHY/defs_eNB.h"

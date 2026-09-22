@@ -12,3 +12,11 @@ foreach (fapi_p5_message IN LISTS _fapi_p5_messages)
     add_test(nr_fapi_${fapi_p5_message}_test nr_fapi_${fapi_p5_message}_test)
     set_tests_properties(nr_fapi_${fapi_p5_message}_test PROPERTIES LABELS "${Test_Labels}")
 endforeach ()
+
+add_executable(nr_fapi_p5_phy_id_test nr_fapi_p5_phy_id_test.c)
+target_link_libraries(nr_fapi_p5_phy_id_test PUBLIC nr_fapi_p5)
+target_link_libraries(nr_fapi_p5_phy_id_test PRIVATE pthread UTIL ${T_LIB} minimal_lib)
+add_dependencies(tests nr_fapi_p5_phy_id_test)
+
+add_test(nr_fapi_p5_phy_id_test nr_fapi_p5_phy_id_test)
+set_tests_properties(nr_fapi_p5_phy_id_test PROPERTIES LABELS "${Test_Labels}")

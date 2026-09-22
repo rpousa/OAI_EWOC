@@ -1402,6 +1402,7 @@ static f1ap_srs_config_t cp_srs_config(const f1ap_srs_config_t *in_config)
 
       f1ap_resource_type_t *f1_res_type = &f1_srs_resource->resource_type;
       f1ap_resource_type_t *res_type = &srs_resource->resource_type;
+      f1_res_type->present = res_type->present;
       if (res_type->present == F1AP_RESOURCE_TYPE_PR_NOTHING) {
         // nothing to copy
       } else if (res_type->present == F1AP_RESOURCE_TYPE_PR_PERIODIC) {
@@ -3201,6 +3202,7 @@ static f1ap_pos_measurement_result_t cp_positioning_measurement_result(const f1a
         f1ap_ul_rtoa_measurement_item_t *f1_ul_rtoa_meas_item = &f1_uL_RTOA->ul_rtoa_measurement_item;
         f1ap_ul_rtoa_measurement_item_t *ul_rtoa_meas_item = &uL_RTOA->ul_rtoa_measurement_item;
 
+        ul_rtoa_meas_item->present = f1_ul_rtoa_meas_item->present;
         switch (f1_ul_rtoa_meas_item->present) {
           case F1AP_ULRTOAMEAS_PR_NOTHING:
             break;
@@ -3232,11 +3234,10 @@ static f1ap_pos_measurement_result_t cp_positioning_measurement_result(const f1a
       case F1AP_MEASURED_RESULTS_VALUE_PR_GNB_RXTXTIMEDIFF: {
         f1ap_gnb_rx_tx_time_diff_t *f1_gNB_RxTxTimeDiff = &f1_measuredResultsValue->choice.gnb_rx_tx_time_diff;
         f1ap_gnb_rx_tx_time_diff_t *gNB_RxTxTimeDiff = &measuredResultsValue->choice.gnb_rx_tx_time_diff;
-        f1_gNB_RxTxTimeDiff->rx_tx_time_diff.present = gNB_RxTxTimeDiff->rx_tx_time_diff.present;
-
         f1ap_gnb_rx_tx_time_diff_meas_t *f1_rx_tx_time_diff = &f1_gNB_RxTxTimeDiff->rx_tx_time_diff;
         f1ap_gnb_rx_tx_time_diff_meas_t *rx_tx_time_diff = &gNB_RxTxTimeDiff->rx_tx_time_diff;
 
+        rx_tx_time_diff->present = f1_rx_tx_time_diff->present;
         switch (f1_rx_tx_time_diff->present) {
           case F1AP_GNBRXTXTIMEDIFFMEAS_PR_NOTHING:
             break;
@@ -3275,6 +3276,8 @@ static f1ap_pos_measurement_result_t cp_positioning_measurement_result(const f1a
     timeStamp->system_frame_number = f1_timeStamp->system_frame_number;
     f1ap_time_stamp_slot_index_t *f1_slot_index = &f1_timeStamp->slot_index;
     f1ap_time_stamp_slot_index_t *slot_index = &timeStamp->slot_index;
+
+    slot_index->present = f1_slot_index->present;
     switch (f1_slot_index->present) {
       case F1AP_TIME_STAMP_SLOT_INDEX_PR_NOTHING:
         break;
@@ -4629,7 +4632,6 @@ bool decode_trp_information_req(const F1AP_F1AP_PDU_t *pdu, f1ap_trp_information
   F1AP_TRPInformationRequestIEs_t *ie;
 
   F1AP_LIB_FIND_IE(F1AP_TRPInformationRequestIEs_t, ie, &in->protocolIEs.list, F1AP_ProtocolIE_ID_id_TransactionID, true);
-  F1AP_LIB_FIND_IE(F1AP_TRPInformationRequestIEs_t, ie, &in->protocolIEs.list, F1AP_ProtocolIE_ID_id_TRPList, true);
   F1AP_LIB_FIND_IE(F1AP_TRPInformationRequestIEs_t,
                    ie,
                    &in->protocolIEs.list,

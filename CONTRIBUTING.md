@@ -1,6 +1,6 @@
 <!-- SPDX-License-Identifier: CC-BY-4.0 -->
 
-# Contributing to OpenAirInterface
+# Contributing to Duranta
 
 We want to make contributing to this project as easy and transparent as possible.
 
@@ -18,41 +18,30 @@ We want to make contributing to this project as easy and transparent as possible
 
 ## Commit Guidelines
 
+Every pull request must pass two CI checks before it can be merged:
+
+1. **[Developer Certificate of Origin (DCO)](https://en.wikipedia.org/wiki/Developer_Certificate_of_Origin)**:
+   Each commit must include a `Signed-off-by:` trailer in the commit message.
+   Use `git commit -s` (or `--signoff`).
+
+2. **[Verified commits](https://docs.github.com/en/authentication/managing-commit-signature-verification/about-commit-signature-verification)**:
+   Each commit must be cryptographically signed using SSH or GPG keys to confirm
+   its origin.
+
 ### Signing Commits
 
-To sign commits:
+GitHub supports commit signing using either SSH keys or GPG keys. For the
+step-by-step setup (key generation, Git configuration, registering the key on
+GitHub, and verifying signatures locally), see the
+[commit signing section of the Git guide](doc/git-guide.md#setting-up-commit-signing).
 
-You can also get the verified label on your commits via using [SSH keys or GPG
-keys](https://docs.github.com/en/authentication/managing-commit-signature-verification/signing-commits)
-
-```
-# Edit .git/config in the git repository you are working on
-# Add the user section
-[user]
-    name = YOUR NAME
-    email = YOUR EMAIL ADDRESS
-
-# If you use a signing key, use the below configuration instead
-[user]
-    name = YOUR NAME
-    email = YOUR EMAIL ADDRESS
-    signingkey = LOCATION OF SSH KEYS or GPG KEY
-
-[gpg]
-    format = ssh
-
-[commit]
-    gpgsign = true
-```
-
-> **NOTE:** If your commits are not signed the CI framework will not accept the PR.
-
+> **NOTE:** If your commits are not signed, the CI framework will not accept the PR.
 For more information regarding contribution guidelines
 please check [this document](doc/code-style-contrib.md)
 
 ## License
 
-By contributing to OpenAirInterface, you agree that your contributions will be
+By contributing to Duranta, you agree that your contributions will be
 licensed under
 
 1. [CSSL v1.0 license](LICENSES/preferred/CSSL-v1.0.txt): for RAN and UE

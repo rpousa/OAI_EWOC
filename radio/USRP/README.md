@@ -151,3 +151,37 @@ There are two workarounds:
 
 You can also find more information on this in the [5G/NR gNB with COTS UE
 tutorial](./NR_SA_Tutorial_COTS_UE.md).
+
+### Sample bit alignment (`rxshift` / TX shift)
+
+`usrp_lib.cpp` registers a custom UHD CPU format, `sc16_oai` (see
+`usrp_converters.cpp`), to correct for UHD's `sc16` bit alignment: UHD places
+each converter's significant bits at the top of the 16-bit word and zeros the
+rest, it doesn't renormalize to full scale (only `fc32` does). OAI's
+fixed-point PHY expects samples in the low 12 bits instead, for MAC headroom,
+so RX undoes UHD's MSB-justification and TX redoes it.
+
+`rxshift` follows each RX converter's real ADC resolution:
+
+| Device    | ADC                        | Resolution | `rxshift` |
+|-----------|-----------------------------|-----------|-----------|
+| B2xx      | AD9361                      | 12-bit    | 4 |
+| X3xx/N3xx | ADS62P48 / AD9371            | 14-bit    | 2 |
+| X4xx      | Xilinx RFSoC ZU28DR RF-ADC   | 12-bit    | 4 |
+
+X4xx was previously lumped in with X3xx/N3xx at `rxshift = 2`, assuming a
+14-bit ADC. Ettus's [X410](https://www.farnell.com/datasheets/3927908.pdf)
+and [X440](https://www.ettus.com/wp-content/uploads/2023/09/ettus_usrp_x440_specifications.pdf)
+spec sheets both list a 12-bit ADC resolution, so X4xx now gets its own
+`rxshift = 4`, matching B2xx instead.
+
+TX shift stays a flat 4 for every device, unlike `rxshift`. OAI's TX chain
+never drives samples near full scale to begin with:
+`gNB->TX_AMP` defaults to `1 << 9 = 512`, and with `tx_amp_backoff_dB` set,
+`openair2/GNB_APP/gnb_config.c` computes it as `32767 / 10^(backoff_dB/20)` -
+a default 36 dB backoff for OFDM PAPR headroom. With that much margin already
+built in, tailoring the shift to each DAC's native resolution (12/14/16-bit)
+wouldn't meaningfully change the transmitted signal, so the flat value is
+kept. Every 6 dB of backoff costs roughly one effective bit to quantization
+noise, so a higher-resolution DAC tolerates the same backoff with less
+relative noise cost than a lower-resolution one.

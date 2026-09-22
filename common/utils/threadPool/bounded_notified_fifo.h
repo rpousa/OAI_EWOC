@@ -85,6 +85,7 @@ static void free_seq_ring_task(seq_ring_task_t* r)
 static void push_back_seq_ring_task(seq_ring_task_t* r, task_t t)
 {
   DevAssert(r != NULL);
+  DevAssert(t.func != NULL || t.args == NULL);
 
   if (full(r))
     enlarge_buffer(r);
@@ -166,7 +167,6 @@ static bool try_push_not_q(not_q_t* q, task_t t)
 static void push_not_q(not_q_t* q, task_t t)
 {
   DevAssert(q != NULL);
-  DevAssert(t.func != NULL);
 
   mutexlock(q->mtx);
 

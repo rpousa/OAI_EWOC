@@ -25,6 +25,7 @@
 #include "asn1_msg.h"
 #include "../nr_rrc_proto.h"
 #include "LAYER2/nr_pdcp/nr_pdcp_asn1_utils.h"
+#include "openair2/RRC/NR/rrc_gNB_measurements.h"
 
 #include "openair3/SECU/key_nas_deriver.h"
 
@@ -61,6 +62,7 @@
 #include "NR_RRCReestablishmentRequest.h"
 #include "NR_PCCH-Message.h"
 #include "NR_PagingRecord.h"
+#include "NR_Paging-v1700-IEs.h"
 #include "NR_UE-CapabilityRequestFilterNR.h"
 #include "NR_HandoverPreparationInformation.h"
 #include "NR_HandoverPreparationInformation-IEs.h"
@@ -880,15 +882,16 @@ int do_RRCSetupComplete(uint8_t *buffer,
   return((enc_rval.encoded+7)/8);
 }
 
-// TODO: This function is only implemented for event A2/A3
+// This function is implemented for event A2/A3 and periodical report
 int do_nrMeasurementReport_SA(long trigger_to_measid,
                               long trigger_quantity,
+                              bool report_rsrp,
                               long rs_type,
                               uint16_t Nid_cell,
                               int rsrp_index,
-                              bool neighbor_cell_valid,
-                              uint16_t neighbor_Nid_cell,
-                              int neighbor_rsrp_index,
+                              int num_neighbor_cells,
+                              const uint16_t *neighbor_Nid_cells,
+                              const int *neighbor_rsrp_indexes,
                               uint8_t *buffer,
                               size_t buffer_size)
 {
@@ -913,7 +916,7 @@ int do_nrMeasurementReport_SA(long trigger_to_measid,
   *pci = Nid_cell;
 
   struct NR_MeasQuantityResults *active_mq_res = calloc_or_fail(1, sizeof(*active_mq_res));
-  if (trigger_quantity == NR_MeasTriggerQuantityOffset_PR_rsrp) {
+  if (trigger_quantity == NR_MeasTriggerQuantityOffset_PR_rsrp || report_rsrp) {
     asn1cCalloc(active_mq_res->rsrp, rsrp);
     // Assign precomputed RSRP index
     *rsrp = rsrp_index;
@@ -925,27 +928,30 @@ int do_nrMeasurementReport_SA(long trigger_to_measid,
 
   ASN_SEQUENCE_ADD(&mrIE->measResults.measResultServingMOList.list, measResultServMo);
 
-  // Neighbor cell
-  if (neighbor_cell_valid) {
+  // Neighbor cells
+  if (num_neighbor_cells > 0) {
     struct NR_MeasResults__measResultNeighCells *measResultNeighCells = calloc_or_fail(1, sizeof(*measResultNeighCells));
     mrIE->measResults.measResultNeighCells = measResultNeighCells;
     measResultNeighCells->present = NR_MeasResults__measResultNeighCells_PR_measResultListNR;
     NR_MeasResultListNR_t *measResultListNR = calloc_or_fail(1, sizeof(*measResultListNR));
     measResultNeighCells->choice.measResultListNR = measResultListNR;
-    struct NR_MeasResultNR *meas_result_neigh_cell = calloc_or_fail(1, sizeof(*meas_result_neigh_cell));
-    asn1cCalloc(meas_result_neigh_cell->physCellId, neighbor_pci);
-    *neighbor_pci = neighbor_Nid_cell;
-    struct NR_MeasResultNR__measResult__cellResults *cellResults = &meas_result_neigh_cell->measResult.cellResults;
-    struct NR_MeasQuantityResults *neigh_mq_res = calloc_or_fail(1, sizeof(*neigh_mq_res));
-    if (trigger_quantity == NR_MeasTriggerQuantityOffset_PR_rsrp) {
-      asn1cCalloc(neigh_mq_res->rsrp, rsrp);
-      *rsrp = neighbor_rsrp_index;
-      if (rs_type == NR_NR_RS_Type_ssb)
-        cellResults->resultsSSB_Cell = neigh_mq_res;
-      else
-        cellResults->resultsCSI_RS_Cell = neigh_mq_res;
+
+    for (int i = 0; i < num_neighbor_cells; i++) {
+      struct NR_MeasResultNR *meas_result_neigh_cell = calloc_or_fail(1, sizeof(*meas_result_neigh_cell));
+      asn1cCalloc(meas_result_neigh_cell->physCellId, neighbor_pci);
+      *neighbor_pci = neighbor_Nid_cells[i];
+      struct NR_MeasResultNR__measResult__cellResults *cellResults = &meas_result_neigh_cell->measResult.cellResults;
+      struct NR_MeasQuantityResults *neigh_mq_res = calloc_or_fail(1, sizeof(*neigh_mq_res));
+      if (trigger_quantity == NR_MeasTriggerQuantityOffset_PR_rsrp || report_rsrp) {
+        asn1cCalloc(neigh_mq_res->rsrp, rsrp);
+        *rsrp = neighbor_rsrp_indexes[i];
+        if (rs_type == NR_NR_RS_Type_ssb)
+          cellResults->resultsSSB_Cell = neigh_mq_res;
+        else
+          cellResults->resultsCSI_RS_Cell = neigh_mq_res;
+      }
+      ASN_SEQUENCE_ADD(&measResultListNR->list, meas_result_neigh_cell);
     }
-    ASN_SEQUENCE_ADD(&measResultListNR->list, meas_result_neigh_cell);
   }
 
   enc_rval = uper_encode_to_buffer(&asn_DEF_NR_UL_DCCH_Message, NULL, (void *)&ul_dcch_msg, buffer, buffer_size);
@@ -957,15 +963,14 @@ int do_nrMeasurementReport_SA(long trigger_to_measid,
 
   LOG_I(NR_RRC, "MeasurementReport Encoded %zd bits (%zd bytes)\n", enc_rval.encoded, (enc_rval.encoded + 7) / 8);
 
-  return ((enc_rval.encoded + 7) / 8);
+  int ret = (enc_rval.encoded + 7) / 8;
+  ASN_STRUCT_FREE_CONTENTS_ONLY(asn_DEF_NR_UL_DCCH_Message, &ul_dcch_msg);
+  return ret;
 }
 
-int do_NR_DLInformationTransfer(uint8_t *buffer,
-                                size_t buffer_len,
-                                uint8_t transaction_id,
-                                uint32_t pdu_length,
-                                uint8_t *pdu_buffer)
+byte_array_t do_NR_DLInformationTransfer(uint8_t transaction_id, uint32_t pdu_length, uint8_t *pdu_buffer)
 {
+  byte_array_t msg = {0};
   NR_DL_DCCH_Message_t dl_dcch_msg = {0};
   dl_dcch_msg.message.present = NR_DL_DCCH_MessageType_PR_c1;
   asn1cCalloc(dl_dcch_msg.message.choice.c1, c1);
@@ -976,18 +981,20 @@ int do_NR_DLInformationTransfer(uint8_t *buffer,
   infoTransfer->criticalExtensions.present = NR_DLInformationTransfer__criticalExtensions_PR_dlInformationTransfer;
 
   asn1cCalloc(infoTransfer->criticalExtensions.choice.dlInformationTransfer, dlInfoTransfer);
-  asn1cCalloc(dlInfoTransfer->dedicatedNAS_Message, msg);
-  // we will free the caller buffer, that is ok in the present code logic (else it will leak memory) but not natural,
-  // comprehensive code design
-  msg->buf = pdu_buffer;
-  msg->size = pdu_length;
+  asn1cCalloc(dlInfoTransfer->dedicatedNAS_Message, nas);
+  /* Takes ownership of pdu_buffer, freed below via ASN_STRUCT_FREE_CONTENTS_ONLY */
+  nas->buf = pdu_buffer;
+  nas->size = pdu_length;
 
-  asn_enc_rval_t r = uper_encode_to_buffer(&asn_DEF_NR_DL_DCCH_Message, NULL, (void *)&dl_dcch_msg, buffer, buffer_len);
-  AssertFatal(r.encoded > 0, "ASN1 message encoding failed (%s, %ld)!\n", "DLInformationTransfer", r.encoded);
+  int val = uper_encode_to_new_buffer(&asn_DEF_NR_DL_DCCH_Message, NULL, &dl_dcch_msg, (void **)&msg.buf);
   ASN_STRUCT_FREE_CONTENTS_ONLY(asn_DEF_NR_DL_DCCH_Message, &dl_dcch_msg);
-  LOG_D(NR_RRC, "DLInformationTransfer Encoded %zd bytes\n", r.encoded);
-  // for (int i=0;i<encoded;i++) printf("%02x ",(*buffer)[i]);
-  return (r.encoded + 7) / 8;
+  if (val <= 0) {
+    LOG_E(NR_RRC, "ASN1 message encoding failed (DLInformationTransfer, %d)!\n", val);
+    return msg;
+  }
+  msg.len = val;
+  LOG_D(NR_RRC, "DLInformationTransfer Encoded %ld bytes\n", msg.len);
+  return msg;
 }
 
 int do_NR_ULInformationTransfer(uint8_t **buffer, uint32_t pdu_length, uint8_t *pdu_buffer)
@@ -1019,7 +1026,8 @@ int do_NR_ULInformationTransfer(uint8_t **buffer, uint32_t pdu_length, uint8_t *
 int do_RRCReestablishmentRequest(uint8_t *buffer,
                                  NR_ReestablishmentCause_t cause,
                                  uint32_t cell_id,
-                                 uint16_t c_rnti)
+                                 uint16_t c_rnti,
+                                 uint16_t short_mac_i)
 {
   asn_enc_rval_t enc_rval;
   NR_UL_CCCH_Message_t ul_ccch_msg;
@@ -1037,10 +1045,9 @@ int do_RRCReestablishmentRequest(uint8_t *buffer,
   rrcReestablishmentRequest->rrcReestablishmentRequest.reestablishmentCause = cause;
   rrcReestablishmentRequest->rrcReestablishmentRequest.ue_Identity.c_RNTI = c_rnti;
   rrcReestablishmentRequest->rrcReestablishmentRequest.ue_Identity.physCellId = cell_id;
-  // TODO properly setting shortMAC-I (see 5.3.7.4 of 331)
   rrcReestablishmentRequest->rrcReestablishmentRequest.ue_Identity.shortMAC_I.buf = buf;
-  rrcReestablishmentRequest->rrcReestablishmentRequest.ue_Identity.shortMAC_I.buf[0] = 0x08;
-  rrcReestablishmentRequest->rrcReestablishmentRequest.ue_Identity.shortMAC_I.buf[1] = 0x32;
+  rrcReestablishmentRequest->rrcReestablishmentRequest.ue_Identity.shortMAC_I.buf[0] = (short_mac_i >> 8) & 0xFF;
+  rrcReestablishmentRequest->rrcReestablishmentRequest.ue_Identity.shortMAC_I.buf[1] = short_mac_i & 0xFF;
   rrcReestablishmentRequest->rrcReestablishmentRequest.ue_Identity.shortMAC_I.size = 2;
 
   if (LOG_DEBUGFLAG(DEBUG_ASN1)) {
@@ -1167,7 +1174,8 @@ static NR_MeasIdToAddMod_t *get_MeasId(NR_MeasId_t measId, NR_ReportConfigId_t r
   return measid;
 }
 
-NR_MeasConfig_t *get_MeasConfig(const NR_MeasTiming_t *mt,
+NR_MeasConfig_t *get_MeasConfig(gNB_RRC_UE_t *ue,
+                                const NR_MeasTiming_t *mt,
                                 int band,
                                 int nr_pci,
                                 NR_ReportConfigToAddMod_t *rc_PER,
@@ -1211,7 +1219,8 @@ NR_MeasConfig_t *get_MeasConfig(const NR_MeasTiming_t *mt,
   // cell-specific offsets, blacklisted cells to be ignored and whitelisted cells to consider for measurements.
 
   // Serving cell
-  NR_MeasObjectToAddMod_t *mo1 = get_MeasObject(ft, band, ft->carrierFreq, 1);
+  int serving_cell_measobj_id = allocate_measurement_object_id(ue);
+  NR_MeasObjectToAddMod_t *mo1 = get_MeasObject(ft, band, ft->carrierFreq, serving_cell_measobj_id);
   NR_MeasObjectNR_t *monr1 = mo1->measObject.choice.measObjectNR;
   monr1->cellsToAddModList = calloc_or_fail(1, sizeof(*monr1->cellsToAddModList));
   NR_CellsToAddMod_t *cell = calloc_or_fail(1, sizeof(*cell));
@@ -1219,10 +1228,16 @@ NR_MeasConfig_t *get_MeasConfig(const NR_MeasTiming_t *mt,
   ASN_SEQUENCE_ADD(&monr1->cellsToAddModList->list, cell);
   asn1cSeqAdd(&mc->measObjectToAddModList->list, mo1);
 
+  int *neighbour_measurement_object_id = NULL;
+  if (neigh_seq && neigh_seq->size)
+    neighbour_measurement_object_id = calloc_or_fail(neigh_seq->size, sizeof(int));
+
   // Neighbour cells
   if (neigh_seq) {
-    int mo_id = 2;
+    int i = 0;
     FOR_EACH_SEQ_ARR(nr_neighbour_cell_t *, neigh_cell, neigh_seq) {
+      int mo_id = allocate_measurement_object_id(ue);
+      neighbour_measurement_object_id[i] = mo_id;
       NR_MeasObjectToAddMod_t *mo_neighbour = get_MeasObject(ft,  neigh_cell->band, neigh_cell->absoluteFrequencySSB, mo_id);
       NR_MeasObjectNR_t *monr = mo_neighbour->measObject.choice.measObjectNR;
       monr->cellsToAddModList = calloc_or_fail(1, sizeof(*monr->cellsToAddModList));
@@ -1230,7 +1245,7 @@ NR_MeasConfig_t *get_MeasConfig(const NR_MeasTiming_t *mt,
       cell->physCellId = neigh_cell->physicalCellId;
       ASN_SEQUENCE_ADD(&monr->cellsToAddModList->list, cell);
       asn1cSeqAdd(&mc->measObjectToAddModList->list, mo_neighbour);
-      mo_id++;
+      i++;
     }
   }
 
@@ -1240,19 +1255,20 @@ NR_MeasConfig_t *get_MeasConfig(const NR_MeasTiming_t *mt,
   // object.
 
   // MeasId for Periodic report
-  int meas_idx = 0;
   if (rc_PER) {
-    for (; meas_idx < mc->measObjectToAddModList->list.count; meas_idx++) {
-      const NR_MeasObjectId_t measObjectId = mc->measObjectToAddModList->list.array[meas_idx]->measObjectId;
-      NR_MeasIdToAddMod_t *measid = get_MeasId(meas_idx + 1, rc_PER->reportConfigId, measObjectId);
+    for (int i = 0; i < mc->measObjectToAddModList->list.count; i++) {
+      const NR_MeasObjectId_t measObjectId = mc->measObjectToAddModList->list.array[i]->measObjectId;
+      int meas_idx = allocate_measurement_id(ue);
+      NR_MeasIdToAddMod_t *measid = get_MeasId(meas_idx, rc_PER->reportConfigId, measObjectId);
       asn1cSeqAdd(&mc->measIdToAddModList->list, measid);
     }
   }
 
   // MeasId for Event A2
   if (rc_A2) {
-    NR_MeasIdToAddMod_t *measid_A2 = get_MeasId(meas_idx + 1, rc_A2->reportConfigId, 1);
-    meas_idx++;
+    int meas_idx = allocate_measurement_id(ue);
+    int meas_obj_id = serving_cell_measobj_id;
+    NR_MeasIdToAddMod_t *measid_A2 = get_MeasId(meas_idx, rc_A2->reportConfigId, meas_obj_id);
     asn1cSeqAdd(&mc->measIdToAddModList->list, measid_A2);
   }
 
@@ -1266,8 +1282,9 @@ NR_MeasConfig_t *get_MeasConfig(const NR_MeasTiming_t *mt,
         i++;
         continue;
       }
-      NR_MeasIdToAddMod_t *measid_A3 = get_MeasId(meas_idx + 1, reportConfigId, i + 2);
-      meas_idx++;
+      int meas_idx = allocate_measurement_id(ue);
+      int meas_obj_id = neighbour_measurement_object_id[i];
+      NR_MeasIdToAddMod_t *measid_A3 = get_MeasId(meas_idx, reportConfigId, meas_obj_id);
       asn1cSeqAdd(&mc->measIdToAddModList->list, measid_A3);
       i++;
     }
@@ -1281,6 +1298,8 @@ NR_MeasConfig_t *get_MeasConfig(const NR_MeasTiming_t *mt,
   asn1cCallocOne(qcnr->quantityConfigCell.ssb_FilterConfig.filterCoefficientRSRP, NR_FilterCoefficient_fc6);
   asn1cCallocOne(qcnr->quantityConfigCell.csi_RS_FilterConfig.filterCoefficientRSRP, NR_FilterCoefficient_fc6);
   asn1cSeqAdd(&mc->quantityConfig->quantityConfigNR_List->list, qcnr);
+
+  free(neighbour_measurement_object_id);
 
   return mc;
 }
@@ -1517,44 +1536,153 @@ void free_MeasConfig(NR_MeasConfig_t *mc)
   ASN_STRUCT_FREE(asn_DEF_NR_MeasConfig, mc);
 }
 
-int do_NR_Paging(uint8_t Mod_id, uint8_t *buffer, uint32_t tmsi)
+/** @brief Generate NR RRC Paging message (TS 38.331 §5.3.2)
+ * Creates a PCCH message with a single PagingRecord containing ng-5G-S-TMSI
+ * for CN-initiated paging of RRC_IDLE UEs. */
+byte_array_t do_NR_Paging(int count, const nr_paging_params_t *params)
 {
-  LOG_D(NR_RRC, "[gNB %d] do_NR_Paging start\n", Mod_id);
+  DevAssert(count > 0 && params != NULL);
+  DevAssert(count <= NR_PCCH_MAX_PAGING_RECORDS);
+  LOG_D(NR_RRC, "Generate NR RRC Paging message (count=%d, ue_identity_type=%d)\n", count, params->ue_identity_type);
+  byte_array_t msg = {.buf = NULL, .len = 0};
+
   NR_PCCH_Message_t pcch_msg = {0};
-  pcch_msg.message.present           = NR_PCCH_MessageType_PR_c1;
+  pcch_msg.message.present = NR_PCCH_MessageType_PR_c1;
   asn1cCalloc(pcch_msg.message.choice.c1, c1);
   c1->present = NR_PCCH_MessageType__c1_PR_paging;
-  c1->choice.paging = CALLOC(1, sizeof(NR_Paging_t));
-  c1->choice.paging->pagingRecordList = CALLOC(
-      1, sizeof(*pcch_msg.message.choice.c1->choice.paging->pagingRecordList));
-  c1->choice.paging->nonCriticalExtension = NULL;
-  asn_set_empty(&c1->choice.paging->pagingRecordList->list);
-  c1->choice.paging->pagingRecordList->list.count = 0;
+  asn1cCalloc(c1->choice.paging, paging);
 
-  asn1cSequenceAdd(c1->choice.paging->pagingRecordList->list, NR_PagingRecord_t,
-                   paging_record_p);
-  /* convert ue_paging_identity_t to PagingUE_Identity_t */
-  paging_record_p->ue_Identity.present = NR_PagingUE_Identity_PR_ng_5G_S_TMSI;
-  // set ng_5G_S_TMSI
-  INT32_TO_BIT_STRING(tmsi, &paging_record_p->ue_Identity.choice.ng_5G_S_TMSI);
+  /* pagingRecordList (Optional)
+   * Network may address multiple UEs by including one PagingRecord per UE.
+   * If pagingRecordList-v1700 is included, it has same entries in same order. */
+  asn1cCalloc(paging->pagingRecordList, pagingRecordList);
+  for (int i = 0; i < count; i++) {
+    asn1cSequenceAdd(pagingRecordList->list, NR_PagingRecord_t, paging_record_p);
+    const nr_paging_params_t *p = &params[i];
 
-  /* add to list */
-  LOG_D(NR_RRC, "[gNB %d] do_Paging paging_record: PagingRecordList.count %d\n",
-        Mod_id, c1->choice.paging->pagingRecordList->list.count);
-  asn_enc_rval_t enc_rval = uper_encode_to_buffer(
-      &asn_DEF_NR_PCCH_Message, NULL, (void *)&pcch_msg, buffer, NR_RRC_BUF_SIZE);
+    /* PagingUE-Identity (choice) { ng-5G-S-TMSI | fullI-RNTI } */
+    paging_record_p->ue_Identity.present = p->ue_identity_type;
+    if (p->ue_identity_type == NR_PagingUE_Identity_PR_ng_5G_S_TMSI) {
+      /* ng-5G-S-TMSI: BIT STRING (SIZE(48)) - AMF Set ID, AMF Pointer, 5G-TMSI (TS 38.331 / 23.003) */
+      BIT_STRING_t *tmsi_bs = &paging_record_p->ue_Identity.choice.ng_5G_S_TMSI;
+      FIVEG_S_TMSI_TO_BIT_STRING(p->ue_identity.fiveg_s_tmsi, tmsi_bs);
+    } else {
+      /* fullI-RNTI: I-RNTI-Value BIT STRING (SIZE(40)) for RAN-initiated paging (RRC_INACTIVE). */
+      BIT_STRING_t *i_rnti_bs = &paging_record_p->ue_Identity.choice.fullI_RNTI;
+      i_rnti_bs->size = NR_PAGING_FULL_I_RNTI_SIZE;
+      i_rnti_bs->buf = calloc_or_fail(NR_PAGING_FULL_I_RNTI_SIZE, sizeof(uint8_t));
+      i_rnti_bs->bits_unused = 0;
+      memcpy(i_rnti_bs->buf, p->ue_identity.full_i_rnti, NR_PAGING_FULL_I_RNTI_SIZE);
+    }
 
-  if ( LOG_DEBUGFLAG(DEBUG_ASN1) ) {
+    /* accessType (optional): indicates whether paging is due to PDU sessions from non-3GPP access */
+    if (p->access_type) {
+      paging_record_p->accessType = calloc_or_fail(1, sizeof(long));
+      *paging_record_p->accessType = NR_PagingRecord__accessType_non3GPP;
+    }
+  }
+
+  /** If pagingRecordList-v1700 is included: same count/order as pagingRecordList (38.331).
+   * pagingCause-r17 present means IMS voice, absent in v1700 entry means non-voice (UE-dependent). */
+  int i = 0;
+  while (i < count && params[i].paging_cause == NULL)
+    i++;
+  if (i < count) {
+    asn1cCalloc(paging->nonCriticalExtension, ext_v1700);
+    ext_v1700->pagingGroupList_r17 = NULL;
+    ext_v1700->nonCriticalExtension = NULL;
+    asn1cCalloc(ext_v1700->pagingRecordList_v1700, list_v1700);
+    for (i = 0; i < count; i++) {
+      asn1cSequenceAdd(list_v1700->list, NR_PagingRecord_v1700_t, rec_v1700);
+      if (params[i].paging_cause != NULL) {
+        rec_v1700->pagingCause_r17 = calloc_or_fail(1, sizeof(long));
+        *rec_v1700->pagingCause_r17 = NR_PagingRecord_v1700__pagingCause_r17_voice;
+      }
+    }
+  }
+
+  LOG_D(NR_RRC, "Paging: PagingRecordList.count=%d\n", pagingRecordList->list.count);
+
+  if (LOG_DEBUGFLAG(DEBUG_ASN1)) {
     xer_fprint(stdout, &asn_DEF_NR_PCCH_Message, (void *)&pcch_msg);
   }
+
+  int val = uper_encode_to_new_buffer(&asn_DEF_NR_PCCH_Message, NULL, &pcch_msg, (void **)&msg.buf);
   ASN_STRUCT_FREE_CONTENTS_ONLY(asn_DEF_NR_PCCH_Message, &pcch_msg);
-  if(enc_rval.encoded == -1) {
-    LOG_I(NR_RRC, "[gNB AssertFatal]ASN1 message encoding failed (%s, %lu)!\n",
-          enc_rval.failed_type->name, enc_rval.encoded);
+
+  if (val <= 0) {
+    LOG_E(NR_RRC, "Failed to encode NR RRC Paging message\n");
+    free_byte_array(msg);
+    return msg;
+  }
+
+  msg.len = val;
+  LOG_I(NR_RRC, "Encoded NR RRC Paging message (%zu bytes)\n", msg.len);
+
+  return msg;
+}
+
+/** @brief Decode an NR PCCH message into nr_paging_params_t records.
+ * @param pcch PCCH SDU as byte_array_t (buffer + length)
+ * @param out_params output array of decoded paging records
+ * @param out_count on success, number of records written to out_params
+ * @return -1 on decode/validation error, 0 on success */
+int nr_pcch_decode(const byte_array_t pcch, nr_paging_params_t *out_params, int *out_count)
+{
+  *out_count = 0;
+  NR_PCCH_Message_t *pcch_msg = NULL;
+  asn_dec_rval_t dec_rval = uper_decode_complete(NULL, &asn_DEF_NR_PCCH_Message, (void **)&pcch_msg, pcch.buf, pcch.len);
+
+  if ((dec_rval.code != RC_OK) || (dec_rval.consumed == 0)) {
+    LOG_E(NR_RRC,
+          "Failed to decode PCCH message (%zu bytes, dec_rval.code=%d, dec_rval.consumed=%zu)\n",
+          pcch.len,
+          dec_rval.code,
+          dec_rval.consumed);
+    ASN_STRUCT_FREE(asn_DEF_NR_PCCH_Message, pcch_msg);
     return -1;
   }
 
-  return((enc_rval.encoded+7)/8);
+  if (pcch_msg->message.present != NR_PCCH_MessageType_PR_c1) {
+    LOG_E(NR_RRC, "PCCH message (%zu bytes) is not a paging message\n", pcch.len);
+    ASN_STRUCT_FREE(asn_DEF_NR_PCCH_Message, pcch_msg);
+    return -1;
+  }
+
+  if (pcch_msg->message.choice.c1->present != NR_PCCH_MessageType__c1_PR_paging) {
+    LOG_E(NR_RRC, "PCCH message (%zu bytes) is not a paging message\n", pcch.len);
+    ASN_STRUCT_FREE(asn_DEF_NR_PCCH_Message, pcch_msg);
+    return -1;
+  }
+
+  NR_Paging_t *paging = pcch_msg->message.choice.c1->choice.paging;
+  if (paging->pagingRecordList == NULL || paging->pagingRecordList->list.count == 0) {
+    LOG_E(NR_RRC, "PCCH message (%zu bytes) has no paging records\n", pcch.len);
+    ASN_STRUCT_FREE(asn_DEF_NR_PCCH_Message, pcch_msg);
+    return -1;
+  }
+
+  int n = 0;
+  for (int i = 0; i < paging->pagingRecordList->list.count && n < NR_PCCH_MAX_PAGING_RECORDS; i++) {
+    NR_PagingRecord_t *record = paging->pagingRecordList->list.array[i];
+    nr_paging_params_t *p = &out_params[n];
+    *p = (nr_paging_params_t){0};
+    p->ue_identity_type = record->ue_Identity.present;
+    p->access_type = (record->accessType != NULL && *record->accessType == NR_PagingRecord__accessType_non3GPP);
+    if (record->ue_Identity.present == NR_PagingUE_Identity_PR_ng_5G_S_TMSI) {
+      const BIT_STRING_t *ng_5g_s_tmsi = &record->ue_Identity.choice.ng_5G_S_TMSI;
+      DevAssert(ng_5g_s_tmsi->size >= 6);
+      p->ue_identity.fiveg_s_tmsi = BIT_STRING_to_uint64(ng_5g_s_tmsi) & ((1ULL << 48) - 1);
+    } else if (record->ue_Identity.present == NR_PagingUE_Identity_PR_fullI_RNTI) {
+      BIT_STRING_t *i_rnti = &record->ue_Identity.choice.fullI_RNTI;
+      DevAssert(i_rnti->size == NR_PAGING_FULL_I_RNTI_SIZE);
+      memcpy(p->ue_identity.full_i_rnti, i_rnti->buf, NR_PAGING_FULL_I_RNTI_SIZE);
+    }
+    n++;
+  }
+  *out_count = n;
+  ASN_STRUCT_FREE(asn_DEF_NR_PCCH_Message, pcch_msg);
+  return 0;
 }
 
 /* \brief generate HandoverPreparationInformation to be sent to the DU for

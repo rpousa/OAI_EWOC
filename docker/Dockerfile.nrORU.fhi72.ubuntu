@@ -29,7 +29,8 @@ RUN apt-get update && \
         libpcap-dev \
         xz-utils \
         libnuma-dev \
-        libyaml-cpp-dev && \
+        libyaml-cpp-dev \
+        libatomic1 && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /opt/nr-oru/bin
@@ -44,6 +45,7 @@ COPY --from=ran-build \
     /oai-ran/cmake_targets/ran_build/build/libdfts.so \
     /oai-ran/cmake_targets/ran_build/build/libldpc*.so \
     /oai-ran/cmake_targets/ran_build/build/libparams_yaml.so \
+    /oai-ran/cmake_targets/ran_build/build/libvrtsim.so \
     /usr/local/lib/
 
 ## Libxran library

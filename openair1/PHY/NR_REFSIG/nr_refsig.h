@@ -9,7 +9,6 @@
 #ifndef __NR_REFSIG__H__
 #define __NR_REFSIG__H__
 
-#include "PHY/nr_phy_common/inc/nr_phy_common.h"
 #include "PHY/defs_nr_common.h"
 
 uint32_t *gold_cache(uint32_t key, int length);
@@ -62,4 +61,5 @@ int nr_pusch_lowpaprtype1_dmrs_rx(nr_prefix_type_t Ncp,
                                   uint32_t re_offset,
                                   uint8_t dmrs_type);
 
+c16_t get_modulated(const uint32_t *gold_sequence, const int idx_gold, const bool inverse);
 #endif

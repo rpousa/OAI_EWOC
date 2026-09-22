@@ -40,7 +40,6 @@
 #include "common/utils/LOG/log.h"
 #include "common/utils/T/T.h"
 #include "common/utils/load_module_shlib.h"
-#include "common_lib.h"
 #include "defs.h"
 #include "executables/nr-uesoftmodem.h"
 #include "fapi_nr_ue_interface.h"
@@ -567,7 +566,6 @@ int main(int argc, char **argv){
   ue_prach_config        = &UE->nrUE_config.prach_config;
   txdata = UE->common_vars.txData;
 
-  ue_prach_pdu->prach_tx_power = AMP;
   ue_prach_pdu->root_seq_id     = rootSequenceIndex;
   ue_prach_pdu->num_cs          = get_NCS(NCS_config, format0, restrictedSetConfig);
   ue_prach_pdu->restricted_set  = restrictedSetConfig;
@@ -645,7 +643,7 @@ int main(int argc, char **argv){
   c16_t *tx[frame_parms->nb_antennas_rx];
   for (int i = 0; i < frame_parms->nb_antennas_rx; i++)
     tx[i] = txdata[i] + slot_start;
-  generate_nr_prach(UE, 0, frame, slot, tx);
+  generate_nr_prach(UE, 0, frame, slot, AMP, tx);
 
   /* tx_lev_dB not used later, no need to set */
   //tx_lev_dB = dB_fixed(tx_lev);

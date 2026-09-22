@@ -3,6 +3,7 @@
 add_subdirectory(MESSAGES)
 
 add_library(nrppa
+  nrppa_common.c
   nrppa_gNB.c
   nrppa_gNB_config.c
   nrppa_gNB_handlers.c

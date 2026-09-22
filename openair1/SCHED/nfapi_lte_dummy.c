@@ -8,7 +8,7 @@
 #include "nfapi/open-nFAPI/nfapi/public_inc/nfapi_nr_interface_scf.h"
 #include "openair2/NR_PHY_INTERFACE/NR_IF_Module.h"
 #include "openair1/PHY/LTE_TRANSPORT/transport_common.h"
-#include "nfapi/open-nFAPI/vnf/inc/vnf.h"
+#include "vnf_lte.h"
 #include "nfapi/open-nFAPI/pnf/inc/pnf.h"
 int l1_north_init_gNB(void){return 0;}
 
@@ -64,4 +64,11 @@ void socket_nfapi_nr_pnf_stop()
 
 void socket_nfapi_send_stop_request(vnf_t *vnf)
 {
+}
+
+typedef struct gNB_MAC_INST_s gNB_MAC_INST;
+typedef struct nr_cell_sched_s nr_cell_sched_t;
+nr_cell_sched_t *nr_mac_get_cell_by_phy_id(gNB_MAC_INST *mac, uint16_t phy_id)
+{
+  return NULL;
 }

@@ -61,6 +61,8 @@ char *message_id_to_str(uint32_t message_id)
       return "NFAPI_NR_PHY_MSG_TYPE_UCI_INDICATION";
     case NFAPI_NR_PHY_MSG_TYPE_SRS_INDICATION:
       return "NFAPI_NR_PHY_MSG_TYPE_SRS_INDICATION";
+    case NFAPI_NR_PHY_MSG_TYPE_SRS_TOA_VENDOR_EXTENSION_INDICATION:
+      return "NFAPI_NR_PHY_MSG_TYPE_SRS_TOA_VENDOR_EXTENSION_INDICATION";
     case NFAPI_NR_PHY_MSG_TYPE_RACH_INDICATION:
       return "NFAPI_NR_PHY_MSG_TYPE_RACH_INDICATION";
     default:
@@ -171,6 +173,11 @@ void unpack_and_dump_message(void *buf, fapi_message_header_t hdr)
     case NFAPI_NR_PHY_MSG_TYPE_SRS_INDICATION: {
       dump_srs_indication(unpacked_req);
       free_srs_indication(unpacked_req);
+      return;
+    }
+    case NFAPI_NR_PHY_MSG_TYPE_SRS_TOA_VENDOR_EXTENSION_INDICATION: {
+      dump_srs_toa_vendor_ext_indication(unpacked_req);
+      free_srs_toa_vendor_ext_indication(unpacked_req);
       return;
     }
     case NFAPI_NR_PHY_MSG_TYPE_RACH_INDICATION: {

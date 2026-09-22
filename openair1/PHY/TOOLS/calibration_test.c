@@ -19,17 +19,6 @@ uint64_t downlink_frequency[MAX_NUM_CCs][4];
 int64_t uplink_frequency_offset[MAX_NUM_CCs][4];
 int cpu_meas_enabled;
 THREAD_STRUCT thread_struct;
-uint32_t target_ul_mcs = 9;
-uint32_t target_dl_mcs = 9;
-uint64_t dlsch_slot_bitmap = (1<<1);
-uint64_t ulsch_slot_bitmap = (1<<8);
-uint32_t target_ul_bw = 50;
-uint32_t target_dl_bw = 50;
-uint32_t target_dl_Nl;
-uint32_t target_ul_Nl;
-char *uecap_file;
-uint32_t dlsch_slot_modval;
-uint32_t ulsch_slot_modval;
 #include <executables/nr-softmodem.h>
 
 int read_recplayconfig(recplay_conf_t **recplay_conf, recplay_state_t **recplay_state) {return 0;}
@@ -44,11 +33,9 @@ int main(int argc, char **argv) {
   setvbuf(stdout, NULL, _IONBF, 0);
   setvbuf(stderr, NULL, _IONBF, 0);
   logInit();
-   paramdef_t cmdline_params[] = CMDLINE_PARAMS_DESC_GNB ;
 
   CONFIG_SETRTFLAG(CONFIG_NOEXITONHELP);
   get_common_options(uniqCfg);
-  config_process_cmdline(uniqCfg, cmdline_params, sizeofArray(cmdline_params), NULL);
   CONFIG_CLEARRTFLAG(CONFIG_NOEXITONHELP);
   lock_memory_to_ram();
     
@@ -103,12 +90,8 @@ int main(int argc, char **argv) {
     .host_type=MIN_HOST_TYPE,
     /* !brief RF frontend parameters set by application */
     .openair0_cfg=NULL, //set by device_init
-    /* !brief ETH params set by application */
-    .eth_params=NULL,
     //! record player data, definition in record_player.h
     .recplay_state=NULL,
-    /* !brief Indicates if device already initialized */
-    .is_init=0,
     /*!brief Can be used by driver to hold internal structure*/
     .priv=NULL,
     /* Functions API, which are called by the application*/

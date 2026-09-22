@@ -144,6 +144,9 @@ void process_msg_rcc_to_mac(nr_mac_rrc_message_t *msg, int instance_id)
                                   msg->payload.config_other_sib.frame,
                                   msg->payload.config_other_sib.can_start_ra);
     } break;
+    case NR_MAC_RRC_START_RA:
+      nr_rrc_mac_start_ra(instance_id, msg->payload.start_ra.cause);
+      break;
     case NR_MAC_RRC_SCHED_SIB:
       nr_rrc_mac_sched_sib(instance_id, msg->payload.sched_sib.get_sib);
       break;
@@ -184,7 +187,7 @@ void nr_ue_rrc_timer_trigger(int instance, int hfn, int frame, int gnb_id)
   NRRRC_FRAME_PROCESS(message_p).hfn = hfn;
   NRRRC_FRAME_PROCESS(message_p).frame = frame;
   NRRRC_FRAME_PROCESS(message_p).gnb_id = gnb_id;
-  LOG_D(NR_RRC, "RRC timer trigger: frame %d\n", frame);
+  LOG_D(NR_MAC, "MAC/PHY send to RRC we have a new frame %d\n", frame);
   itti_send_msg_to_task(TASK_RRC_NRUE, instance, message_p);
 }
 

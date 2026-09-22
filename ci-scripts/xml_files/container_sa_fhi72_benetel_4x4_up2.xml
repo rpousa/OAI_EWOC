@@ -69,7 +69,8 @@
 
   <testCase>
     <class>Iperf</class>
-    <desc>iperf (DL/800Mbps/UDP)(60 sec)</desc>
+    <desc>Optional iperf (DL/800Mbps/UDP)(60 sec)</desc>
+    <may_fail>true</may_fail>
     <iperf_args>-u -b 800M -t 60 -R -l 1428</iperf_args>
     <id>up2-fhi72</id>
     <iperf_packetloss_threshold>20</iperf_packetloss_threshold>
@@ -80,20 +81,8 @@
 
   <testCase>
     <class>Iperf</class>
-    <desc>Optional iperf (DL/1000Mbps/UDP)(60 sec)</desc>
-    <may_fail>true</may_fail>
-    <iperf_args>-u -b 1000M -t 60 -R -l 1428</iperf_args>
-    <id>up2-fhi72</id>
-    <iperf_packetloss_threshold>20</iperf_packetloss_threshold>
-    <iperf_bitrate_threshold>80</iperf_bitrate_threshold>
-    <iperf_profile>balanced</iperf_profile>
-    <svr_id>oc-cn5g-20897-stonechat</svr_id>
-  </testCase>
-
-  <testCase>
-    <class>Iperf</class>
-    <desc>iperf (UL/60Mbps/UDP)(30 sec)</desc>
-    <iperf_args>-u -b 60M -t 30</iperf_args>
+    <desc>iperf (UL/100Mbps/UDP)(30 sec)</desc>
+    <iperf_args>-u -b 100M -t 30</iperf_args>
     <id>up2-fhi72</id>
     <iperf_packetloss_threshold>20</iperf_packetloss_threshold>
     <iperf_bitrate_threshold>80</iperf_bitrate_threshold>

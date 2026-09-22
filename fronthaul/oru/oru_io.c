@@ -3,6 +3,7 @@
  */
 
 #include "oru_io.h"
+#include "oru_pcap.h"
 #include <rte_ether.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -31,6 +32,9 @@ static int configure_ru_flows(oru_io_t *io, uint16_t port_id, int num_du_macs, s
   rte_eth_macaddr_get(port_id, &local_mac);
 
   for (int i = 0; i < num_du_macs; i++) {
+    // Match on eCPRI ethertype instead of RTE_FLOW_ITEM_TYPE_ECPRI
+    // The latter needs a flex parser not all NICs support.
+    // rx_cb() already splits eCPRI message types in software so an ethertype match is enough.
     struct rte_flow_item_eth eth_spec, eth_mask;
     memset(&eth_spec, 0, sizeof(eth_spec));
     memset(&eth_mask, 0, sizeof(eth_mask));
@@ -38,27 +42,16 @@ static int configure_ru_flows(oru_io_t *io, uint16_t port_id, int num_du_macs, s
     rte_ether_addr_copy(&du_macs[i], &eth_spec.src);
     memset(&eth_mask.src, 0xFF, 6);
     memset(&eth_mask.dst, 0x00, 6);
-
-    struct rte_flow_item_vlan vlan_spec, vlan_mask;
-    memset(&vlan_spec, 0, sizeof(vlan_spec));
-    memset(&vlan_mask, 0, sizeof(vlan_mask));
-
-    // Wildcard eCPRI specs: Zero-initialized maps to a match-all filter for eCPRI layer
-    struct rte_flow_item_ecpri ecpri_spec;
-    struct rte_flow_item_ecpri ecpri_mask;
-    memset(&ecpri_spec, 0, sizeof(struct rte_flow_item_ecpri));
-    memset(&ecpri_mask, 0, sizeof(struct rte_flow_item_ecpri));
+    eth_spec.type = rte_cpu_to_be_16(ECPRI_ETHER_TYPE);
+    eth_mask.type = RTE_BE16(0xFFFF);
 
     // Rule 1: Match all Untagged eCPRI traffic from DU MAC
-    struct rte_flow_item pattern_ecpri[3];
+    struct rte_flow_item pattern_ecpri[2];
     memset(pattern_ecpri, 0, sizeof(pattern_ecpri));
     pattern_ecpri[0].type = RTE_FLOW_ITEM_TYPE_ETH;
     pattern_ecpri[0].spec = &eth_spec;
     pattern_ecpri[0].mask = &eth_mask;
-    pattern_ecpri[1].type = RTE_FLOW_ITEM_TYPE_ECPRI;
-    pattern_ecpri[1].spec = &ecpri_spec;
-    pattern_ecpri[1].mask = &ecpri_mask;
-    pattern_ecpri[2].type = RTE_FLOW_ITEM_TYPE_END;
+    pattern_ecpri[1].type = RTE_FLOW_ITEM_TYPE_END;
 
     struct rte_flow *flow_ecpri = rte_flow_create(port_id, &attr, pattern_ecpri, actions, &error);
     if (!flow_ecpri) {
@@ -70,18 +63,25 @@ static int configure_ru_flows(oru_io_t *io, uint16_t port_id, int num_du_macs, s
     }
 
     // Rule 2: Match all VLAN Tagged eCPRI traffic from DU MAC
-    struct rte_flow_item pattern_vlan_ecpri[4];
+    struct rte_flow_item_eth eth_vlan_spec = eth_spec, eth_vlan_mask = eth_mask;
+    eth_vlan_spec.type = rte_cpu_to_be_16(RTE_ETHER_TYPE_VLAN);
+    eth_vlan_mask.type = RTE_BE16(0xFFFF);
+
+    struct rte_flow_item_vlan vlan_spec, vlan_mask;
+    memset(&vlan_spec, 0, sizeof(vlan_spec));
+    memset(&vlan_mask, 0, sizeof(vlan_mask));
+    vlan_spec.inner_type = rte_cpu_to_be_16(ECPRI_ETHER_TYPE);
+    vlan_mask.inner_type = RTE_BE16(0xFFFF);
+
+    struct rte_flow_item pattern_vlan_ecpri[3];
     memset(pattern_vlan_ecpri, 0, sizeof(pattern_vlan_ecpri));
     pattern_vlan_ecpri[0].type = RTE_FLOW_ITEM_TYPE_ETH;
-    pattern_vlan_ecpri[0].spec = &eth_spec;
-    pattern_vlan_ecpri[0].mask = &eth_mask;
+    pattern_vlan_ecpri[0].spec = &eth_vlan_spec;
+    pattern_vlan_ecpri[0].mask = &eth_vlan_mask;
     pattern_vlan_ecpri[1].type = RTE_FLOW_ITEM_TYPE_VLAN;
     pattern_vlan_ecpri[1].spec = &vlan_spec;
     pattern_vlan_ecpri[1].mask = &vlan_mask;
-    pattern_vlan_ecpri[2].type = RTE_FLOW_ITEM_TYPE_ECPRI;
-    pattern_vlan_ecpri[2].spec = &ecpri_spec;
-    pattern_vlan_ecpri[2].mask = &ecpri_mask;
-    pattern_vlan_ecpri[3].type = RTE_FLOW_ITEM_TYPE_END;
+    pattern_vlan_ecpri[2].type = RTE_FLOW_ITEM_TYPE_END;
 
     struct rte_flow *flow_vlan_ecpri = rte_flow_create(port_id, &attr, pattern_vlan_ecpri, actions, &error);
     if (!flow_vlan_ecpri) {
@@ -205,6 +205,8 @@ int oru_io_init(oru_io_t *io, oru_io_config_t *conf)
   // 3. Initialize Timer
   if (fh_timer_init(&io->timer, conf->numerology) < 0)
     return -1;
+  if (conf->clock_timebase == FH_CLOCK_TAI)
+    fh_timer_set_timebase(&io->timer, FH_CLOCK_TAI);
   fh_timer_register_cb(&io->timer, conf->timer_cb, conf->timer_user_data);
 
   // 4. Initialize Send (on primary port)
@@ -258,6 +260,8 @@ int oru_io_send_uplane(oru_io_t *io, struct rte_mbuf **mbufs, uint32_t num_mbufs
     eth->ether_type = rte_cpu_to_be_16(ECPRI_ETHER_TYPE);
     rte_ether_addr_copy(&io->conf.du_macs[0], &eth->dst_addr);
     rte_ether_addr_copy(&io->local_macs[0], &eth->src_addr);
+
+    oru_pcap_write_uplane(mbufs[i], oru_pcap_mbuf_is_prach(mbufs[i]));
   }
 
   return fh_send_immediate(&io->send, mbufs, num_mbufs);

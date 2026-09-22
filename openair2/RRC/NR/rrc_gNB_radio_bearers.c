@@ -84,8 +84,8 @@ nr_rrc_qos_t *add_qos(seq_arr_t *qos, const pdusession_level_qos_parameter_t *in
     return existing;
   }
 
-  // Validate 5QI value (TS 23.501 allows dynamically assigned 5QIs)
   if (in->fiveQI_type == NON_DYNAMIC && !is_5qi_standardized(in->qos_characteristics.non_dynamic.fiveQI)) {
+    // This is a pre-configured 5QI, not a standardized non-dynamic value: not implemented
     LOG_W(NR_RRC,
           "QoS flow QFI=%d: 5QI %d is not a standardized value. Skipping QoS flow.\n",
           in->qfi,

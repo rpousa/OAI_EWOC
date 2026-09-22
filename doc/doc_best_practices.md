@@ -61,7 +61,7 @@ Correct (Markdown):
 **Bold text**
 *Italic text*
 
-![OAI Logo](./images/oai_final_logo.png) instead of <img src="./images/oai_final_logo.png" alt="OAI Logo">
+![some image](./path/to/image.png)
 
 | Feature       | Description                     |
 |---------------|---------------------------------|
@@ -75,7 +75,7 @@ Incorrect (HTML):
 <b>Bold text</b>
 <i>Italic text</i>
 
-<img src="./images/oai_final_logo.png" alt="OAI Logo">
+<img src="./path/to/image.png" alt="some image">
 
 <table style="border-collapse: collapse; border: none;">
   <tr>
@@ -114,7 +114,7 @@ Incorrect (HTML):
   is](https://www.kernel.org/doc/html/latest/process/submitting-patches.html#separate-your-changes).
 - See [OAI CN5G configuration files](#22-oai-cn5g-configuration-files) for
   details.
-- ![OAI Logo](./images/oai_final_logo.png)
+- ![some image](./path/to/image.png)
 ```
 
 ## Inline code for technical elements

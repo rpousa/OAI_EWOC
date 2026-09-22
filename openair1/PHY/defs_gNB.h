@@ -56,7 +56,7 @@ typedef struct {
 typedef struct {
   int dump_frame;
   int round_trials[8];
-  int total_bytes_tx;
+  uint64_t total_bytes_tx;
   int total_bytes_rx;
   int current_Qm;
   int current_RI;
@@ -110,6 +110,12 @@ typedef struct {
   uint8_t *b;
   /// Pointers to transport block segments
   uint8_t **c;
+#ifdef LDPC_CUDA
+  /// Pointers to transport block segments (contains pointers in c above)
+  uint8_t *c_devh;
+  /// Pointers to transport block segments (GPU mapping)
+  uint8_t *c_dev;
+#endif
   /// Interleaver outputs
   uint8_t *f;
   /// REs unavailable for DLSCH (overlapping with PTRS, CSIRS etc.)
@@ -181,6 +187,11 @@ typedef struct {
   uint32_t slot;
   /// ULSCH PDU
   nfapi_nr_pusch_pdu_t pusch_pdu;
+  // Multi-User (MU) group index
+  // -1 : unallocated
+  int16_t mu_group_idx;
+  // 1 for Single-User (SU) and > 1 is MU
+  uint8_t mu_group_size;
 } NR_gNB_PUSCH_job_t;
 
 typedef struct {
@@ -211,10 +222,9 @@ typedef struct {
   /// - first index: tx antenna [0..16) where 16 is the total supported antenna ports.
   /// - second index: sample [0..ofdm_symbol_size*symbols_per_frame)
   c16_t **txdataF;
-  /// \brief Anaglogue beam ID for each OFDM symbol (used when beamforming not done in RU)
-  /// - first index: symbol index [0 .. symbols_per_frame)
-  /// - second index: beam ID for each antenna port [0 .. num_ports)
-  /// Array of beam id assigned to antenna ports in a frame
+  /// \brief Analogue beam ID for each [symbol, antenna] pair
+  /// - first index: symbol [slot * fp->symbols_per_slot + sym_idx]
+  /// - second index: logical antenna [0..nb_rx/nb_tx]
   uint16_t **beam_id;
   int num_beams_period;
   bool analog_bf;
@@ -244,16 +254,10 @@ typedef struct {
   /// \brief llr values.
   /// - first index: ? [0..1179743] (hard coded)
   int16_t *llr;
-  // PTRS symbol index, to be updated every PTRS symbol within a slot.
-  uint8_t ptrs_symbol_index;
-  /// bit mask of PT-RS ofdm symbol indicies
-  uint16_t ptrs_symbols;
-  // PTRS subcarriers per OFDM symbol
-  int32_t ptrs_re_per_slot;
-  /// \brief Estimated phase error based upon PTRS on each symbol .
-  /// - first index: ? [0..7] Number of Antenna
-  /// - second index: ? [0...14] smybol per slot
-  int32_t **ptrs_phase_per_slot;
+#ifdef LDPC_CUDA
+  /// \brief llr values link to device memory
+  int16_t *llr_dev;
+#endif
   /// \brief Total RE count after DMRS/PTRS RE's are extracted from respective symbol.
   /// - first index: ? [0...14] smybol per slot
   int16_t *ul_valid_re_per_slot;
@@ -331,11 +335,6 @@ typedef struct {
   /// PRACH background noise level
   int prach_I0;
 } PHY_MEASUREMENTS_gNB;
-
-// the current RRC resource allocation is that each UE gets its
-// "own" PUCCH resource (for F0) in a dedicated PRB in each slot
-// therefore, we can have up to "number of UE" UCI PDUs
-#define MAX_NUM_NR_UCI_PDUS MAX_MOBILES_PER_GNB
 
 /// Top-level PHY Data Structure for gNB
 typedef struct PHY_VARS_gNB_s {
@@ -417,38 +416,28 @@ typedef struct PHY_VARS_gNB_s {
   time_stats_t l1_rx_proc;
 
   time_stats_t phy_proc_tx;
+  time_stats_t gnb_tx_procedures_stats;
+  time_stats_t ru_tx_func_stats;
   time_stats_t phy_proc_rx;
   time_stats_t rx_prach;
 
   time_stats_t dlsch_encoding_stats;
+  time_stats_t dlsch_ldpc_encode_stats;
   time_stats_t dlsch_modulation_stats;
   time_stats_t dlsch_scrambling_stats;
   time_stats_t dlsch_pdsch_generation_stats;
   time_stats_t dlsch_layer_mapping_stats;
   time_stats_t dlsch_resource_mapping_stats;
   time_stats_t dlsch_precoding_stats;
-  time_stats_t tinput;
-  time_stats_t tinput_memcpy;
-  time_stats_t tprep;
-  time_stats_t tparity;
-  time_stats_t toutput;
-  time_stats_t tconcat;
-
-  time_stats_t dlsch_rate_matching_stats;
-  time_stats_t dlsch_interleaving_stats;
-  time_stats_t dlsch_segmentation_stats;
+  time_stats_t dlsch_crc_stats;
 
   time_stats_t dci_generation_stats;
-  time_stats_t phase_comp_stats;
   time_stats_t rx_pusch_stats;
   time_stats_t rx_pusch_init_stats;
   time_stats_t rx_pusch_symbol_processing_stats;
   time_stats_t ul_indication_stats;
   time_stats_t slot_indication_stats;
   time_stats_t ulsch_decoding_stats;
-  time_stats_t ts_deinterleave;
-  time_stats_t ts_rate_unmatch;
-  time_stats_t ts_seg_prep;
   time_stats_t ts_ldpc_decode;
   time_stats_t ulsch_deinterleaving_stats;
   time_stats_t ulsch_channel_estimation_stats;
@@ -466,6 +455,8 @@ typedef struct PHY_VARS_gNB_s {
   time_stats_t srs_report_tlv_stats;
   time_stats_t srs_beam_report_stats;
   time_stats_t srs_iq_matrix_stats;
+  time_stats_t pucch01_proc_rx;
+  time_stats_t pucch23_proc_rx;
 
   notifiedFIFO_t resp_L1;
   notifiedFIFO_t L1_tx_out;

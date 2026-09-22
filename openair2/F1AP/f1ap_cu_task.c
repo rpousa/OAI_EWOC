@@ -14,12 +14,15 @@
 #include "f1ap_cu_task.h"
 #include "openair2/RRC/NR/nr_rrc_defs.h"
 #include <openair3/ocp-gtpu/gtp_itf.h>
+#include "common_lib.h"
+#include "f1ap_cu_positioning.h"
 
-static instance_t cu_task_create_gtpu_instance(eth_params_t *IPaddrs) {
+static instance_t cu_task_create_gtpu_instance(const char *bind_addr, uint16_t local_port, uint16_t remote_port)
+{
   openAddr_t tmp= {0};
-  strncpy(tmp.originHost, IPaddrs->my_addr, sizeof(tmp.originHost)-1);
-  sprintf(tmp.originService, "%d", IPaddrs->my_portd);
-  sprintf(tmp.destinationService, "%d", IPaddrs->remote_portd);
+  strncpy(tmp.originHost, bind_addr, sizeof(tmp.originHost)-1);
+  sprintf(tmp.originService, "%d", local_port);
+  sprintf(tmp.destinationService, "%d", remote_port);
   return gtpv1Init(tmp);
 }
 
@@ -77,27 +80,28 @@ static void cu_task_send_sctp_init_req(instance_t instance, char *my_addr)
 
 void *F1AP_CU_task(void *arg)
 {
-  UNUSED(arg);
+  DevAssert(arg != NULL);
   MessageDef *received_msg = NULL;
   int         result;
   LOG_I(F1AP, "Starting F1AP at CU\n");
   // no RLC in CU, initialize mem pool for PDCP
   itti_mark_task_ready(TASK_CU_F1);
-  eth_params_t *IPaddrs;
-
-  // Hardcoded instance id!
-  IPaddrs = &RC.nrrrc[0]->eth_params_s;
+  f1ap_cu_conf_t *c = arg;
+  DevAssert(c->type == ngran_gNB_CU || c->type == ngran_gNB_CUCP);
 
   const int instance = 0;
   createF1inst(instance, NULL, NULL);
-  cu_task_send_sctp_init_req(instance, IPaddrs->my_addr);
+  cu_task_send_sctp_init_req(instance, c->bind_addr);
 
-  if (RC.nrrrc[instance]->node_type != ngran_gNB_CUCP) {
-    getCxt(instance)->gtpInst = cu_task_create_gtpu_instance(IPaddrs);
+  if (c->type != ngran_gNB_CUCP) {
+    getCxt(instance)->gtpInst = cu_task_create_gtpu_instance(c->bind_addr, c->local_f1u_port, c->remote_f1u_port);
     AssertFatal(getCxt(instance)->gtpInst > 0, "Failed to create CU F1-U UDP listener");
   } else {
     LOG_I(F1AP, "In F1AP connection, don't start GTP-U, as we have also E1AP\n");
   }
+
+  free(c->bind_addr);
+  free(c);
 
   while (1) {
     itti_receive_msg(TASK_CU_F1, &received_msg);
@@ -181,6 +185,22 @@ void *F1AP_CU_task(void *arg)
       case F1AP_UE_CONTEXT_MODIFICATION_REFUSE:
         CU_send_UE_CONTEXT_MODIFICATION_REFUSE(assoc_id,
                                                &F1AP_UE_CONTEXT_MODIFICATION_REFUSE(received_msg));
+        break;
+
+      case F1AP_TRP_INFORMATION_REQ:
+        CU_send_TRP_INFORMATION_REQUEST(assoc_id, &F1AP_TRP_INFORMATION_REQ(received_msg));
+        break;
+
+      case F1AP_POSITIONING_INFORMATION_REQ:
+        CU_send_POSITIONING_INFORMATION_REQUEST(assoc_id, &F1AP_POSITIONING_INFORMATION_REQ(received_msg));
+        break;
+
+      case F1AP_POSITIONING_ACTIVATION_REQ:
+        CU_send_POSITIONING_ACTIVATION_REQUEST(assoc_id, &F1AP_POSITIONING_ACTIVATION_REQ(received_msg));
+        break;
+
+      case F1AP_POSITIONING_MEASUREMENT_REQ:
+        CU_send_POSITIONING_MEASUREMENT_REQUEST(assoc_id, &F1AP_POSITIONING_MEASUREMENT_REQ(received_msg));
         break;
 
       case TERMINATE_MESSAGE:

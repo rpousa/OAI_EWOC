@@ -160,10 +160,10 @@ bool decode_ng_paging(ngap_paging_ind_t *out, const NGAP_NGAP_PDU_t *pdu)
   // TAI List for Paging (M)
   NGAP_FIND_PROTOCOLIE_BY_ID(NGAP_PagingIEs_t, ie, container, NGAP_ProtocolIE_ID_id_TAIListForPaging, true);
 
-  // Validate TAI list count
+  // Validate TAI list count (1..maxnoofTAIforPaging)
   int tai_count = ie->value.choice.TAIListForPaging.list.count;
-  if (tai_count > NGAP_MAX_NO_TAI_PAGING) {
-    NGAP_ERROR("Invalid TAI list count: %d (must be <= %d)\n", tai_count, NGAP_MAX_NO_TAI_PAGING);
+  if (tai_count < 1 || tai_count > NGAP_MAX_NO_TAI_PAGING) {
+    NGAP_ERROR("Invalid TAI list count: %d (must be 1..%d)\n", tai_count, NGAP_MAX_NO_TAI_PAGING);
     return false;
   }
 

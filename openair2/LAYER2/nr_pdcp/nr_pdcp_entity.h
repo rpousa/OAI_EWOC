@@ -132,6 +132,9 @@ typedef struct nr_pdcp_entity_s {
   /* set to the latest know time by the user of the module. Unit: ms */
   uint64_t t_current;
 
+  uint64_t t_log_pdu_discard;
+  int pdu_discarded;
+
   /* timers (stores the ms of activation, 0 means not active) */
   uint64_t t_reordering_start;
 

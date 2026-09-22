@@ -19,6 +19,9 @@ typedef struct {
 
 typedef struct {
   dlul_mac_stats_t mac_stats;
+
+  uint64_t rrc_conn_count_sum;
+  uint64_t rrc_conn_count_samples;
 } e2_node_level_stats_t;
 
 e2_node_level_stats_t cp_node_level_stats(const e2_node_level_stats_t *src);

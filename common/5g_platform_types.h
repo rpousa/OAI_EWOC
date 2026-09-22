@@ -39,8 +39,9 @@ typedef enum { NON_DYNAMIC, DYNAMIC } fiveQI_t;
 /* 5QI (5G QoS Identifier) - 3GPP TS 23.501 §5.7.2.1
  * Range: 0..255
  * - Standardized 5QI values: have one-to-one mapping to standardized 5G QoS characteristics (Table 5.7.4-1)
- * - Pre-configured 5QI values: pre-configured in the AN
- * - Dynamically assigned 5QI values: require signaling of QoS characteristics as part of QoS profile */
+ * - Pre-configured 5QI values: pre-configured in the AN (not in Table 5.7.4-1)
+ * - Dynamically assigned 5QI values: require signaling of QoS characteristics as part of QoS profile
+ * OAI implements standardized non-dynamic 5QI only. */
 #define MIN_FIVEQI 0
 #define MAX_STANDARDIZED_FIVEQI 90
 #define MAX_FIVEQI 255

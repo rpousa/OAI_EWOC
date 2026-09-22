@@ -34,7 +34,7 @@ static void get_NGU_S1U_addr(char **addr, uint16_t *port)
   GET_PARAMS(NETParams, GNBNETPARAMS_DESC, gtpupath);
 
   char *address;
-  if (NETParams[GNB_IPV4_ADDRESS_FOR_NG_AMF_IDX].strptr != NULL) {
+  if (IS_SA_MODE(get_softmodem_params())) {
     LOG_I(GTPU, "SA mode \n");
     AssertFatal(gnb_ipv4_address_for_NGU != NULL, "NG-U IPv4 address is NULL: could not read IPv4 address\n");
     address = strdup(gnb_ipv4_address_for_NGU);

@@ -30,6 +30,7 @@
 #include "NR_BCCH-BCH-Message.h"
 #include "NR_ReestablishmentCause.h"
 #include "NR_UE-NR-Capability.h"
+#include "RRC/NR_UE/nr_mac_rrc_types.h"
 
 //-------------------------------------------------------------------------------------------//
 // Messages for RRC logging
@@ -61,6 +62,7 @@
 #define NAS_CELL_SELECTION_REQ(mSGpTR)  (mSGpTR)->ittiMsg.nas_cell_selection_req
 #define NAS_CONN_ESTABLI_REQ(mSGpTR)    (mSGpTR)->ittiMsg.nas_conn_establi_req
 #define NAS_UPLINK_DATA_REQ(mSGpTR)     (mSGpTR)->ittiMsg.nas_ul_data_req
+#define NAS_INITIAL_UL_TRANSFER_REQ(mSGpTR) (mSGpTR)->ittiMsg.nas_initial_ul_transfer_req
 #define NAS_DETACH_REQ(mSGpTR)          (mSGpTR)->ittiMsg.nas_detach_req
 #define NAS_DEREGISTRATION_REQ(mSGpTR)  (mSGpTR)->ittiMsg.nas_deregistration_req
 #define NAS_5GMM_IND(mSGpTR)            (mSGpTR)->ittiMsg.nas_5gmm_ind
@@ -79,6 +81,7 @@
 
 #define RRC_SUBFRAME_PROCESS(mSGpTR)    (mSGpTR)->ittiMsg.rrc_subframe_process
 #define NRRRC_FRAME_PROCESS(mSGpTR)     (mSGpTR)->ittiMsg.nr_rrc_frame_process
+#define NR_RRC_NRDC_TIMEOUT(mSGpTR)     (mSGpTR)->ittiMsg.nr_rrc_nrdc_timeout
 
 #define RLC_SDU_INDICATION(mSGpTR)      (mSGpTR)->ittiMsg.rlc_sdu_indication
 #define NRDuDlReq(mSGpTR)      (mSGpTR)->ittiMsg.nr_du_dl_req
@@ -460,6 +463,9 @@ typedef struct {
   int get_sib;
 } nr_mac_rrc_sched_sib_t;
 
+typedef struct {
+  nr_mac_ra_start_cause_t cause;
+} nr_mac_rrc_start_ra_t;
 
 enum payload_type {
   NR_MAC_RRC_CONFIG_RESET,
@@ -467,6 +473,7 @@ enum payload_type {
   NR_MAC_RRC_CONFIG_MIB,
   NR_MAC_RRC_CONFIG_SIB1,
   NR_MAC_RRC_CONFIG_OTHER_SIB,
+  NR_MAC_RRC_START_RA,
   NR_MAC_RRC_SCHED_SIB,
   NR_MAC_RRC_RESUME_RB
 };
@@ -480,8 +487,15 @@ typedef struct {
     nr_mac_rrc_config_sib1_t config_sib1;
     nr_mac_rrc_sched_sib_t sched_sib;
     nr_mac_rrc_config_other_sib_t config_other_sib;
+    nr_mac_rrc_start_ra_t start_ra;
     nr_mac_rrc_resume_rb_t resume_rb;
   } payload;
 } nr_mac_rrc_message_t;
+
+typedef struct {
+  uint64_t ue_id;
+  int xid;
+  int state;
+} nr_rrc_nrdc_timeout_t;
 
 #endif /* RRC_MESSAGES_TYPES_H_ */

@@ -18,6 +18,7 @@
 #include "PHY/phy_extern.h"
 #include "PHY/CODING/coding_extern.h"
 #include "PHY/nr_phy_common/inc/nr_phy_common.h"
+#include "PHY/NR_REFSIG/nr_refsig.h"
 #include "PHY/sse_intrin.h"
 #include "common/utils/nr/nr_common.h"
 #include <openair1/PHY/TOOLS/phy_scope_interface.h>
@@ -206,24 +207,11 @@ static void nr_pdcch_extract_rbs_single(uint32_t rxdataF_sz,
     c16_t *rxF_ext = rxdataF_ext[aarx];
 
     /*
-     * The following for loop handles treatment of PDCCH contained in table rxdataF (in frequency domain)
-     * In NR the PDCCH IQ symbols are contained within RBs in the CORESET defined by higher layers which is located within the BWP
-     * Lets consider that the first RB to be considered as part of the CORESET and part of the PDCCH is n_BWP_start
-     * Several cases have to be handled differently as IQ symbols are situated in different parts of rxdataF:
-     * 1. Number of RBs in the system bandwidth is even
-     *    1.1 The RB is <  than the N_RB_DL/2 -> IQ symbols are in the second half of the rxdataF (from first_carrier_offset)
-     *    1.2 The RB is >= than the N_RB_DL/2 -> IQ symbols are in the first half of the rxdataF (from element 0)
-     * 2. Number of RBs in the system bandwidth is odd
-     * (particular case when the RB with DC as it is treated differently: it is situated in symbol borders of rxdataF)
-     *    2.1 The RB is <  than the N_RB_DL/2 -> IQ symbols are in the second half of the rxdataF (from first_carrier_offset)
-     *    2.2 The RB is >  than the N_RB_DL/2 -> IQ symbols are in the first half of the rxdataF (from element 0 + 2nd half RB
-     * containing DC) 2.3 The RB is == N_RB_DL/2          -> IQ symbols are in the upper border of the rxdataF for first 6 IQ
-     * element and the lower border of the rxdataF for the last 6 IQ elements If the first RB containing PDCCH within the UE BWP
-     * and within the CORESET is higher than half of the system bandwidth (N_RB_DL), then the IQ symbol is going to be found at
-     * the position 0+c_rb-N_RB_DL/2 in rxdataF and we have to point the pointer at (1+c_rb-N_RB_DL/2) in rxdataF
+     * The following for loop handles treatment of PDCCH contained in table rxdataF (in frequency domain).
+     * rxdataF is FFT shifted: the first negative frequency of the carrier is at index 0 and the REs of the
+     * whole carrier are contiguous, so the REs of a CORESET RB are found at RE_PER_RB * (c_rb + n_BWP_start).
      */
 
-    c16_t middle_prb_buffer[RE_PER_RB];
     int start = rb_offset / 6;
     int size = coreset_nbr_rb / 6;
     for (int rb_group = start; rb_group < start + size; rb_group++) {
@@ -232,37 +220,7 @@ static void nr_pdcch_extract_rbs_single(uint32_t rxdataF_sz,
       }
       for (int rb = 0; rb < 6; rb++) {
         int c_rb = rb_group * 6 + rb;
-        c16_t *rxF = NULL;
-        if ((frame_parms->N_RB_DL & 1) == 0) {
-          if ((c_rb + n_BWP_start) < frame_parms->N_RB_DL / 2)
-            // if RB to be treated is lower than middle system bandwidth then rxdataF pointed
-            // at (offset + c_br + symbol * ofdm_symbol_size): even case
-            rxF = rxFbase + frame_parms->first_carrier_offset + RE_PER_RB * (c_rb + n_BWP_start);
-          else
-            // number of RBs is even  and c_rb is higher than half system bandwidth (we don't skip DC)
-            // if these conditions are true the pointer has to be situated at the 1st part of the rxdataF
-            // we point at the 1st part of the rxdataF in symbol
-            rxF = rxFbase + RE_PER_RB * (c_rb + n_BWP_start - frame_parms->N_RB_DL / 2);
-        } else {
-          if ((c_rb + n_BWP_start) <= frame_parms->N_RB_DL / 2)
-            // if RB to be treated is lower than middle system bandwidth then rxdataF pointed
-            //  at (offset + c_br + symbol * ofdm_symbol_size): odd case
-            // Reassemble the middle PRB
-            if (c_rb + n_BWP_start == frame_parms->N_RB_DL / 2) {
-              memcpy(middle_prb_buffer, rxFbase + frame_parms->ofdm_symbol_size - RE_PER_RB / 2, sizeof(c16_t) * RE_PER_RB / 2);
-              memcpy(middle_prb_buffer + RE_PER_RB / 2, rxFbase, sizeof(c16_t) * RE_PER_RB / 2);
-              rxF = middle_prb_buffer;
-            } else {
-              rxF = rxFbase + frame_parms->first_carrier_offset + RE_PER_RB * (c_rb + n_BWP_start);
-            }
-
-          else
-            // number of RBs is odd  and c_rb is higher than half system bandwidth + 1
-            // if these conditions are true the pointer has to be situated at the 1st part of
-            // the rxdataF just after the first IQ symbols of the RB containing DC
-            // we point at the 1st part of the rxdataF in symbol
-            rxF = rxFbase + RE_PER_RB * (c_rb + n_BWP_start - frame_parms->N_RB_DL / 2) - 6;
-        }
+        const c16_t *rxF = rxFbase + RE_PER_RB * (c_rb + n_BWP_start);
 
         const int valid_re[RE_PER_RB_OUT_DMRS] = {0, 2, 3, 4, 6, 7, 8, 10, 11};
         for (int i = 0; i < sizeofArray(valid_re); i++) {
@@ -330,11 +288,10 @@ static void nr_rx_pdcch_symbol(PHY_VARS_NR_UE *ue,
   // Note: pilot returned by the following function is already the complex conjugate of the transmitted DMRS
   const uint32_t *gold = nr_gold_pdcch(fp->N_RB_DL, fp->symbols_per_slot, scrambling_id, proc->nr_slot_rx, symbol);
   nr_pdcch_dmrs_ref(gold, pilot, n_rb + rb_offset + dmrs_ref);
-  nr_pdcch_channel_estimation(ue,
+  nr_pdcch_channel_estimation(fp,
                               n_rb,
                               rb_offset,
                               dmrs_ref,
-                              fp->first_carrier_offset,
                               phy_pdcch_config->pdcch_config[ss_idx].BWPStart,
                               pdcch_est_size,
                               pdcch_dl_ch_estimates,
@@ -360,7 +317,7 @@ static void nr_rx_pdcch_symbol(PHY_VARS_NR_UE *ue,
 
   LOG_D(NR_PHY_DCI, "in channel level function (dl_ch_estimates_ext -> dl_ch_estimates_ext)\n");
   int avg[fp->nb_antennas_rx];
-  nr_channel_level(0, rx_size, pdcch_dl_ch_estimates_ext, fp->nb_antennas_rx, 1, avg, n_rb * RE_PER_RB_OUT_DMRS);
+  nr_channel_level(0, rx_size, pdcch_dl_ch_estimates_ext, fp->nb_antennas_rx, avg, n_rb * RE_PER_RB_OUT_DMRS);
   int avgs = avg[0];
   for (int i = 1; i < fp->nb_antennas_rx; i++)
       avgs = cmax(avgs, avg[i]);
@@ -589,7 +546,6 @@ void nr_pdcch_dci_indication(const UE_nr_rxtx_proc_t *proc,
 {
   NR_UE_PDCCH_CONFIG *phy_pdcch_config = &phy_data->phy_pdcch_config;
 
-  nr_downlink_indication_t dl_indication;
   fapi_nr_dci_indication_t dci_ind = {.SFN = proc->frame_rx, .slot = proc->nr_slot_rx};
 
   for (int ss_idx = 0; ss_idx < phy_pdcch_config->nb_search_space; ss_idx++) {
@@ -632,7 +588,14 @@ void nr_pdcch_dci_indication(const UE_nr_rxtx_proc_t *proc,
   }
 
   /* Send to MAC */
-  nr_fill_dl_indication(&dl_indication, &dci_ind, NULL, proc, ue, phy_data);
+  nr_downlink_indication_t dl_indication = (nr_downlink_indication_t){.gNB_index = proc->gNB_id,
+                                                                      .module_id = ue->Mod_id,
+                                                                      .cc_id = ue->CC_id,
+                                                                      .hfn = proc->hfn_rx,
+                                                                      .frame = proc->frame_rx,
+                                                                      .slot = proc->nr_slot_rx,
+                                                                      .phy_data = phy_data,
+                                                                      .dci_ind = &dci_ind};
   ue->if_inst->dl_indication(&dl_indication);
   phy_pdcch_config->nb_search_space = 0;
 }

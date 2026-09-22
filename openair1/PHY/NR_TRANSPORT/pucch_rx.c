@@ -5,6 +5,8 @@
 /*!
  * \brief Top-level routines for decoding the PUCCH physical channel
  */
+#include "PHY/defs_RU.h"
+#include "nr_common.h"
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
@@ -22,12 +24,10 @@
 #include "PHY/NR_TRANSPORT/nr_transport_proto.h"
 #include "PHY/NR_REFSIG/nr_refsig.h"
 #include "common/utils/LOG/log.h"
-#include "nfapi/oai_integration/vendor_ext.h"
-#include "nfapi/oai_integration/vendor_ext.h"
+#include "nr_sequences_tables.h"
 #include "SCHED_NR/sched_nr.h"
 #include "bits.h"
 
-#include "T.h"
 #include "nr_phy_common.h"
 
 //#define DEBUG_NR_PUCCH_RX 1
@@ -57,21 +57,22 @@ void nr_fill_pucch(PHY_VARS_gNB *gNB, int frame, int slot, nfapi_nr_pucch_pdu_t 
 
 int get_pucch0_cs_lut_index(PHY_VARS_gNB *gNB, const nfapi_nr_pucch_pdu_t *pucch_pdu)
 {
-  int i = 0;
-
 #ifdef DEBUG_NR_PUCCH_RX
   printf("getting index for LUT with %d entries, Nid %d\n", gNB->pucch0_lut.nb_id, pucch_pdu->hopping_id);
 #endif
 
+  int i;
   for (i = 0; i < gNB->pucch0_lut.nb_id; i++) {
     if (gNB->pucch0_lut.Nid[i] == pucch_pdu->hopping_id)
       break;
   }
+
+  if (i < gNB->pucch0_lut.nb_id) {
 #ifdef DEBUG_NR_PUCCH_RX
   printf("found index %d\n", i);
 #endif
-  if (i < gNB->pucch0_lut.nb_id)
-    return (i);
+  return (i);
+  }
 
 #ifdef DEBUG_NR_PUCCH_RX
   printf("Initializing PUCCH0 LUT index %i with Nid %d\n", i, pucch_pdu->hopping_id);
@@ -121,7 +122,9 @@ void nr_decode_pucch0(PHY_VARS_gNB *gNB,
                       const nfapi_nr_pucch_pdu_t *pucch_pdu)
 {
   NR_DL_FRAME_PARMS *frame_parms = &gNB->frame_parms;
-  int soffset = (slot % RU_RX_SLOT_DEPTH) * frame_parms->symbols_per_slot * frame_parms->ofdm_symbol_size;
+  const int nb_symbols = pucch_pdu->nr_of_symbols;
+  const int symb_sz = frame_parms->ofdm_symbol_size;
+  int soffset = (slot % RU_RX_SLOT_DEPTH) * frame_parms->symbols_per_slot * symb_sz;
 
   AssertFatal(pucch_pdu->bit_len_harq > 0 || pucch_pdu->sr_flag > 0,
               "Either bit_len_harq (%d) or sr_flag (%d) must be > 0\n",
@@ -154,7 +157,7 @@ void nr_decode_pucch0(PHY_VARS_gNB *gNB,
   LOG_D(PHY,
         "pucch0: nr_symbols %d, start_symbol %d, prb_start %d, second_hop_prb %d,  group_hop_flag %d, sequence_hop_flag %d, O_ACK "
         "%d, O_SR %d, mcs %d initial_cyclic_shift %d\n",
-        pucch_pdu->nr_of_symbols,
+        nb_symbols,
         pucch_pdu->start_symbol_index,
         pucch_pdu->prb_start,
         pucch_pdu->second_hop_prb,
@@ -194,7 +197,7 @@ void nr_decode_pucch0(PHY_VARS_gNB *gNB,
     prb_offset[1] = pucch_pdu->bwp_start + pucch_pdu->second_hop_prb;
   }
 
-  AssertFatal(pucch_pdu->nr_of_symbols < 3, "nr_of_symbols %d not allowed\n", pucch_pdu->nr_of_symbols);
+  AssertFatal(nb_symbols < 3, "nr_of_symbols %d not allowed\n", nb_symbols);
   uint32_t re_offset[2] = {0};
 
   const int16_t *x_re[2], *x_im[2];
@@ -205,34 +208,22 @@ void nr_decode_pucch0(PHY_VARS_gNB *gNB,
 
   const uint8_t num_sp_streams = pucch_pdu->param_v4.numSpatialStreamIndices;
 
-  c64_t xr[num_sp_streams][pucch_pdu->nr_of_symbols][12] __attribute__((aligned(32)));
-  memset(xr, 0, sizeof(xr));
-
   int64_t xrtmag = 0, xrtmag_next = 0;
   uint8_t maxpos = 0;
   uint8_t index = 0;
 
-  int nb_re_pucch = 12 * pucch_pdu->prb_size; // prb size is 1
+  const int nb_re_pucch = NR_NB_SC_PER_RB * pucch_pdu->prb_size; // prb size is 1
   int64_t signal_energy = 0, signal_energy_ant0 = 0;
 
-  for (int l = 0; l < pucch_pdu->nr_of_symbols; l++) {
+  c64_t xr[num_sp_streams][nb_symbols][nb_re_pucch] __attribute__((aligned(32)));
+  for (int l = 0; l < nb_symbols; l++) {
     uint8_t l2 = l + pucch_pdu->start_symbol_index;
 
-    re_offset[l] = (12 * prb_offset[l]) + frame_parms->first_carrier_offset;
-    if (re_offset[l] >= frame_parms->ofdm_symbol_size)
-      re_offset[l] -= frame_parms->ofdm_symbol_size;
+    re_offset[l] = NR_NB_SC_PER_RB * prb_offset[l];
 
     for (int aa = 0; aa < num_sp_streams; aa++) {
-      c16_t rp[nb_re_pucch];
-      memset(rp, 0, sizeof(rp));
       c16_t *tmp_rp = &rxdataF[aa][soffset + l2 * frame_parms->ofdm_symbol_size];
-      if (re_offset[l] + nb_re_pucch > frame_parms->ofdm_symbol_size) {
-        int neg_length = frame_parms->ofdm_symbol_size - re_offset[l];
-        int pos_length = nb_re_pucch - neg_length;
-        memcpy(rp, &tmp_rp[re_offset[l]], neg_length * sizeof(*tmp_rp));
-        memcpy(&rp[neg_length], tmp_rp, pos_length * sizeof(*tmp_rp));
-      } else
-        memcpy(rp, &tmp_rp[re_offset[l]], nb_re_pucch * sizeof(*tmp_rp));
+      c16_t *rp = tmp_rp + re_offset[l];
 
       for (int n = 0; n < nb_re_pucch; n++) {
         xr[aa][l][n].r = (int32_t)x_re[l][n] * rp[n].r + (int32_t)x_im[l][n] * rp[n].i;
@@ -247,24 +238,24 @@ void nr_decode_pucch0(PHY_VARS_gNB *gNB,
         signal_energy_ant0 += energ;
     }
   }
-  signal_energy /= (pucch_pdu->nr_of_symbols * num_sp_streams);
-  signal_energy_ant0 /= pucch_pdu->nr_of_symbols;
+  signal_energy /= nb_symbols * num_sp_streams;
+  signal_energy_ant0 /= nb_symbols;
   int pucch_power_dBtimes10 = 10 * dB_fixed(signal_energy);
 
-  // int32_t no_corr = 0;
   int seq_index = 0;
 
   for (int i = 0; i < nr_sequences; i++) {
     c64_t corr[num_sp_streams][2];
     for (int aa = 0; aa < num_sp_streams; aa++) {
-      for (int l = 0; l < pucch_pdu->nr_of_symbols; l++) {
+      for (int l = 0; l < nb_symbols; l++) {
         seq_index =
-            (pucch_pdu->initial_cyclic_shift + mcs[i] + gNB->pucch0_lut.lut[cs_ind][slot][l + pucch_pdu->start_symbol_index]) % 12;
+            (pucch_pdu->initial_cyclic_shift + mcs[i] + gNB->pucch0_lut.lut[cs_ind][slot][l + pucch_pdu->start_symbol_index])
+            % NR_NB_SC_PER_RB;
 #ifdef DEBUG_NR_PUCCH_RX
         printf("PUCCH symbol %d seq %d, seq_index %d, mcs %d\n", l, i, seq_index, mcs[i]);
 #endif
         corr[aa][l] = (c64_t){0};
-        for (int n = 0; n < 12; n++) {
+        for (int n = 0; n < NR_NB_SC_PER_RB; n++) {
           corr[aa][l].r += xr[aa][l][n].r * idft12_re[seq_index][n] + xr[aa][l][n].i * idft12_im[seq_index][n];
           corr[aa][l].i += xr[aa][l][n].r * idft12_im[seq_index][n] - xr[aa][l][n].i * idft12_re[seq_index][n];
         }
@@ -279,7 +270,7 @@ void nr_decode_pucch0(PHY_VARS_gNB *gNB,
           corr[0][0].r,
           corr[0][0].i,
           10 * log10((double)squaredMod(corr[0][0])));
-    if (pucch_pdu->nr_of_symbols == 2)
+    if (nb_symbols == 2)
       LOG_D(PHY,
             "PUCCH 2nd symbol IDFT[%d/%d] = (%ld,%ld)=>%f\n",
             mcs[i],
@@ -289,7 +280,7 @@ void nr_decode_pucch0(PHY_VARS_gNB *gNB,
             10 * log10((double)squaredMod(corr[0][1])));
     int64_t temp = 0;
     if (pucch_pdu->freq_hop_flag == 0) {
-      if (pucch_pdu->nr_of_symbols == 1) { // non-coherent correlation
+      if (nb_symbols == 1) { // non-coherent correlation
         for (int aa = 0; aa < num_sp_streams; aa++)
           temp += squaredMod(corr[aa][0]);
       } else {
@@ -298,7 +289,7 @@ void nr_decode_pucch0(PHY_VARS_gNB *gNB,
           csum(corr2, corr[aa][0], corr[aa][1]);
           // coherent combining of 2 symbols and then complex modulus for
           // single-frequency case
-          temp += corr2.r * corr2.r + corr2.i * corr2.i;
+          temp += squaredMod(corr2);
         }
       }
     } else {
@@ -316,18 +307,18 @@ void nr_decode_pucch0(PHY_VARS_gNB *gNB,
       int64_t temp2 = 0, temp3 = 0;
       for (int aa = 0; aa < num_sp_streams; aa++) {
         temp2 += squaredMod(corr[aa][0]);
-        if (pucch_pdu->nr_of_symbols == 2)
+        if (nb_symbols == 2)
           temp3 += squaredMod(corr[aa][1]);
       }
       uci_stats->current_pucch0_stat0 = dB_fixed64(temp2);
-      if (pucch_pdu->nr_of_symbols == 2)
+      if (nb_symbols == 2)
         uci_stats->current_pucch0_stat1 = dB_fixed64(temp3);
     } else if (temp > xrtmag_next)
       xrtmag_next = temp;
   }
 
-  int xrtmag_dBtimes10 = 10 * (int)dB_fixed64(xrtmag / (12 * pucch_pdu->nr_of_symbols));
-  int xrtmag_next_dBtimes10 = 10 * (int)dB_fixed64(xrtmag_next / (12 * pucch_pdu->nr_of_symbols));
+  int xrtmag_dBtimes10 = 10 * (int)dB_fixed64(xrtmag / (12 * nb_symbols));
+  int xrtmag_next_dBtimes10 = 10 * (int)dB_fixed64(xrtmag_next / (12 * nb_symbols));
 #ifdef DEBUG_NR_PUCCH_RX
   printf("PUCCH 0 : maxpos %d\n", maxpos);
 #endif
@@ -374,7 +365,7 @@ void nr_decode_pucch0(PHY_VARS_gNB *gNB,
   uci_pdu->rnti = pucch_pdu->rnti;
   uci_pdu->ul_cqi = cqi;
   uci_pdu->timing_advance = 0xffff; // currently not valid
-  uci_pdu->rssi = 1280 - (10 * dB_fixed(32767 * 32767) - dB_fixed_times10(signal_energy_ant0));
+  uci_pdu->rssi = 1280 - (10 * dB_fixed(32767 * 32767) - dB_fixed_times10(signal_energy));
 
   if (pucch_pdu->bit_len_harq == 0) {
     uci_pdu->sr.sr_confidence_level = SNRtimes10 < gNB->pucch0_thres;
@@ -453,6 +444,20 @@ void nr_decode_pucch0(PHY_VARS_gNB *gNB,
     }
   }
 }
+
+static void addIt(const c16_t *in1, cd_t *out1, const c16_t *in2, cd_t *out2)
+{
+  cd_t tmp1 = {0}, tmp2 = {0};
+  for (int n = 0; n < NR_NB_SC_PER_RB; n++) {
+    csum(tmp1, tmp1, in1[n]);
+    csum(tmp2, tmp2, in2[n]);
+  }
+  out1->r += tmp1.r / NR_NB_SC_PER_RB;
+  out1->i += tmp1.i / NR_NB_SC_PER_RB;
+  out2->r += tmp2.r / NR_NB_SC_PER_RB;
+  out2->i += tmp2.i / NR_NB_SC_PER_RB;
+}
+
 //*****************************************************************//
 void nr_decode_pucch1(PHY_VARS_gNB *gNB,
                       c16_t **rxdataF,
@@ -482,14 +487,16 @@ void nr_decode_pucch1(PHY_VARS_gNB *gNB,
    *
    */
   NR_DL_FRAME_PARMS *frame_parms = &gNB->frame_parms;
-  const uint8_t n_rx = pucch_pdu->param_v4.numSpatialStreamIndices;
+  const uint n_rx = pucch_pdu->param_v4.numSpatialStreamIndices;
+  const int nb_symbols = pucch_pdu->nr_of_symbols;
+  const int symb_sz = frame_parms->ofdm_symbol_size;
 
-  const int soffset = (slot & 3) * frame_parms->symbols_per_slot * frame_parms->ofdm_symbol_size;
+  const int soffset = (slot % RU_RX_SLOT_DEPTH) * frame_parms->symbols_per_slot * symb_sz;
   // lprime is the index of the OFDM symbol in the slot that corresponds to the first OFDM symbol of the PUCCH transmission in the
   // slot given by [5, TS 38.213]
   const int lprime = pucch_pdu->start_symbol_index;
   // mcs = 0 except for PUCCH format 0
-  const uint8_t mcs = 0;
+  const uint mcs = 0;
   // r_u_v_alpha_delta_re and r_u_v_alpha_delta_im tables containing the sequence y(n) for the PUCCH, when they are multiplied by
   // d(0) r_u_v_alpha_delta_dmrs_re and r_u_v_alpha_delta_dmrs_im tables containing the sequence for the DM-RS.
   c16_t r_u_v_alpha_delta[12], r_u_v_alpha_delta_dmrs[12];
@@ -509,11 +516,11 @@ void nr_decode_pucch1(PHY_VARS_gNB *gNB,
   // otherwise no intra-slot frequency hopping shall be assumed
   // uint8_t PUCCH_Frequency_Hopping = 0 ; // from higher layers
   const bool intraSlotFrequencyHopping = pucch_pdu->prb_start != pucch_pdu->second_hop_prb;
-  float inv_sqrt2 = 0.70710678118f; // 1 / sqrt(2)
+  const float inv_sqrt2 = 0.70710678118f; // 1 / sqrt(2)
   int64_t signal_energy = 0, signal_energy_ant0 = 0;
-  uint8_t nb_re_pucch = pucch_pdu->prb_size * 12;
+  uint8_t nb_re_pucch = pucch_pdu->prb_size * NR_NB_SC_PER_RB;
   pucch_GroupHopping_t pucch_GroupHopping = pucch_pdu->group_hop_flag + (pucch_pdu->sequence_hop_flag << 1);
-  int16_t amp = 0x7FFF;
+  const int16_t amp = INT16_MAX;
   int xrtmag_dBtimes10 = 0;
 
   NR_gNB_UCI_STATS_t stack_uci_stats = {0};
@@ -536,39 +543,16 @@ void nr_decode_pucch1(PHY_VARS_gNB *gNB,
   c16_t z_rx[16][MAX_SIZE_Z] = {0};
   c16_t z_dmrs_rx[16][MAX_SIZE_Z] = {0};
   c16_t z[16][12] = {0};
-  const int half_nb_rb_dl = frame_parms->N_RB_DL >> 1;
-  const bool nb_rb_is_even = (frame_parms->N_RB_DL & 1) == 0;
-  for (int l = 0; l < pucch_pdu->nr_of_symbols; l++) { // extracting data and dmrs from rxdataF
-    if (intraSlotFrequencyHopping && (l >= floor(pucch_pdu->nr_of_symbols / 2))) { // intra-slot hopping enabled, we need
+  for (int l = 0; l < nb_symbols; l++) { // extracting data and dmrs from rxdataF
+    if (intraSlotFrequencyHopping && (l >= nb_symbols / 2)) { // intra-slot hopping enabled, we need
       // to calculate new offset PRB
       pucch_pdu->prb_start = pucch_pdu->bwp_start + pucch_pdu->second_hop_prb;
     }
-    int re_offset = (l + pucch_pdu->start_symbol_index) * frame_parms->ofdm_symbol_size;
 
-    if (nb_rb_is_even) {
-      if (pucch_pdu->prb_start < half_nb_rb_dl) // if number RBs in bandwidth is even and
-                                                // current PRB is lower band
-        re_offset += 12 * pucch_pdu->prb_start + frame_parms->first_carrier_offset;
-      else // if number RBs in bandwidth is even and current PRB is upper band
-        re_offset += 12 * (pucch_pdu->prb_start - half_nb_rb_dl);
-    } else {
-      if (pucch_pdu->prb_start < half_nb_rb_dl) // if number RBs in bandwidth is odd  and
-                                                // current PRB is lower band
-        re_offset += 12 * pucch_pdu->prb_start + frame_parms->first_carrier_offset;
-      else if (pucch_pdu->prb_start > half_nb_rb_dl) // if number RBs in bandwidth is odd
-                                                     // and current PRB is upper band
-        re_offset += 12 * (pucch_pdu->prb_start - half_nb_rb_dl) + 6;
-      else // if number RBs in bandwidth is odd  and current PRB contains DC
-        re_offset += 12 * pucch_pdu->prb_start + frame_parms->first_carrier_offset;
-    }
+    int re_offset = (l + pucch_pdu->start_symbol_index) * symb_sz + NR_NB_SC_PER_RB * pucch_pdu->prb_start;
 
-    for (int n = 0; n < 12; n++) {
-      const int current_subcarrier = (l / 2) * 12 + n;
-      if (n == 6 && pucch_pdu->prb_start == half_nb_rb_dl && !nb_rb_is_even) {
-        // if number RBs in bandwidth is odd  and current PRB contains DC, we need to recalculate the offset when n=6 (for second
-        // half PRB)
-        re_offset = ((l + pucch_pdu->start_symbol_index) * frame_parms->ofdm_symbol_size);
-      }
+    for (int n = 0; n < NR_NB_SC_PER_RB; n++) {
+      const int current_subcarrier = (l / 2) * NR_NB_SC_PER_RB + n;
 
       if (l % 2 == 1) // mapping PUCCH or DM-RS according to TS38.211 subclause 6.4.1.3.1
         for (int r = 0; r < n_rx; r++) {
@@ -588,7 +572,7 @@ void nr_decode_pucch1(PHY_VARS_gNB *gNB,
           "\tz_pucch[%d]=rxptr(%d)=(x_n(l=%d,n=%d)=(%d,%d))\n",
           l % 2 ? "PUCCH" : "DM-RS",
           amp,
-          frame_parms->ofdm_symbol_size,
+          symb_sz,
           frame_parms->N_RB_DL,
           frame_parms->first_carrier_offset,
           current_subcarrier,
@@ -612,8 +596,8 @@ void nr_decode_pucch1(PHY_VARS_gNB *gNB,
 
   } // end symbols loop
 
-  signal_energy /= (pucch_pdu->nr_of_symbols * n_rx);
-  signal_energy_ant0 /= pucch_pdu->nr_of_symbols;
+  signal_energy /= (nb_symbols * n_rx);
+  signal_energy_ant0 /= nb_symbols;
   int pucch_power_dBtimes10 = 10 * dB_fixed(signal_energy);
   int max_n0 = max(gNB->measurements.n0_subband_power_tot_dB[pucch_pdu->bwp_start + pucch_pdu->prb_start],
                    gNB->measurements.n0_subband_power_tot_dB[pucch_pdu->bwp_start + pucch_pdu->second_hop_prb]);
@@ -634,9 +618,8 @@ void nr_decode_pucch1(PHY_VARS_gNB *gNB,
   else
     cqi = (640 + SNRtimes10) / 5;
 
-  cd_t y[16] = {0}, y1[16] = {0};
   // generating transmitted sequence and dmrs
-  for (int l = 0; l < pucch_pdu->nr_of_symbols; l++) {
+  for (int l = 0; l < nb_symbols; l++) {
 #ifdef DEBUG_NR_PUCCH_RX
     printf("\t [nr_decode_pucch1] for symbol l=%d, lprime=%d\n", l, lprime);
 #endif
@@ -647,11 +630,12 @@ void nr_decode_pucch1(PHY_VARS_gNB *gNB,
     // if frequency hopping is enabled,  intraSlotFrequencyHopping is provided
     //              n_hop = 0 for first hop
     //              n_hop = 1 for second hop
-    const int n_hop = intraSlotFrequencyHopping && l >= pucch_pdu->nr_of_symbols / 2 ? 1 : 0;
+    const int n_hop = intraSlotFrequencyHopping && l >= nb_symbols / 2 ? 1 : 0;
 
 #ifdef DEBUG_NR_PUCCH_RX
     printf("\t [nr_decode_pucch1] entering function nr_group_sequence_hopping with n_hop=%d, nr_tti_tx=%d\n", n_hop, slot);
 #endif
+    const int symb_idx = nb_symbols - 1;
     nr_group_sequence_hopping(pucch_GroupHopping, pucch_pdu->hopping_id, n_hop, slot, &u, &v); // calculating u and v value
     // Defining cyclic shift hopping TS 38.211 Subclause 6.3.2.2.2
     double alpha = nr_cyclic_shift_hopping(pucch_pdu->hopping_id, pucch_pdu->initial_cyclic_shift, mcs, l, lprime, slot);
@@ -700,9 +684,9 @@ void nr_decode_pucch1(PHY_VARS_gNB *gNB,
       // hopping
 
       // only if intra-slot hopping not enabled (PUCCH)
-      int N_SF_mprime_PUCCH_1 = table_6_3_2_4_1_1_N_SF_mprime_PUCCH_1_noHop[pucch_pdu->nr_of_symbols - 1];
+      int N_SF_mprime_PUCCH_1 = table_6_3_2_4_1_1_N_SF_mprime_PUCCH_1_noHop[symb_idx];
       // only if intra-slot hopping not enabled (DM-RS)
-      int N_SF_mprime_PUCCH_DMRS_1 = table_6_4_1_3_1_1_1_N_SF_mprime_PUCCH_1_noHop[pucch_pdu->nr_of_symbols - 1]; 
+      int N_SF_mprime_PUCCH_DMRS_1 = table_6_4_1_3_1_1_1_N_SF_mprime_PUCCH_1_noHop[symb_idx];
       if (l % 2 == 1) {
         for (int m = 0; m < N_SF_mprime_PUCCH_1; m++) {
           c16_t table = {table_6_3_2_4_1_2_Wi_Re[N_SF_mprime_PUCCH_1][w_index][m],
@@ -758,13 +742,13 @@ void nr_decode_pucch1(PHY_VARS_gNB *gNB,
       // hopping
 
       // only if intra-slot hopping enabled mprime = 0 (PUCCH)
-      int N_SF_mprime_PUCCH_1 = table_6_3_2_4_1_1_N_SF_mprime_PUCCH_1_m0Hop[pucch_pdu->nr_of_symbols - 1]; 
+      int N_SF_mprime_PUCCH_1 = table_6_3_2_4_1_1_N_SF_mprime_PUCCH_1_m0Hop[symb_idx];
       // only if intra-slot hopping enabled mprime = 0 (DM-RS)
-      int N_SF_mprime_PUCCH_DMRS_1 = table_6_4_1_3_1_1_1_N_SF_mprime_PUCCH_1_m0Hop[pucch_pdu->nr_of_symbols - 1]; 
+      int N_SF_mprime_PUCCH_DMRS_1 = table_6_4_1_3_1_1_1_N_SF_mprime_PUCCH_1_m0Hop[symb_idx];
       // only if intra-slot hopping enabled mprime = 0 (PUCCH)
-      int N_SF_mprime0_PUCCH_1 = table_6_3_2_4_1_1_N_SF_mprime_PUCCH_1_m0Hop[pucch_pdu->nr_of_symbols - 1];
+      int N_SF_mprime0_PUCCH_1 = table_6_3_2_4_1_1_N_SF_mprime_PUCCH_1_m0Hop[symb_idx];
       // only if intra-slot hopping enabled mprime = 0 (DM-RS)
-      int N_SF_mprime0_PUCCH_DMRS_1 = table_6_4_1_3_1_1_1_N_SF_mprime_PUCCH_1_m0Hop[pucch_pdu->nr_of_symbols - 1]; 
+      int N_SF_mprime0_PUCCH_DMRS_1 = table_6_4_1_3_1_1_1_N_SF_mprime_PUCCH_1_m0Hop[symb_idx];
 #ifdef DEBUG_NR_PUCCH_RX
       printf(
           "\t [nr_decode_pucch1] w_index = %d, N_SF_mprime_PUCCH_1 = %d, N_SF_mprime_PUCCH_DMRS_1 = %d, N_SF_mprime0_PUCCH_1 = %d, "
@@ -812,170 +796,117 @@ void nr_decode_pucch1(PHY_VARS_gNB *gNB,
         }
 
         N_SF_mprime_PUCCH_1 =
-            table_6_3_2_4_1_1_N_SF_mprime_PUCCH_1_m1Hop[pucch_pdu->nr_of_symbols
-                                                        - 1]; // only if intra-slot hopping enabled mprime = 1 (PUCCH)
+            table_6_3_2_4_1_1_N_SF_mprime_PUCCH_1_m1Hop[symb_idx]; // only if intra-slot hopping enabled mprime = 1 (PUCCH)
         N_SF_mprime_PUCCH_DMRS_1 =
-            table_6_4_1_3_1_1_1_N_SF_mprime_PUCCH_1_m1Hop[pucch_pdu->nr_of_symbols
-                                                          - 1]; // only if intra-slot hopping enabled mprime = 1 (DM-RS)
+            table_6_4_1_3_1_1_1_N_SF_mprime_PUCCH_1_m1Hop[symb_idx]; // only if intra-slot hopping enabled mprime = 1 (DM-RS)
       }
     }
   } // end of symbols loop
 
   cd_t H[16] = {0}, H1[16] = {0};
-  const double half_nb_symbols = pucch_pdu->nr_of_symbols / 2.0;
+  cd_t y[16] = {0}, y1[16] = {0};
+  const int half_nb_symbols = nb_symbols / 2;
   for (int r = 0; r < n_rx; r++) {
     for (int l = 0; l <= half_nb_symbols; l++) {
-      if (intraSlotFrequencyHopping == false) {
-        for (int n = 0; n < 12; n++) {
-          H[r].r += z_dmrs_rx[r][l * 12 + n].r / half_nb_symbols / 12;
-          H[r].i += z_dmrs_rx[r][l * 12 + n].i / half_nb_symbols / 12;
-          y[r].r += z_rx[r][l * 12 + n].r / half_nb_symbols / 12;
-          y[r].i += z_rx[r][l * 12 + n].i / half_nb_symbols / 12;
-        }
-      } else { // with Frequency-hopping
-        if (l < pucch_pdu->nr_of_symbols / 4) {
-          for (int n = 0; n < 12; n++) {
-            H[r].r += z_dmrs_rx[r][l * 12 + n].r / half_nb_symbols / 12;
-            H[r].i += z_dmrs_rx[r][l * 12 + n].i / half_nb_symbols / 12;
-            y[r].r += z_rx[r][l * 12 + n].r / half_nb_symbols / 12;
-            y[r].i += z_rx[r][l * 12 + n].i / half_nb_symbols / 12;
-          }
-        } else {
-          for (int n = 0; n < 12; n++) {
-            H1[r].r += z_dmrs_rx[r][l * 12 + n].r / half_nb_symbols / 12;
-            H1[r].i += z_dmrs_rx[r][l * 12 + n].i / half_nb_symbols / 12;
-            y1[r].r += z_rx[r][l * 12 + n].r / half_nb_symbols / 12;
-            y1[r].i += z_rx[r][l * 12 + n].i / half_nb_symbols / 12;
-          }
-        }
+      const c16_t *dmrs = z_dmrs_rx[r] + l * NR_NB_SC_PER_RB;
+      const c16_t *z = z_rx[r] + l * NR_NB_SC_PER_RB;
+      if (intraSlotFrequencyHopping) { // with Frequency-hopping
+        if (l < nb_symbols / 4)
+          addIt(dmrs, H + r, z, y + r);
+        else
+          addIt(dmrs, H1 + r, z, y1 + r);
+      } else {
+        addIt(dmrs, H + r, z, y + r);
       }
     }
+    H[r].r /= half_nb_symbols;
+    H[r].i /= half_nb_symbols;
+    H1[r].r /= half_nb_symbols;
+    H1[r].i /= half_nb_symbols;
+    y[r].r /= half_nb_symbols;
+    y[r].i /= half_nb_symbols;
+    y1[r].r /= half_nb_symbols;
+    y1[r].i /= half_nb_symbols;
   }
   // mrc combining to obtain z_re and z_im
-  cd_t dp1 = {0}, dm1 = {0}, d0 = {0}, d1 = {0}, d2 = {0}, d3 = {0};
-  double dp1mag = 0, dm1mag = 0, d0mag = 0, d1mag = 0, d2mag = 0, d3mag = 0;
   // complex-valued symbol d_re, d_im containing complex-valued symbol d(0):
-  for (int r = 0; r < n_rx; r++) {
-    if (pucch_pdu->bit_len_harq == 1) // BPSK
-    {
-      dp1.r = H[r].r + inv_sqrt2 * (y[r].r + y[r].i);
-      dp1.i = H[r].i + inv_sqrt2 * (y[r].i - y[r].r);
-      dm1.r = H[r].r + inv_sqrt2 * (-y[r].r - y[r].i);
-      dm1.i = H[r].i + inv_sqrt2 * (y[r].r - y[r].i);
+  if (pucch_pdu->bit_len_harq == 1) { // BPSK
+    double dp1mag = {0}, dm1mag = {0};
+    for (int r = 0; r < n_rx; r++) {
+      double yr = y[r].r, yi = y[r].i;
+      cd_t dp1 = (cd_t){H[r].r + inv_sqrt2 * (yr + yi), H[r].i + inv_sqrt2 * (yi - yr)};
       dp1mag += squaredMod(dp1);
+      cd_t dm1 = (cd_t){H[r].r + inv_sqrt2 * (-yr - yi), H[r].i + inv_sqrt2 * (yr - yi)};
       dm1mag += squaredMod(dm1);
 
-      LOG_D(PHY,
-            "r %d y : (%f,%f) H (%f,%f) dp1 : (%f,%f) : %f dm1 : (%f,%f) : %f\n",
-            r,
-            y[r].r,
-            y[r].i,
-            H[r].r,
-            H[r].i,
-            dp1.r,
-            dp1.i,
-            dp1mag,
-            dm1.r,
-            dm1.i,
-            dm1mag);
-
-      if (intraSlotFrequencyHopping == true) {
-        dp1.r = H1[r].r + inv_sqrt2 * (y1[r].r + y1[r].i);
-        dp1.i = H1[r].i + inv_sqrt2 * (y1[r].i - y1[r].r);
-        dm1.r = H1[r].r + inv_sqrt2 * (-y1[r].r - y1[r].i);
-        dm1.i = H1[r].i + inv_sqrt2 * (y1[r].r - y1[r].i);
+      if (intraSlotFrequencyHopping) {
+        double y1r = y1[r].r, y1i = y1[r].i;
+        cd_t dp1 = (cd_t){H1[r].r + inv_sqrt2 * (y1r + y1i), H1[r].i + inv_sqrt2 * (y1i - y1r)};
         dp1mag += squaredMod(dp1);
+        cd_t dm1 = (cd_t){H1[r].r + inv_sqrt2 * (-y1r - y1i), H1[r].i + inv_sqrt2 * (y1r - y1i)};
         dm1mag += squaredMod(dm1);
       }
-      if (r == n_rx - 1) {
-        if (dp1mag > dm1mag) {
-          uci_pdu->harq.harq_list[0].harq_value = 1;
-          xrtmag_dBtimes10 = 10 * (int)dB_fixed64(dp1mag / (12 * pucch_pdu->nr_of_symbols));
-        } else {
-          //*payload = 1;
-          uci_pdu->harq.harq_list[0].harq_value = 0;
-          xrtmag_dBtimes10 = 10 * (int)dB_fixed64(dm1mag / (12 * pucch_pdu->nr_of_symbols));
-        }
-      }
-    } else if (pucch_pdu->bit_len_harq == 2) // QPSK
-    {
+    }
+    if (dp1mag > dm1mag) {
+      uci_pdu->harq.harq_list[0].harq_value = 1;
+      xrtmag_dBtimes10 = 10 * (int)dB_fixed64(dp1mag / (NR_NB_SC_PER_RB * nb_symbols));
+    } else {
+      //*payload = 1;
+      uci_pdu->harq.harq_list[0].harq_value = 0;
+      xrtmag_dBtimes10 = 10 * (int)dB_fixed64(dm1mag / (NR_NB_SC_PER_RB * nb_symbols));
+    }
+  } else if (pucch_pdu->bit_len_harq == 2) { // QPSK
+    double d0mag = {0}, d1mag = {0}, d2mag = {0}, d3mag = {0};
+    for (int r = 0; r < n_rx; r++) {
+      double yr = y[r].r, yi = y[r].i;
       // d0 = H + (1 - j)*y
-      d0.r = H[r].r + inv_sqrt2 * (y[r].r + y[r].i);
-      d0.i = H[r].i + inv_sqrt2 * (y[r].i - y[r].r);
+      cd_t d0 = (cd_t){H[r].r + inv_sqrt2 * (yr + yi), H[r].i + inv_sqrt2 * (yi - yr)};
       d0mag += squaredMod(d0);
 
       // d1 = H + (-1 - j)*y
-      d1.r = H[r].r + inv_sqrt2 * (-y[r].r + y[r].i);
-      d1.i = H[r].i + inv_sqrt2 * (-y[r].r - y[r].i);
+      cd_t d1 = (cd_t){H[r].r + inv_sqrt2 * (-yr + yi), H[r].i + inv_sqrt2 * (-yr - yi)};
       d1mag += squaredMod(d1);
 
       // d2 = H + (1 + j)*y
-      d2.r = H[r].r + inv_sqrt2 * (y[r].r - y[r].i);
-      d2.i = H[r].i + inv_sqrt2 * (y[r].i + y[r].r);
+      cd_t d2 = (cd_t){H[r].r + inv_sqrt2 * (yr - yi), H[r].i + inv_sqrt2 * (yi + yr)};
       d2mag += squaredMod(d2);
 
       // d3 = H + (-1 + j)*y
-      d3.r = H[r].r + inv_sqrt2 * (-y[r].r - y[r].i);
-      d3.i = H[r].i + inv_sqrt2 * (y[r].r - y[r].i);
+      cd_t d3 = (cd_t){H[r].r + inv_sqrt2 * (-yr - yi), H[r].i + inv_sqrt2 * (yr - yi)};
       d3mag += squaredMod(d3);
 
       // with frequency hopping
       if (intraSlotFrequencyHopping == true) {
-        d0.r = H1[r].r + inv_sqrt2 * (y1[r].r + y1[r].i);
-        d0.i = H1[r].i + inv_sqrt2 * (y1[r].i - y1[r].r);
+        double y1r = y1[r].r, y1i = y1[r].i;
+        cd_t d0 = (cd_t){H1[r].r + inv_sqrt2 * (y1r + y1i), H1[r].i + inv_sqrt2 * (y1i - y1r)};
         d0mag += squaredMod(d0);
 
-        d1.r = H1[r].r + inv_sqrt2 * (-y1[r].r + y1[r].i);
-        d1.i = H1[r].i + inv_sqrt2 * (-y1[r].r - y1[r].i);
+        cd_t d1 = (cd_t){H1[r].r + inv_sqrt2 * (-y1r + y1i), H1[r].i + inv_sqrt2 * (-y1r - y1i)};
         d1mag += squaredMod(d1);
 
-        d2.r = H1[r].r + inv_sqrt2 * (y1[r].r - y1[r].i);
-        d2.i = H1[r].i + inv_sqrt2 * (y1[r].i + y1[r].r);
+        cd_t d2 = (cd_t){H1[r].r + inv_sqrt2 * (y1r - y1i), H1[r].i + inv_sqrt2 * (y1i + y1r)};
         d2mag += squaredMod(d2);
 
-        d3.r = H1[r].r + inv_sqrt2 * (-y1[r].r - y1[r].i);
-        d3.i = H1[r].i + inv_sqrt2 * (y1[r].r - y1[r].i);
+        cd_t d3 = (cd_t){H1[r].r + inv_sqrt2 * (-y1r - y1i), H1[r].i + inv_sqrt2 * (y1r - y1i)};
         d3mag += squaredMod(d3);
       }
 
-      LOG_D(PHY,
-            "r %d y : (%f,%f) H (%f,%f) d0 : (%f,%f) : %f d1 : (%f,%f) : %f d2 : (%f,%f) : %f d3 : (%f,%f) : %f\n",
-            r,
-            y[r].r,
-            y[r].i,
-            H[r].r,
-            H[r].i,
-            d0.r,
-            d0.i,
-            d0mag,
-            d1.r,
-            d1.i,
-            d1mag,
-            d2.r,
-            d2.i,
-            d2mag,
-            d3.r,
-            d3.i,
-            d3mag);
-
-      if (r == n_rx - 1) {
-        if (d0mag >= d1mag && d0mag >= d2mag && d0mag >= d3mag) {
-          uci_pdu->harq.harq_list[0].harq_value = 1;
-          uci_pdu->harq.harq_list[1].harq_value = 1;
-          xrtmag_dBtimes10 = 10 * (int)dB_fixed64(d0mag / (12 * pucch_pdu->nr_of_symbols));
-        } else if (d1mag >= d0mag && d1mag >= d2mag && d1mag >= d3mag) {
-          uci_pdu->harq.harq_list[0].harq_value = 1;
-          uci_pdu->harq.harq_list[1].harq_value = 0;
-          xrtmag_dBtimes10 = 10 * (int)dB_fixed64(d1mag / (12 * pucch_pdu->nr_of_symbols));
-        } else if (d2mag >= d0mag && d2mag >= d1mag && d2mag >= d3mag) {
-          uci_pdu->harq.harq_list[0].harq_value = 0;
-          uci_pdu->harq.harq_list[1].harq_value = 1;
-          xrtmag_dBtimes10 = 10 * (int)dB_fixed64(d2mag / (12 * pucch_pdu->nr_of_symbols));
-        } else {
-          uci_pdu->harq.harq_list[0].harq_value = 0;
-          uci_pdu->harq.harq_list[1].harq_value = 0;
-          xrtmag_dBtimes10 = 10 * (int)dB_fixed64(d3mag / (12 * pucch_pdu->nr_of_symbols));
-        }
+      if (d0mag >= d1mag && d0mag >= d2mag && d0mag >= d3mag) {
+        uci_pdu->harq.harq_list[0].harq_value = 1;
+        uci_pdu->harq.harq_list[1].harq_value = 1;
+        xrtmag_dBtimes10 = 10 * (int)dB_fixed64(d0mag / (NR_NB_SC_PER_RB * nb_symbols));
+      } else if (d1mag >= d0mag && d1mag >= d2mag && d1mag >= d3mag) {
+        uci_pdu->harq.harq_list[0].harq_value = 1;
+        uci_pdu->harq.harq_list[1].harq_value = 0;
+        xrtmag_dBtimes10 = 10 * (int)dB_fixed64(d1mag / (NR_NB_SC_PER_RB * nb_symbols));
+      } else if (d2mag >= d0mag && d2mag >= d1mag && d2mag >= d3mag) {
+        uci_pdu->harq.harq_list[0].harq_value = 0;
+        uci_pdu->harq.harq_list[1].harq_value = 1;
+        xrtmag_dBtimes10 = 10 * (int)dB_fixed64(d2mag / (NR_NB_SC_PER_RB * nb_symbols));
+      } else {
+        uci_pdu->harq.harq_list[0].harq_value = 0;
+        uci_pdu->harq.harq_list[1].harq_value = 0;
+        xrtmag_dBtimes10 = 10 * (int)dB_fixed64(d3mag / (NR_NB_SC_PER_RB * nb_symbols));
       }
     }
   }
@@ -1082,25 +1013,32 @@ static cw_t *pucch2_lut[9] =
 typedef struct {
   int16_t cw[4];
 } cw4bit_t;
-static cw4bit_t pucch2_polar_4bit[16] __attribute__((aligned(32)));
+
 static simde__m128i pucch2_polar_llr_num_lut[256];
+static simde__m128i pucch2_polar_factor_lut[256] __attribute__((aligned(16)));
 
 void init_pucch2_luts()
 {
   for (int b = 3; b < 12; b++) {
     for (int cw = 0; cw < (1 << b); cw++) {
-      uint32_t out = encodeSmallBlock(cw, b);
+      uint32_t out = encodeSmallBlock(cw, b, 0); // Qm = 0 because it's unused for len >= 3
       uint16_t *tmp = (uint16_t *)pucch2_lut[b - 3][cw].cw;
       for (int j = 0; j < 32; j++)
         *tmp++ = (out & (1U << j)) > 0 ? -1 : 1;
     }
   }
+  cw4bit_t pucch2_polar_4bit[16] __attribute__((aligned(32)));
   for (int i = 0; i < 16; i++) {
     int16_t *lut_i = pucch2_polar_4bit[i].cw;
     *lut_i++ = (i & 0x1) <= 0;
     *lut_i++ = (i & 0x2) <= 0;
     *lut_i++ = (i & 0x4) <= 0;
     *lut_i++ = (i & 0x8) <= 0;
+  }
+  for (int cw = 0; cw < 256; cw++) {
+    simde__m128i part1 = simde_mm_set_epi64x(0ULL, *(int64_t *)&pucch2_polar_4bit[cw & 15].cw);
+    simde__m128i part2 = simde_mm_set_epi64x(0ULL, *(int64_t *)&pucch2_polar_4bit[cw >> 4].cw);
+    pucch2_polar_factor_lut[cw] = simde_mm_unpacklo_epi16(part1, part2);
   }
   for (int cw = 0; cw < 256; cw++) {
     int16_t *lut_num_i = (int16_t *)&pucch2_polar_llr_num_lut[cw];
@@ -1128,6 +1066,7 @@ void nr_decode_pucch2(PHY_VARS_gNB *gNB,
   NR_DL_FRAME_PARMS *frame_parms = &gNB->frame_parms;
   // pucch_GroupHopping_t pucch_GroupHopping = pucch_pdu->group_hop_flag + (pucch_pdu->sequence_hop_flag<<1);
   const int nb_symbols = pucch_pdu->nr_of_symbols;
+  const int symb_sz = frame_parms->ofdm_symbol_size;
 
   AssertFatal(nb_symbols == 1 || nb_symbols == 2, "Illegal number of symbols  for PUCCH 2 %d\n", nb_symbols);
 
@@ -1138,14 +1077,13 @@ void nr_decode_pucch2(PHY_VARS_gNB *gNB,
   // extract pucch and dmrs first
 
   int l2 = pucch_pdu->start_symbol_index;
-  int soffset = (slot % RU_RX_SLOT_DEPTH) * frame_parms->symbols_per_slot * frame_parms->ofdm_symbol_size;
+  int soffset = (slot % RU_RX_SLOT_DEPTH) * frame_parms->symbols_per_slot * symb_sz;
   uint16_t starting_prb = pucch_pdu->prb_start + pucch_pdu->bwp_start;
   int re_offset[nb_symbols];
-  re_offset[0] = (12 * starting_prb + frame_parms->first_carrier_offset) % frame_parms->ofdm_symbol_size;
+  re_offset[0] = NR_NB_SC_PER_RB * starting_prb;
   if (nb_symbols == 2) {
     if (pucch_pdu->freq_hop_flag)
-      re_offset[1] = (12 * (pucch_pdu->second_hop_prb + pucch_pdu->bwp_start) + frame_parms->first_carrier_offset)
-                     % frame_parms->ofdm_symbol_size;
+      re_offset[1] = NR_NB_SC_PER_RB * (pucch_pdu->second_hop_prb + pucch_pdu->bwp_start);
     else
       re_offset[1] = re_offset[0];
   }
@@ -1154,23 +1092,15 @@ void nr_decode_pucch2(PHY_VARS_gNB *gNB,
   int Prx = pucch_pdu->param_v4.numSpatialStreamIndices;
   //  AssertFatal((pucch_pdu->prb_size&1) == 0,"prb_size %d is not a multiple of2\n",pucch_pdu->prb_size);
   // use 2 for Nb antennas in case of single antenna to allow the following allocations
-  const int nb_re_pucch = 12 * pucch_pdu->prb_size;
+  const int nb_re_pucch = NR_NB_SC_PER_RB * pucch_pdu->prb_size;
   c16_t rp[Prx][nb_symbols][nb_re_pucch];
   memset(rp, 0, sizeof(rp));
 
   int64_t pucch2_lev = 0;
   for (int aa = 0; aa < Prx; aa++) {
     for (int symb = 0; symb < nb_symbols; symb++) {
-      c16_t *tmp_rp = ((c16_t *)&rxdataF[aa][soffset + (l2 + symb) * frame_parms->ofdm_symbol_size]);
-
-      if (re_offset[symb] + nb_re_pucch < frame_parms->ofdm_symbol_size) {
-        memcpy(rp[aa][symb], &tmp_rp[re_offset[symb]], nb_re_pucch * sizeof(c16_t));
-      } else {
-        int neg_length = frame_parms->ofdm_symbol_size - re_offset[symb];
-        int pos_length = nb_re_pucch - neg_length;
-        memcpy(rp[aa][symb], &tmp_rp[re_offset[symb]], neg_length * sizeof(c16_t));
-        memcpy(&rp[aa][symb][neg_length], tmp_rp, pos_length * sizeof(c16_t));
-      }
+      c16_t *tmp_rp = &rxdataF[aa][soffset + (l2 + symb) * symb_sz];
+      memcpy(rp[aa][symb], &tmp_rp[re_offset[symb]], nb_re_pucch * sizeof(c16_t));
       pucch2_lev += signal_energy_nodc(rp[aa][symb], nb_re_pucch);
     }
   }
@@ -1282,7 +1212,7 @@ void nr_decode_pucch2(PHY_VARS_gNB *gNB,
            symb,
            pucch_pdu->dmrs_scrambling_id);
 #endif
-    uint32_t *sGold = gold_cache(x2, starting_prb / 4 + ngroup / 2);
+    uint32_t *sGold = gold_cache(x2, starting_prb / 4 + (ngroup + 1) / 2);
     // Compute pilot conjugate
     c16_t pil_dmrs[nb_re_dmrs] __attribute__((aligned(32)));
     uint8_t *sGold8 = (uint8_t *)(sGold + starting_prb / 4);
@@ -1385,7 +1315,10 @@ void nr_decode_pucch2(PHY_VARS_gNB *gNB,
   memset(decodedPayload, 0, sizeof(decodedPayload));
   uint8_t corr_dB;
   int decoderState = 2;
-  if (pucch2_levdB < gNB->measurements.n0_subband_power_avg_dB + (gNB->pucch0_thres / 10))
+  int max_n0 = gNB->measurements.n0_subband_power_tot_dB[pucch_pdu->bwp_start + pucch_pdu->prb_start];
+  for (int p = 1; p < pucch_pdu->prb_size; p++)
+    max_n0 = max(max_n0, gNB->measurements.n0_subband_power_tot_dB[pucch_pdu->bwp_start + pucch_pdu->prb_start + p]);
+  if (pucch2_levdB < max_n0 + (gNB->pucch0_thres / 10))
     decoderState = 1; // assuming missed detection, only attempt to decode for polar case (with CRC)
   LOG_D(NR_PHY,
         "n0+thres %d decoderState %d\n",
@@ -1395,13 +1328,28 @@ void nr_decode_pucch2(PHY_VARS_gNB *gNB,
   if (nb_bit < 12 && decoderState == 2) { // short blocklength case
     uint64_t corr = 0;
     int cw_ML = 0;
-    for (int cw = 0; cw < 1 << nb_bit; cw++) {
-      uint64_t corr_tmp = 0;
+    // Bit 0 of the message toggles nrSmallBlockBasis[0] (the all-ones basis vector), which negates
+    // every output bit of the codeword. In the correlation domain this means the data-correlation term
+    // for codeword (cw|1) is the exact negation of that for codeword (cw&~1); only the cw-independent
+    // DMRS/pilot reference term (corr32) stays the same. So we only run the expensive correlation once
+    // per even/odd pair and derive both metrics from it -- halving the number of madd/hadd evaluations.
+    for (int cw = 0; cw < 1 << nb_bit; cw += 2) {
+#if defined(__AVX2__)
+      const simde__m256i *coeff = (simde__m256i *)&pucch2_lut[nb_bit - 3][cw].cw;
+#else
+      // No native 256-bit ISA (e.g. aarch64): use 128-bit NEON directly rather than
+      // SIMDe's 256-bit-on-NEON emulation, which is inefficient for the cross-lane
+      // hadd/permute ops this loop relies on.
+      const simde__m128i *coeff = (simde__m128i *)&pucch2_lut[nb_bit - 3][cw].cw;
+#endif
+      uint64_t corr_tmp_even = 0;
+      uint64_t corr_tmp_odd = 0;
       for (int symb = 0; symb < nb_symbols; symb++) {
         for (int group = 0; group < ngroup; group++) {
           // do complex correlation
           for (int aa = 0; aa < Prx; aa++) {
-            const simde__m256i *coeff = (simde__m256i *)&pucch2_lut[nb_bit - 3][cw].cw;
+            c64_t d;
+#if defined(__AVX2__)
             const simde__m256i *rext = (simde__m256i *)r_ext[aa][symb];
             const simde__m256i *rext2 = (simde__m256i *)r_ext2[aa][symb];
             simde__m256i re = simde_mm256_madd_epi16(coeff[0], rext[group]);
@@ -1410,32 +1358,74 @@ void nr_decode_pucch2(PHY_VARS_gNB *gNB,
             simde__m256i im2 = simde_mm256_madd_epi16(coeff[1], rext2[group + 1]);
             re = simde_mm256_add_epi32(re, re2);
             im = simde_mm256_add_epi32(im, im2);
-            re = simde_mm256_hadd_epi32(re, re);
-            re = simde_mm256_hadd_epi32(re, re);
-            im = simde_mm256_hadd_epi32(im, im);
-            im = simde_mm256_hadd_epi32(im, im);
-            int32_t *re32 = (int32_t *)&re;
-            int32_t *im32 = (int32_t *)&im;
-            c64_t prod = (c64_t){re32[0] + re32[5], im32[0] + im32[5]};
-            csum(prod, prod, corr32[symb][group][aa]);
-            corr_tmp += squaredMod(prod);
+            simde__m256i ri = simde_mm256_hadd_epi32(re, im);
+            ri = simde_mm256_hadd_epi32(ri, ri);
+            int32_t *v = (int32_t *)&ri;
+            d = (c64_t){v[0] + v[4], v[1] + v[5]};
+#else
+            // Each AVX2 256-bit "group"/"group+1" chunk is, byte-for-byte, two
+            // consecutive 128-bit chunks here: coeff[0]/coeff[1] correspond to
+            // the low/high halves of AVX2's coeff[0], coeff[2]/coeff[3] to
+            // AVX2's coeff[1]. Same mapping for rext/rext2. All reductions
+            // below stay within a single 128-bit register -- no cross-lane
+            // combine except a final plain scalar add.
+            const simde__m128i *rext = (simde__m128i *)r_ext[aa][symb];
+            const simde__m128i *rext2 = (simde__m128i *)r_ext2[aa][symb];
+            int g0 = group * 2, g1 = group * 2 + 1;
+            int g2 = (group + 1) * 2, g3 = (group + 1) * 2 + 1;
+            simde__m128i re_lo = simde_mm_madd_epi16(coeff[0], rext[g0]);
+            simde__m128i im_lo = simde_mm_madd_epi16(coeff[0], rext2[g0]);
+            simde__m128i re_hi = simde_mm_madd_epi16(coeff[1], rext[g1]);
+            simde__m128i im_hi = simde_mm_madd_epi16(coeff[1], rext2[g1]);
+            simde__m128i re2_lo = simde_mm_madd_epi16(coeff[2], rext[g2]);
+            simde__m128i im2_lo = simde_mm_madd_epi16(coeff[2], rext2[g2]);
+            simde__m128i re2_hi = simde_mm_madd_epi16(coeff[3], rext[g3]);
+            simde__m128i im2_hi = simde_mm_madd_epi16(coeff[3], rext2[g3]);
+            re_lo = simde_mm_add_epi32(re_lo, re2_lo);
+            im_lo = simde_mm_add_epi32(im_lo, im2_lo);
+            re_hi = simde_mm_add_epi32(re_hi, re2_hi);
+            im_hi = simde_mm_add_epi32(im_hi, im2_hi);
+            simde__m128i lo_ri = simde_mm_hadd_epi32(re_lo, im_lo);
+            lo_ri = simde_mm_hadd_epi32(lo_ri, lo_ri);
+            simde__m128i hi_ri = simde_mm_hadd_epi32(re_hi, im_hi);
+            hi_ri = simde_mm_hadd_epi32(hi_ri, hi_ri);
+            int32_t *vlo = (int32_t *)&lo_ri;
+            int32_t *vhi = (int32_t *)&hi_ri;
+            d = (c64_t){vlo[0] + vhi[0], vlo[1] + vhi[1]};
+#endif
+            c32_t c = corr32[symb][group][aa];
+            c64_t prod_even = {d.r + c.r, d.i + c.i};
+            c64_t prod_odd  = {-d.r + c.r, -d.i + c.i};
+            corr_tmp_even += squaredMod(prod_even);
+            corr_tmp_odd  += squaredMod(prod_odd);
 #ifdef DEBUG_NR_PUCCH_RX
-            printf("pucch2 cw %d group %d aa %d: (%d,%d)+prod=(%ld,%ld)\n",
+            printf("pucch2 cw %d/%d group %d aa %d: c=(%d,%d) d=(%ld,%ld) even=(%ld,%ld) odd=(%ld,%ld)\n",
                    cw,
+                   cw+1,
                    group,
                    aa,
-                   corr32[symb][group][aa].r,
-                   corr32[symb][group][aa].i,
-                   prod.r,
-                   prod.i);
-
+                   c.r,
+                   c.i,
+                   d.r,
+                   d.i,
+                   prod_even.r,
+                   prod_even.i,
+                   prod_odd.r,
+                   prod_odd.i);
 #endif
           }
         } // group loop
       } // symb loop
-      if (corr_tmp > corr) {
-        corr = corr_tmp;
+      if (corr_tmp_even > corr) {
+        corr = corr_tmp_even;
         cw_ML = cw;
+#ifdef DEBUG_NR_PUCCH_RX
+        printf("slot %d PUCCH2 cw_ML %d, corr %lu\n", slot, cw_ML, corr);
+#endif
+      }
+      if (corr_tmp_odd > corr) {
+        corr = corr_tmp_odd;
+        cw_ML = cw + 1;
 #ifdef DEBUG_NR_PUCCH_RX
         printf("slot %d PUCCH2 cw_ML %d, corr %lu\n", slot, cw_ML, corr);
 #endif
@@ -1446,9 +1436,7 @@ void nr_decode_pucch2(PHY_VARS_gNB *gNB,
     printf("slot %d PUCCH2 cw_ML %d, metric %d \n", slot, cw_ML, corr_dB);
 #endif
     decodedPayload[0] = (uint64_t)cw_ML;
-
   } else if (nb_bit >= 12) { // polar coded case
-
     simde__m128i llrs[pucch_pdu->prb_size * 2 * nb_symbols];
     // non-coherent LLR computation on groups of 4 REs (half-PRBs)
     uint64_t corr = 0;
@@ -1459,19 +1447,16 @@ void nr_decode_pucch2(PHY_VARS_gNB *gNB,
         simde__m128i llr_den = simde_mm_set1_epi16(0);
         for (int cw = 0; cw < 256; cw++) {
           int32_t corr_tmp = 0;
+          simde__m128i factor = pucch2_polar_factor_lut[cw];
           for (int aa = 0; aa < Prx; aa++) {
-            simde__m128i part1 = simde_mm_set_epi64x(0ULL, *(int64_t *)&pucch2_polar_4bit[cw & 15].cw);
-            simde__m128i part2 = simde_mm_set_epi64x(0ULL, *(int64_t *)&pucch2_polar_4bit[cw >> 4].cw);
-            simde__m128i factor = simde_mm_unpacklo_epi16(part1, part2);
             simde__m128i re = *(simde__m128i *)&r_ext[aa][symb][half_prb * 4];
             simde__m128i im = *(simde__m128i *)&r_ext2[aa][symb][half_prb * 4];
             simde__m128i prod_re = simde_mm_madd_epi16(re, factor);
             simde__m128i prod_im = simde_mm_madd_epi16(im, factor);
-            prod_re = simde_mm_hadd_epi32(prod_re, prod_re);
-            prod_im = simde_mm_hadd_epi32(prod_im, prod_im);
-            prod_re = simde_mm_hadd_epi32(prod_re, prod_re);
-            prod_im = simde_mm_hadd_epi32(prod_im, prod_im);
-            simde__m128i prod = simde_mm_srai_epi32(simde_mm_unpacklo_epi32(prod_re, prod_im), 5);
+            // combine re/im into one register so both reductions share the same hadd chain
+            simde__m128i ri = simde_mm_hadd_epi32(prod_re, prod_im);
+            ri = simde_mm_hadd_epi32(ri, ri);
+            simde__m128i prod = simde_mm_srai_epi32(ri, 5);
             c64_t corr64 = (c64_t){corr32[symb][half_prb >> 2][aa].r / (2 * nc_group_size * 4 / 2),
                                    corr32[symb][half_prb >> 2][aa].i / (2 * nc_group_size * 4 / 2)};
             //  _mm_srai_epi64 is missing in SIMDE package, we need to update it
@@ -1509,17 +1494,14 @@ void nr_decode_pucch2(PHY_VARS_gNB *gNB,
 
   LOG_D(PHY, "UCI decoderState %d, payload[0] %llu\n", decoderState, (unsigned long long)decodedPayload[0]);
 
-  // estimate CQI for MAC (from antenna port 0 only)
-  // TODO this computation is wrong -> to be ignored at MAC for now
-  int cqi = 0xff;
-  /*int SNRtimes10 =
-    dB_fixed_times10(signal_energy_nodc((int32_t *)&rxdataF[0][soffset + (l2 * frame_parms->ofdm_symbol_size) + re_offset[0]],
-    12 * pucch_pdu->prb_size))
-    - (10 * gNB->measurements.n0_power_tot_dB);
-    int cqi,bit_left;
-    if (SNRtimes10 < -640) cqi=0;
-    else if (SNRtimes10 >  635) cqi=255;
-    else cqi=(640+SNRtimes10)/5;*/
+  int SNRtimes10 = dB_fixed_times10(pucch2_lev) - (10 * max_n0);
+  int cqi;
+  if (SNRtimes10 < -640)
+    cqi = 0;
+  else if (SNRtimes10 > 635)
+    cqi = 255;
+  else
+    cqi = (640 + SNRtimes10) / 5;
 
   uci_pdu->harq.harq_bit_len = pucch_pdu->bit_len_harq;
   uci_pdu->pduBitmap = 0;
@@ -1528,11 +1510,8 @@ void nr_decode_pucch2(PHY_VARS_gNB *gNB,
   uci_pdu->pucch_format = 0;
   uci_pdu->ul_cqi = cqi;
   uci_pdu->timing_advance = 0xffff; // currently not valid
-  uci_pdu->rssi =
-      1280
-      - (10 * dB_fixed(32767 * 32767)
-         - dB_fixed_times10(signal_energy_nodc(&rxdataF[0][soffset + (l2 * frame_parms->ofdm_symbol_size) + re_offset[0]],
-                                               12 * pucch_pdu->prb_size)));
+  uint e = signal_energy_nodc(rp[0][0], nb_re_pucch);
+  uci_pdu->rssi = 1280 - (10 * dB_fixed(INT16_MAX * INT16_MAX) - dB_fixed_times10(e));
   if (pucch_pdu->bit_len_harq > 0) {
     int harq_bytes = pucch_pdu->bit_len_harq >> 3;
     if ((pucch_pdu->bit_len_harq & 7) > 0)

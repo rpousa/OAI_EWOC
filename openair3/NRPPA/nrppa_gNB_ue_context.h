@@ -23,5 +23,6 @@ void nrppa_store_ue_context(const nrppa_gnb_ue_info_t *info, const uint16_t tran
 nrppa_gNB_ue_context_t *nrppa_get_ue_context(uint16_t transaction_id);
 nrppa_gNB_ue_context_t *nrppa_detach_ue_context(uint16_t transaction_id);
 void nrppa_free_ue_context(nrppa_gNB_ue_context_t *ue_info);
+struct nrppa_gNB_ue_context_s *nrppa_get_context_by_ue_id(uint32_t gNB_ue_ngap_id);
 
 #endif /* NRPPA_GNB_UE_CONTEXT_H_ */

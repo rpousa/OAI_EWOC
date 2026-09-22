@@ -25,14 +25,13 @@
 // - idft for short sequence assumes we are transmitting starting in symbol 0 of a PRACH slot
 // - Assumes that PRACH SCS is same as PUSCH SCS @ 30 kHz, take values for formats 0-2 and adjust for others below
 // - Preamble index different from 0 is not detected by gNB
-int32_t generate_nr_prach(PHY_VARS_NR_UE *ue, uint8_t gNB_id, int frame, uint8_t slot, c16_t **txData)
+int32_t generate_nr_prach(PHY_VARS_NR_UE *ue, uint8_t gNB_id, int frame, uint8_t slot, int16_t tx_amp, c16_t **txData)
 {
   NR_DL_FRAME_PARMS *fp=&ue->frame_parms;
   fapi_nr_config_request_t *nrUE_config = &ue->nrUE_config;
   fapi_nr_ul_config_prach_pdu *prach_pdu = &ue->prach_vars[gNB_id]->prach_pdu;
 
   const int fd_occasion = prach_pdu->num_ra;
-  const int16_t amp = prach_pdu->prach_tx_power;
   const int prach_sequence_length = nrUE_config->prach_config.prach_sequence_length;
   const int N_ZC = (prach_sequence_length == 0) ? 839 : 139;
   const int mu = nrUE_config->prach_config.prach_sub_c_spacing;
@@ -311,7 +310,7 @@ int32_t generate_nr_prach(PHY_VARS_NR_UE *ue, uint8_t gNB_id, int frame, uint8_t
     for (int offset = 0, offset2 = 0; offset < N_ZC; offset++, offset2 += preamble_shift) {
       if (offset2 >= N_ZC)
         offset2 -= N_ZC;
-      const c16_t Xu_t = c16xmulConstShift(Xu[offset], amp, 15);
+      const c16_t Xu_t = c16xmulConstShift(Xu[offset], tx_amp, 15);
       const double w = 2 * M_PI * (double)offset2 / N_ZC;
       const c16_t ru = {.r = (int16_t)(floor(32767.0 * cos(w))), .i = (int16_t)(floor(32767.0 * sin(w)))};
       const c16_t p = c16mulShift(Xu_t, ru, 15);

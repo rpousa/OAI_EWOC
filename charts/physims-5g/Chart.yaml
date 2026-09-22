@@ -14,7 +14,7 @@ description: A Helm chart for physical simulators network function
 # pipeline. Library charts do not define any templates and therefore cannot be deployed.
 type: application
 
-icon: http://www.openairinterface.org/wp-content/uploads/2015/06/cropped-oai_final_logo.png
+icon: https://raw.githubusercontent.com/duranta-project/governance/main/logos/Duranta-Logo-Color.png
 
 # This is the chart version. This version number should be incremented each time you make changes
 # to the chart and its templates, including the app version.

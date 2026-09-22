@@ -77,7 +77,23 @@ You can build the tester as follows:
 
 Start the tester with the dedicated configuration file:
 
-    openairinterface5g/build$ LD_LIBRARY_PATH=. ./tests/nr-ue-nas-simulator/nr-ue-nas-simulator-test -O ../tests/nr-ue-nas-simulator/test.conf
+    openairinterface5g/build$ ./tests/nr-ue-nas-simulator/nr-ue-nas-simulator-test -O ../tests/nr-ue-nas-simulator/test.conf
+
+# Testing NAS procedures
+
+## Registration with unknown 5G-GUTI
+
+Optional `--identity-guti` or `identity-guti = 1` in the config file:
+Registration Request is sent with an unknown 5G-GUTI so the AMF sends Identity
+Request (SUCI) per TS 23.502 step 6, the simulator then continues the normal
+attach flow. From `cmake_targets/ran_build/build`:
+
+```bash
+    ./tests/nr-ue-nas-simulator/nr-ue-nas-simulator-test \
+      -O ../tests/nr-ue-nas-simulator/test.conf --identity-guti
+```
+
+Look for `Unknown-GUTI test:` then `IDENTITY REQUEST` / `IDENTITY RESPONSE` in NAS logs.
 
 # Limitations
 - The tester is limited to a fixed flow: Initial Attach -> PDU Session -> Deregistration.

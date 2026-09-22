@@ -216,52 +216,48 @@ You can further [tune your machine](../../doc/tuning_and_security.md)
 
 # Beam simulation
 
-RFsimulator supports beam domain simulation.
+RFsimulator supports beam domain simulation. Each antenna element (`nb_tx`/`nb_rx`) carries exactly one
+beam ID at a time — not a set of concurrent beams. Different antennas may be assigned the same beam ID
+(e.g. to form a wider physical beam out of several antennas), but a single antenna cannot carry more than
+one beam ID simultaneously. The beam vector sent alongside the samples therefore always has one entry per
+antenna, and there is no separate "concurrent beam count" to configure.
+
+Only the gNB side has a real, switchable beam — a physical property of its antenna array and the
+channel. The UE does not switch beams; it simply sits at a fixed position relative to the gNB's beam
+space, so the loss it experiences depends only on which of the gNB's beams is currently active.
 
 ## Configuration
 
-Several new CLI parameters were added
+Command line parameters to be set on gNB side only.
 
-* `--rfsimulator.[0].enable_beams` : enable beam domain simulation. Should match on server and all clients.
-* `--rfsimulator.[0].beam_gains <comma separated list>` : define a matrix of additional pathloss values (in dB)
-to simulate the effect of different beam combinations in the RF simulator. You provide a comma-separated
-list of numbers, which forms the first row of a square matrix. The rest of the matrix is filled by projecting
-these values onto the diagonals, making it symmetric.
+* `--rfsimulator.[0].enable_beams` : enable beam domain simulation
+* `--rfsimulator.[0].beam_gains <comma separated list>` : one gain/loss value (in dB) per gNB beam id.
+`beam_gains[k]` is the additional pathloss applied, on top of the channel model (if present), whenever
+the gNB's antenna is on beam `k`.
 
- Example list: `0,-2,-3`
- Resulting matrix:
- ```
- [[0,-2,-3],
-  [-2,0,-2],
-  [-3,-2,0]]
- ```
+Example: `0,-2,-3` means the 1st beam is the reference, the 2nd beam has 2 dB extra loss, the 3rd beam has 3 dB extra loss.
 
- The beam gain matrix will be used during beam combining. RX beam selects the row and TX beam selects column.
- Using the example above, if gNB is receiving in beam 1 and the UE is transmitting in beam 1, an additional
- 2 dB pathloss will be applied on top of the pathloss from the channel model (if present).
-
-* `--rfsimulator.[0].beam_map <beam_map>` : where `<beam_map>` is a `uint64_t` value where each bit is an enabled TX/RX beam.
-   For gNB: Initial beam_map, i.e. which beams gNB transmits/receives before calling beam APIs.
-   For UE: Beam position in beam space in the simulation. The UE is not expected to use the beam APIs for now.
-* `--rfsimulator.[0].beam_ids <beam_ids>` : where `<beam_ids>` is a comma separated list. Same as above but added for convenience.
+All beam gain is applied once, on the gNB side (on Tx for DL, on Rx for UL), using whichever beam the gNB is currently on.
+The UE's own samples are never touched: DL arrives already scaled, and UL is scaled by the receiver (the gNB), not the sender.
 
 ## Runtime commands
 
-### Moving the UE in beam space
+### Changing the beam gains
 
-Use telnet command `rfsimu setbeams <beam_map>` or `rfsimu setbeamids <beam_ids>`. They correspond to the CLI parameters described
-above and work the same way.
+Use telnet command `rfsimulator setbeamgains <gain1,gain2,...>` to replace the gNB's beam gain table at
+runtime, e.g. to script a UE moving through the gNB's beam space over the course of a test without
+restarting the simulator.
 
-### Modifying the gNB beam
-
-It is possible to test the beam domain simulation without implementing the beam APIs. The same telnet command can be used
-to modify the tx/rx beam of the gNB. The gNB does not need to be beam-aware and use the new APIs. 
+Shrinking the table below the number of beams actually in use will crash on the next lookup against an
+out-of-range beam id; there is no runtime validation against what the gNB is currently sweeping.
 
 ## Programming guide
 
 RFsimulator is attempting to simulate hardware device operation, but there are differences. Like with real hardware,
-it is expected that you provide the configured beams in `set_beams` function ahead of sample reception. This is due
-to the fact that a hardware device will buffer received samples before the driver requests them.
+it is expected that you provide the configured beams in the `trx_set_beams` function ahead of sample reception. This
+is due to the fact that a hardware device will buffer received samples before the driver requests them.
 
-For rfsimulator, as long as the call to `set_beams` with timestamp `n` is done before `trx_read` which is expected
-to return sample `n` the beam switch command will apply to the received samples.
+`trx_set_beams(device, uint16_t *beams, int num_beams, timestamp)` takes a beam ID array whose length (`num_beams`)
+must equal the number of antennas (`nb_tx` for TX, `nb_rx` for RX): `beams[a]` is the beam ID to apply on antenna `a`
+starting at `timestamp`. As long as the call to `trx_set_beams` with timestamp `n` is done before `trx_read` which is
+expected to return sample `n`, the beam switch command will apply to the received samples.

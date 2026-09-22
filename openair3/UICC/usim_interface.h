@@ -14,7 +14,6 @@
 #include <common/utils/LOG/log.h>
 #include <common/utils/load_module_shlib.h>
 #include <common/config/config_userapi.h>
-#include "common_lib.h"
 #include "pdu_session.h"
 
 /* 3GPP glossary

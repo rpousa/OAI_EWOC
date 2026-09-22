@@ -102,7 +102,7 @@ typedef enum {
 #define GNB_CONFIG_STRING_1ST_ACTIVE_BWP                "first_active_bwp"
 #define GNB_CONFIG_STRING_LIMIT_RSRP_REPORT             "max_num_RSRP_reported"
 
-#define GNB_CONFIG_HLP_STRING_ENABLE_SDAP               "enable the SDAP layer\n"
+#define GNB_CONFIG_HLP_STRING_ENABLE_SDAP               "set sdap-HeaderUL/DL present in RRC SDAP-Config (false = both absent)\n"
 #define GNB_CONFIG_HLP_FORCE256QAMOFF                   "suppress activation of 256 QAM despite UE support"
 #define GNB_CONFIG_HLP_MAXMIMOLAYERS                    "limit on maxMIMO-layers for DL"
 #define GNB_CONFIG_HLP_DISABLE_HARQ                     "disable feedback for all HARQ processes (REL17 feature)"
@@ -799,6 +799,23 @@ typedef enum {
 /*-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 /*-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
+/* Xn configuration section */
+#define GNB_CONFIG_STRING_XN_PARAMETERS                              "Xn_INTERFACE"
+
+#define GNB_CONFIG_STRING_GNB_IPV4_ADDRESS_FOR_XNC                   "gnb_ipv4_address_for_xnc"
+
+#define XNPARAMS_DESC { \
+  {GNB_CONFIG_STRING_GNB_IPV4_ADDRESS_FOR_XNC, "interface ip address for xnc",   0,               .strptr=NULL, .defstrval=0,      TYPE_STRING, 0}, \
+}
+
+#define GNB_CONFIG_STRING_CANDIDATE_GNB_IPV4_ADDRESS_FOR_XNC         "candidate_gnb_ipv4_address_for_xnc"
+
+#define GNB_CONFIG_STRING_CANDIDATE_GNB_ADDRESS_FOR_XNC         "ip"
+
+#define XN_CANDIDATE_PARAMS_DESC { \
+  {GNB_CONFIG_STRING_CANDIDATE_GNB_ADDRESS_FOR_XNC, "candidate node ip address for xnc", 0, .strptr=NULL, .defstrval=0, TYPE_STRING, 0}, \
+}
+
 /* E1 configuration section */
 #define GNB_CONFIG_STRING_E1_PARAMETERS                   "E1_INTERFACE"
 
@@ -1056,6 +1073,20 @@ typedef enum {
           .okstrval = { VALUES_NR_PDCP_DISCARD_TIMER_STR }, \
           .setintval = { VALUES_NR_PDCP_DISCARD_TIMER }, \
           .num_okstrval = SIZEOF_NR_PDCP_DISCARD_TIMER }}} \
+}
+
+/*----------------------------------------------------------------------*/
+
+#define CONFIG_STRING_NRDC "nrdc"
+
+#define CONFIG_NRDC_COMBINATION_LIST "combinations"
+
+#define CONFIG_NRDC_MCG "mcg"
+#define CONFIG_NRDC_SCG "scg"
+
+#define NRDC_PARAMS_DESC { \
+  { CONFIG_NRDC_MCG, "mcg", PARAMFLAG_MANDATORY, .u64ptr=NULL, .defint64val=0, TYPE_UINT64, 0 }, \
+  { CONFIG_NRDC_SCG, "scg", PARAMFLAG_MANDATORY, .u64ptr=NULL, .defint64val=0, TYPE_UINT64, 0 }, \
 }
 
 /*----------------------------------------------------------------------*/

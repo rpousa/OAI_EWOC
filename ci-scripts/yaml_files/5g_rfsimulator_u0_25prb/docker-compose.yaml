@@ -30,7 +30,7 @@ services:
         environment:
             - TZ=Europe/paris
         volumes:
-            - ../5g_rfsimulator/mini_nonrf_config.yaml:/openair-amf/etc/config.yaml
+            - ./mini_nonrf_config.yaml:/openair-amf/etc/config.yaml
         depends_on:
             - mysql
         networks:
@@ -42,7 +42,7 @@ services:
         environment:
             - TZ=Europe/Paris
         volumes:
-            - ../5g_rfsimulator/mini_nonrf_config.yaml:/openair-smf/etc/config.yaml
+            - ./mini_nonrf_config.yaml:/openair-smf/etc/config.yaml
         depends_on:
             - oai-amf
             - oai-pcf
@@ -55,7 +55,7 @@ services:
         environment:
             - TZ=Europe/Paris
         volumes:
-            - ../5g_rfsimulator/mini_nonrf_config.yaml:/openair-pcf/etc/config.yaml
+            - ./mini_nonrf_config.yaml:/openair-pcf/etc/config.yaml
             - ./policies/policy_decisions:/openair-pcf/policies/policy_decisions
             - ./policies/pcc_rules:/openair-pcf/policies/pcc_rules
             - ./policies/traffic_rules:/openair-pcf/policies/traffic_rules
@@ -72,7 +72,7 @@ services:
         environment:
             - TZ=Europe/Paris
         volumes:
-            - ../5g_rfsimulator/mini_nonrf_config.yaml:/openair-upf/etc/config.yaml
+            - ./mini_nonrf_config.yaml:/openair-upf/etc/config.yaml
         depends_on:
             - oai-smf
         cap_add:

@@ -39,7 +39,6 @@
 #include "common/platform_constants.h"
 #include "common/ran_context.h"
 #include "common/utils/nr/nr_common.h"
-#include "common_lib.h"
 #include "constr_SEQUENCE.h"
 #include "constr_TYPE.h"
 #include "cucp_cuup_if.h"
@@ -81,6 +80,12 @@
 #include "alg/find.h"
 #include "NR_HandoverCommand.h"
 #include "openair2/SDAP/nr_sdap/nr_sdap_configuration.h"
+#include "rrc_gNB_NRPPA.h"
+#include "openair2/F1AP/lib/f1ap_positioning.h"
+#include "openair3/NRPPA/nrppa_gNB_location_information_transfer.h"
+#include "openair3/NRPPA/nrppa_gNB_measurement_information_transfer.h"
+#include "rrc_gNB_measurements.h"
+#include "rrc_gNB_nrdc.h"
 
 #ifdef E2_AGENT
 #include "openair2/E2AP/RAN_FUNCTION/O-RAN/ran_func_rc_extern.h"
@@ -96,6 +101,13 @@ mui_t rrc_gNB_mui = 0;
 
 /* Per-transaction max_delays counter to limit retry attempts */
 #define MAX_DELAYS 100
+
+/* C-RNTI range (0001-FFF2) (TS 38.321 Table 7.1-1, Rel-16+) */
+#define NR_C_RNTI_MIN 0x0001
+#define NR_C_RNTI_MAX 0xfff2
+
+/* 5.3.3.3 TS 38.331: Random UE identity mask for 39-bit values */
+#define NR_RRC_RANDOM_VALUE_39_BIT_MASK (0x7fffffffffULL)
 
 /** @brief clone and re-enqueue an NGAP message after delaying
  * delays the ongoing transaction (in msg_p) by setting a timer to wait
@@ -276,6 +288,42 @@ const nr_neighbour_cell_t *get_neighbour_cell_by_pci(const neighbour_cell_config
   return NULL;
 }
 
+static bool eq_nr_cell_id(const void *vval, const void *vit)
+{
+  const uint64_t *nrcell_id = (const uint64_t *)vval;
+  const nr_neighbour_cell_t *neighbour = (const nr_neighbour_cell_t *)vit;
+  return neighbour->nrcell_id == *nrcell_id;
+}
+
+const nr_neighbour_cell_t *get_neighbour_cell_by_cell_id(const neighbour_cell_configuration_t *cell, uint64_t nrcell_id)
+{
+  DevAssert(cell);
+  elm_arr_t e = find_if((seq_arr_t *)&cell->neighbour_cells, &nrcell_id, eq_nr_cell_id);
+  if (e.found) {
+    const nr_neighbour_cell_t *neighbour = (const nr_neighbour_cell_t *)e.it;
+    LOG_D(NR_RRC, "Found matching neighbour cell with Cell ID %ld and PCI %d\n", neighbour->nrcell_id, neighbour->physicalCellId);
+    return neighbour;
+  }
+  LOG_E(NR_RRC, "No matching neighbour cell found for NR Cell Identity: %lu\n", nrcell_id);
+  return NULL;
+}
+
+void nr_rrc_mark_ho_completed(const gNB_RRC_INST *rrc, const uint64_t from_cell_id, const uint64_t to_cell_id)
+{
+  const neighbour_cell_configuration_t *cfg = get_neighbour_cell_config(rrc, from_cell_id);
+  if (!cfg)
+    return;
+  const nr_neighbour_cell_t *nc = get_neighbour_cell_by_cell_id(cfg, to_cell_id);
+  if (!nc)
+    return;
+  ((nr_neighbour_cell_t *)nc)->stats.ho_success_count++;
+  LOG_I(NR_RRC,
+        "marking neighbour relation cell %lu -> cell %lu as HO-completed (count %d)\n",
+        from_cell_id,
+        to_cell_id,
+        ((nr_neighbour_cell_t *)nc)->stats.ho_success_count);
+}
+
 typedef struct deliver_dl_rrc_message_data_s {
   const gNB_RRC_INST *rrc;
   f1ap_dl_rrc_message_t *dl_rrc;
@@ -294,12 +342,12 @@ static void rrc_deliver_dl_rrc_message(void *deliver_pdu_data, ue_id_t ue_id, in
   data->rrc->mac_rrc.dl_rrc_message_transfer(data->assoc_id, data->dl_rrc);
 }
 
-static void nr_rrc_transfer_protected_rrc_message(const gNB_RRC_INST *rrc,
-                                                  const gNB_RRC_UE_t *ue_p,
-                                                  uint8_t srb_id,
-                                                  const uint32_t message_id,
-                                                  const uint8_t *buffer,
-                                                  int size)
+void nr_rrc_transfer_protected_rrc_message(const gNB_RRC_INST *rrc,
+                                           const gNB_RRC_UE_t *ue_p,
+                                           uint8_t srb_id,
+                                           const uint32_t message_id,
+                                           const uint8_t *buffer,
+                                           int size)
 {
   DevAssert(size > 0);
   f1_ue_data_t ue_data = cu_get_f1_ue_data(ue_p->rrc_ue_id);
@@ -319,6 +367,43 @@ static void nr_rrc_transfer_protected_rrc_message(const gNB_RRC_INST *rrc,
 #else
   UNUSED(message_id);
 #endif
+}
+
+typedef struct deliver_ue_context_modif_confirm_s {
+  const gNB_RRC_INST *rrc;
+  f1ap_ue_context_modif_confirm_t *confirm;
+  sctp_assoc_t assoc_id;
+} deliver_ue_context_modif_confirm_t;
+
+static void rrc_deliver_ue_context_modif_confirm(void *deliver_pdu_data, ue_id_t ue_id, int srb_id, char *buf, int size, int sdu_id)
+{
+  UNUSED(ue_id);
+  UNUSED(sdu_id);
+  DevAssert(deliver_pdu_data != NULL);
+  deliver_ue_context_modif_confirm_t *data = (deliver_ue_context_modif_confirm_t *)deliver_pdu_data;
+  data->confirm->rrc_container = (uint8_t *)buf;
+  data->confirm->rrc_container_length = size;
+  data->rrc->mac_rrc.ue_context_modification_confirm(data->assoc_id, data->confirm);
+}
+
+static void nr_rrc_transfer_protected_ue_reconfig_confirm(const gNB_RRC_INST *rrc,
+                                                          const gNB_RRC_UE_t *ue_p,
+                                                          uint8_t srb_id,
+                                                          const uint8_t *buffer,
+                                                          int size)
+{
+  DevAssert(size > 0);
+  f1_ue_data_t ue_data = cu_get_f1_ue_data(ue_p->rrc_ue_id);
+  RETURN_IF_INVALID_ASSOC_ID(ue_data.du_assoc_id);
+  f1ap_ue_context_modif_confirm_t confirm = { .gNB_CU_ue_id = ue_p->rrc_ue_id, .gNB_DU_ue_id = ue_data.secondary_ue};
+  deliver_ue_context_modif_confirm_t data = {.rrc = rrc, .confirm = &confirm, .assoc_id = ue_data.du_assoc_id};
+  nr_pdcp_data_req_srb(ue_p->rrc_ue_id,
+                       srb_id,
+                       rrc_gNB_mui++,
+                       size,
+                       (unsigned char *const)buffer,
+                       rrc_deliver_ue_context_modif_confirm,
+                       &data);
 }
 
 static void rrc_gNB_CU_DU_init(gNB_RRC_INST *rrc)
@@ -360,6 +445,7 @@ void openair_rrc_gNB_configuration(gNB_RRC_INST *rrc, nr_rrc_config_t *configura
   RB_INIT(&rrc->cuups);
   RB_INIT(&rrc->dus);
   RB_INIT(&rrc->cells);
+  RB_INIT(&rrc->xn_candidates);
   rrc->configuration = *configuration;
 }
 
@@ -656,10 +742,10 @@ static nr_a3_event_t *get_a3_configuration(gNB_RRC_INST *rrc, int pci)
   return NULL;
 }
 
-static NR_ReportConfigToAddMod_t *prepare_periodic_event_report(const nr_per_event_t *per_event)
+static NR_ReportConfigToAddMod_t *prepare_periodic_event_report(gNB_RRC_UE_t *ue, const nr_per_event_t *per_event)
 {
   NR_ReportConfigToAddMod_t *rc = calloc(1, sizeof(*rc));
-  rc->reportConfigId = 1;
+  rc->reportConfigId = allocate_report_config_id(ue);
   rc->reportConfig.present = NR_ReportConfigToAddMod__reportConfig_PR_reportConfigNR;
 
   NR_PeriodicalReportConfig_t *prc = calloc(1, sizeof(*prc));
@@ -685,10 +771,10 @@ static NR_ReportConfigToAddMod_t *prepare_periodic_event_report(const nr_per_eve
   return rc;
 }
 
-static NR_ReportConfigToAddMod_t *prepare_a2_event_report(const nr_a2_event_t *a2_event)
+static NR_ReportConfigToAddMod_t *prepare_a2_event_report(gNB_RRC_UE_t *ue, const nr_a2_event_t *a2_event)
 {
   NR_ReportConfigToAddMod_t *rc_A2 = calloc(1, sizeof(*rc_A2));
-  rc_A2->reportConfigId = 2;
+  rc_A2->reportConfigId = allocate_report_config_id(ue);
   rc_A2->reportConfig.present = NR_ReportConfigToAddMod__reportConfig_PR_reportConfigNR;
   NR_EventTriggerConfig_t *etrc_A2 = calloc(1, sizeof(*etrc_A2));
   etrc_A2->eventId.present = NR_EventTriggerConfig__eventId_PR_eventA2;
@@ -756,7 +842,7 @@ void free_RRCReconfiguration_params(nr_rrc_reconfig_param_t params)
     FREE_AND_ZERO_BYTE_ARRAY(params.dedicated_NAS_msg_list[i]);
 }
 
-NR_MeasConfig_t *nr_rrc_get_measconfig(const gNB_RRC_INST *rrc, uint64_t nr_cellid)
+NR_MeasConfig_t *nr_rrc_get_measconfig(const gNB_RRC_INST *rrc, uint64_t nr_cellid, gNB_RRC_UE_t *ue)
 {
   nr_rrc_cell_container_t *cell = get_cell_by_cell_id(&((gNB_RRC_INST *)rrc)->cells, nr_cellid);
   DevAssert(cell != NULL);
@@ -790,6 +876,7 @@ NR_MeasConfig_t *nr_rrc_get_measconfig(const gNB_RRC_INST *rrc, uint64_t nr_cell
       */
       LOG_D(NR_RRC, "Preparing A3 Event Measurement Configuration!\n");
       bool default_a3_added = false; // To ensure that the default configuration is only added once
+      int default_a3_report_config_id = -1;
       int i = 0;
       FOR_EACH_SEQ_ARR(nr_neighbour_cell_t *, neighbourCell, neighbour_cells) {
         seq_arr_push_back(&neigh_seq, neighbourCell, sizeof(nr_neighbour_cell_t));
@@ -798,7 +885,7 @@ NR_MeasConfig_t *nr_rrc_get_measconfig(const gNB_RRC_INST *rrc, uint64_t nr_cell
           /* no A3 event configured for this neighbour, let's try the default one, if it exists */
           if (default_a3_added) {
             /* default A3 exists and is already added, use it for this neighbour */
-            neigh_a3_id[i] = 3;
+            neigh_a3_id[i] = default_a3_report_config_id;
             i++;
             continue;
           }
@@ -810,12 +897,13 @@ NR_MeasConfig_t *nr_rrc_get_measconfig(const gNB_RRC_INST *rrc, uint64_t nr_cell
             i++;
             continue;
           }
+          /* allocated default A3 report config ID */
+          default_a3_report_config_id = allocate_report_config_id(ue);
+          neigh_a3_id[i] = default_a3_report_config_id;
           default_a3_added = true;
-          /* default A3 report config ID is 3 */
-          neigh_a3_id[i] = 3;
         } else {
-          /* specific A3 report config ID are 4, 5, ... */
-          neigh_a3_id[i] = i + 4;
+          /* allocate specific A3 report config ID */
+          neigh_a3_id[i] = allocate_report_config_id(ue);
         }
         NR_ReportConfigId_t reportConfigId = neigh_a3_id[i];
         seq_arr_push_back(&rc_A3_seq, prepare_a3_event_report(a3Event, reportConfigId), sizeof(NR_ReportConfigToAddMod_t));
@@ -823,11 +911,11 @@ NR_MeasConfig_t *nr_rrc_get_measconfig(const gNB_RRC_INST *rrc, uint64_t nr_cell
       }
     }
     if (meas_cfg->per_event)
-      rc_PER = prepare_periodic_event_report(meas_cfg->per_event);
+      rc_PER = prepare_periodic_event_report(ue, meas_cfg->per_event);
     if (meas_cfg->a2_event)
-      rc_A2 = prepare_a2_event_report(meas_cfg->a2_event);
+      rc_A2 = prepare_a2_event_report(ue, meas_cfg->a2_event);
 
-    NR_MeasConfig_t *result = get_MeasConfig(mt, band, cell->info.pci, rc_PER, rc_A2, &rc_A3_seq, &neigh_seq, neigh_a3_id);
+    NR_MeasConfig_t *result = get_MeasConfig(ue, mt, band, cell->info.pci, rc_PER, rc_A2, &rc_A3_seq, &neigh_seq, neigh_a3_id);
 
     // Clean up sequence arrays
     seq_arr_free(&rc_A3_seq, NULL);
@@ -867,7 +955,7 @@ nr_rrc_reconfig_param_t get_RRCReconfiguration_params(gNB_RRC_INST *rrc, gNB_RRC
       LOG_D(NR_RRC, "Transfer NAS info with size %ld to RRCReconfiguration params\n", session->nas_pdu.len);
     }
     // Collect DRBs to release for PDU sessions marked for release
-    if (item->status == PDU_SESSION_STATUS_TORELEASE) {
+    if (item->status == PDU_SESSION_STATUS_TORELEASE || item->status == PDU_SESSION_STATUS_NOTIFYONRELEASE) {
       if (!params.drb_rel)
         params.drb_rel = calloc_or_fail(MAX_DRBS_PER_UE, sizeof(int));
       FOR_EACH_SEQ_ARR (drb_t *, drb, &UE->drbs) {
@@ -918,12 +1006,15 @@ static void cuup_notify_reestablishment(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue_p);
   } while (0)
 
 /** @brief Set xid for all PDU sessions and derive RRC transaction action from
- * session statuses. At most one active status (NEW, TOMODIFY, TORELEASE) or reestablishment.
+ * session statuses. At most one active status (NEW, TOMODIFY, TORELEASE,
+ * NOTIFYONRELEASE) or reestablishment.
  * Status vs procedures (F1AP UE Context Setup/Modification Response only):
  * - NEW: Initial Context Setup or PDU Session Resource Setup Request;
  *   E1 then F1 Setup/Modification.
  * - TORELEASE: NGAP PDU Session Release Command -> E1 Bearer Context
  *   Modification (release) -> F1 Modification (release DRBs).
+ * - NOTIFYONRELEASE: N3 GTP-U Error Indication (TS 23.527) -> same teardown chain
+     (E1/F1) -> PDU Session Resource Notify.
  * - ESTABLISHED: Bystander when adding/releasing others.
  * - TOMODIFY: NGAP PDU Session Modify Request -> E1 Bearer Context
  *   Modification (if CU-UP) -> F1 Modification Response.
@@ -952,10 +1043,13 @@ static rrc_action_t rrc_gNB_action_from_pdusession_status(gNB_RRC_UE_t *ue_p,
     } else if (item->status == PDU_SESSION_STATUS_TORELEASE) {
       DevAssert(params->n_drb_rel > 0);
       ASSERT_PDU_ACTION_SINGLE(action, RRC_PDUSESSION_RELEASE);
-      LOG_I(NR_RRC,
-            "PDU Session Release: setting PDU Session status to TORELEASE for PDU Session %d \n",
-            item->param.pdusession_id);
+      LOG_I(NR_RRC, "PDU Session Release: setting PDU Session status to TORELEASE for PDU Session %d\n", item->param.pdusession_id);
       action = RRC_PDUSESSION_RELEASE;
+    } else if (item->status == PDU_SESSION_STATUS_NOTIFYONRELEASE) {
+      DevAssert(params->n_drb_rel > 0);
+      ASSERT_PDU_ACTION_SINGLE(action, RRC_PDUSESSION_RESOURCE_NOTIFY);
+      LOG_I(NR_RRC, "Released PDU Session %d to be notified (NOTIFYONRELEASE)\n", item->param.pdusession_id);
+      action = RRC_PDUSESSION_RESOURCE_NOTIFY;
     }
     /* ESTABLISHED and FAILED do not drive transaction action */
   }
@@ -1085,15 +1179,18 @@ static DRB_nGRAN_to_mod_t get_e1_drb_mod_reestablishment(const drb_t *drb, const
   return drb_e1;
 }
 
-/**
- * @brief Notify E1 re-establishment to CU-UP
- */
+/** @brief Re-establish DRB PDCP on CU-UP (TS 38.331 clause 5.3.5.6.5, TS 38.463 bearer mod).
+ * Sends pDCP_Reestablishment and updated KUP keys after KgNB derivation. */
 static void cuup_notify_reestablishment(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue_p)
 {
   // Quit if no CU-UP is associated
   if (!is_cuup_associated(rrc) || !ue_associated_to_cuup(ue_p)) {
     return;
   }
+
+  /* TS 38.331 §5.3.5.6.5: no DRB/PDU session (e.g. after release) means nothing to do. */
+  if (seq_arr_size(&ue_p->drbs) == 0)
+    return;
 
   e1ap_bearer_mod_req_t req = {
       .gNB_cu_cp_ue_id = ue_p->rrc_ue_id,
@@ -1252,7 +1349,9 @@ static void rrc_gNB_process_RRCReestablishmentComplete(gNB_RRC_INST *rrc, gNB_RR
   }
 }
 
-int nr_rrc_reconfiguration_req(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue_p)
+/* \brief Explicit request for reconfiguration from DU, after UE context
+ * modificatien required. Send in a UE context modification confirm message. */
+static int nr_rrc_reconfiguration_req(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue_p)
 {
   uint8_t xid = rrc_gNB_get_next_transaction_identifier(rrc->module_id);
   ue_p->xids[xid] = RRC_DEDICATED_RECONF;
@@ -1264,8 +1363,7 @@ int nr_rrc_reconfiguration_req(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue_p)
     LOG_E(NR_RRC, "UE %d: Failed to generate RRCReconfiguration\n", ue_p->rrc_ue_id);
     return -1;
   }
-  const uint32_t msg_id = NR_DL_DCCH_MessageType__c1_PR_rrcReconfiguration;
-  nr_rrc_transfer_protected_rrc_message(rrc, ue_p, DL_SCH_LCID_DCCH, msg_id, msg.buf, msg.len);
+  nr_rrc_transfer_protected_ue_reconfig_confirm(rrc, ue_p, DL_SCH_LCID_DCCH, msg.buf, msg.len);
   free_byte_array(msg);
   free_RRCReconfiguration_params(params);
   return 0;
@@ -1304,6 +1402,8 @@ static void rrc_handle_RRCSetupRequest(gNB_RRC_INST *rrc,
            rrcSetupRequest->ue_Identity.choice.randomValue.size);
 
     ue_context_p = rrc_gNB_create_ue_context(assoc_id, msg->crnti, rrc, random_value, msg->gNB_DU_ue_id);
+    if (!ue_context_p)
+      return;
   } else if (NR_InitialUE_Identity_PR_ng_5G_S_TMSI_Part1 == rrcSetupRequest->ue_Identity.present) {
     /* <5G-S-TMSI> = <AMF Set ID><AMF Pointer><5G-TMSI> 48-bit */
     /* ng-5G-S-TMSI-Part1                  BIT STRING (SIZE (39)) */
@@ -1318,7 +1418,8 @@ static void rrc_handle_RRCSetupRequest(gNB_RRC_INST *rrc,
     LOG_I(NR_RRC, "Received UE 5G-S-TMSI-Part1 %ld\n", s_tmsi_part1);
 
     ue_context_p = rrc_gNB_create_ue_context(assoc_id, msg->crnti, rrc, s_tmsi_part1, msg->gNB_DU_ue_id);
-    AssertFatal(ue_context_p != NULL, "out of memory\n");
+    if (!ue_context_p)
+      return;
     gNB_RRC_UE_t *UE = &ue_context_p->ue_context;
     UE->Initialue_identity_5g_s_TMSI.presence = true;
     UE->ng_5G_S_TMSI_Part1 = s_tmsi_part1;
@@ -1329,6 +1430,8 @@ static void rrc_handle_RRCSetupRequest(gNB_RRC_INST *rrc,
            rrcSetupRequest->ue_Identity.choice.randomValue.size);
 
     ue_context_p = rrc_gNB_create_ue_context(assoc_id, msg->crnti, rrc, random_value, msg->gNB_DU_ue_id);
+    if (!ue_context_p)
+      return;
     LOG_E(NR_RRC, "RRCSetupRequest without random UE identity or S-TMSI not supported, let's reject the UE %04x\n", msg->crnti);
     rrc_gNB_generate_RRCReject(rrc, ue_context_p);
     return;
@@ -1361,7 +1464,7 @@ static void rrc_handle_RRCSetupRequest(gNB_RRC_INST *rrc,
     return;
   }
   UE->ongoing_reconfiguration = false;
-  UE->measConfig = nr_rrc_get_measconfig(rrc, msg->nr_cellid);
+  UE->measConfig = nr_rrc_get_measconfig(rrc, msg->nr_cellid, UE);
   activate_srb(UE, 1);
   rrc_gNB_generate_RRCSetup(0, ue_context_p, msg->du2cu_rrc_container, msg->du2cu_rrc_container_length);
 }
@@ -1432,11 +1535,20 @@ static const nr_rrc_cell_container_t *get_previous_cell_by_pci_in_du(gNB_RRC_INS
   return rrc_get_cell_by_pci_for_du(&du->cells, pci);
 }
 
+/** @brief Process RRCReestablishmentRequest on CCCH (TS 38.331 clause 5.3.7.4).
+ * On valid UE context, update RNTI and PCell and trigger RRCReestablishment, otherwise
+ * release any old context and send RRCSetup.
+ * @note Context lookup uses c-RNTI only. Out of range PhysCellId or C-RNTI are ignored. */
 static void rrc_handle_RRCReestablishmentRequest(gNB_RRC_INST *rrc,
                                                  sctp_assoc_t assoc_id,
                                                  const NR_RRCReestablishmentRequest_IEs_t *req,
                                                  const f1ap_initial_ul_rrc_message_t *msg)
 {
+  DevAssert(req);
+  DevAssert(msg);
+  DevAssert(rrc);
+  RETURN_IF_INVALID_ASSOC_ID(assoc_id);
+
   uint64_t random_value = 0;
   const char *scause = get_reestab_cause(req->reestablishmentCause);
   const long physCellId = req->ue_Identity.physCellId;
@@ -1450,6 +1562,18 @@ static void rrc_handle_RRCReestablishmentRequest(gNB_RRC_INST *rrc,
         old_rnti,
         physCellId,
         scause);
+
+  /* Validate PCI range per TS 38.331: PhysCellId (0..1007) */
+  if (physCellId < 0 || physCellId > NR_PHYS_CELL_ID_MAX) {
+    LOG_E(NR_RRC, "Invalid physCellId %ld (valid range: 0-%d), rejecting reestablishment request\n", physCellId, NR_PHYS_CELL_ID_MAX);
+    return;
+  }
+
+  /* TS 38.321 Table 7.1-1: out-of-range C-RNTI, ignore request */
+  if (old_rnti < NR_C_RNTI_MIN || old_rnti > NR_C_RNTI_MAX) {
+    LOG_E(NR_RRC, "C-RNTI %04x out of range (%#04x-%#04x): rejecting RRCReestablishmentRequest\n", old_rnti, NR_C_RNTI_MIN, NR_C_RNTI_MAX);
+    return;
+  }
 
   const nr_rrc_du_container_t *du = get_du_by_assoc_id(rrc, assoc_id);
   if (du == NULL) {
@@ -1467,12 +1591,6 @@ static void rrc_handle_RRCReestablishmentRequest(gNB_RRC_INST *rrc,
     return;
   }
 
-  // Validate C-RNTI range (3GPP TS 38.321 version 15.13.0 Section 7.1 Table 7.1-1)
-  if (old_rnti < 0x1 || old_rnti > 0xffef) {
-    LOG_E(NR_RRC, "NR_RRCReestablishmentRequest c_RNTI %04x range error, fallback to RRC setup\n", old_rnti);
-    goto fallback_rrc_setup;
-  }
-
   if (current_cell->mtc == NULL) {
     // some UEs don't send MeasurementTimingConfiguration, so we don't know the
     // SSB ARFCN and can't do reestablishment. handle it gracefully by doing
@@ -1488,6 +1606,8 @@ static void rrc_handle_RRCReestablishmentRequest(gNB_RRC_INST *rrc,
     return;
   }
 
+  /* TS 38.331 §5.3.7.1: retrieve UE context (C-RNTI + physCellId): if it cannot be
+   * retrieved, respond with RRCSetup (Fig. 5.3.7.1-2). */
   ue_context_p = rrc_gNB_get_ue_context_by_rnti(rrc, assoc_id, old_rnti);
   if (ue_context_p == NULL) {
     // Fallback 1: Try to find UE by RNTI only (re-establishment on different DU scenario)
@@ -1506,6 +1626,15 @@ static void rrc_handle_RRCReestablishmentRequest(gNB_RRC_INST *rrc,
   if (!UE->as_security_active) {
     /* no active security context, need to restart entire connection */
     LOG_E(NR_RRC, "UE requested Reestablishment without activated AS security\n");
+    ngap_cause = NGAP_CAUSE_RADIO_NETWORK_RELEASE_DUE_TO_NGRAN_GENERATED_REASON;
+    goto fallback_rrc_setup;
+  }
+
+  /* TS 38.331 5.3.7.1: requires a retrieved valid UE context. Context without
+   * SRB2 or any DRB is incomplete for re-establishment (UE initiation needs both,
+   * treat as not verified). */
+  if (!UE->Srb[SRB2].Active || seq_arr_size(&UE->drbs) == 0) {
+    LOG_E(NR_RRC, "UE context not valid for re-establishment (no SRB2/DRB), fallback to RRC setup\n");
     ngap_cause = NGAP_CAUSE_RADIO_NETWORK_RELEASE_DUE_TO_NGRAN_GENERATED_REASON;
     goto fallback_rrc_setup;
   }
@@ -1618,7 +1747,7 @@ static void rrc_handle_RRCReestablishmentRequest(gNB_RRC_INST *rrc,
 
 fallback_rrc_setup:
   fill_random(&random_value, sizeof(random_value));
-  random_value = random_value & 0x7fffffffff; /* random value is 39 bits */
+  random_value = random_value & NR_RRC_RANDOM_VALUE_39_BIT_MASK;
 
   ngap_cause_t cause = {.type = NGAP_CAUSE_RADIO_NETWORK, .value = ngap_cause};
   /* request release of the "old" UE in case it exists */
@@ -1626,11 +1755,34 @@ fallback_rrc_setup:
     rrc_gNB_send_NGAP_UE_CONTEXT_RELEASE_REQ(0, ue_context_p, cause);
 
   rrc_gNB_ue_context_t *new = rrc_gNB_create_ue_context(assoc_id, msg->crnti, rrc, random_value, msg->gNB_DU_ue_id);
+  if (!new)
+    return;
   activate_srb(&new->ue_context, 1);
   added = rrc_update_ue_pcell(&new->ue_context, current_cell);
   DevAssert(added);
   rrc_gNB_generate_RRCSetup(0, new, msg->du2cu_rrc_container, msg->du2cu_rrc_container_length);
   return;
+}
+
+static void nr_rrc_count_ss_sinr_dist(gNB_RRC_INST *rrc, const NR_MeasResults_t *mr)
+{
+  if (rrc == NULL || mr == NULL)
+    return;
+  if (mr->measResultServingMOList.list.count == 0 || mr->measResultServingMOList.list.array == NULL)
+    return;
+
+  for (int i = 0; i < mr->measResultServingMOList.list.count; i++) {
+    const NR_MeasResultServMO_t *serv_mo = mr->measResultServingMOList.list.array[i];
+    if (serv_mo == NULL)
+      continue;
+    const struct NR_MeasResultNR__measResult__cellResults *cr =
+        &serv_mo->measResultServingCell.measResult.cellResults;
+    if (cr->resultsSSB_Cell == NULL || cr->resultsSSB_Cell->sinr == NULL)
+      continue;
+    const long encoded = *cr->resultsSSB_Cell->sinr;
+    if (encoded >= 0 && encoded < NR_KPM_SS_SINR_NB_LEVELS)
+      rrc->ss_sinr_cell_dist[encoded]++;
+  }
 }
 
 static void process_Periodical_Measurement_Report(gNB_RRC_UE_t *ue_ctxt, NR_MeasurementReport_t *measurementReport)
@@ -1788,6 +1940,12 @@ static void rrc_gNB_process_MeasurementReport(gNB_RRC_INST *rrc, gNB_RRC_UE_t *U
   NR_MeasurementReport_IEs_t *measurementReport_IEs = measurementReport->criticalExtensions.choice.measurementReport;
   const NR_MeasId_t measId = measurementReport_IEs->measResults.measId;
 
+  /* check NR-DC measurement */
+  if (measId == get_scg_measurement_id(UE)) {
+    rrc_gnb_nrdc_measurement_received(rrc, UE, measurementReport);
+    return;
+  }
+
   NR_MeasIdToAddMod_t *meas_id_s = NULL;
   for (int meas_idx = 0; meas_idx < meas_config->measIdToAddModList->list.count; meas_idx++) {
     if (measId == meas_config->measIdToAddModList->list.array[meas_idx]->measId) {
@@ -1815,8 +1973,11 @@ static void rrc_gNB_process_MeasurementReport(gNB_RRC_INST *rrc, gNB_RRC_UE_t *U
     return;
   }
 
-  if (report_config->choice.reportConfigNR->reportType.present == NR_ReportConfigNR__reportType_PR_periodical)
-    return process_Periodical_Measurement_Report(UE, measurementReport);
+  if (report_config->choice.reportConfigNR->reportType.present == NR_ReportConfigNR__reportType_PR_periodical) {
+    nr_rrc_count_ss_sinr_dist(rrc, &measurementReport->criticalExtensions.choice.measurementReport->measResults);
+    process_Periodical_Measurement_Report(UE, measurementReport);
+    return;
+  }
 
   if (report_config->choice.reportConfigNR->reportType.present == NR_ReportConfigNR__reportType_PR_eventTriggered)
     return process_Event_Based_Measurement_Report(rrc, UE, report_config->choice.reportConfigNR, measurementReport);
@@ -1854,16 +2015,20 @@ void rrc_forward_ue_nas_message(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE)
 
   LOG_UE_DL_EVENT(UE, "Send DL Information Transfer [%ld bytes]\n", UE->nas_pdu.len);
 
-  uint8_t buffer[4096];
   unsigned int xid = rrc_gNB_get_next_transaction_identifier(rrc->module_id);
-  uint32_t length = do_NR_DLInformationTransfer(buffer, sizeof(buffer), xid, UE->nas_pdu.len, UE->nas_pdu.buf);
-  LOG_DUMPMSG(NR_RRC, DEBUG_RRC, buffer, length, "[MSG] RRC DL Information Transfer\n");
-  rb_id_t srb_id = UE->Srb[2].Active ? DL_SCH_LCID_DCCH1 : DL_SCH_LCID_DCCH;
-  const uint32_t msg_id = NR_DL_DCCH_MessageType__c1_PR_dlInformationTransfer;
-  nr_rrc_transfer_protected_rrc_message(rrc, UE, srb_id, msg_id, buffer, length);
-  // no need to free UE->nas_pdu.buf, do_NR_DLInformationTransfer() did that
+  byte_array_t msg = do_NR_DLInformationTransfer(xid, UE->nas_pdu.len, UE->nas_pdu.buf);
+  /* do_NR_DLInformationTransfer() takes ownership of the NAS buffer */
   UE->nas_pdu.buf = NULL;
   UE->nas_pdu.len = 0;
+  if (msg.buf == NULL || msg.len <= 0) {
+    LOG_E(NR_RRC, "UE %d: failed to encode DLInformationTransfer\n", UE->rrc_ue_id);
+    return;
+  }
+  LOG_DUMPMSG(NR_RRC, DEBUG_RRC, msg.buf, msg.len, "[MSG] RRC DL Information Transfer\n");
+  rb_id_t srb_id = UE->Srb[2].Active ? DL_SCH_LCID_DCCH1 : DL_SCH_LCID_DCCH;
+  const uint32_t msg_id = NR_DL_DCCH_MessageType__c1_PR_dlInformationTransfer;
+  nr_rrc_transfer_protected_rrc_message(rrc, UE, srb_id, msg_id, msg.buf, msg.len);
+  free_byte_array(msg);
 }
 
 static void handle_ueCapabilityInformation(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE, const NR_UECapabilityInformation_t *ue_cap_info)
@@ -1871,6 +2036,12 @@ static void handle_ueCapabilityInformation(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE, 
   int xid = ue_cap_info->rrc_TransactionIdentifier;
   rrc_action_t a = UE->xids[xid];
   UE->xids[xid] = RRC_ACTION_NONE;
+
+  if (a == RRC_F1_NRDC_IN_PROGRESS) {
+    rrc_gnb_nrdc_ue_capabilities_received(rrc, UE, ue_cap_info);
+    return;
+  }
+
   if (a != RRC_UECAPABILITY_ENQUIRY) {
     LOG_E(NR_RRC, "UE %d: received unsolicited UE Capability Information, aborting procedure\n", UE->rrc_ue_id);
     return;
@@ -1882,6 +2053,11 @@ static void handle_ueCapabilityInformation(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE, 
     const NR_UE_CapabilityRAT_ContainerList_t *ue_CapabilityRAT_ContainerList =
         ue_cap_info->criticalExtensions.choice.ueCapabilityInformation->ue_CapabilityRAT_ContainerList;
 
+    if (!ue_CapabilityRAT_ContainerList) {
+      LOG_E(NR_RRC, "ue_CapabilityRAT_ContainerList is NULL, nothing to handle\n");
+      return;
+    }
+
     /* Encode UE-CapabilityRAT-ContainerList for sending to the DU */
     FREE_AND_ZERO_BYTE_ARRAY(UE->ue_cap_buffer);
     UE->ue_cap_buffer.len = uper_encode_to_new_buffer(&asn_DEF_NR_UE_CapabilityRAT_ContainerList,
@@ -1889,7 +2065,7 @@ static void handle_ueCapabilityInformation(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE, 
                                                       ue_CapabilityRAT_ContainerList,
                                                       (void **)&UE->ue_cap_buffer.buf);
     if (UE->ue_cap_buffer.len <= 0) {
-      LOG_E(RRC, "could not encode UE-CapabilityRAT-ContainerList, abort handling capabilities\n");
+      LOG_E(NR_RRC, "could not encode UE-CapabilityRAT-ContainerList, abort handling capabilities\n");
       return;
     }
     LOG_UE_UL_EVENT(UE, "Received UE capabilities\n");
@@ -2069,9 +2245,15 @@ static void handle_rrcReconfigurationComplete(gNB_RRC_INST *rrc, gNB_RRC_UE_t *U
   UE->ue_reconfiguration_counter++;
   UE->ongoing_reconfiguration = false;
 
+  bool start_nrdc = false;
+
   switch (UE->xids[xid]) {
     case RRC_PDUSESSION_RELEASE: {
       rrc_gNB_send_NGAP_PDUSESSION_RELEASE_RESPONSE(rrc, UE, xid);
+      reset_delayed_action(&UE->delayed_action);
+    } break;
+    case RRC_PDUSESSION_RESOURCE_NOTIFY: {
+      rrc_gNB_send_NGAP_PDUSESSION_RESOURCE_NOTIFY(rrc, UE, xid);
       reset_delayed_action(&UE->delayed_action);
     } break;
     case RRC_PDUSESSION_ESTABLISH:
@@ -2088,6 +2270,8 @@ static void handle_rrcReconfigurationComplete(gNB_RRC_INST *rrc, gNB_RRC_UE_t *U
               "UE %d: RRC Reconfiguration Complete for PDU session establishment, but no PDU sessions were setup\n",
               UE->rrc_ue_id);
       reset_delayed_action(&UE->delayed_action);
+      /* once a PDU session is established, we can start NR-DC */
+      start_nrdc = true;
       break;
     case RRC_PDUSESSION_MODIFY:
       rrc_gNB_send_NGAP_PDUSESSION_MODIFY_RESP(rrc, UE, xid);
@@ -2099,6 +2283,10 @@ static void handle_rrcReconfigurationComplete(gNB_RRC_INST *rrc, gNB_RRC_UE_t *U
       break;
     case RRC_ACTION_NONE:
       LOG_E(RRC, "UE %d: Received RRC Reconfiguration Complete with xid %d while no transaction is ongoing\n", UE->rrc_ue_id, xid);
+      break;
+    case RRC_F1_NRDC_IN_PROGRESS:
+      rrc_gnb_nrdc_rrc_reconfiguration_complete_received(rrc, UE, xid);
+      reset_delayed_action(&UE->delayed_action);
       break;
     default:
       LOG_E(RRC, "UE %d: Received unexpected transaction type %d for xid %d\n", UE->rrc_ue_id, UE->xids[xid], xid);
@@ -2130,6 +2318,9 @@ static void handle_rrcReconfigurationComplete(gNB_RRC_INST *rrc, gNB_RRC_UE_t *U
   };
   rrc->mac_rrc.ue_context_modification_request(ue_data.du_assoc_id, &req);
   /* nothing to be freed */
+
+  if (start_nrdc)
+    rrc_gnb_nrdc_start(rrc, UE);
 }
 
 static void rrc_gNB_generate_UECapabilityEnquiry(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue)
@@ -2262,6 +2453,24 @@ static int rrc_gNB_decode_dcch(gNB_RRC_INST *rrc, const f1ap_ul_rrc_message_t *m
         handle_rrcReestablishmentComplete(rrc, UE, rc);
         break;
 
+      case NR_UL_DCCH_MessageType__c1_PR_scgFailureInformation: {
+        long type = ul_dcch_msg->message.choice.c1->choice.scgFailureInformation->criticalExtensions.choice.scgFailureInformation->failureReportSCG->failureType;
+        char *cause[] = {
+          "NR_FailureReportSCG__failureType_t310_Expiry",
+          "NR_FailureReportSCG__failureType_randomAccessProblem",
+          "NR_FailureReportSCG__failureType_rlc_MaxNumRetx",
+          "NR_FailureReportSCG__failureType_synchReconfigFailureSCG",
+          "NR_FailureReportSCG__failureType_scg_ReconfigFailure",
+          "NR_FailureReportSCG__failureType_srb3_IntegrityFailure",
+          "NR_FailureReportSCG__failureType_other_r16",
+          "NR_FailureReportSCG__failureType_spare1"
+        };
+        LOG_E(NR_RRC, "scg failure cause %s\n", type >= 0 && type <= 7 ? cause[type] : "unknown");
+        LOG_UE_UL_EVENT(UE, "received scg failure cause %s\n", type >= 0 && type <= 7 ? cause[type] : "unknown");
+        nrdc_handle_scg_failure_information(rrc, UE, ul_dcch_msg->message.choice.c1->choice.scgFailureInformation);
+        break;
+      }
+
       default:
         break;
     }
@@ -2374,7 +2583,7 @@ static gtpu_tunnel_t f1u_gtp_update(uint32_t teid, const in_addr_t addr)
 /**
  * @brief Update DRB TEID information in RRC storage from received DRB list
  */
-static void store_du_f1u_tunnel(const f1ap_drb_setup_t *drbs, int n, gNB_RRC_UE_t *ue)
+void store_du_f1u_tunnel(const f1ap_drb_setup_t *drbs, int n, gNB_RRC_UE_t *ue)
 {
   for (int i = 0; i < n; i++) {
     const f1ap_drb_setup_t *drb_f1 = &drbs[i];
@@ -2424,7 +2633,7 @@ static void e1_send_bearer_modification_request(gNB_RRC_INST *rrc, gNB_RRC_UE_t 
 }
 
 /** @brief Send E1 bearer updates for DRBs to setup from F1 UE Context Modification Response */
-static void e1_send_bearer_updates(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE, int n, f1ap_drb_setup_t *drbs)
+void e1_send_bearer_updates(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE, int n, f1ap_drb_setup_t *drbs)
 {
   if (!is_cuup_associated(rrc) || n <= 0)
     return;
@@ -2571,6 +2780,9 @@ static void rrc_CU_process_ue_context_setup_response(MessageDef *msg_p, instance
   gNB_RRC_UE_t *UE = &ue_context_p->ue_context;
   UE->f1_ue_context_active = true;
 
+  if (UE->nrdc && rrc_gnb_nrdc_wait_for_f1_context_setup_response(UE))
+    return nrdc_rrc_CU_process_ue_context_setup_response(UE, rrc, resp);
+
   // Store the encoded CellGroupConfig for transparent forwarding
   byte_array_t *cgc = &resp->du_to_cu_rrc_info.cell_group_config;
   store_cgc(UE, cgc);
@@ -2640,6 +2852,11 @@ static void rrc_CU_process_ue_context_release_request(MessageDef *msg_p, sctp_as
   }
 
   gNB_RRC_UE_t *UE = &ue_context_p->ue_context;
+
+  if (UE->nrdc != NULL)
+    /* UE has NR-DC connection, send release to the SCG DU */
+    nrdc_scg_ue_release(rrc, UE);
+
   if (UE->ho_context != NULL) {
     nr_ho_source_cu_t *source_ctx = UE->ho_context->source;
     bool from_source_du = source_ctx && source_ctx->cell->assoc_id == assoc_id;
@@ -2692,11 +2909,14 @@ static void rrc_delete_ue_data(gNB_RRC_UE_t *UE)
   ASN_STRUCT_FREE(asn_DEF_NR_MeasResults, UE->measResults);
   FREE_AND_ZERO_BYTE_ARRAY(UE->ue_cap_buffer);
   free_MeasConfig(UE->measConfig);
+  reset_all_measurement_ids(UE);
   free(UE->redcap_cap);
   UE->redcap_cap = NULL;
   seq_arr_free(&UE->pduSessions, free_pdusession);
   seq_arr_free(&UE->drbs, free_drb);
   seq_arr_free(&UE->serving_cells, NULL);
+  if (UE->nrdc)
+    rrc_gnb_free_nrdc(UE);
 }
 
 void rrc_remove_ue(gNB_RRC_INST *rrc, rrc_gNB_ue_context_t *ue_context_p)
@@ -2723,6 +2943,14 @@ static void rrc_CU_process_ue_context_release_complete(MessageDef *msg_p)
   }
 
   gNB_RRC_UE_t *UE = &ue_context_p->ue_context;
+
+  /* check if this message is for NR-DC */
+  if (UE->nrdc) {
+    /* if the message is handled by the NR-DC module, do nothing more */
+    if (nrdc_handle_f1_context_release_complete(rrc, UE, complete))
+      return;
+  }
+
   if (UE->an_release) {
     /* only trigger release if it has been requested by core
      * otherwise, it might be CU that requested release on a DU during normal
@@ -2742,6 +2970,12 @@ static void rrc_CU_process_ue_context_modification_response(MessageDef *msg_p, i
     return;
   }
   gNB_RRC_UE_t *UE = &ue_context_p->ue_context;
+
+  if (UE->nrdc && rrc_gnb_nrdc_wait_for_f1_context_modification_response(UE))
+    return nrdc_rrc_CU_process_ue_context_modification_response(UE, rrc, resp);
+
+  if (UE->nrdc && rrc_gnb_nrdc_wait_for_scg_failure_context_modification_response(UE))
+    return nrdc_scg_failure_context_modification_response(UE, rrc, resp);
 
   bool is_inter_cu_ho = UE->ho_context && UE->ho_context->source && !UE->ho_context->target;
   if (resp->drbs_len > 0) { // DRB to setup
@@ -2856,8 +3090,13 @@ static void rrc_CU_process_ue_modification_required(MessageDef *msg_p, instance_
     store_cgc(UE, &temp_cgc);
 
     /* trigger reconfiguration */
-    if (!UE->ongoing_reconfiguration)
+    if (!UE->ongoing_reconfiguration) {
       nr_rrc_reconfiguration_req(rrc, UE);
+    } else {
+      LOG_W(NR_RRC, "UE %d UE Context Modification Request: has ongoing reconfiguration\n", UE->rrc_ue_id);
+      /* TODO send reject? */
+    }
+
     return;
   }
   LOG_W(RRC,
@@ -2873,7 +3112,7 @@ unsigned int mask_flip(unsigned int x) {
 /** @brief Get F1AP QoS flow parameters from PDU session QoS parameters
  * @param qos_param PDU session level QoS parameters from NGAP
  * @return F1AP QoS flow parameters */
-static f1ap_qos_flow_param_t nr_rrc_get_f1_qos_flow_param(const pdusession_level_qos_parameter_t *qos_param)
+f1ap_qos_flow_param_t nr_rrc_get_f1_qos_flow_param(const pdusession_level_qos_parameter_t *qos_param)
 {
   f1ap_qos_flow_param_t qos_char = {0};
 
@@ -3092,6 +3331,27 @@ static void rrc_send_f1_ue_context_modification_request(const gNB_RRC_INST *rrc,
   f1_ue_data_t ue_data = cu_get_f1_ue_data(ue_p->rrc_ue_id);
   RETURN_IF_INVALID_ASSOC_ID(ue_data.du_assoc_id);
 
+  /* check if one of the bearers to remove is the NR-DC one, remove it if yes */
+  if (n_rel_drbs) {
+    int nrdc_bearer_index;
+    for (nrdc_bearer_index = 0; nrdc_bearer_index < n_rel_drbs; nrdc_bearer_index++) {
+      if (is_nrdc_bearer(ue_p, rel_drbs[nrdc_bearer_index].id)) {
+        nrdc_release_bearer(rrc, ue_p, rel_drbs[nrdc_bearer_index].id);
+        break;
+      }
+    }
+
+    if (nrdc_bearer_index != n_rel_drbs) {
+      /* nrdc bearer was removed, do not remove it again */
+      n_rel_drbs--;
+      /* do nothing else if no add/rel to do */
+      if (!n_rel_drbs && !n_drbs)
+        return;
+      memcpy(&rel_drbs[nrdc_bearer_index], &rel_drbs[nrdc_bearer_index + 1],
+             sizeof(*rel_drbs) * (n_rel_drbs - nrdc_bearer_index));
+    }
+  }
+
   f1ap_ue_context_mod_req_t req = {
       .gNB_CU_ue_id = ue_p->rrc_ue_id,
       .gNB_DU_ue_id = ue_data.secondary_ue,
@@ -3133,6 +3393,60 @@ static void rrc_send_f1_ue_context_modification_request(const gNB_RRC_INST *rrc,
         ue_p->rrc_ue_id,
         n_drbs,
         n_rel_drbs);
+}
+
+/** @brief Mark PDU sessions to remove and start local teardown.
+ * NGAP PDU Session Resource Notify is sent after RRCReconfigurationComplete. */
+static void rrc_gNB_trigger_pdu_session_notify_on_release(gNB_RRC_INST *rrc,
+                                                          gNB_RRC_UE_t *UE,
+                                                          const pdu_session_to_remove_t *rem,
+                                                          int n_rem)
+{
+  DevAssert(rrc);
+  DevAssert(UE);
+  DevAssert(rem || n_rem == 0);
+
+  f1ap_drb_to_release_t f1_drbs_rel[MAX_DRBS_PER_UE] = {0};
+  int n_f1_drbs_rel = 0;
+
+  for (int i = 0; i < n_rem; i++) {
+    rrc_pdu_session_param_t *pduSession = find_pduSession(&UE->pduSessions, rem[i].sessionId);
+    if (!pduSession) {
+      LOG_W(NR_RRC, "UE %u: Bearer Context Modification Required: PDU session %ld not found\n", UE->rrc_ue_id, rem[i].sessionId);
+      continue;
+    }
+    if (pduSession->status == PDU_SESSION_STATUS_NOTIFYONRELEASE) {
+      LOG_W(NR_RRC, "UE %u: PDU Session %d already set to be released\n", UE->rrc_ue_id, pduSession->param.pdusession_id);
+      continue;
+    }
+
+    const int pdusession_id = pduSession->param.pdusession_id;
+    int n_session_drbs = 0;
+    FOR_EACH_SEQ_ARR (drb_t *, drb, &UE->drbs) {
+      if (drb->pdusession_id != pdusession_id)
+        continue;
+      DevAssert(n_f1_drbs_rel < MAX_DRBS_PER_UE);
+      f1_drbs_rel[n_f1_drbs_rel++].id = drb->drb_id;
+      n_session_drbs++;
+    }
+    if (n_session_drbs == 0) {
+      LOG_E(NR_RRC, "UE %d: no DRBs to release for PDU session %d\n", UE->rrc_ue_id, pdusession_id);
+      continue;
+    }
+
+    LOG_I(NR_RRC, "UE %u: Bearer Context Modification Required: release PDU session %d\n", UE->rrc_ue_id, pdusession_id);
+    pduSession->status = PDU_SESSION_STATUS_NOTIFYONRELEASE;
+  }
+
+  if (n_f1_drbs_rel == 0)
+    return;
+  if (!UE->f1_ue_context_active) {
+    LOG_W(NR_RRC, "UE %d: DRB(s) to release but F1 UE context is not active\n", UE->rrc_ue_id);
+    return;
+  }
+
+  rrc_send_f1_ue_context_modification_request(rrc, UE, 0, NULL, n_f1_drbs_rel, f1_drbs_rel);
+  init_delayed_action(&UE->delayed_action);
 }
 
 /**
@@ -3353,6 +3667,30 @@ static void rrc_gNB_process_e1_bearer_context_modif_fail(const e1ap_bearer_conte
         fail->cause.value);
 }
 
+/** @brief E1AP Bearer Context Modification Required processing on CU-CP */
+static void rrc_gNB_process_e1_bearer_context_mod_required(sctp_assoc_t assoc_id, const e1ap_bearer_mod_required_t *req)
+{
+  DevAssert(req);
+  gNB_RRC_INST *rrc = RC.nrrrc[0];
+  rrc_gNB_ue_context_t *ue_context_p = rrc_gNB_get_ue_context(rrc, req->gNB_cu_cp_ue_id);
+  if (ue_context_p == NULL) {
+    LOG_E(NR_RRC, "No UE with CU-CP UE ID %d found (Bearer Context Modification Required)\n", req->gNB_cu_cp_ue_id);
+  } else if (ue_context_p->ue_context.amf_ue_ngap_id == 0) {
+    LOG_W(NR_RRC,
+          "UE %u: Bearer Context Modification Required but UE not NGAP-associated, skip release\n",
+          ue_context_p->ue_context.rrc_ue_id);
+  } else {
+    gNB_RRC_UE_t *UE = &ue_context_p->ue_context;
+    rrc_gNB_trigger_pdu_session_notify_on_release(rrc, UE, req->pduSessionRem, req->numPDUSessionsRem);
+  }
+
+  e1ap_bearer_mod_confirm_t conf = {
+      .gNB_cu_cp_ue_id = req->gNB_cu_cp_ue_id,
+      .gNB_cu_up_ue_id = req->gNB_cu_up_ue_id,
+  };
+  rrc->cucp_cuup.bearer_context_mod_confirm(assoc_id, &conf);
+}
+
 /**
  * @brief E1AP Bearer Context Release processing
  */
@@ -3428,6 +3766,8 @@ static const char *get_pdusession_status_text(pdu_session_status_t status)
     case PDU_SESSION_STATUS_TOMODIFY: return "to-modify";
     case PDU_SESSION_STATUS_FAILED: return "failed";
     case PDU_SESSION_STATUS_TORELEASE: return "to-release";
+    case PDU_SESSION_STATUS_NOTIFYONRELEASE:
+      return "notify-on-release";
     default: AssertFatal(false, "illegal PDU status code %d\n", status); return "illegal";
   }
   return "illegal";
@@ -3491,6 +3831,18 @@ static bool write_rrc_stats(const gNB_RRC_INST *rrc)
   return true;
 }
 
+static void nr_rrc_sample_conn_count(gNB_RRC_INST *rrc)
+{
+  if (rrc == NULL)
+    return;
+  uint32_t count = 0;
+  rrc_gNB_ue_context_t *ue_context_p = NULL;
+  RB_FOREACH(ue_context_p, rrc_nr_ue_tree_s, &rrc->rrc_ue_head)
+    count++;
+  rrc->rrc_conn_count_sum += count;
+  rrc->rrc_conn_count_samples += 1;
+}
+
 void *rrc_gnb_task(void *args_p)
 {
   UNUSED(args_p);
@@ -3530,6 +3882,7 @@ void *rrc_gnb_task(void *args_p)
 
       case TIMER_HAS_EXPIRED:
         if (TIMER_HAS_EXPIRED(msg_p).timer_id == stats_timer_id) {
+          nr_rrc_sample_conn_count(RC.nrrrc[0]);
           if (!write_rrc_stats(RC.nrrrc[0]))
             timer_remove(stats_timer_id);
         } else {
@@ -3677,6 +4030,12 @@ void *rrc_gnb_task(void *args_p)
         rrc_gNB_process_e1_bearer_context_modif_fail(&E1AP_BEARER_CONTEXT_MODIFICATION_FAIL(msg_p));
         break;
 
+      case E1AP_BEARER_CONTEXT_MODIFICATION_REQUIRED:
+        rrc_gNB_process_e1_bearer_context_mod_required(msg_p->ittiMsgHeader.originInstance,
+                                                       &E1AP_BEARER_CONTEXT_MODIFICATION_REQUIRED(msg_p));
+        free_e1ap_context_mod_required(&E1AP_BEARER_CONTEXT_MODIFICATION_REQUIRED(msg_p));
+        break;
+
       case E1AP_BEARER_CONTEXT_RELEASE_CPLT:
         rrc_gNB_process_e1_bearer_context_release_cplt(&E1AP_BEARER_CONTEXT_RELEASE_CPLT(msg_p));
         break;
@@ -3697,6 +4056,66 @@ void *rrc_gnb_task(void *args_p)
       case NGAP_HANDOVER_COMMAND:
         rrc_gNB_process_HandoverCommand(RC.nrrrc[instance], &NGAP_HANDOVER_COMMAND(msg_p));
         rrc_gNB_free_Handover_Command(&NGAP_HANDOVER_COMMAND(msg_p)); // Free transfered NG message
+        break;
+
+      case NRPPA_TRP_INFORMATION_REQ:
+        rrc_gNB_process_trp_information_request(RC.nrrrc[instance], &NRPPA_TRP_INFORMATION_REQ(msg_p));
+        free_nrppa_trp_information_request(&NRPPA_TRP_INFORMATION_REQ(msg_p));
+        break;
+
+      case F1AP_TRP_INFORMATION_RESP:
+        rrc_CU_process_trp_information_response(&F1AP_TRP_INFORMATION_RESP(msg_p));
+        free_trp_information_resp(&F1AP_TRP_INFORMATION_RESP(msg_p));
+        break;
+
+      case F1AP_TRP_INFORMATION_FAILURE:
+        rrc_CU_process_trp_information_failure(&F1AP_TRP_INFORMATION_FAILURE(msg_p));
+        break;
+
+      case NRPPA_POSITIONING_INFORMATION_REQ:
+        rrc_gNB_process_positioning_information_request(RC.nrrrc[instance], &NRPPA_POSITIONING_INFORMATION_REQ(msg_p));
+        break;
+
+      case F1AP_POSITIONING_INFORMATION_RESP:
+        rrc_CU_process_positioning_information_response(&F1AP_POSITIONING_INFORMATION_RESP(msg_p));
+        free_positioning_information_resp(&F1AP_POSITIONING_INFORMATION_RESP(msg_p));
+        break;
+
+      case NRPPA_POSITIONING_ACTIVATION_REQ:
+        rrc_gNB_process_positioning_activation_request(RC.nrrrc[instance], &NRPPA_POSITIONING_ACTIVATION_REQ(msg_p));
+        free_nrppa_positioning_activation_request(&NRPPA_POSITIONING_ACTIVATION_REQ(msg_p));
+        break;
+
+      case F1AP_POSITIONING_ACTIVATION_RESP:
+        rrc_CU_process_positioning_activation_response(&F1AP_POSITIONING_ACTIVATION_RESP(msg_p));
+        free_positioning_activation_resp(&F1AP_POSITIONING_ACTIVATION_RESP(msg_p));
+        break;
+
+      case NRPPA_MEASUREMENT_REQ:
+        rrc_gNB_process_positioning_measurement_request(RC.nrrrc[instance], &NRPPA_MEASUREMENT_REQ(msg_p));
+        free_nrppa_measurement_request(&NRPPA_MEASUREMENT_REQ(msg_p));
+        break;
+
+      case F1AP_POSITIONING_MEASUREMENT_RESP:
+        rrc_CU_process_positioning_measurement_response(&F1AP_POSITIONING_MEASUREMENT_RESP(msg_p));
+        free_positioning_measurement_resp(&F1AP_POSITIONING_MEASUREMENT_RESP(msg_p));
+        break;
+
+      case F1AP_POSITIONING_MEASUREMENT_FAILURE:
+        rrc_CU_process_positioning_measurement_failure(&F1AP_POSITIONING_MEASUREMENT_FAILURE(msg_p));
+        break;
+
+      case NR_RRC_NRDC_TIMEOUT:
+        rrc_gnb_nrdc_timeout(RC.nrrrc[instance], &NR_RRC_NRDC_TIMEOUT(msg_p));
+        break;
+
+      /* Messages from XNAP task */
+      case XNAP_SETUP_IND:
+        rrc_add_xn_candidate(RC.nrrrc[instance], XNAP_SETUP_IND(msg_p).gnb_id, XNAP_SETUP_IND(msg_p).assoc_id);
+        break;
+
+      case XNAP_PEER_SHUTDOWN_IND:
+        rrc_remove_xn_candidate(RC.nrrrc[instance], XNAP_PEER_SHUTDOWN_IND(msg_p).gnb_id);
         break;
 
       default:
@@ -3754,95 +4173,13 @@ void rrc_gNB_generate_RRCRelease(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE)
   deliver_ue_ctxt_release_data_t data = {.rrc = rrc, .release_cmd = &ue_context_release_cmd, .assoc_id = ue_data.du_assoc_id};
   nr_pdcp_data_req_srb(UE->rrc_ue_id, DL_SCH_LCID_DCCH, rrc_gNB_mui++, size, buffer, rrc_deliver_ue_ctxt_release_cmd, &data);
 
+  /* if the UE is in NR-DC, release it from SCG DU */
+  if (UE->nrdc)
+    nrdc_scg_ue_release(rrc, UE);
+
 #ifdef E2_AGENT
   E2_AGENT_SIGNAL_DL_DCCH_RRC_MSG(buffer, size, NR_DL_DCCH_MessageType__c1_PR_rrcRelease);
 #endif
-}
-
-int rrc_gNB_generate_pcch_msg(sctp_assoc_t assoc_id, const NR_SIB1_t *sib1, uint32_t tmsi, uint8_t paging_drx)
-{
-  instance_t instance = 0;
-  const unsigned int Ttab[4] = {32,64,128,256};
-  uint8_t Tc;
-  uint8_t Tue;
-  uint32_t pfoffset;
-  uint32_t N;  /* N: min(T,nB). total count of PF in one DRX cycle */
-  uint32_t Ns = 0;  /* Ns: max(1,nB/T) */
-  uint32_t T;  /* DRX cycle */
-  uint8_t buffer[NR_RRC_BUF_SIZE];
-
-  /* get default DRX cycle from configuration */
-  Tc = sib1->servingCellConfigCommon->downlinkConfigCommon.pcch_Config.defaultPagingCycle;
-
-  Tue = paging_drx;
-  /* set T = min(Tc,Tue) */
-  T = Tc < Tue ? Ttab[Tc] : Ttab[Tue];
-  /* set N = PCCH-Config->nAndPagingFrameOffset */
-  switch (sib1->servingCellConfigCommon->downlinkConfigCommon.pcch_Config.nAndPagingFrameOffset.present) {
-    case NR_PCCH_Config__nAndPagingFrameOffset_PR_oneT:
-      N = T;
-      pfoffset = 0;
-      break;
-    case NR_PCCH_Config__nAndPagingFrameOffset_PR_halfT:
-      N = T/2;
-      pfoffset = 1;
-      break;
-    case NR_PCCH_Config__nAndPagingFrameOffset_PR_quarterT:
-      N = T/4;
-      pfoffset = 3;
-      break;
-    case NR_PCCH_Config__nAndPagingFrameOffset_PR_oneEighthT:
-      N = T/8;
-      pfoffset = 7;
-      break;
-    case NR_PCCH_Config__nAndPagingFrameOffset_PR_oneSixteenthT:
-      N = T/16;
-      pfoffset = 15;
-      break;
-    default:
-      LOG_E(RRC, "[gNB %ld] In rrc_gNB_generate_pcch_msg:  pfoffset error (pfoffset %d)\n",
-            instance, sib1->servingCellConfigCommon->downlinkConfigCommon.pcch_Config.nAndPagingFrameOffset.present);
-      return (-1);
-
-  }
-
-  switch (sib1->servingCellConfigCommon->downlinkConfigCommon.pcch_Config.ns) {
-    case NR_PCCH_Config__ns_four:
-      if(*sib1->servingCellConfigCommon->downlinkConfigCommon.initialDownlinkBWP.pdcch_ConfigCommon->choice.setup->pagingSearchSpace == 0){
-        LOG_E(RRC, "[gNB %ld] In rrc_gNB_generate_pcch_msg:  ns error only 1 or 2 is allowed when pagingSearchSpace is 0\n",
-              instance);
-        return (-1);
-      } else {
-        Ns = 4;
-      }
-      break;
-    case NR_PCCH_Config__ns_two:
-      Ns = 2;
-      break;
-    case NR_PCCH_Config__ns_one:
-      Ns = 1;
-      break;
-    default:
-      LOG_E(RRC, "[gNB %ld] In rrc_gNB_generate_pcch_msg: ns error (ns %ld)\n",
-            instance, sib1->servingCellConfigCommon->downlinkConfigCommon.pcch_Config.ns);
-      return (-1);
-  }
-
-  (void) N; /* not used, suppress warning */
-  (void) Ns; /* not used, suppress warning */
-  (void) pfoffset; /* not used, suppress warning */
-
-  /* Create message for PDCP (DLInformationTransfer_t) */
-  int length = do_NR_Paging(instance, buffer, tmsi);
-
-  if (length == -1) {
-    LOG_I(NR_RRC, "do_Paging error\n");
-    return -1;
-  }
-  // TODO, send message to pdcp
-  (void) assoc_id;
-
-  return 0;
 }
 
 /* F1AP UE Context Management Procedures */
@@ -3931,7 +4268,8 @@ void rrc_f1_ue_context_setup_for_target_du(const gNB_RRC_INST *rrc,
 
   /* Update measurement config for target DU */
   free_MeasConfig(ue->measConfig);
-  ue->measConfig = nr_rrc_get_measconfig(rrc, cell->info.cell_id);
+  reset_all_measurement_ids(ue);
+  ue->measConfig = nr_rrc_get_measconfig(rrc, cell->info.cell_id, ue);
   byte_array_t *meas_config = calloc_or_fail(1, sizeof(*meas_config));
   meas_config->buf = calloc_or_fail(1, NR_RRC_BUF_SIZE);
   meas_config->len = do_NR_MeasConfig(ue->measConfig, meas_config->buf, NR_RRC_BUF_SIZE);

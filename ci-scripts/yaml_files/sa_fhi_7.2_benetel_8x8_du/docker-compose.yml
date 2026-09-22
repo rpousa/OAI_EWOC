@@ -27,7 +27,7 @@ services:
         devices:
             - /dev/vfio:/dev/vfio/
         volumes:
-            - ../../conf_files/gnb-du.sa.band78.273prb.fhi72.8x8-benetel650_650.conf:/opt/oai-gnb/etc/gnb.conf
+            - ../../conf_files/gnb-du.sa.band77.273prb.fhi72.8x8-benetel650_650.conf:/opt/oai-gnb/etc/gnb.conf
             - /dev/hugepages:/dev/hugepages
         # Please change these values based on your system
         cpuset: "7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23"

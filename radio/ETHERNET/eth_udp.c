@@ -37,7 +37,6 @@ uint16_t pck_seq_num_prev=0;
 int eth_socket_init_udp(openair0_device_t *device)
 {
   eth_state_t *eth = (eth_state_t*)device->priv;
-  eth_params_t *eth_params = device->eth_params;
  
   char str_local[INET_ADDRSTRLEN];
   char str_remote[INET_ADDRSTRLEN];
@@ -51,22 +50,22 @@ int eth_socket_init_udp(openair0_device_t *device)
   const char str[2][4] = {"RRU\0","RAU\0"};
   int hostind = 0;
 
-  local_ip     = eth_params->my_addr;   
-  local_portc  = eth_params->my_portc;
-  local_portd  = eth_params->my_portd;
+  local_ip     = device->eth_params.my_addr;
+  local_portc  = device->eth_params.my_portc;
+  local_portd  = device->eth_params.my_portd;
   
 
   if (device->host_type == RRU_HOST ) {
 
     remote_ipc   = "0.0.0.0";   
-    remote_ipd   = eth_params->remote_addr;   
+    remote_ipd   = device->eth_params.remote_addr;
     remote_portc =  0;   
-    remote_portd =  eth_params->remote_portd;;   
+    remote_portd =  device->eth_params.remote_portd;;
     printf("[%s] local ip addr %s portc %d portd %d\n", "RRU", local_ip, local_portc, local_portd);    
   } else { 
-    remote_ipc   = eth_params->remote_addr;   
+    remote_ipc   = device->eth_params.remote_addr;
     remote_ipd   = "0.0.0.0";   
-    remote_portc = eth_params->remote_portc;   
+    remote_portc = device->eth_params.remote_portc;
     remote_portd = 0;
     hostind      = 1;
     printf("[%s] local ip addr %s portc %d portd %d\n","RAU", local_ip, local_portc, local_portd);    
@@ -280,7 +279,7 @@ void *trx_eth_write_udp_cmd(udpTXelem_t *udpTXelem)
   int bytes_sent=0;
   eth_state_t *eth = (eth_state_t*)device->priv;
   int sendto_flag =0;
-  fhstate_t *fhstate = &device->fhstate;
+  fhstate_t *fhstate = &eth->fhstate;
 
   //sendto_flag|=flags;
   eth->tx_nsamps=nsamps;
@@ -308,13 +307,19 @@ void *trx_eth_write_udp_cmd(udpTXelem_t *udpTXelem)
   *(uint8_t *)(buff2 + 1) = 64;
 
   openair0_timestamp_t TS = timestamp + fhstate->TS0;
-  TS = (6*device->sampling_rate_ratio_d*TS)/device->sampling_rate_ratio_n;
-  TS -= device->txrx_offset; 
-  int TSinc = (6*256*device->sampling_rate_ratio_d)/device->sampling_rate_ratio_n;
+  TS = (6 * eth->sampling_rate_ratio_d * TS) / eth->sampling_rate_ratio_n;
+  TS -= eth->txrx_offset;
+  int TSinc = (6 * 256 * eth->sampling_rate_ratio_d) / eth->sampling_rate_ratio_n;
   int len=256;
-  LOG_D(NR_PHY,"in eth send: TS %llu (%llu),txrx_offset %d,d %d, n %d, buff[0] %p buff[1] %p\n",
-        (unsigned long long)TS,(unsigned long long)timestamp,device->txrx_offset,device->sampling_rate_ratio_d,device->sampling_rate_ratio_n,
-	buff[0],buff[1]);
+  LOG_D(NR_PHY,
+        "in eth send: TS %llu (%llu),txrx_offset %d,d %d, n %d, buff[0] %p buff[1] %p\n",
+        (unsigned long long)TS,
+        (unsigned long long)timestamp,
+        eth->txrx_offset,
+        eth->sampling_rate_ratio_d,
+        eth->sampling_rate_ratio_n,
+        buff[0],
+        buff[1]);
   for (int offset=0;offset<nsamps;offset+=256,TS+=TSinc) {
     // OAI modified SEQ_ID (4 bytes)
     *(uint64_t *)(buff2 + 6) = TS;
@@ -406,11 +411,17 @@ void *udp_read_thread(void *arg)
   int aid;
   udp_ctx_t *u = (udp_ctx_t *)arg;
   openair0_device_t *device=u->device;
-  fhstate_t *fhstate = &device->fhstate;
+  eth_state_t *eth = device->priv;
+  fhstate_t *fhstate = &eth->fhstate;
   char buffer[UDP_PACKET_SIZE_BYTES(256)];
   int first_read=0;
   while (oai_exit == 0) {
-    LOG_I(PHY,"UDP read thread %d on core %d, waiting for start sampling_rate_d %d, sampling_rate_n %d\n",u->thread_id,sched_getcpu(),device->sampling_rate_ratio_n,device->sampling_rate_ratio_d);
+    LOG_I(PHY,
+          "UDP read thread %d on core %d, waiting for start sampling_rate_d %d, sampling_rate_n %d\n",
+          u->thread_id,
+          sched_getcpu(),
+          eth->sampling_rate_ratio_n,
+          eth->sampling_rate_ratio_d);
     while (fhstate->active > 0) {
       ssize_t count = recvfrom(((eth_state_t*)device->priv)->sockfdd[0],
                                buffer,sizeof(buffer),0,
@@ -432,9 +443,9 @@ void *udp_read_thread(void *arg)
       if (oai_exit)
         break;
       aid = *(uint16_t*)(&buffer[ECPRICOMMON_BYTES]);
-      TS  = *(openair0_timestamp_t *)(&buffer[ECPRICOMMON_BYTES+ECPRIPCID_BYTES]);
+      memcpy(&TS, &buffer[ECPRICOMMON_BYTES+ECPRIPCID_BYTES], sizeof(TS));
       // convert TS to samples, /6 for AW2S @ 30.72 Ms/s, this is converted for other sample rates in OAI application
-      TS = (device->sampling_rate_ratio_n*TS)/(device->sampling_rate_ratio_d*6);
+      TS = (eth->sampling_rate_ratio_n * TS) / (eth->sampling_rate_ratio_d * 6);
       AssertFatal(aid < 8,"Cannot handle more than 8 antennas, got aid %d\n",aid);
       fhstate->r[aid]=1;
       if (aid==0 && first_read == 0) fhstate->TS0 = TS;
@@ -464,7 +475,8 @@ void *udp_read_thread(void *arg)
 
 int trx_eth_read_udp(openair0_device_t *device, openair0_timestamp_t *timestamp, uint32_t **buff, int nsamps)
 {
-  fhstate_t *fhstate = &device->fhstate;
+  eth_state_t *eth = device->priv;
+  fhstate_t *fhstate = &eth->fhstate;
   openair0_timestamp_t prev_read_TS= fhstate->TS_read;
   volatile openair0_timestamp_t min_TS;
   // block until FH is ready

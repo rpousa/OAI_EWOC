@@ -12,14 +12,15 @@
 #include "SCHED_NR_UE/defs.h"
 #include "common/utils/nr/nr_common.h"
 
-#include "common_lib.h"
 #include <math.h>
 
 #include "PHY/NR_REFSIG/pss_nr.h"
 #include "PHY/NR_REFSIG/sss_nr.h"
 #include "PHY/NR_REFSIG/nr_refsig.h"
+#include "PHY/MODULATION/nr_modulation.h"
 #include "PHY/TOOLS/tools_defs.h"
 #include "nr-uesoftmodem.h"
+#include "nfapi/open-nFAPI/nfapi/public_inc/fapi_nr_ue_interface.h"
 
 //#define DEBUG_INITIAL_SYNCH
 #define DUMP_PBCH_CH_ESTIMATES 0
@@ -78,6 +79,7 @@ static bool nr_pbch_detection(const UE_nr_rxtx_proc_t *proc,
     // computing channel estimation for selected best ssb
     int16_t pbch_e_rx[NR_POLAR_PBCH_E];
 
+    uint8_t log2_maxh = 0;
     for (int i = pbch_initial_symbol; i < pbch_initial_symbol + 3; i++) {
       __attribute__((aligned(32))) c16_t dl_ch_estimates[nb_ant][estimateSz];
       for (int aarx = 0; aarx < nb_ant; aarx++) {
@@ -107,7 +109,8 @@ static bool nr_pbch_detection(const UE_nr_rxtx_proc_t *proc,
                            ssb_start_subcarrier,
                            rxdataF[i],
                            dl_ch_estimates,
-                           pbch_e_rx);
+                           pbch_e_rx,
+                           &log2_maxh);
     }
 
     if (0
@@ -151,6 +154,7 @@ static void generate_table(nr_ssb_search_params_t *params,
                            c16_t symbol_rotation[224])
 {
   init_timeshift_rotation(params->ofdm_symbol_size,
+                          params->N_RB_DL * NR_NB_SC_PER_RB,
                           params->nb_prefix_samples,
                           params->ofdm_offset_divisor,
                           timeshift_symbol_rotation);
@@ -178,16 +182,19 @@ static void do_time_to_freq(nr_ssb_search_params_t *params, uint32_t sample_offs
     rx_offset -= params->nb_prefix_samples / params->ofdm_offset_divisor;
     for (unsigned char aa = 0; aa < params->nb_antennas_rx; aa++) {
       c16_t *rxF = rxdataF[symb][aa];
+      // OFDM Demod
       dft(dftsize, (int16_t *)&params->rxdata[aa][rx_offset], (int16_t *)rxF, 1);
-      apply_nr_rotation_symbol_RX(params->symbols_per_slot,
-                                  params->slots_per_subframe,
-                                  timeshift_symbol_rotation,
-                                  params->first_carrier_offset,
-                                  rxF,
-                                  symbol_rotation,
-                                  params->N_RB_DL,
-                                  0,
-                                  symb);
+      // FFT-shift
+      fftshift_inplace(rxF, params->N_RB_DL * NR_NB_SC_PER_RB, params->ofdm_symbol_size);
+      // Phase compensation
+      apply_nr_rotation_symbol_fftshifted_RX(params->symbols_per_slot,
+                                             params->slots_per_subframe,
+                                             timeshift_symbol_rotation,
+                                             rxF,
+                                             symbol_rotation,
+                                             params->N_RB_DL,
+                                             0,
+                                             symb);
     }
   }
 }
@@ -205,61 +212,74 @@ bool nr_search_ssb_common(nr_ssb_search_params_t *params)
                                       .nb_antennas_rx = params->nb_antennas_rx,
                                       .rxdata_length = params->rxdata_size,
                                       .ofdm_symbol_size = params->ofdm_symbol_size,
+                                      .nb_prefix_samples = params->nb_prefix_samples,
                                       .subcarrier_spacing = params->subcarrier_spacing,
                                       .fo_flag = params->fo_flag,
                                       .target_Nid_cell = params->target_nid_cell,
                                       .pssTime = (c16_t *)pssTime};
-  params->pss_res = pss_search_time_nr(&p_pss);
+  nr_pss_info_t pss_info = pss_search_time_nr(&p_pss);
 
-  if (!params->pss_res.success)
-    return false;
+  // This is the frequency offset that will be applied in the compensation,
+  // and it takes into account the values already applied previously during the loop.
+  int f_off_to_comp = 0;
 
-  const int ssb_time_offset = params->pss_res.pos - params->nb_prefix_samples;
+  for (int p = 0; p < NUMBER_PSS_SEQUENCE; p++) {
+    pss_detection_result_t *pss_res = &pss_info.pss_elem_info[p];
+    if (!pss_res->success)
+      continue;
+
+    int freq_offset_pss = pss_res->freq_offset;
+    int sync_pos = pss_res->pos;
+
+    const int ssb_time_offset = sync_pos - params->nb_prefix_samples;
 
 #ifdef DEBUG_INITIAL_SYNCH
-  LOG_I(PHY, "Initial sync : Estimated PSS position %d, Nid2 %d, ssb offset %d\n", sync_pos, nid2, ssb_offset);
+    LOG_I(PHY, "Initial sync : Estimated PSS position %d, Nid2 %d, ssb time offset %d\n", sync_pos, p, ssb_time_offset);
 #endif
 
-  // Check that SSB fits within buffer
-  if (ssb_time_offset + NR_N_SYMBOLS_SSB * (params->ofdm_symbol_size + params->nb_prefix_samples) >= params->rxdata_size) {
-    LOG_D(PHY,
-          "SSB extends beyond buffer boundary (sync_pos %d, ssb_offset %d, buffer_size %d)\n",
-          params->pss_res.pos,
-          ssb_time_offset,
-          params->rxdata_size);
-    return false;
+    // Check that SSB fits within buffer
+    if (ssb_time_offset + NR_N_SYMBOLS_SSB * (params->ofdm_symbol_size + params->nb_prefix_samples) >= params->rxdata_size) {
+      LOG_D(PHY,
+            "SSB extends beyond buffer boundary (sync_pos %d, ssb_time_offset %d, buffer_size %d)\n",
+            sync_pos,
+            ssb_time_offset,
+            params->rxdata_size);
+      return false;
+    }
+
+    // Apply frequency offset compensation if requested
+    if (params->apply_freq_offset && freq_offset_pss != 0) {
+      f_off_to_comp += freq_offset_pss;
+      compensate_freq_offset(params->rxdata, params->nb_antennas_rx, params->rxdata_size, f_off_to_comp, params->sampling_rate);
+      f_off_to_comp *= -1;
+    }
+
+    // Extract SSB symbols to frequency domain
+    // Symbol ordering: 0=PSS, 1=PBCH, 2=SSS, 3=PBCH
+    do_time_to_freq(params, ssb_time_offset);
+
+    // Perform SSS detection
+    nr_sss_params_t p_sss = (nr_sss_params_t){.nb_antennas_rx = params->nb_antennas_rx,
+                                              .samples_per_slot_wCP = params->samples_per_slot_wCP,
+                                              .ofdm_symbol_size = params->ofdm_symbol_size,
+                                              .ssb_start_subcarrier = params->ssb_start_subcarrier,
+                                              .subcarrier_spacing = params->subcarrier_spacing,
+                                              .exclude_nid_cells = params->exclude_nid_cells,
+                                              .num_exclude_nid_cells = params->num_exclude_nid_cells};
+
+    c16_t(*rxdataF)[params->nb_antennas_rx][params->ofdm_symbol_size] =
+        (c16_t(*)[params->nb_antennas_rx][params->ofdm_symbol_size])params->rxdataF;
+    params->sss_res = rx_sss_nr(&p_sss, pss_res, -1, rxdataF);
+
+    if (!params->sss_res.success || params->sss_res.nid_cell < 0) {
+      continue;
+    }
+
+    params->pss_res = *pss_res;
+    return true;
   }
 
-  // Apply frequency offset compensation if requested
-  if (params->apply_freq_offset && params->pss_res.freq_offset != 0) {
-    compensate_freq_offset(params->rxdata, params->nb_antennas_rx, params->rxdata_size, params->pss_res.freq_offset, params->sampling_rate);
-  }
-
-  // Extract SSB symbols to frequency domain
-  // Symbol ordering: 0=PSS, 1=PBCH, 2=SSS, 3=PBCH
-  do_time_to_freq(params, ssb_time_offset);
-
-  // Perform SSS detection
-  nr_sss_params_t p_sss = (nr_sss_params_t){.nb_antennas_rx = params->nb_antennas_rx,
-                                            .samples_per_slot_wCP = params->samples_per_slot_wCP,
-                                            .ofdm_symbol_size = params->ofdm_symbol_size,
-                                            .first_carrier_offset = params->first_carrier_offset,
-                                            .ssb_start_subcarrier = params->ssb_start_subcarrier,
-                                            .subcarrier_spacing = params->subcarrier_spacing};
-
-  c16_t(*rxdataF)[params->nb_antennas_rx][params->ofdm_symbol_size] =
-      (c16_t(*)[params->nb_antennas_rx][params->ofdm_symbol_size])params->rxdataF;
-  params->sss_res = rx_sss_nr(&p_sss, &params->pss_res, -1, rxdataF);
-
-  if (!params->sss_res.success || params->sss_res.nid_cell < 0) {
-    return false;
-  }
-
-  // Check if we should exclude the serving cell
-  if (params->exclude_nid_cell >= 0 && params->sss_res.nid_cell == params->exclude_nid_cell)
-    return false;
-
-  return true;
+  return false;
 }
 
 static void nr_scan_ssb(void *arg)
@@ -294,85 +314,76 @@ static void nr_scan_ssb(void *arg)
   if (ssbInfo->freqOffset)
     compensate_freq_offset(rxdata, fp->nb_antennas_rx, ssbInfo->rxdata_sz, ssbInfo->freqOffset, fp->samples_per_subframe * 1000);
 
-  for (int frame_id = 0; frame_id < ssbInfo->nFrames && !ssbInfo->syncRes.cell_detected; frame_id++) {
-    c16_t *rxdataShift[fp->nb_antennas_rx];
-    for (int i = 0; i < fp->nb_antennas_rx; i++)
-      rxdataShift[i] = rxdata[i] + fp->samples_per_frame * frame_id;
+  nr_ssb_search_params_t search_params = {
+      .dl_CarrierFreq = fp->dl_CarrierFreq,
+      .sampling_rate = fp->samples_per_subframe * 1000,
+      .slots_per_frame = fp->slots_per_frame,
+      .slots_per_subframe = fp->slots_per_subframe,
+      .numerology_index = fp->numerology_index,
+      .ofdm_symbol_size = fp->ofdm_symbol_size,
+      .ofdm_offset_divisor = fp->ofdm_offset_divisor,
+      .nb_antennas_rx = fp->nb_antennas_rx,
+      .symbols_per_slot = fp->symbols_per_slot,
+      .N_RB_DL = fp->N_RB_DL,
+      .rxdata_size = ssbInfo->rxdata_sz,
+      .rxdata = rxdata,
+      .nb_prefix_samples = fp->nb_prefix_samples,
+      .nb_prefix_samples0 = fp->nb_prefix_samples0,
+      .ssb_start_subcarrier = ssbInfo->gscnInfo.ssbFirstSC,
+      .subcarrier_spacing = fp->subcarrier_spacing,
+      .samples_per_slot_wCP = fp->samples_per_slot_wCP,
+      .target_nid_cell = ssbInfo->targetNidCell,
+      .exclude_nid_cells = NULL, // No exclusion for initial sync
+      .num_exclude_nid_cells = 0,
+      .apply_freq_offset = ssbInfo->foFlag,
+      .fo_flag = ssbInfo->foFlag,
+      .rxdataF = rxdataF,
+      .pssTime = pssTime,
+  };
 
-    nr_ssb_search_params_t search_params = {
-        .dl_CarrierFreq = fp->dl_CarrierFreq,
-        .sampling_rate = fp->samples_per_subframe * 1000,
-        .slots_per_frame = fp->slots_per_frame,
-        .slots_per_subframe = fp->slots_per_subframe,
-        .numerology_index = fp->numerology_index,
-        .ofdm_symbol_size = fp->ofdm_symbol_size,
-        .ofdm_offset_divisor = fp->ofdm_offset_divisor,
-        .nb_antennas_rx = fp->nb_antennas_rx,
-        .symbols_per_slot = fp->symbols_per_slot,
-        .first_carrier_offset = fp->first_carrier_offset,
-        .N_RB_DL = fp->N_RB_DL,
-        .rxdata_size = fp->samples_per_frame,
-        .rxdata = rxdataShift,
-        .nb_prefix_samples = fp->nb_prefix_samples,
-        .nb_prefix_samples0 = fp->nb_prefix_samples0,
-        .ssb_start_subcarrier = ssbInfo->gscnInfo.ssbFirstSC,
-        .subcarrier_spacing = fp->subcarrier_spacing,
-        .samples_per_slot_wCP = fp->samples_per_slot_wCP,
-        .target_nid_cell = ssbInfo->targetNidCell,
-        .exclude_nid_cell = -1, // No exclusion for initial sync
-        .apply_freq_offset = ssbInfo->foFlag,
-        .fo_flag = ssbInfo->foFlag,
-        .rxdataF = rxdataF,
-        .pssTime = pssTime,
-    };
+  ssbInfo->syncRes.cell_detected = nr_search_ssb_common(&search_params);
 
-    ssbInfo->syncRes.frame_id = frame_id;
-    ssbInfo->syncRes.cell_detected = nr_search_ssb_common(&search_params);
-
-    if (!ssbInfo->syncRes.cell_detected) {
-      continue;
-    }
-
-    ssbInfo->ssbOffset = search_params.pss_res.pos - search_params.nb_prefix_samples;
-    ssbInfo->nidCell = search_params.sss_res.nid_cell;
+  ssbInfo->pssCorrAvgPower = search_params.pss_res.avg;
+  ssbInfo->pssCorrPeakPower = search_params.pss_res.peak;
+  ssbInfo->ssbOffset = search_params.pss_res.pos - search_params.nb_prefix_samples;
+  ssbInfo->nidCell = search_params.sss_res.nid_cell;
 
 #ifdef DEBUG_INITIAL_SYNCH
-    LOG_I(PHY,
-          "TDD Normal prefix: sss detection result; %d, CellId %d metric %d, phase %d, measured offset %d\n",
-          ssbInfo->syncRes.cell_detected,
-          ssbInfo->nidCell,
-          sss_metric,
-          sss_phase,
-          ssbInfo->syncRes.rx_offset);
+  LOG_I(PHY,
+        "TDD Normal prefix: sss detection result; %d, CellId %d metric %d, phase %d, measured offset %d\n",
+        ssbInfo->syncRes.cell_detected,
+        ssbInfo->nidCell,
+        sss_metric,
+        sss_phase,
+        ssbInfo->syncRes.rx_offset);
 #endif
-    ssbInfo->freqOffset += search_params.pss_res.freq_offset + search_params.sss_res.freq_offset;
+  ssbInfo->freqOffset += search_params.pss_res.freq_offset + search_params.sss_res.freq_offset;
 
-    if (ssbInfo->syncRes.cell_detected) { // we got sss channel
-      ssbInfo->syncRes.cell_detected = nr_pbch_detection(ssbInfo->proc,
-                                                         ssbInfo->fp,
-                                                         ssbInfo->nidCell,
-                                                         1,
-                                                         ssbInfo->gscnInfo.ssbFirstSC,
-                                                         &ssbInfo->halfFrameBit,
-                                                         &ssbInfo->ssbIndex,
-                                                         &ssbInfo->symbolOffset,
-                                                         &ssbInfo->pbchResult,
-                                                         rxdataF); // start pbch detection at first symbol after pss
-      if (ssbInfo->syncRes.cell_detected) {
-        uint32_t rsrp_avg = nr_ue_calculate_ssb_rsrp(ssbInfo->fp, rxdataF[2], ssbInfo->gscnInfo.ssbFirstSC);
-        int rsrp_db_per_re = 10 * log10(rsrp_avg);
-        ssbInfo->adjust_rxgain = TARGET_RX_POWER - rsrp_db_per_re;
-        LOG_I(PHY, "pbch rx ok. rsrp:%d dB/RE, adjust_rxgain:%d dB\n", rsrp_db_per_re, ssbInfo->adjust_rxgain);
-      }
+  if (ssbInfo->syncRes.cell_detected) { // we got sss channel
+    ssbInfo->syncRes.cell_detected = nr_pbch_detection(ssbInfo->proc,
+                                                       ssbInfo->fp,
+                                                       ssbInfo->nidCell,
+                                                       1,
+                                                       ssbInfo->gscnInfo.ssbFirstSC,
+                                                       &ssbInfo->halfFrameBit,
+                                                       &ssbInfo->ssbIndex,
+                                                       &ssbInfo->symbolOffset,
+                                                       &ssbInfo->pbchResult,
+                                                       rxdataF); // start pbch detection at first symbol after pss
+    if (ssbInfo->syncRes.cell_detected) {
+      uint32_t rsrp_avg = nr_ue_calculate_ssb_rsrp(ssbInfo->fp, rxdataF[2], ssbInfo->gscnInfo.ssbFirstSC);
+      int rsrp_db_per_re = 10 * log10(rsrp_avg);
+      ssbInfo->adjust_rxgain = TARGET_RX_POWER - rsrp_db_per_re;
+      LOG_I(PHY, "pbch rx ok. rsrp:%d dB/RE, adjust_rxgain:%d dB\n", rsrp_db_per_re, ssbInfo->adjust_rxgain);
     }
   }
-
   completed_task_ans(ssbInfo->ans);
 }
 
 nr_initial_sync_t nr_initial_sync(UE_nr_rxtx_proc_t *proc,
                                   PHY_VARS_NR_UE *ue,
-                                  int n_frames,
+                                  int input_sz,
+                                  c16_t **input,
                                   nr_gscn_info_t gscnInfo[MAX_GSCN_BAND],
                                   int numGscn)
 {
@@ -394,16 +405,14 @@ nr_initial_sync_t nr_initial_sync(UE_nr_rxtx_proc_t *proc,
                                   .fp = &ue->frame_parms,
                                   .proc = proc,
                                   .syncRes.cell_detected = false,
-                                  .nFrames = n_frames,
                                   .foFlag = ue->UE_fo_compensation,
                                   .freqOffset = ue->initial_fo,
                                   .targetNidCell = ue->target_Nid_cell};
     ssbInfo->rxdata = malloc16_clear(fp->nb_antennas_rx * sizeof(c16_t *));
     for (int ant = 0; ant < fp->nb_antennas_rx; ant++) {
-      ssbInfo->rxdata[ant] = malloc16(sizeof(c16_t) * (fp->samples_per_frame * n_frames + fp->ofdm_symbol_size));
-      memcpy(ssbInfo->rxdata[ant], ue->common_vars.rxdata[ant], sizeof(c16_t) * fp->samples_per_frame * n_frames);
-      memset(ssbInfo->rxdata[ant] + fp->samples_per_frame * n_frames, 0, fp->ofdm_symbol_size * sizeof(c16_t));
-      ssbInfo->rxdata_sz = fp->samples_per_frame * n_frames + fp->ofdm_symbol_size;
+      ssbInfo->rxdata[ant] = malloc16(sizeof(c16_t) * input_sz);
+      memcpy(ssbInfo->rxdata[ant], input[ant], sizeof(c16_t) * input_sz);
+      ssbInfo->rxdata_sz = input_sz;
     }
     LOG_I(NR_PHY,
           "Scanning GSCN: %d, with SSB offset: %d, SSB Freq: %lf\n",
@@ -451,23 +460,21 @@ nr_initial_sync_t nr_initial_sync(UE_nr_rxtx_proc_t *proc,
   }
 
   // In initial sync, we indicate PBCH to MAC after the scan is complete.
-  nr_downlink_indication_t dl_indication;
-  fapi_nr_rx_indication_t rx_ind = {0};
-  uint16_t number_pdus = 1;
-  nr_fill_dl_indication(&dl_indication, NULL, &rx_ind, proc, ue, NULL);
-  nr_fill_rx_indication(&rx_ind,
-                        FAPI_NR_RX_PDU_TYPE_SSB,
-                        ue,
-                        0,
-                        0,
-                        NULL,
-                        number_pdus,
-                        proc,
-                        res ? (void *)&res->pbchResult : NULL,
-                        NULL);
-
-  if (ue->if_inst && ue->if_inst->dl_indication)
+  if (ue->if_inst && ue->if_inst->dl_indication) {
+    fapi_nr_rx_indication_t rx_ind;
+    rx_ind.number_pdus = 0;
+    nr_fill_rx_indication(&rx_ind, FAPI_NR_RX_PDU_TYPE_SSB, ue, 0, 0, NULL, proc, res ? (void *)&res->pbchResult : NULL);
+    nr_downlink_indication_t dl_indication = (nr_downlink_indication_t){
+        .gNB_index = proc->gNB_id,
+        .module_id = ue->Mod_id,
+        .cc_id = ue->CC_id,
+        .hfn = proc->hfn_rx,
+        .frame = proc->frame_rx,
+        .slot = proc->nr_slot_rx,
+        .rx_ind = &rx_ind,
+    };
     ue->if_inst->dl_indication(&dl_indication);
+  }
 
   LOG_D(PHY, "nr_initial sync ue RB_DL %d\n", fp->N_RB_DL);
 
@@ -480,17 +487,8 @@ nr_initial_sync_t nr_initial_sync(UE_nr_rxtx_proc_t *proc,
     int n_symb_prefix0 = (res->symbolOffset / (7 * (1 << mu))) + 1;
     const int sync_pos_frame = n_symb_prefix0 * (fp->ofdm_symbol_size + fp->nb_prefix_samples0)
                                + (res->symbolOffset - n_symb_prefix0) * (fp->ofdm_symbol_size + fp->nb_prefix_samples);
-    // for a correct computation of frame number to sync with the one decoded at MIB we need to take into account in which of
-    // the n_frames we got sync
-    ue->init_sync_frame = n_frames - 1 - res->syncRes.frame_id;
 
-    // we also need to take into account the shift by samples_per_frame in case the if is true
-    if (res->ssbOffset < sync_pos_frame) {
-      res->syncRes.rx_offset = fp->samples_per_frame - sync_pos_frame + res->ssbOffset;
-      ue->init_sync_frame += 1;
-    } else {
-      res->syncRes.rx_offset = res->ssbOffset - sync_pos_frame;
-    }
+    res->syncRes.rx_offset = res->ssbOffset - sync_pos_frame;
 
     LOG_I(PHY, "[UE%d] In synch, rx_offset %d samples\n", ue->Mod_id, res->syncRes.rx_offset);
     LOG_I(PHY, "[UE %d] Measured Carrier Frequency offset %d Hz\n", ue->Mod_id, res->freqOffset);

@@ -12,7 +12,6 @@
 #include <errno.h>
 #include <bits/getopt_core.h>
 #include "common/utils/nr/nr_common.h"
-#include "common/utils/var_array.h"
 #define inMicroS(a) (((double)(a))/(get_cpu_freq_GHz()*1000.0))
 #include "SIMULATION/LTE_PHY/common_sim.h"
 #include "common/utils/assertions.h"
@@ -57,8 +56,6 @@
 #include "common/utils/T/T.h"
 #include "common/utils/nr/nr_common.h"
 #include "common/utils/threadPool/thread-pool.h"
-#include "common/utils/var_array.h"
-#include "common_lib.h"
 #include "e1ap_messages_types.h"
 #include "executables/nr-uesoftmodem.h"
 #include "fapi_nr_ue_constants.h"
@@ -116,20 +113,10 @@ void signal_ue_id(void /* const gNB_RRC_UE_t *rrc_ue_context, const uint16_t cla
 
 void e1_bearer_context_setup(const e1ap_bearer_setup_req_t *req) { abort(); }
 void e1_bearer_context_modif(const e1ap_bearer_mod_req_t *req) { abort(); }
+void e1_bearer_context_mod_confirm(const e1ap_bearer_mod_confirm_t *conf) { abort(); }
 void e1_bearer_release_cmd(const e1ap_bearer_release_cmd_t *cmd) { abort(); }
 
 int8_t nr_rrc_RA_succeeded(const module_id_t mod_id, const uint8_t gNB_index) {
-  return 0;
-}
-
-int DU_send_INITIAL_UL_RRC_MESSAGE_TRANSFER(module_id_t     module_idP,
-                                            int             CC_idP,
-                                            int             UE_id,
-                                            rnti_t          rntiP,
-                                            const uint8_t   *sduP,
-                                            sdu_size_t      sdu_lenP,
-                                            const uint8_t   *sdu2P,
-                                            sdu_size_t      sdu2_lenP) {
   return 0;
 }
 
@@ -147,7 +134,7 @@ nrUE_params_t *get_nrUE_params(void) {
 }
 // needed for some functions
 uint16_t n_rnti = 0x1234;
-openair0_config_t openair0_cfg[MAX_CARDS];
+openair0_config_t openair0_cfg_g[MAX_CARDS] = {};
 
 channel_desc_t *UE2gNB[MAX_MOBILES_PER_GNB][NUMBER_OF_gNB_MAX];
 
@@ -735,14 +722,14 @@ int main(int argc, char *argv[])
                         &tx_bandwidth,
                         &rx_bandwidth);
 
-  RC.gNB = (PHY_VARS_gNB **) malloc(sizeof(PHY_VARS_gNB *));
-  RC.gNB[0] = calloc(1,sizeof(PHY_VARS_gNB));
+  RC.gNB = (PHY_VARS_gNB **)malloc_or_fail(sizeof(PHY_VARS_gNB *));
+  RC.gNB[0] = calloc_or_fail(1, sizeof(PHY_VARS_gNB));
   gNB = RC.gNB[0];
   gNB->ofdm_offset_divisor = UINT_MAX;
   gNB->num_pusch_symbols_per_thread = 1;
   gNB->dmrs_num_antennas_per_thread = num_antennas_per_thread;
-  gNB->RU_list[0] = calloc(1, sizeof(**gNB->RU_list));
-  gNB->RU_list[0]->rfdevice.openair0_cfg = openair0_cfg;
+  gNB->RU_list[0] = calloc_or_fail(1, sizeof(**gNB->RU_list));
+  gNB->RU_list[0]->rfdevice.openair0_cfg = openair0_cfg_g;
 
   if (setAffinity == false)
     initFloatingCoresTpool(threadCnt, &gNB->threadPool, false, "gNB-tpool");
@@ -763,11 +750,11 @@ int main(int argc, char *argv[])
   AssertFatal((gNB->if_inst = NR_IF_Module_init(0)) != NULL, "Cannot register interface");
   gNB->if_inst->NR_PHY_config_req = nr_phy_config_request;
 
-  s_interleaved = malloc(n_tx * sizeof(float *));
-  r_re = malloc(n_rx * sizeof(float *));
-  r_im = malloc(n_rx * sizeof(float *));
+  s_interleaved = malloc_or_fail(n_tx * sizeof(float *));
+  r_re = malloc_or_fail(n_rx * sizeof(float *));
+  r_im = malloc_or_fail(n_rx * sizeof(float *));
 
-  NR_ServingCellConfigCommon_t *scc = calloc(1,sizeof(*scc));;
+  NR_ServingCellConfigCommon_t *scc = calloc_or_fail(1, sizeof(*scc));
   prepare_scc(scc);
   uint64_t ssb_bitmap;
   fill_scc_sim(scc, &ssb_bitmap, N_RB_DL, N_RB_DL, mu, mu);
@@ -828,22 +815,24 @@ int main(int argc, char *argv[])
   };
 
   RC.nb_nr_macrlc_inst = 1;
-  mac_top_init_gNB(ngran_gNB, scc, &conf, &rlc_config);
-  RC.nrmac[0]->beam_info = (NR_beam_info_t){.beams_per_period = 1};
-  nr_mac_config_scc(RC.nrmac[0], scc, &conf);
+  nr_cell_sched_t *cell;
+  mac_top_init_gNB(ngran_gNB, scc, &conf, &rlc_config, &cell);
+  gNB_MAC_INST *nrmac = RC.nrmac[0];
+  cell->beam_info = (NR_beam_info_t){.beams_per_period = 1};
+  nr_mac_config_scc(nrmac, cell, scc, &conf);
 
   NR_UE_NR_Capability_t* UE_Capability_nr = CALLOC(1,sizeof(NR_UE_NR_Capability_t));
   prepare_sim_uecap(UE_Capability_nr, scc, mu, N_RB_UL, 0, mcs_table);
   rnti_t rnti = 0x1234;
   int uid = 0;
   int ssb_index = 0;
-  NR_CellGroupConfig_t *secondaryCellGroup = get_default_secondaryCellGroup(scc, UE_Capability_nr, 0, 1, &conf, uid, ssb_index);
+  NR_CellGroupConfig_t *secondaryCellGroup = get_default_secondaryCellGroup(scc, UE_Capability_nr, 0, 1, &conf, cell, uid, ssb_index);
   secondaryCellGroup->spCellConfig->reconfigurationWithSync = get_reconfiguration_with_sync(rnti, uid, scc, frame);
 
   NR_BCCH_BCH_Message_t *mib = get_new_MIB_NR(scc);
 
   // UE dedicated configuration
-  nr_mac_add_test_ue(RC.nrmac[0], rnti, secondaryCellGroup);
+  nr_mac_add_test_ue(nrmac, cell, rnti, secondaryCellGroup);
   gNB->frame_parms.nb_antennas_tx = 1;
   gNB->frame_parms.nb_antennas_rx = n_rx;
   nfapi_nr_config_request_scf_t *cfg = &gNB->gNB_config;
@@ -863,9 +852,9 @@ int main(int argc, char *argv[])
 
   /* no RU: need to have rxdata */
   c16_t **rxdata;
-  rxdata = malloc(n_rx * sizeof(*rxdata));
+  rxdata = malloc_or_fail(n_rx * sizeof(*rxdata));
   for (int i = 0; i < n_rx; ++i)
-    rxdata[i] = calloc(gNB->frame_parms.samples_per_frame, sizeof(**rxdata));
+    rxdata[i] = calloc_or_fail(gNB->frame_parms.samples_per_frame, sizeof(**rxdata));
 
   NR_BWP_Uplink_t *ubwp=secondaryCellGroup->spCellConfig->spCellConfigDedicated->uplinkConfig->uplinkBWP_ToAddModList->list.array[0];
 
@@ -903,7 +892,7 @@ int main(int argc, char *argv[])
                           &d_channel_coeffs_gpu);
   if (use_cuda) {
     int num_links = n_tx * n_rx;
-    h_channel_coeffs = (float *)malloc(num_links * UE2gNB->channel_length * sizeof(float2));
+    h_channel_coeffs = (float *)malloc_or_fail(num_links * UE2gNB->channel_length * sizeof(float2));
   }
 #endif
 
@@ -911,7 +900,7 @@ int main(int argc, char *argv[])
   printf("Pre-allocating padded host memory for the CPU channel pipeline...\n");
   const int max_padding_alloc = 256 - 1;
   size_t padded_tx_alloc_bytes = n_tx * (num_samples_alloc + max_padding_alloc) * 2 * sizeof(float);
-  h_tx_sig_pinned = malloc(padded_tx_alloc_bytes);
+  h_tx_sig_pinned = malloc_or_fail(padded_tx_alloc_bytes);
   if (h_tx_sig_pinned == NULL) {
     printf("Error: Failed to allocate host buffer for CPU path\n");
     exit(-1);
@@ -919,9 +908,9 @@ int main(int argc, char *argv[])
 #endif
 
   // Configure UE
-  nrPHY_vars_UE_g = malloc(sizeof(PHY_VARS_NR_UE **));
-  nrPHY_vars_UE_g[0] = malloc(sizeof(PHY_VARS_NR_UE *));
-  PHY_VARS_NR_UE *UE = calloc(1, sizeof(PHY_VARS_NR_UE));
+  nrPHY_vars_UE_g = malloc_or_fail(sizeof(PHY_VARS_NR_UE **));
+  nrPHY_vars_UE_g[0] = malloc_or_fail(sizeof(PHY_VARS_NR_UE *));
+  PHY_VARS_NR_UE *UE = calloc_or_fail(1, sizeof(PHY_VARS_NR_UE));
   nrPHY_vars_UE_g[0][0] = UE;
   UE->frame_parms = gNB->frame_parms;
   UE->frame_parms.nb_antennas_tx = n_tx;
@@ -964,6 +953,7 @@ int main(int argc, char *argv[])
   time_stats_t channel_stats = {0};
   time_stats_t noise_stats = {0};
   time_stats_t pipeline_stats = {0};
+  init_sorted_list_meas(&gNB->phy_proc_rx, max_rounds * n_trials);
 
   nr_phy_data_tx_t phy_data = {0};
 
@@ -1078,7 +1068,7 @@ int main(int argc, char *argv[])
 
   uint32_t unav_res = 0;
   if (pdu_bit_map & PUSCH_PDU_BITMAP_PUSCH_PTRS) {
-    set_ptrs_symb_idx(&ptrsSymPos, nb_symb_sch, start_symbol, 1 << ptrs_time_density, l_prime_mask);
+    ptrsSymPos = get_ptrs_symb_idx(nb_symb_sch, start_symbol, 1 << ptrs_time_density, l_prime_mask);
     ptrsSymbPerSlot = get_ptrs_symbols_in_slot(ptrsSymPos, start_symbol, nb_symb_sch);
     ptrsRePerSymb = ((nb_rb + ptrs_freq_density - 1) / ptrs_freq_density);
     unav_res = ptrsSymbPerSlot * ptrsRePerSymb;
@@ -1088,17 +1078,17 @@ int main(int argc, char *argv[])
   unsigned int available_bits = nr_get_G(nb_rb, nb_symb_sch, nb_re_dmrs, number_dmrs_symbols, unav_res, mod_order, precod_nbr_layers);
   uint8_t cw_buf[available_bits];
   memset(cw_buf, 0, available_bits);
-  UE->phy_sim_test_buf = calloc(1, (available_bits + 7) / 8);
+  UE->phy_sim_test_buf = calloc_or_fail(1, (available_bits + 7) / 8);
   printf("[ULSIM]: VALUE OF G: %u, TBS: %u\n", available_bits, TBS);
 
   int frame_length_complex_samples = gNB->frame_parms.samples_per_subframe * NR_NUMBER_OF_SUBFRAMES_PER_FRAME;
   for (int aatx = 0; aatx < n_tx; aatx++) {
-    s_interleaved[aatx] = calloc(1, frame_length_complex_samples * 2 * sizeof(float));
+    s_interleaved[aatx] = calloc_or_fail(1, frame_length_complex_samples * 2 * sizeof(float));
   }
 
   for (int aarx = 0; aarx < n_rx; aarx++) {
-    r_re[aarx] = calloc(1, frame_length_complex_samples * sizeof(float));
-    r_im[aarx] = calloc(1, frame_length_complex_samples * sizeof(float));
+    r_re[aarx] = calloc_or_fail(1, frame_length_complex_samples * sizeof(float));
+    r_im[aarx] = calloc_or_fail(1, frame_length_complex_samples * sizeof(float));
   }
 
   //for (int i=0;i<16;i++) printf("%f\n",gaussdouble(0.0,1.0));
@@ -1174,9 +1164,9 @@ int main(int argc, char *argv[])
   //---------------
   int ret = 1;
   int srs_ret = do_SRS;
+  init_sorted_list_meas(&gNB->phy_proc_tx, 4 * n_trials);
   for (SNR = snr0; SNR <= snr1 && !stop; SNR += snr_step) {
 
-    varArray_t *table_rx=initVarArray(1000,sizeof(double));
     int error_flag = 0;
     n_false_positive = 0;
     effRate = 0;
@@ -1192,8 +1182,6 @@ int main(int argc, char *argv[])
     reset_meas(&gNB->ulsch_layer_demapping_stats);
     reset_meas(&gNB->ulsch_unscrambling_stats);
     reset_meas(&gNB->ulsch_decoding_stats);
-    reset_meas(&gNB->ts_deinterleave);
-    reset_meas(&gNB->ts_rate_unmatch);
     reset_meas(&gNB->ts_ldpc_decode);
     reset_meas(&gNB->ulsch_channel_estimation_stats);
     reset_meas(&gNB->pusch_channel_estimation_antenna_processing_stats);
@@ -1294,8 +1282,9 @@ int main(int argc, char *argv[])
         pusch_pdu->pusch_data.num_cb = 0;
         pusch_pdu->pusch_ptrs.ptrs_time_density = ptrs_time_density;
         pusch_pdu->pusch_ptrs.ptrs_freq_density = ptrs_freq_density;
-        pusch_pdu->pusch_ptrs.ptrs_ports_list = (nfapi_nr_ptrs_ports_t *)malloc(2 * sizeof(nfapi_nr_ptrs_ports_t));
+        pusch_pdu->pusch_ptrs.ptrs_ports_list = (nfapi_nr_ptrs_ports_t *)malloc_or_fail(2 * sizeof(nfapi_nr_ptrs_ports_t));
         pusch_pdu->pusch_ptrs.ptrs_ports_list[0].ptrs_re_offset = 0;
+        pusch_pdu->pusch_ptrs.num_ptrs_ports = 1;
         pusch_pdu->maintenance_parms_v3.ldpcBaseGraph = get_BG(TBS, code_rate);
         pusch_pdu->param_v4.numSpatialStreamIndices = conf.pusch_AntennaPorts;
         memcpy(pusch_pdu->param_v4.spatialStreamIndices, conf.spatial_stream_index, sizeof(conf.spatial_stream_index));
@@ -1337,6 +1326,12 @@ int main(int argc, char *argv[])
           srs_pdu->beamforming.num_prgs = m_SRS[srs_pdu->config_index];
           srs_pdu->beamforming.prg_size = 1;
         }
+
+        // Fill FAPI PUSCH groups for 1 UE
+        UL_tti_req->n_group = 1;
+        nfapi_nr_ul_tti_request_number_of_groups_t *group = &UL_tti_req->groups_list[0];
+        group->n_ue = 1;
+        group->ue_list[0].pdu_idx = 0;
 
         /* load FAPI into RX of L1 */
         nr_save_ul_tti_req(gNB, &Sched_INFO->UL_tti_req);
@@ -1383,8 +1378,10 @@ int main(int argc, char *argv[])
         pusch_config_pdu->pusch_data.harq_process_id = harq_pid;
         pusch_config_pdu->pusch_ptrs.ptrs_time_density = ptrs_time_density;
         pusch_config_pdu->pusch_ptrs.ptrs_freq_density = ptrs_freq_density;
-        pusch_config_pdu->pusch_ptrs.ptrs_ports_list = (nfapi_nr_ue_ptrs_ports_t *)malloc(2 * sizeof(nfapi_nr_ue_ptrs_ports_t));
+        pusch_config_pdu->pusch_ptrs.ptrs_ports_list =
+            (nfapi_nr_ue_ptrs_ports_t *)malloc_or_fail(2 * sizeof(nfapi_nr_ue_ptrs_ports_t));
         pusch_config_pdu->pusch_ptrs.ptrs_ports_list[0].ptrs_re_offset = 0;
+        pusch_config_pdu->pusch_ptrs.num_ptrs_ports = 1;
         pusch_config_pdu->transform_precoding = transform_precoding;
         // if transform precoding is enabled
         if (transform_precoding == transformPrecoder_enabled) {
@@ -1507,7 +1504,7 @@ int main(int argc, char *argv[])
             random_channel(UE2gNB, 0);
             int num_links = UE2gNB->nb_tx * UE2gNB->nb_rx;
             if (h_channel_coeffs == NULL) {
-              h_channel_coeffs = (float *)malloc(num_links * 256 * sizeof(float2));
+              h_channel_coeffs = (float *)malloc_or_fail(num_links * 256 * sizeof(float2));
             }
 
             for (int link = 0; link < num_links; link++) {
@@ -1543,7 +1540,7 @@ int main(int argc, char *argv[])
           } else
 #endif
           {
-            float **tx_sig_for_cpu = malloc(n_tx * sizeof(float *));
+            float **tx_sig_for_cpu = malloc_or_fail(n_tx * sizeof(float *));
             float *h_tx_ptr = (float *)h_tx_sig_pinned;
             const int padding_len = UE2gNB->channel_length - 1;
             const int padded_slot_length = slot_length + padding_len;
@@ -1583,9 +1580,8 @@ int main(int argc, char *argv[])
         UL_INFO.srs_ind.number_of_pdus = 0;
 
         //----------- OFDM Demodulation and RX rotation--------------------------
-        bool was_symbol_used[14] = {0};
-        int offset = (slot & 3) * gNB->frame_parms.symbols_per_slot * gNB->frame_parms.ofdm_symbol_size;
-        for (int i = 0; i < 14; i++) {
+        bool was_symbol_used[NR_SYMBOLS_PER_SLOT] = {0};
+        for (int i = 0; i < NR_SYMBOLS_PER_SLOT; i++) {
           was_symbol_used[i] = true;
         }
         nr_ofdm_demod_and_rx_rotation(rxdata,
@@ -1593,7 +1589,7 @@ int main(int argc, char *argv[])
                                       &gNB->frame_parms,
                                       gNB->frame_parms.nb_antennas_rx,
                                       slot,
-                                      offset,
+                                      0,
                                       link_type_ul,
                                       was_symbol_used);
 
@@ -1840,7 +1836,7 @@ int main(int argc, char *argv[])
       }
 
       printf("\ngNB RX\n");
-      printDistribution(&gNB->phy_proc_rx,table_rx, "Total PHY proc rx");
+      printDistribution(&gNB->phy_proc_rx, "Total PHY proc rx");
       printStatIndent(&gNB->rx_pusch_stats, "RX PUSCH time");
       printStatIndent2(&gNB->ulsch_channel_estimation_stats, "ULSCH channel estimation time");
       printStatIndent3(&gNB->pusch_channel_estimation_antenna_processing_stats, "Antenna Processing time");
@@ -1857,11 +1853,6 @@ int main(int argc, char *argv[])
       gNB->ulsch_unscrambling_stats.trials = gNB->rx_pusch_symbol_processing_stats.trials;
       printStatIndent3(&gNB->ulsch_unscrambling_stats, "RX PUSCH unscrambling");
       printStatIndent(&gNB->ulsch_decoding_stats,"ULSCH total decoding time");
-      gNB->ts_deinterleave.trials = n_trials;
-      printStatIndent2(&gNB->ts_deinterleave, "ULSCH segment deinterleaving time");
-      gNB->ts_rate_unmatch.trials = n_trials;
-      printStatIndent2(&gNB->ts_rate_unmatch, "ULSCH segment rate matching time");
-      gNB->ts_ldpc_decode.trials = n_trials;
       printStatIndent2(&gNB->ts_ldpc_decode, "ULSCH segments decoding time");
       printStatIndent(&gNB->rx_srs_stats,"RX SRS time");
       printStatIndent2(&gNB->generate_srs_stats,"Generate SRS sequence time");
@@ -1910,6 +1901,7 @@ int main(int argc, char *argv[])
           length_dmrs,
           num_dmrs_cdm_grps_no_data);
 
+  free_sorted_list_meas(&gNB->phy_proc_rx);
   free_MIB_NR(mib);
 
   free_nrLDPC_coding_interface(&gNB->nrLDPC_coding_interface);

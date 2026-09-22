@@ -12,8 +12,10 @@
 #include "nfapi/open-nFAPI/fapi/inc/nr_fapi_p7_utils.h"
 
 #define WLS_DEV_NAME "wls"
-#define WLS_MAC_MEMORY_SIZE 0x7F000000
-#define WLS_PHY_MEMORY_SIZE 0x7F000000
+#define WLS_MAC_MEMORY_SIZE 0x3F000000
+#define WLS_PHY_MEMORY_SIZE 0x3F000000
+// Setting WLS_UL_ENQUEUE_SIZE to 0 makes wls internally allocate the maximum (UL_FREE_BLOCK_QUEUE_SIZE_MAX), as seen in wls_lib_dpdk.c
+#define WLS_UL_ENQUEUE_SIZE 0
 
 #define MAX_NUM_LOCATIONS           (508)
 

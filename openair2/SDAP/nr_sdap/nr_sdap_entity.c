@@ -7,6 +7,7 @@
 #include <openair3/ocp-gtpu/gtp_itf.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
 #include <unistd.h>
 #include "T.h"
 #include "assertions.h"
@@ -14,7 +15,6 @@
 #include "gtpv1_u_messages_types.h"
 #include "intertask_interface.h"
 #include "rlc.h"
-#include "tuntap_if.h"
 #include "nr_sdap.h"
 
 #define NO_SDAP_HEADER 0
@@ -27,6 +27,15 @@ static nr_sdap_entity_info sdap_info;
 
 instance_t *N3GTPUInst = NULL;
 
+static void remove_ip_if(nr_sdap_entity_t *entity)
+{
+  DevAssert(entity != NULL);
+  nr_sdap_tun_detach(entity);
+  if (!entity->is_gnb)
+    return;
+  nr_sdap_tun_destroy(entity->ue_id, entity->pdusession_id);
+}
+
 /** @brief Returns a bitmap indicating the SDAP entity role,
  *        i.e. for UL transmission, header for UL data is present in RX/TX
  *             for DL transmission, header for DL data is present in RX/TX */
@@ -34,12 +43,33 @@ static int get_sdap_role(bool is_gnb, const NR_SDAP_Config_t *sdap_config)
 {
   sdap_role_t role_ul = is_gnb ? SDAP_UL_RX : SDAP_UL_TX;
   sdap_role_t role_dl = is_gnb ? SDAP_DL_TX : SDAP_DL_RX;
+  const bool ul_hdr = sdap_config->sdap_HeaderUL == NR_SDAP_Config__sdap_HeaderUL_present;
+  const bool dl_hdr = sdap_config->sdap_HeaderDL == NR_SDAP_Config__sdap_HeaderDL_present;
   int role = NO_SDAP_HEADER;
-  if (sdap_config->sdap_HeaderUL == NR_SDAP_Config__sdap_HeaderUL_present)
+  if (ul_hdr)
     role |= role_ul;
-  if (sdap_config->sdap_HeaderDL == NR_SDAP_Config__sdap_HeaderDL_present)
+  if (dl_hdr)
     role |= role_dl;
+  LOG_D(SDAP,
+        "PDU session %ld %s: sdap-HeaderUL %s, sdap-HeaderDL %s (role 0x%x)\n",
+        sdap_config->pdu_Session,
+        is_gnb ? "gNB" : "UE",
+        ul_hdr ? "present" : "absent",
+        dl_hdr ? "present" : "absent",
+        role);
   return role;
+}
+
+/** Return the first table row for drb_id (all QFIs on a DRB share entity_role) */
+static const qfi2drb_t *nr_sdap_drb_lookup(const nr_sdap_entity_t *entity, int drb_id)
+{
+  for (int qfi = 0; qfi < SDAP_MAX_QFI; qfi++) {
+    if (entity->qfi2drb_table[qfi].drb_id == drb_id)
+      return &entity->qfi2drb_table[qfi];
+  }
+  if (entity->default_drb.drb_id == drb_id)
+    return &entity->default_drb;
+  return NULL;
 }
 
 void nr_pdcp_submit_sdap_ctrl_pdu(ue_id_t ue_id, int sdap_ctrl_pdu_drb, nr_sdap_ul_hdr_t ctrl_pdu)
@@ -85,19 +115,20 @@ static bool nr_sdap_tx_entity(nr_sdap_entity_t *entity,
   }
 
   uint8_t sdap_buf[SDAP_MAX_PDU];
-  int drb_id = entity->qfi2drb_map(entity, qfi);
-
-  if (drb_id != SDAP_MAP_RULE_EMPTY) {
-    sdap_ul_tx = entity->qfi2drb_table[qfi].entity_role & SDAP_UL_TX; // UE TX entity
-    sdap_dl_tx = entity->qfi2drb_table[qfi].entity_role & SDAP_DL_TX; // gNB TX entity
-    LOG_D(SDAP, "TX - QFI: %u is mapped to DRB ID: %d\n", qfi, entity->qfi2drb_table[qfi].drb_id);
-  } else {
-    LOG_E(SDAP, "QFI %u not mapped to any DRB - dropping SDU of size %d\n", qfi, sdu_buffer_size);
+  const qfi2drb_t *map = entity->qfi2drb_map(entity, qfi);
+  if (!map) {
+    LOG_W(SDAP, "Dropping TX SDAP SDU: no DRB mapping for QFI %u (pdu_session=%d)\n", qfi, entity->pdusession_id);
     return false;
   }
+  const int drb_id = map->drb_id;
+  const int drb_role = map->entity_role;
+
+  sdap_ul_tx = drb_role & SDAP_UL_TX;
+  sdap_dl_tx = drb_role & SDAP_DL_TX;
+  LOG_D(SDAP, "TX - QFI: %u is mapped to DRB ID: %d\n", qfi, drb_id);
 
   if (!sdap_ul_tx && !sdap_dl_tx) {
-    LOG_D(SDAP, "TX - DRB ID: %d does not have SDAP header\n", entity->qfi2drb_table[qfi].drb_id);
+    LOG_D(SDAP, "TX - DRB ID: %d does not have SDAP header\n", drb_id);
     ret = nr_pdcp_data_req_drb(ctxt_p,
                                srb_flag,
                                drb_id,
@@ -120,6 +151,21 @@ static bool nr_sdap_tx_entity(nr_sdap_entity_t *entity,
     return 0;
   }
 
+  // Reuse a QFI that the UE has already mapped to the default DRB to avoid
+  // encoding an invalid QFI in the SDAP header. This follows TS 37.324 5.2.1,
+  // which maps SDAP SDUs from unmapped QoS flows (e.g., a UFP-generated Router Advertisement) to the default DRB.
+  uint8_t hdr_qfi = qfi;
+  if (qfi >= SDAP_MAX_QFI) { // qfi = -1 (uint_8 255)
+    for (int i = 0; i < SDAP_MAX_QFI; i++) {
+      if (entity->qfi2drb_table[i].drb_id == drb_id) {
+        hdr_qfi = i;
+        break;
+      }
+    }
+    DevAssert (hdr_qfi < SDAP_MAX_QFI);
+    LOG_W(SDAP, "TX SDAP SDU with no QFI marking: reusing QFI %u already mapped to DRB %d\n", hdr_qfi, drb_id);
+  }
+
   if (sdap_dl_tx) { // create DL Data PDU with SDAP header
     offset = SDAP_HDR_LENGTH;
     /*
@@ -129,7 +175,7 @@ static bool nr_sdap_tx_entity(nr_sdap_entity_t *entity,
      * Construct the DL SDAP data PDU.
      */
     nr_sdap_dl_hdr_t sdap_hdr;
-    sdap_hdr.QFI = qfi;
+    sdap_hdr.QFI = hdr_qfi;
     sdap_hdr.RQI = rqi;
     sdap_hdr.RDI = 0; // SDAP Hardcoded Value
     /* Add the SDAP DL Header to the buffer */
@@ -148,7 +194,7 @@ static bool nr_sdap_tx_entity(nr_sdap_entity_t *entity,
      * construct the UL SDAP data PDU as specified in the subclause 6.2.2.3.
      */
     nr_sdap_ul_hdr_t sdap_hdr;
-    sdap_hdr.QFI = qfi;
+    sdap_hdr.QFI = hdr_qfi;
     sdap_hdr.R = 0;
     sdap_hdr.DC = rqi;
     /* Add the SDAP UL Header to the buffer */
@@ -183,55 +229,47 @@ static bool nr_sdap_tx_entity(nr_sdap_entity_t *entity,
   return ret;
 }
 
-static void nr_sdap_rx_entity(nr_sdap_entity_t *entity,
-                              int pdcp_entity,
-                              int is_gnb,
-                              int pdusession_id,
-                              ue_id_t ue_id,
-                              char *buf,
-                              int size)
+static void
+nr_sdap_rx_entity(nr_sdap_entity_t *entity, int drb_id, int is_gnb, int pdusession_id, ue_id_t ue_id, char *buf, int size)
 {
-  bool sdap_ul_rx = false;
-  bool sdap_dl_rx = false;
   int qfi = -1;
-  /* If SDAP header is disabled for this entity, bypass header parsing */
-  if (entity->enable_sdap) {
-    /** Extract QFI from SDAP header for UL direction
-     * Per TS 37.324 §6.2.2, QFI is carried in SDAP header when SDAP header is present
-     * This QFI will be used in GTP-U extension header (PDU Session Container)
-     * for N3-U tunnel (the first 6 bits in the first octet) */
-    qfi = buf[0] & 0x3F;
-    if (qfi >= SDAP_MAX_QFI) {
-      LOG_E(SDAP, "Invalid QFI %d received in SDAP header\n", qfi);
-      return;
-    }
-    // Accept SDAP packets only for QFIs that still have an active mapping.
-    const qfi2drb_t *mapping = &entity->qfi2drb_table[qfi];
-    /* If the QFI has no active mapping, drop the packet: it can happen
-     * after QoS-flow removal/reconfiguration due to packets that were already enqueued in PDCP */
-    if (mapping->drb_id == SDAP_NO_MAPPING_RULE) {
-      LOG_W(SDAP,
-            "Dropping UL SDAP PDU with unmapped QFI=%d (ue=%ld pdu_session=%d drb=%d)\n",
-            qfi,
-            ue_id,
-            pdusession_id,
-            pdcp_entity);
-      return;
-    }
-    sdap_ul_rx = mapping->entity_role & SDAP_UL_RX; // gNB RX entity
-    sdap_dl_rx = mapping->entity_role & SDAP_DL_RX; // UE RX entity
+  const qfi2drb_t *map = nr_sdap_drb_lookup(entity, drb_id);
+  if (!map) {
+    LOG_W(SDAP, "Dropping RX payload: DRB %d has no qfi2drb_table entry (ue=%ld, pdu_session=%d)\n", drb_id, ue_id, pdusession_id);
+    return;
   }
+  const int drb_role = map->entity_role;
+  bool sdap_header_rx = is_gnb ? (drb_role & SDAP_UL_RX) : (drb_role & SDAP_DL_RX);
 
+  if (is_gnb) {
+    if (sdap_header_rx) {
+     /** Extract QFI from SDAP header for gNB UL RX
+      * Per TS 37.324 §6.2.2, QFI is carried in SDAP header when SDAP header is present
+      * This QFI will be used in GTP-U extension header (PDU Session Container)
+      * for N3-U tunnel (the first 6 bits in the first octet) */
+      const nr_sdap_ul_hdr_t *sdap_hdr = (const nr_sdap_ul_hdr_t *)buf;
+      qfi = sdap_hdr->QFI;
+      if (qfi >= SDAP_MAX_QFI) {
+        LOG_E(SDAP, "Invalid QFI %d received in SDAP header\n", qfi);
+        return;
+      }
+      /* TS 37.324 §5.2.1: with no stored rule, map to the default DRB when configured
+       * TS 38.331: default DRB always has a UL SDAP header
+       * Drop only when neither a stored rule nor default DRB applies to this QFI */
+      const qfi2drb_t *qfi_map = entity->qfi2drb_map(entity, qfi);
+      if (!qfi_map || qfi_map->drb_id != drb_id) {
+        LOG_W(SDAP,
+              "Dropping UL PDU: QFI=%d %s (ue=%ld, pdu_session=%d, receiving_drb=%d)\n",
+              qfi,
+              !qfi_map ? "no rule/default DRB" : "wrong DRB",
+              ue_id,
+              pdusession_id,
+              drb_id);
+        return;
+      }
 
-  if (is_gnb) { // gNB
-    /** QFI extracted from SDAP header for UL direction (N3-U tunnel)
-     * QFI range: 0..63 (6 bits) */
-    if (sdap_ul_rx) { // UL Data/Control PDU with SDAP header
-      DevAssert(qfi >= 0 && qfi < SDAP_MAX_QFI);
       int offset = SDAP_HDR_LENGTH;
-      nr_sdap_ul_hdr_t *sdap_hdr = (nr_sdap_ul_hdr_t *)buf;
-      DevAssert(sdap_hdr->QFI == qfi);
-      LOG_D(SDAP, "RX Entity Received QFI:    %u\n", qfi);
+      LOG_D(SDAP, "RX Entity Received QFI:    %u\n", sdap_hdr->QFI);
       LOG_D(SDAP, "RX Entity Received R bit:  %u\n", sdap_hdr->R);
       LOG_D(SDAP, "RX Entity Received DC bit: %u\n", sdap_hdr->DC);
 
@@ -270,7 +308,7 @@ static void nr_sdap_rx_entity(nr_sdap_entity_t *entity,
      * if the DRB from which this SDAP data PDU is received is configured by RRC with the presence of SDAP header.
      */
     int offset = 0;
-    if (sdap_dl_rx) { // DL Data/Control PDU with SDAP header
+    if (sdap_header_rx) { // DL Data/Control PDU with SDAP header
       offset = SDAP_HDR_LENGTH;
       /*
        * TS 37.324 5.2 Data transfer
@@ -294,7 +332,7 @@ static void nr_sdap_rx_entity(nr_sdap_entity_t *entity,
          * 5.3.2 Reflective mapping
          * If there is no stored QoS flow to DRB mapping rule for the QoS flow and a default DRB is configured.
          */
-        if(!entity->qfi2drb_table[sdap_hdr->QFI].drb_id && entity->default_drb){
+        if (!entity->qfi2drb_table[sdap_hdr->QFI].drb_id && entity->default_drb.drb_id) {
           nr_sdap_ul_hdr_t sdap_ctrl_pdu = entity->sdap_construct_ctrl_pdu(sdap_hdr->QFI);
           int sdap_ctrl_pdu_drb = entity->sdap_map_ctrl_pdu(entity, SDAP_CTRL_PDU_MAP_DEF_DRB, sdap_hdr->QFI);
           entity->sdap_submit_ctrl_pdu(ue_id, sdap_ctrl_pdu_drb, sdap_ctrl_pdu);
@@ -309,18 +347,19 @@ static void nr_sdap_rx_entity(nr_sdap_entity_t *entity,
          * the DRB according to the stored QoS flow to DRB mapping rule is configured by RRC
          * with the presence of UL SDAP header
          */
-        if (pdcp_entity != entity->qfi2drb_table[sdap_hdr->QFI].drb_id) {
+        if (drb_id != entity->qfi2drb_table[sdap_hdr->QFI].drb_id) {
           nr_sdap_ul_hdr_t sdap_ctrl_pdu = entity->sdap_construct_ctrl_pdu(sdap_hdr->QFI);
           int sdap_ctrl_pdu_drb = entity->sdap_map_ctrl_pdu(entity, SDAP_CTRL_PDU_MAP_RULE_DRB, sdap_hdr->QFI);
           entity->sdap_submit_ctrl_pdu(ue_id, sdap_ctrl_pdu_drb, sdap_ctrl_pdu);
         }
 
         /*
-         * TS 37.324 5.3 QoS flow to DRB Mapping 
-         * 5.3.2 Reflective mapping
-         * store the QoS flow to DRB mapping of the DL SDAP data PDU as the QoS flow to DRB mapping rule for the UL. 
-         */ 
-        entity->qfi2drb_table[sdap_hdr->QFI].drb_id = pdcp_entity;
+         * TS 37.324 §5.3.2 Reflective mapping: store the DL QoS flow to DRB mapping
+         * as the UL mapping rule. sdap-HeaderUL/DL are per DRB: copy the
+         * receiving DRB role onto the QFI row together with drb_id.
+         */
+        entity->qfi2drb_table[sdap_hdr->QFI].drb_id = drb_id;
+        entity->qfi2drb_table[sdap_hdr->QFI].entity_role = drb_role;
       }
 
       /*
@@ -338,6 +377,10 @@ static void nr_sdap_rx_entity(nr_sdap_entity_t *entity,
      * 5.2.2 Downlink
      * deliver the retrieved SDAP SDU to the upper layer.
      */
+    if (entity->pdusession_sock < 0) {
+      LOG_D(SDAP, "[UE %ld] PDU session %d: TUN not attached, drop DL SDU (%d B)\n", ue_id, pdusession_id, size - offset);
+      return;
+    }
     int len = write(entity->pdusession_sock, &buf[offset], size - offset);
     LOG_D(SDAP, "RX Entity len : %d\n", len);
     LOG_D(SDAP, "RX Entity size : %d\n", size);
@@ -369,31 +412,32 @@ static void nr_sdap_qfi2drb_map_del(nr_sdap_entity_t *entity, const uint8_t qfi)
 
 /**
  * @brief   get the DRB ID mapped to the QFI, for both DL and UL
- * @return  DRB that is mapped to the QFI
- *          or the default DRB if no mapping rule exists
- *          or 0 if no mapping and no default DRB exists for that QFI
+ * @return  qfi2drb_table entry for the QFI {drb_id, entity_role},
+ *          or the default DRB row if no mapping rule exists,
+ *          or NULL if no mapping and no default DRB exists for that QFI
  * @ref     TS 37.324, 5.2.1 Uplink
  *          If there is no stored QoS flow to DRB mapping rule for the
  *          QoS flow as specified in the subclause 5.3, and a default DRB is configured,
  *          map the SDAP SDU to the default DRB else, map the SDAP SDU to the DRB according
  *          to the stored QoS flow to DRB mapping rule. */
-static int nr_sdap_qfi2drb(nr_sdap_entity_t *entity, uint8_t qfi)
+static const qfi2drb_t *nr_sdap_qfi2drb(const nr_sdap_entity_t *entity, uint8_t qfi)
 {
   /* Fetch DRB ID mapped to QFI */
-  int drb_id = entity->qfi2drb_table[qfi].drb_id;
-  if (drb_id) {
+  // Handle the out-of-bound case when a DL PDU arrives with no QFI marking (QFI = -1 (255 in uint8_t)).
+  const qfi2drb_t *row = qfi < SDAP_MAX_QFI ? &entity->qfi2drb_table[qfi] : NULL;
+  if (row && row->drb_id) {
     /* QoS flow to DRB mapping rule exists, return corresponding DRB ID */
-    LOG_D(SDAP, "Existing QoS flow to DRB mapping rule: QFI %u to DRB %d\n", qfi, drb_id);
-    return drb_id;
-  } else if (entity->default_drb) {
-    /* QoS flow to DRB mapping rule does not exist, map SDAP SDU to default DRB, e.g. return default DRB of the SDAP entity */
-    LOG_D(SDAP, "QoS flow to DRB mapping rule does not exists! mapping SDU to Default DRB: %d\n", entity->default_drb);
-    return entity->default_drb;
+    LOG_D(SDAP, "Existing QoS flow to DRB mapping rule: QFI %u to DRB %d\n", qfi, row->drb_id);
+    return row;
+  } else if (entity->default_drb.drb_id) {
+    /* QoS flow to DRB mapping rule does not exist: map SDAP SDU to default DRB */
+    LOG_D(SDAP, "QoS flow to DRB mapping rule does not exists! mapping SDU to Default DRB: %d\n", entity->default_drb.drb_id);
+    return &entity->default_drb;
   } else {
     /* Note: UE undefined behaviour when neither a default DRB
        nor a stored QoS flow to DRB mapping rule exists */
     LOG_E(SDAP, "Mapping rule and default DRB do not exist for QFI:%u\n", qfi);
-    return SDAP_MAP_RULE_EMPTY;
+    return NULL;
   }
 }
 
@@ -412,11 +456,16 @@ int nr_sdap_map_ctrl_pdu(nr_sdap_entity_t *entity, int map_type, uint8_t dl_qfi)
 {
   int drb_of_endmarker = 0;
   if(map_type == SDAP_CTRL_PDU_MAP_DEF_DRB){
-    drb_of_endmarker = entity->default_drb;
+    drb_of_endmarker = entity->default_drb.drb_id;
     LOG_D(SDAP, "Mapping Control PDU QFI: %u to Default DRB: %d\n", dl_qfi, drb_of_endmarker);
   }
   if(map_type == SDAP_CTRL_PDU_MAP_RULE_DRB){
-    drb_of_endmarker = entity->qfi2drb_map(entity, dl_qfi);
+    const qfi2drb_t *map = entity->qfi2drb_map(entity, dl_qfi);
+    if (!map) {
+      LOG_E(SDAP, "No DRB mapping for control PDU QFI %u\n", dl_qfi);
+      return 0;
+    }
+    drb_of_endmarker = map->drb_id;
     LOG_D(SDAP, "Mapping Control PDU QFI: %u to DRB: %d\n", dl_qfi, drb_of_endmarker);
   }
   return drb_of_endmarker;
@@ -441,7 +490,7 @@ static void nr_sdap_ue_control_pdu_config(nr_sdap_entity_t *entity, const ue_id_
   for (int i = 0; i < sdap->mappedQFIs2AddCount; i++) {
     uint8_t qfi = sdap->mappedQFIs2Add[i];
     /* a default DRB exists and there is no stored QFI to DRB mapping rule for the QFI */
-    if (entity->default_drb && entity->qfi2drb_table[qfi].drb_id == SDAP_NO_MAPPING_RULE) {
+    if (entity->default_drb.drb_id && entity->qfi2drb_table[qfi].drb_id == SDAP_NO_MAPPING_RULE) {
       // construct an end-marker control PDU (6.2.3 TS 37.324)
       nr_sdap_ul_hdr_t sdap_ctrl_pdu = entity->sdap_construct_ctrl_pdu(qfi);
       // map the end-marker control PDU to the default DRB
@@ -468,7 +517,7 @@ static void nr_sdap_add_qos_flows_to_drb(nr_sdap_entity_t *entity, const sdap_co
   for (int i = 0; i < sdap->mappedQFIs2AddCount; i++) {
     uint8_t qfi = sdap->mappedQFIs2Add[i];
     LOG_D(SDAP, "Adding QFI to DRB mapping rules: %d mapped QFIs for DRB %d\n", sdap->mappedQFIs2AddCount, sdap->drb_id);
-    if (qfi < SDAP_MAX_QFI && sdap->drb_id > SDAP_MAP_RULE_EMPTY && sdap->drb_id <= MAX_DRBS_PER_UE) {
+    if (qfi < SDAP_MAX_QFI && sdap->drb_id > SDAP_NO_MAPPING_RULE && sdap->drb_id <= MAX_DRBS_PER_UE) {
       entity->qfi2drb_map_add(entity, qfi, sdap->drb_id, sdap->role);
     } else {
       LOG_E(SDAP, "Failed to add qfi2drb mapping: QFI=%d, DRB=%d\n", qfi, sdap->drb_id);
@@ -491,24 +540,31 @@ static void nr_sdap_rm_qos_flows_from_drb(nr_sdap_entity_t *entity, const sdap_c
  * @param drb the DRB ID to be mapped */
 static void nr_sdap_qfi2drb_map_update(nr_sdap_entity_t *entity, const sdap_config_t *sdap)
 {
-  /* disabled SDAP: only one DRB per PDU session existing qfi2drb_table entries must match the DRB to be updated */
-  if (!entity->enable_sdap) {
-    for (int i = 0; i < SDAP_MAX_QFI; i++) {
-      int mapped = entity->qfi2drb_table[i].drb_id;
-      if (mapped != SDAP_NO_MAPPING_RULE) {
-        AssertFatal(mapped == sdap->drb_id,
-                    "PDU session %d: disabled SDAP allows only one DRB per PDU session (qfi2drb_table[%d] maps to DRB %d)\n",
-                    entity->pdusession_id,
-                    i,
-                    mapped);
-      }
-    }
-  }
   if (!entity->is_gnb) { // UE control PDU configuration
     nr_sdap_ue_control_pdu_config(entity, entity->ue_id, sdap);
   }
   nr_sdap_add_qos_flows_to_drb(entity, sdap);
   nr_sdap_rm_qos_flows_from_drb(entity, sdap);
+
+  /* TS 38.331: all QFIs on a DRB share the same sdap-HeaderUL/DL role */
+  for (int i = 0; i < SDAP_MAX_QFI; i++) {
+    if (entity->qfi2drb_table[i].drb_id == sdap->drb_id)
+      entity->qfi2drb_table[i].entity_role = sdap->role;
+  }
+
+  if (sdap->role == NO_SDAP_HEADER) {
+    /* TS 37.324 §6.2.2.1: with both headers absent, only one DRB per PDU session is allowed */
+    int mapped_drbs = 0;
+    for (int drb = 1; drb <= MAX_DRBS_PER_UE; drb++) {
+      for (int qfi = 0; qfi < SDAP_MAX_QFI; qfi++) {
+        if (entity->qfi2drb_table[qfi].drb_id == drb) {
+          mapped_drbs++;
+          break;
+        }
+      }
+    }
+    AssertFatal(mapped_drbs <= 1, "PDU session %d: disabled SDAP but %d DRBs mapped\n", entity->pdusession_id, mapped_drbs);
+  }
 }
 
 /**
@@ -521,12 +577,12 @@ static void nr_sdap_qfi2drb_map_update(nr_sdap_entity_t *entity, const sdap_conf
 static void nr_sdap_add_entity(const int is_gnb, const ue_id_t ue_id, const sdap_config_t *sdap)
 {
   nr_sdap_entity_t *sdap_entity = calloc_or_fail(1, sizeof(*sdap_entity));
+  LOG_I(SDAP, "Creating SDAP entity ue_id=%ld pdu_session_id=%d\n", ue_id, sdap->pdusession_id);
 
   // SDAP entity ids
   sdap_entity->ue_id = ue_id;
   sdap_entity->pdusession_id = sdap->pdusession_id;
   sdap_entity->is_gnb = is_gnb;
-  sdap_entity->enable_sdap = (sdap->role != NO_SDAP_HEADER);
 
   // rx/tx entities
   sdap_entity->tx_entity = nr_sdap_tx_entity;
@@ -546,13 +602,14 @@ static void nr_sdap_add_entity(const int is_gnb, const ue_id_t ue_id, const sdap
 
   // set default DRB
   if (sdap->defaultDRB) {
-    sdap_entity->default_drb = sdap->drb_id;
-    LOG_I(SDAP, "Default DRB for the created SDAP entity: DRB %d \n", sdap_entity->default_drb);
+    sdap_entity->default_drb.drb_id = sdap->drb_id;
+    sdap_entity->default_drb.entity_role = sdap->role;
+    LOG_I(SDAP, "Default DRB for the created SDAP entity: DRB %d \n", sdap_entity->default_drb.drb_id);
   }
 
-  if (!sdap_entity->enable_sdap) {
+  if (sdap->role == NO_SDAP_HEADER) {
     AssertFatal(sdap->mappedQFIs2AddCount <= 1,
-                "PDU session %d: disabled SDAP allows at most one QoS flow to add at entity creation\n",
+                "PDU session %d: both SDAP headers absent: at most one QoS flow at entity creation\n",
                 sdap->pdusession_id);
   }
 
@@ -567,6 +624,13 @@ static void nr_sdap_add_entity(const int is_gnb, const ue_id_t ue_id, const sdap
     // In NOS1 mode, terminate SDAP for the first UE on the gNB. This allows injecting/receiving
     // PDCP SDUs to/from the TUN interface.
     start_sdap_tun_gnb_first_ue_default_pdu_session(ue_id, sdap_entity->pdusession_id);
+  }
+
+  if (!is_gnb) {
+    /* No-op on first setup until NAS registers the TUN. After paging/service request,
+     * re-attach the preserved UE TUN for the established PDU session (TS 38.304 clause 7.1,
+     * TS 24.501 clauses 5.6.2.2.1/5.6.1.1 restore UP resources for an established PDU session). */
+    nr_sdap_tun_attach(sdap_entity);
   }
 }
 
@@ -591,8 +655,10 @@ nr_sdap_entity_t *nr_sdap_get_entity(ue_id_t ue_id, int pdusession_id)
   nr_sdap_entity_t *sdap_entity;
   sdap_entity = sdap_info.sdap_entity_llist;
 
-  if(sdap_entity == NULL)
+  if (sdap_entity == NULL) {
+    LOG_W(SDAP, " Could not find SDAP entity: entity list empty (ue_id=%ld pdu_session_id=%d)\n", ue_id, pdusession_id);
     return NULL;
+  }
 
   while ((sdap_entity->ue_id != ue_id || sdap_entity->pdusession_id != pdusession_id) && sdap_entity->next_entity != NULL) {
     sdap_entity = sdap_entity->next_entity;
@@ -622,61 +688,46 @@ void nr_sdap_release_drb(ue_id_t ue_id, int drb_id, int pdusession_id)
  * On E1 Bearer Context Modification (CP to UP), Flow Mapping Information in DRB To Modify
  * carries the QoS Flow QoS Parameters List for that DRB. Per TS 38.463, when present the
  * CU-UP replaces the previous mapping for that DRB.
- * Remove every QFI currently mapped to the DRB that is absent from the list of QFIs to be mapped.
- * @param qfis[] list of QFIs to be mapped to the DRB
- * @param n_qfis number of QFIs in the list
- * @param drb_id the DRB ID to be mapped */
-void nr_sdap_entity_update_qos_flows(ue_id_t ue_id, int pdusession_id, int drb_id, const uint8_t *qfis, int n_qfis)
+ * @param sdap mapped QoS flows to add */
+void nr_sdap_entity_update_qos_flows(ue_id_t ue_id, sdap_config_t *sdap)
 {
-  nr_sdap_entity_t *entity = nr_sdap_get_entity(ue_id, pdusession_id);
+  DevAssert(sdap);
+  nr_sdap_entity_t *entity = nr_sdap_get_entity(ue_id, sdap->pdusession_id);
   if (!entity) {
-    LOG_W(SDAP, "gNB SDAP: no entity for UE %lu PDU session %d when updating QoS flows for DRB %d\n", ue_id, pdusession_id, drb_id);
+    LOG_W(SDAP, "No entity when updating QoS flows for DRB %d (pdu_session=%d)\n", sdap->drb_id, sdap->pdusession_id);
     return;
   }
 
-  /* Derive SDAP role from entity configuration */
-  uint8_t role = NO_SDAP_HEADER;
-  if (entity->enable_sdap) {
-    if (entity->is_gnb) {
-      role |= SDAP_UL_RX;
-      role |= SDAP_DL_TX;
-    } else {
-      role |= SDAP_UL_TX;
-      role |= SDAP_DL_RX;
-    }
+  const qfi2drb_t *drb_map = nr_sdap_drb_lookup(entity, sdap->drb_id);
+  if (!drb_map) {
+    LOG_E(SDAP, "DRB %d: no qfi2drb_table entry, skip QoS-flow mapping update (pdu_session=%d)\n", sdap->drb_id, sdap->pdusession_id);
+    return;
   }
+  /* TS 38.331: sdap-HeaderUL/DL cannot change after DRB establishment */
+  sdap->role = drb_map->entity_role;
+  sdap->defaultDRB = (entity->default_drb.drb_id == sdap->drb_id);
 
-  sdap_config_t sdap = {.pdusession_id = pdusession_id,
-                        .drb_id = drb_id,
-                        .role = role,
-                        .defaultDRB = (entity->default_drb == drb_id),
-                        .mappedQFIs2AddCount = n_qfis};
-
-  /* Build list of QFIs to be released */
+  /* TS 37.324 clause 5.3.1 mappedQoS-FlowsToRelease: QFIs on this DRB not in the new list */
   for (int q = 0; q < SDAP_MAX_QFI; q++) {
-    if (entity->qfi2drb_table[q].drb_id != drb_id)
+    if (entity->qfi2drb_table[q].drb_id != sdap->drb_id)
       continue;
     bool keep = false;
-    for (int i = 0; i < n_qfis; i++) {
-      if (qfis[i] == q) {
+    for (int i = 0; i < sdap->mappedQFIs2AddCount; i++) {
+      if (sdap->mappedQFIs2Add[i] == q) {
         keep = true;
         break;
       }
     }
     if (!keep) {
-      DevAssert(sdap.mappedQFIs2ReleaseCount < SDAP_MAX_QFI);
-      sdap.mappedQFIs2Release[sdap.mappedQFIs2ReleaseCount++] = q;
-      LOG_I(SDAP, "gNB SDAP mapping update: UE %lu pduSession %d DRB %d release_qfi=%d\n", ue_id, pdusession_id, drb_id, q);
+      DevAssert(sdap->mappedQFIs2ReleaseCount < SDAP_MAX_QFI);
+      sdap->mappedQFIs2Release[sdap->mappedQFIs2ReleaseCount++] = q;
+      LOG_I(SDAP, "Update: release QFI %d from DRB %d (pdu_session=%d)\n", q, sdap->drb_id, sdap->pdusession_id);
     }
   }
 
-  /* Build list of QFIs to be added */
-  for (int i = 0; i < n_qfis; i++)
-    sdap.mappedQFIs2Add[i] = qfis[i];
-
-  LOG_I(SDAP, "gNB SDAP mapping update: UE %lu pduSession %d DRB %d n_qfis=%d\n", ue_id, pdusession_id, drb_id, n_qfis);
-
-  entity->qfi2drb_map_update(entity, &sdap);
+  LOG_I(SDAP, "Update: add %d QFIs to DRB %d (pdu_session=%d)\n", sdap->mappedQFIs2AddCount, sdap->drb_id, sdap->pdusession_id);
+  /* TS 37.324 clause 5.3.1: mappedQoS-FlowsToAdd and apply mapping on the DRB */
+  entity->qfi2drb_map_update(entity, sdap);
 }
 
 bool nr_sdap_delete_entity(ue_id_t ue_id, int pdusession_id)
@@ -692,8 +743,7 @@ bool nr_sdap_delete_entity(ue_id_t ue_id, int pdusession_id)
 
   if (entityPtr->ue_id == ue_id && entityPtr->pdusession_id == pdusession_id) {
     sdap_info.sdap_entity_llist = sdap_info.sdap_entity_llist->next_entity;
-    if (entityPtr->pdusession_sock != -1)
-      remove_ip_if(entityPtr);
+    remove_ip_if(entityPtr);
     free(entityPtr);
     LOG_D(SDAP, "Successfully deleted SDAP entity for UE %lx and PDU Session id %d\n", ue_id, pdusession_id);
     return true;
@@ -707,9 +757,7 @@ bool nr_sdap_delete_entity(ue_id_t ue_id, int pdusession_id)
 
     if (entityPtr->ue_id == ue_id && entityPtr->pdusession_id == pdusession_id) {
       entityPrev->next_entity = entityPtr->next_entity;
-      if (entityPtr->pdusession_sock != -1) {
-        remove_ip_if(entityPtr);
-      }
+      remove_ip_if(entityPtr);
       free(entityPtr);
       LOG_D(SDAP, "Successfully deleted Entity for UE %lx and PDU Session id %d\n", ue_id, pdusession_id);
       return true;
@@ -734,8 +782,7 @@ bool nr_sdap_delete_ue_entities(ue_id_t ue_id)
   /* Handle scenario where ue_id matches the head of the list */
   while (entityPtr != NULL && entityPtr->ue_id == ue_id && upperBound < MAX_DRBS_PER_UE) {
     sdap_info.sdap_entity_llist = entityPtr->next_entity;
-    if (entityPtr->pdusession_sock != -1)
-      remove_ip_if(entityPtr);
+    remove_ip_if(entityPtr);
     free(entityPtr);
     entityPtr = sdap_info.sdap_entity_llist;
     ret = true;
@@ -747,8 +794,7 @@ bool nr_sdap_delete_ue_entities(ue_id_t ue_id)
       entityPtr = entityPtr->next_entity;
     } else {
       entityPrev->next_entity = entityPtr->next_entity;
-      if (entityPtr->pdusession_sock != -1)
-        remove_ip_if(entityPtr);
+      remove_ip_if(entityPtr);
       free(entityPtr);
       entityPtr = entityPrev->next_entity;
       LOG_I(SDAP, "Successfully deleted SDAP entity for UE %ld\n", ue_id);
@@ -765,7 +811,6 @@ sdap_config_t nr_sdap_get_config(const int is_gnb, const NR_SDAP_Config_t *sdap_
   sdap_config_t sdapConfig = {0};
   sdapConfig.drb_id = drb_id;
   sdapConfig.role = get_sdap_role(is_gnb, sdap_Config);
-  LOG_D(SDAP, "SDAP headers %s\n", sdapConfig.role == NO_SDAP_HEADER ? "absent" : "present");
   sdapConfig.defaultDRB = sdap_Config->defaultDRB;
   // 3GPP TS 38.331 The network sets sdap-HeaderUL to present if the field defaultDRB is set to true
   if (sdapConfig.defaultDRB && (sdap_Config->sdap_HeaderUL != NR_SDAP_Config__sdap_HeaderUL_present))
@@ -815,8 +860,9 @@ void nr_reconfigure_sdap_entity(NR_SDAP_Config_t *sdap_config, ue_id_t ue_id, in
 
 void set_qfi(uint8_t qfi, uint8_t pduid, ue_id_t ue_id)
 {
+  DevAssert(qfi < SDAP_MAX_QFI);
   nr_sdap_entity_t *entity = nr_sdap_get_entity(ue_id, pduid);
   DevAssert(entity != NULL);
   entity->qfi = qfi;
-  return;
+  nr_sdap_tun_store_qfi(ue_id, pduid, qfi);
 }

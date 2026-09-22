@@ -80,19 +80,11 @@ static void polar_encode_bits(uint8_t *in_out, size_t N)
   }
 }
 
-static uint32_t log2_floor(uint32_t x)
-{
-  if (x == 0)
-    return 0;
-  uint32_t clz = __builtin_clz(x);
-  return 31U - clz;
-}
-
 static void polar_encode_bytes(uint8_t *in_out, size_t N)
 {
   size_t brnch_sz = 1;
   size_t n_brnch = N >> 4;
-  size_t const blck_pwr = log2_floor(N);
+  size_t const blck_pwr = floor_log2_u32(N);
   for (size_t stage = 3; stage < blck_pwr; ++stage) {
     for (size_t brnch = 0; brnch < n_brnch; ++brnch) {
       for (size_t byte = 0; byte < brnch_sz; ++byte) {
@@ -148,10 +140,10 @@ uint32_t nr_polar_output_length(uint16_t K, uint16_t E, uint8_t n_max)
   int n_1, n_2, n_min = 5;
   double R_min = 1.0 / 8;
 
-  if ((E <= (9.0 / 8) * pow(2, ceil(log2(E)) - 1)) && (K / E < 9.0 / 16)) {
-    n_1 = ceil(log2(E)) - 1;
+  if ((E <= (9.0 / 8) * pow(2, ceil_log2_u32(E) - 1)) && (K / E < 9.0 / 16)) {
+    n_1 = ceil_log2_u32(E) - 1;
   } else {
-    n_1 = ceil(log2(E));
+    n_1 = ceil_log2_u32(E);
   }
 
   n_2 = ceil(log2(K / R_min));
@@ -246,9 +238,30 @@ void nr_polar_info_bit_pattern(uint8_t *ibp,
   }
 
   if (n_PC > 0) {
-    AssertFatal(n_pc_wm == 0, "Q_PC_N computation for n_pc_wm = %i is not implemented yet!\n", n_pc_wm);
+    AssertFatal(n_pc_wm <= 1, "n_pc_wm = %i is not valid (only 0 and 1 allowed)\n", n_pc_wm);
+
+    // As per 5.3.1.2 of 38.212, denote the set of bit indices for parity check bits as Q_PC_N
+    // A number of (n_PC - n_pc_wm) parity check bits are placed in the (n_PC - n_pc_wm) least reliable bit indices
     for (int n = 0; n < n_PC - n_pc_wm; n++) {
       Q_PC_N[n] = Q_I_N[n];
+    }
+
+    // A number of n_pc_wm other parity check bits are placed in the bit indices of minimum row weight of most reliable bit indices
+    if (n_pc_wm == 1) {
+      // tilde{Q_I}^N = K most reliable indices of bar{Q_I}^N = Q_I_N[n_PC .. K+n_PC-1].
+      // Find minimum row weight over this range; on ties, keep the most reliable
+      // (later position, since Q_I_N is ascending by reliability).
+      int min_weight = INT_MAX;
+      int best_pos = -1;
+      for (int n = n_PC; n <= (K + n_PC) - 1; n++) {
+        const int w = __builtin_popcount((unsigned)Q_I_N[n]);
+        if (w <= min_weight) {
+          min_weight = w;
+          best_pos = n;
+        }
+      }
+      AssertFatal(best_pos >= 0, "No candidate found in tilde{Q_I}^N for n_pc_wm = 1 (K=%u, n_PC=%u)", K, n_PC);
+      Q_PC_N[n_PC - 1] = Q_I_N[best_pos];
     }
   }
 
@@ -266,7 +279,7 @@ void nr_polar_info_bit_pattern(uint8_t *ibp,
     }
   }
 
-  // Information and Parity Chack Bit Pattern
+  // Information and Parity Check Bit Pattern
   for (int n = 0; n <= N - 1; n++) {
     ibp[n] = 0;
     for (int m = 0; m <= (K + n_PC) - 1; m++) {
@@ -277,7 +290,7 @@ void nr_polar_info_bit_pattern(uint8_t *ibp,
     }
 
     pcbp[n] = 0;
-    for (int m = 0; m < n_PC - n_pc_wm; m++) {
+    for (int m = 0; m < n_PC; m++) {
       if (n == Q_PC_N[m]) {
         pcbp[n] = 1;
         break;

@@ -33,9 +33,6 @@ class HTMLManagement():
 		self.htmlHeaderCreated = False
 		self.htmlFooterCreated = False
 
-		self.repository = ''
-		self.branch = ''
-
 		self.nbTestXMLfiles = 0
 		self.htmlTabRefs = []
 		self.htmlTabNames = []
@@ -54,7 +51,7 @@ class HTMLManagement():
 #-----------------------------------------------------------
 
 
-	def CreateHtmlHeader(self):
+	def CreateHtmlHeader(self, repository, branch):
 		if (not self.htmlHeaderCreated):
 			logging.info('\u001B[1m----------------------------------------\u001B[0m')
 			logging.info('\u001B[1m  Creating HTML header \u001B[0m')
@@ -75,17 +72,16 @@ class HTMLManagement():
 			self.htmlFile.write('    <tr style="border-collapse: collapse; border: none;">\n')
 			self.htmlFile.write('      <td style="border-collapse: collapse; border: none;">\n')
 			self.htmlFile.write('        <a href="http://www.openairinterface.org/">\n')
-			self.htmlFile.write('           <img src="http://www.openairinterface.org/wp-content/uploads/2016/03/cropped-oai_final_logo2.png" alt="" border="none" height=50 width=150>\n')
+			self.htmlFile.write('           <img src="https://raw.githubusercontent.com/duranta-project/governance/main/logos/Duranta-Logo-Color.png" alt="" border="none" style="margin-right: 2rem;" width=150>\n')
 			self.htmlFile.write('           </img>\n')
 			self.htmlFile.write('        </a>\n')
 			self.htmlFile.write('      </td>\n')
 			self.htmlFile.write('      <td style="border-collapse: collapse; border: none; vertical-align: center;">\n')
-			self.htmlFile.write('        <b><font size = "6">Job Summary -- Job: TEMPLATE_JOB_NAME -- Build-ID: TEMPLATE_BUILD_ID</font></b>\n')
+			self.htmlFile.write('        <b><font size = "6">TEMPLATE_JOB_NAME -- Build-ID: TEMPLATE_BUILD_ID</font></b>\n')
 			self.htmlFile.write('      </td>\n')
 			self.htmlFile.write('    </tr>\n')
 			self.htmlFile.write('  </table>\n')
 			self.htmlFile.write('  <br>\n')
-			self.htmlFile.write('  <div class="alert alert-info"><strong> <span class="glyphicon glyphicon-dashboard"></span> TEMPLATE_STAGE_NAME</strong></div>\n')
 			self.htmlFile.write('  <table border = "1">\n')
 			self.htmlFile.write('     <tr>\n')
 			self.htmlFile.write('       <td bgcolor = "lightcyan" > <span class="glyphicon glyphicon-time"></span> Build Start Time (UTC) </td>\n')
@@ -93,11 +89,11 @@ class HTMLManagement():
 			self.htmlFile.write('     </tr>\n')
 			self.htmlFile.write('     <tr>\n')
 			self.htmlFile.write('       <td bgcolor = "lightcyan" > <span class="glyphicon glyphicon-cloud-upload"></span> GIT Repository </td>\n')
-			self.htmlFile.write('       <td><a href="' + self.repository + '">' + self.repository + '</a></td>\n')
+			self.htmlFile.write('       <td><a href="' + repository + '">' + repository + '</a></td>\n')
 			self.htmlFile.write('     </tr>\n')
 			self.htmlFile.write('     <tr>\n')
 			self.htmlFile.write('       <td bgcolor = "lightcyan" > <span class="glyphicon glyphicon-log-out"></span> Test Branch </td>\n')
-			self.htmlFile.write('       <td>' + self.branch + '</td>\n')
+			self.htmlFile.write('       <td>' + branch + '</td>\n')
 			self.htmlFile.write('     </tr>\n')
 			commit_id = subprocess.check_output("git log -n1 --pretty=format:\"%H\" ", shell=True, universal_newlines=True)
 			commit_id = commit_id.strip()
@@ -289,14 +285,14 @@ class HTMLManagement():
 		self.htmlFile.close()
 
 	#for the moment it is limited to 4 columns, to be made generic later
-	def CreateHtmlDataLogTable(self, DataLog):
+	def CreateHtmlDataLogTable(self, DataLog, filename):
 		if (self.htmlFooterCreated or (not self.htmlHeaderCreated)):
 			return
 		self.htmlFile = open('test_results.html', 'a')
 		
         # TabHeader 
 		self.htmlFile.write('      <tr bgcolor = "#F0F0F0" >\n')
-		self.htmlFile.write('        <td colspan="6"><b> ---- ' + DataLog['Title'] + ' ---- </b></td>\n')
+		self.htmlFile.write(f'        <td colspan="6"><b> ---- Processing Time from {filename} ---- </b></td>\n')
 		self.htmlFile.write('      </tr>\n')
 		self.htmlFile.write('      <tr bgcolor = "#33CCFF" >\n')
 		self.htmlFile.write('        <th colspan="3">'+ DataLog['ColNames'][0] +'</th>\n')

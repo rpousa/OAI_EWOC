@@ -73,18 +73,15 @@ typedef enum { SIMU_ROLE_SERVER = 1, SIMU_ROLE_CLIENT } simuRole;
 #define RFSIMU_PROP_DELAY "prop_delay"
 #define RFSIMU_WAIT_TIMEOUT "wait_timeout"
 #define RFSIMU_ENABLE_BEAMS "enable_beams"
-#define RFSIMU_NUM_CONCURRENT_BEAMS "num_concurrent_beams"
-#define RFSIMU_BEAM_MAP "beam_map"
 #define RFSIMU_BEAM_GAINS "beam_gains"
-#define RFSIMU_BEAM_IDS "beam_ids"
 
 #define RFSIM_CONFIG_HELP_OPTIONS                                                                  \
   " list of comma separated options to enable rf simulator functionalities. Available options: \n" \
   "        chanmod:   enable channel modelisation\n"                                               \
   "        saviq:     enable saving written iqs to a file\n"
 
-#define simOpt PARAMFLAG_NOFREE | PARAMFLAG_CMDLINE_NOPREFIXENABLED
-#define simBool PARAMFLAG_BOOL | PARAMFLAG_NOFREE | PARAMFLAG_CMDLINE_NOPREFIXENABLED
+#define simOpt PARAMFLAG_CMDLINE_NOPREFIXENABLED
+#define simBool PARAMFLAG_BOOL | PARAMFLAG_CMDLINE_NOPREFIXENABLED
 // clang-format off
 /*----------------------------------------------------------------------------------------------------------------------------------------------------*/
 /*                                            configuration parameters for the rfsimulator device */
@@ -102,10 +99,7 @@ typedef enum { SIMU_ROLE_SERVER = 1, SIMU_ROLE_CLIENT } simuRole;
   DOUBLEPARAM(RFSIMU_PROP_DELAY,        "<propagation delay in ms>\n",              simOpt, NULL,                             0.0),                   \
   INTPARAM(RFSIMU_WAIT_TIMEOUT,         "<wait timeout if no UE connected>\n",      simOpt, NULL,                             1),                     \
   BOOLPARAM(RFSIMU_ENABLE_BEAMS,        "<enable simplified beam simulation>\n",    simBool,NULL,                             0),                     \
-  INTPARAM(RFSIMU_NUM_CONCURRENT_BEAMS, "<number of concurrent beams supported>\n", simOpt, NULL,                             1),                     \
-  UINT64PARAM(RFSIMU_BEAM_MAP,          "<initial beam map>\n",                     simOpt, NULL,                             1),                     \
-  STRINGPARAM(RFSIMU_BEAM_IDS,          "<initial beam ids>\n",                     simOpt, NULL,                             NULL),                  \
-  STRINGPARAM(RFSIMU_BEAM_GAINS,        "<beam gain matrix in toeplitz form>\n",    simOpt, NULL,                             NULL),                  \
+  STRINGPARAM(RFSIMU_BEAM_GAINS,        "<per-beam gain in dB, one value per gNB beam id>\n", simOpt, NULL,                   NULL),                  \
 };
 // clang-format on
 static void getset_currentchannels_type(char *buf, int debug, webdatadef_t *tdata, telnet_printfunc_t prnt);
@@ -113,8 +107,7 @@ static int rfsimu_setchanmod_cmd(char *buff, int debug, telnet_printfunc_t prnt,
 static int rfsimu_setdistance_cmd(char *buff, int debug, telnet_printfunc_t prnt, void *arg);
 static int rfsimu_getdistance_cmd(char *buff, int debug, telnet_printfunc_t prnt, void *arg);
 static int rfsimu_vtime_cmd(char *buff, int debug, telnet_printfunc_t prnt, void *arg);
-static int rfsimu_set_beam(char *buff, int debug, telnet_printfunc_t prnt, void *arg);
-static int rfsimu_set_beamids(char *buff, int debug, telnet_printfunc_t prnt, void *arg);
+static int rfsimu_set_beam_gains(char *buff, int debug, telnet_printfunc_t prnt, void *arg);
 // clang-format off
 static telnetshell_cmddef_t rfsimu_cmdarray[] = {
     {"show models", "", (cmdfunc_t)rfsimu_setchanmod_cmd, {(webfunc_t)getset_currentchannels_type}, TELNETSRV_CMDFLAG_WEBSRVONLY | TELNETSRV_CMDFLAG_GETWEBTBLDATA, NULL},
@@ -122,8 +115,7 @@ static telnetshell_cmddef_t rfsimu_cmdarray[] = {
     {"setdistance", "<model name> <distance>", (cmdfunc_t)rfsimu_setdistance_cmd, {NULL}, TELNETSRV_CMDFLAG_PUSHINTPOOLQ | TELNETSRV_CMDFLAG_NEEDPARAM },
     {"getdistance", "<model name>", (cmdfunc_t)rfsimu_getdistance_cmd, {NULL}, TELNETSRV_CMDFLAG_PUSHINTPOOLQ},
     {"vtime", "", (cmdfunc_t)rfsimu_vtime_cmd, {NULL}, TELNETSRV_CMDFLAG_PUSHINTPOOLQ | TELNETSRV_CMDFLAG_AUTOUPDATE},
-    {"setbeam", "beam_map", (cmdfunc_t)rfsimu_set_beam, {NULL}, TELNETSRV_CMDFLAG_PUSHINTPOOLQ},
-    {"setbeamids", "beam_id1,beam_id2,...", (cmdfunc_t)rfsimu_set_beamids, {NULL}, TELNETSRV_CMDFLAG_PUSHINTPOOLQ},
+    {"setbeamgains", "gain1,gain2,...", (cmdfunc_t)rfsimu_set_beam_gains, {NULL}, TELNETSRV_CMDFLAG_PUSHINTPOOLQ | TELNETSRV_CMDFLAG_NEEDPARAM},
     {"", "", NULL},
 };
 // clang-format on
@@ -132,14 +124,24 @@ static telnetshell_cmddef_t *setmodel_cmddef = &(rfsimu_cmdarray[1]);
 static telnetshell_vardef_t rfsimu_vardef[] = {{"", 0, 0, NULL}};
 typedef c16_t sample_t; // 2*16 bits complex number
 
+enum class BeamSide { kTx, kRx };
+
 typedef struct beam_switch_command_t {
-  std::vector<int> beams;
+  std::vector<uint16_t> beams;
   openair0_timestamp_t timestamp;
 } beam_switch_command_t;
 
-typedef struct {
-  std::vector<int> beams;
-  std::queue<beam_switch_command_t> cmd_queue;
+// One physical beam's schedule of switches, queried by TX and RX at different timestamps (TX runs
+// a few blocks ahead of RX). tx_watermark/rx_watermark are NOT two beams -- they only gate garbage
+// collection: a command is retired (folded into the settled `beams` baseline and popped) only once
+// BOTH watermarks have passed it, so whichever side reaches a switch point first can never pop it
+// out from under the side that hasn't gotten there yet. The lookup itself (get_beams) always reads
+// the one shared queue; only clear_beam_queue mutates it, and only up to the slower side's position.
+typedef struct beam_state_s {
+  std::vector<uint16_t> beams; // settled baseline: beam in effect before the oldest queued command
+  std::queue<beam_switch_command_t> cmd_queue; // ascending timestamp order
+  openair0_timestamp_t tx_watermark = 0;
+  openair0_timestamp_t rx_watermark = 0;
   std::mutex mutex;
 } beam_state_t;
 
@@ -151,6 +153,7 @@ typedef struct {
 typedef struct buffer_s {
   int conn_sock;
   openair0_timestamp_t lastReceivedTS;
+  bool headerReceived; // true once a header has been parsed, even if its timestamp was 0
   bool headerMode;
   bool trashingPacket;
   samplesBlockHeader_t th;
@@ -164,12 +167,15 @@ typedef struct buffer_s {
   std::queue<rfsim_packet_t *> received_packets;
 } buffer_t;
 
+// Only the gNB side has a real, switchable beam: beam_gains[k] is the gain/loss (dB) applied
+// when the gNB's antenna is on beam k, and active is driven exclusively by trx_set_beams. On
+// the UE side enable_beams/beam_gains are simply never configured, so get_beam_gain_db()
+// always returns 0 and `active` is never touched.
 typedef struct {
   int enable_beams;
-  int num_concurrent_beams;
-  std::vector<std::vector<float>> beam_gains;
-  beam_state_t tx;
-  beam_state_t rx;
+  std::vector<float> beam_gains;
+  std::mutex gains_mutex;
+  beam_state_t active;
 } rfsim_beam_ctrl_t;
 
 typedef struct {
@@ -205,17 +211,26 @@ typedef struct {
  * @brief Get the current beam map for a given timestamp and number of samples.
  *
  * This function retrieves the beam map from the beam state, considering any queued beam switch commands.
+ * Never retires anything itself -- it only records this side's watermark for clear_beam_queue() to use.
  *
  * @param beam_state Pointer to the beam_state_t structure containing the current beam map and command queue.
+ * @param side Which of the two independent consumers (TX or RX) is querying -- see beam_state_t.
  * @param timestamp The timestamp for which the beam map is requested.
  * @param nsamps The number of samples to process.
  * @param nsamps_out output pointer to receive the number of samples until the next beam switch.
  * @return The beam map (uint64_t) valid for the given timestamp.
  */
-static std::vector<int> get_beams(beam_state_t *beam_state, openair0_timestamp_t timestamp, uint32_t nsamps, uint32_t *nsamps_out)
+static std::vector<uint16_t> get_beams(beam_state_t *beam_state,
+                                       BeamSide side,
+                                       openair0_timestamp_t timestamp,
+                                       uint32_t nsamps,
+                                       uint32_t *nsamps_out)
 {
   std::lock_guard<std::mutex> lock(beam_state->mutex);
-  std::vector<int> current_beams = beam_state->beams;
+  openair0_timestamp_t &watermark = (side == BeamSide::kTx) ? beam_state->tx_watermark : beam_state->rx_watermark;
+  watermark = std::max(watermark, timestamp);
+
+  std::vector<uint16_t> current_beams = beam_state->beams;
   uint32_t samples_to_next_switch = nsamps;
 
   // Find the latest beam_switch_command_t with timestamp <= requested timestamp
@@ -243,46 +258,26 @@ static std::vector<int> get_beams(beam_state_t *beam_state, openair0_timestamp_t
   return current_beams;
 }
 
-
-static std::vector<int> beam_map_to_beams(uint64_t beam_map)
-{
-  int num_beams = __builtin_popcountll(beam_map);
-  AssertFatal(num_beams > 0, "Needs at least one beam\n");
-  std::vector<int> beam_ids;
-  for (int i = 0; i < MAX_BEAMS; i++) {
-    if (beam_map & (1ULL << i)) {
-      beam_ids.push_back(i);
-    }
-  }
-  return beam_ids;
-}
-
-static uint64_t beams_to_beam_map(const std::vector<int> &beam_ids)
-{
-  uint64_t beam_map = 0;
-  for (size_t i = 0; i < beam_ids.size(); i++) {
-    beam_map |= (1ULL << beam_ids[i]);
-  }
-  return beam_map;
-}
-
-
 /**
  * @brief Clears outdated beam switch commands from the queue and updates the current beam map.
  *
- * This function processes the beam switch command queue in the given beam_state_t.
- * For each command with a timestamp less than or equal to the provided timestamp,
- * it updates the current beam_map and removes the command from the queue.
- * The queue is left unchanged for commands with timestamps greater than the provided timestamp.
+ * Only retires a command once BOTH the tx and rx watermarks have passed it -- i.e. once neither
+ * consumer can possibly still need the old value. This is what makes it safe for TX and RX to
+ * share one queue despite querying it at different timestamps: whichever side calls this first
+ * can advance its own watermark, but nothing is actually popped until the slower side catches up.
  *
  * @param beam_state Pointer to the beam_state_t structure containing the command queue and current beam map.
- * @param timestamp The timestamp up to which commands should be processed and removed.
+ * @param side Which of the two independent consumers (TX or RX) is reporting its progress.
+ * @param timestamp The timestamp up to which this side has processed.
  */
-static void clear_beam_queue(beam_state_t *beam_state, openair0_timestamp_t timestamp)
+static void clear_beam_queue(beam_state_t *beam_state, BeamSide side, openair0_timestamp_t timestamp)
 {
   std::lock_guard<std::mutex> lock(beam_state->mutex);
+  openair0_timestamp_t &watermark = (side == BeamSide::kTx) ? beam_state->tx_watermark : beam_state->rx_watermark;
+  watermark = std::max(watermark, timestamp);
+  openair0_timestamp_t safe_point = std::min(beam_state->tx_watermark, beam_state->rx_watermark);
   while (!beam_state->cmd_queue.empty()) {
-    if (beam_state->cmd_queue.front().timestamp <= timestamp) {
+    if (beam_state->cmd_queue.front().timestamp <= safe_point) {
       beam_state->beams = beam_state->cmd_queue.front().beams;
       beam_state->cmd_queue.pop();
     } else {
@@ -323,6 +318,7 @@ static buffer_t *allocCirBuf(rfsimulator_state_t *bridge, int sock)
   bridge->nb_cnx++;
   ptr->conn_sock = sock;
   ptr->lastReceivedTS = 0;
+  ptr->headerReceived = false;
   ptr->headerMode = true;
   ptr->trashingPacket = true;
   ptr->transferPtr = (char *)&ptr->th;
@@ -378,6 +374,7 @@ static void removeCirBuf(rfsimulator_state_t *bridge, buffer_t *buf)
   // a lot of mem leaks
   // free(bridge->buf[sock].channel_model);
   clear_old_packets(buf->received_packets, INT64_MAX);
+  free(buf->packet_ptr);
   *buf = buffer_t{};
   buf->conn_sock = -1;
   bridge->nb_cnx--;
@@ -454,62 +451,41 @@ static void fullwrite(int fd, void *_buf, ssize_t count, rfsimulator_state_t *t)
   }
 }
 
-static float get_rx_gain_db(rfsimulator_state_t *rfsimulator, uint rx_beam, uint tx_beam)
+static float get_beam_gain_db(rfsimulator_state_t *rfsimulator, uint beam_id)
 {
-  if (!rfsimulator->beam_ctrl->enable_beams) {
+  rfsim_beam_ctrl_t *beam_ctrl = rfsimulator->beam_ctrl;
+  if (!beam_ctrl->enable_beams) {
     return 0;
   }
-  AssertFatal(rx_beam < rfsimulator->beam_ctrl->beam_gains.size() && tx_beam < rfsimulator->beam_ctrl->beam_gains[rx_beam].size(),
-              "Beam gain for this combination was not provided rx_beam %d tx_beam %d\n",
-              rx_beam,
-              tx_beam);
-  return rfsimulator->beam_ctrl->beam_gains[rx_beam][tx_beam];
+  std::lock_guard<std::mutex> lock(beam_ctrl->gains_mutex);
+  AssertFatal(beam_id < beam_ctrl->beam_gains.size(),
+              "Beam gain for beam %d was not provided (only %zu beam gains configured)\n",
+              beam_id,
+              beam_ctrl->beam_gains.size());
+  return beam_ctrl->beam_gains[beam_id];
 }
 
-static int rfsimulator_set_beams(openair0_device_t *device, uint64_t beam_map, openair0_timestamp_t timestamp)
+// Called from trx_set_beams(), this is the only place a node's beam id is ever allowed 
+// to change. One queue, shared by the tx and rx watermark mechanism
+static int rfsimulator_set_beams_vector(openair0_device_t *device, uint16_t *beams, int num_beams, openair0_timestamp_t timestamp)
 {
   rfsimulator_state_t *s = static_cast<rfsimulator_state_t *>(device->priv);
   rfsim_beam_ctrl_t *beam_ctrl = s->beam_ctrl;
-  std::lock_guard<std::mutex> lock_tx(beam_ctrl->tx.mutex);
-  std::lock_guard<std::mutex> lock_rx(beam_ctrl->rx.mutex);
-  beam_switch_command_t command = {.beams = beam_map_to_beams(beam_map), .timestamp = timestamp};
-  beam_ctrl->rx.cmd_queue.emplace(command);
-  beam_ctrl->tx.cmd_queue.emplace(command);
+  std::lock_guard<std::mutex> lock(beam_ctrl->active.mutex);
+  beam_switch_command_t command = {.beams = std::vector<uint16_t>(beams, beams + num_beams), .timestamp = timestamp};
+  beam_ctrl->active.cmd_queue.emplace(command);
   return 0;
 }
 
-static int rfsimulator_set_beams_vector(openair0_device_t *device, int *beams, int num_beams, openair0_timestamp_t timestamp)
+static std::vector<float> parse_beam_gains(const char *str)
 {
-  rfsimulator_state_t *s = static_cast<rfsimulator_state_t *>(device->priv);
-  rfsim_beam_ctrl_t *beam_ctrl = s->beam_ctrl;
-  std::lock_guard<std::mutex> lock_tx(beam_ctrl->tx.mutex);
-  std::lock_guard<std::mutex> lock_rx(beam_ctrl->rx.mutex);
-  beam_switch_command_t command = {.beams = std::vector<int>(beams, beams + num_beams), .timestamp = timestamp};
-  beam_ctrl->rx.cmd_queue.emplace(command);
-  beam_ctrl->tx.cmd_queue.emplace(command);
-  return 0;
-}
-
-static void process_gains(char *str, rfsim_beam_ctrl_t *beam_ctrl)
-{
-  int num_gains = 0;
-  float gain_array[MAX_BEAMS];
+  std::vector<float> gains;
   std::stringstream ss(str);
   std::string token;
-  while (std::getline(ss, token, ',') && num_gains < MAX_BEAMS) {
-    gain_array[num_gains++] = std::stof(token);
+  while (std::getline(ss, token, ',') && gains.size() < MAX_BEAMS) {
+    gains.push_back(std::stof(token));
   }
-
-  if (num_gains != 0) {
-    for (int i = 0; i < num_gains; i++) {
-      std::vector<float> beam_gains;
-      for (int j = 0; j < num_gains; j++) {
-        int diag = abs(i - j);
-        beam_gains.push_back(gain_array[diag]);
-      }
-      beam_ctrl->beam_gains.push_back(beam_gains);
-    }
-  }
+  return gains;
 }
 
 static void rfsimulator_readconfig(rfsimulator_state_t *rfsimulator)
@@ -535,8 +511,7 @@ static void rfsimulator_readconfig(rfsimulator_state_t *rfsimulator)
 
   rfsimulator->ip = strdup(*(gpd(rfsimuParam, sizeofArray(rfsimuParams), RFSIMU_SERVER_ADDR)->strptr));
   rfsimulator->port = *(gpd(rfsimuParam, sizeofArray(rfsimuParams), RFSIMU_SERVER_PORT)->u16ptr);
-  char *saveF = strdup(*(gpd(rfsimuParam, sizeofArray(rfsimuParams), RFSIMU_IQFILE)->strptr));
-//char *modelname = strdup(*(gpd(rfsimuParam, sizeofArray(rfsimuParams), RFSIMU_MODELNAME)->strptr));
+  const char *saveF = *(gpd(rfsimuParam, sizeofArray(rfsimuParams), RFSIMU_IQFILE)->strptr);
   rfsimulator->chan_pathloss = *(gpd(rfsimuParam, sizeofArray(rfsimuParams), RFSIMU_PLOSS)->dblptr);
   rfsimulator->chan_forgetfact = *(gpd(rfsimuParam, sizeofArray(rfsimuParams), RFSIMU_FORGETFACT)->dblptr);
   rfsimulator->chan_offset = *(gpd(rfsimuParam, sizeofArray(rfsimuParams), RFSIMU_OFFSET)->u64ptr);
@@ -545,8 +520,12 @@ static void rfsimulator_readconfig(rfsimulator_state_t *rfsimulator)
 
   rfsim_beam_ctrl_t *beam_ctrl = rfsimulator->beam_ctrl;
   beam_ctrl->enable_beams = *(gpd(rfsimuParam, sizeofArray(rfsimuParams), RFSIMU_ENABLE_BEAMS)->iptr);
-  beam_ctrl->num_concurrent_beams = *(gpd(rfsimuParam, sizeofArray(rfsimuParams), RFSIMU_NUM_CONCURRENT_BEAMS)->iptr);
-  uint64_t beam_map = *(gpd(rfsimuParam, sizeofArray(rfsimuParams), RFSIMU_BEAM_MAP)->u64ptr);
+  if (beam_ctrl->enable_beams) {
+    // Start at a correctly-sized, all-zero beam vector rather than an empty one: on the gNB this
+    // is just the pre-trx_set_beams default; on the UE, which never calls trx_set_beams, this is
+    // the permanent value (there's no beam to switch, so "beam 0" for every antenna is correct).
+    beam_ctrl->active.beams = std::vector<uint16_t>(rfsimulator->tx_num_channels, 0);
+  }
 
   rfsimulator->saveIQfile = -1;
 
@@ -579,23 +558,7 @@ static void rfsimulator_readconfig(rfsimulator_state_t *rfsimulator)
 
   int beam_gains_param_index = config_paramidx_fromname(rfsimuParams, sizeofArray(rfsimuParams), RFSIMU_BEAM_GAINS);
   if (rfsimuParam[beam_gains_param_index].strptr) {
-    process_gains(*rfsimuParam[beam_gains_param_index].strptr, beam_ctrl);
-  }
-
-  std::vector<int> initial_beams = beam_map_to_beams(beam_map);
-  beam_ctrl->rx.beams = initial_beams;
-  beam_ctrl->tx.beams = initial_beams;
-
-  int beam_ids_param_index = config_paramidx_fromname(rfsimuParams, sizeofArray(rfsimuParams), RFSIMU_BEAM_IDS);
-  if (rfsimuParam[beam_ids_param_index].strptr) {
-    std::vector<int> beam_ids;
-    std::stringstream ss(*rfsimuParam[beam_ids_param_index].strptr);
-    std::string token;
-    while (std::getline(ss, token, ',')) {
-      beam_ids.push_back(std::stoi(token));
-    }
-    beam_ctrl->rx.beams = beam_ids;
-    beam_ctrl->tx.beams = beam_ids;
+    beam_ctrl->beam_gains = parse_beam_gains(*rfsimuParam[beam_gains_param_index].strptr);
   }
 
   if (strncasecmp(rfsimulator->ip, "enb", 3) == 0 || strncasecmp(rfsimulator->ip, "server", 3) == 0)
@@ -604,38 +567,26 @@ static void rfsimulator_readconfig(rfsimulator_state_t *rfsimulator)
     rfsimulator->role = SIMU_ROLE_CLIENT;
 }
 
-static int rfsimu_set_beam(char *buff, int debug, telnet_printfunc_t prnt, void *arg)
+// Modifies the fixed beam gain table at runtime, e.g. to script a UE moving through the gNB's beam
+// space over the course of a test, without restarting the simulator.
+static int rfsimu_set_beam_gains(char *buff, int debug, telnet_printfunc_t prnt, void *arg)
 {
   UNUSED(debug);
   rfsimulator_state_t *t = (rfsimulator_state_t *)arg;
   rfsim_beam_ctrl_t *beam_ctrl = t->beam_ctrl;
-  AssertFatal(beam_ctrl->enable_beams, "Beam simualtion is disabled, cannot set beams\n");
-  uint64_t beam_map = strtoull(buff, NULL, 0);
-  std::lock_guard<std::mutex> lock_tx(beam_ctrl->tx.mutex);
-  std::lock_guard<std::mutex> lock_rx(beam_ctrl->rx.mutex);
-  beam_ctrl->rx.beams = beam_map_to_beams(beam_map);
-  beam_ctrl->tx.beams = beam_map_to_beams(beam_map);
-  prnt("Beam map set to 0x%lx\n", beam_map);
-  return CMDSTATUS_FOUND;
-}
-
-static int rfsimu_set_beamids(char *buff, int debug, telnet_printfunc_t prnt, void *arg)
-{
-  UNUSED(debug);
-  rfsimulator_state_t *t = (rfsimulator_state_t *)arg;
-  rfsim_beam_ctrl_t *beam_ctrl = t->beam_ctrl;
-  AssertFatal(beam_ctrl->enable_beams, "Beam simualtion is disabled, cannot set beams\n");
-  std::vector<int> beam_ids;
-  std::stringstream ss(buff);
-  std::string token;
-  while (std::getline(ss, token, ',')) {
-    beam_ids.push_back(std::stoi(token));
+  AssertFatal(beam_ctrl->enable_beams, "Beam simulation is disabled, cannot set beam gains\n");
+  std::vector<float> gains = parse_beam_gains(buff);
+  if (gains.empty()) {
+    prnt("No valid gains parsed from \"%s\", beam gains left unchanged\n", buff);
+    return CMDSTATUS_FOUND;
   }
-  std::lock_guard<std::mutex> lock_tx(beam_ctrl->tx.mutex);
-  std::lock_guard<std::mutex> lock_rx(beam_ctrl->rx.mutex);
-  beam_ctrl->rx.beams = beam_ids;
-  beam_ctrl->tx.beams = beam_ids;
-  prnt("Beam ids set\n");
+  {
+    std::lock_guard<std::mutex> lock(beam_ctrl->gains_mutex);
+    beam_ctrl->beam_gains = gains;
+  }
+  prnt("Beam gains set to %zu values; note this will crash on the next lookup if the currently active "
+       "beam id is now out of range\n",
+       gains.size());
   return CMDSTATUS_FOUND;
 }
 
@@ -735,7 +686,7 @@ static int rfsimu_setdistance_cmd(char *buff, int debug, telnet_printfunc_t prnt
 
   rfsimulator_state_t *t = (rfsimulator_state_t *)arg;
   const double sample_rate = t->sample_rate;
-  const double c = (double) SPEED_OF_LIGHT;
+  const double c = (double)SPEED_OF_LIGHT;
 
   const uint64_t new_offset = (double)distance * sample_rate / c;
   const double new_distance = (double)new_offset * c / sample_rate;
@@ -771,7 +722,7 @@ static int rfsimu_getdistance_cmd(char *buff, int debug, telnet_printfunc_t prnt
 
   rfsimulator_state_t *t = (rfsimulator_state_t *)arg;
   const double sample_rate = t->sample_rate;
-  const double c = (double) SPEED_OF_LIGHT;
+  const double c = (double)SPEED_OF_LIGHT;
 
   for (int i = 0; i < MAX_FD_RFSIMU; i++) {
     buffer_t *b = &t->buf[i];
@@ -939,7 +890,7 @@ static int startClient(openair0_device_t *device)
   do {
     have_to_wait = true;
     flushInput(t, 3, true);
-    if (b->lastReceivedTS)
+    if (b->headerReceived)
       have_to_wait = false;
   } while (have_to_wait);
   if (b->lastReceivedTS > 0)
@@ -953,10 +904,10 @@ static int startClient(openair0_device_t *device)
 
 static int rfsimulator_write_internal(rfsimulator_state_t *t,
                                       openair0_timestamp_t timestamp,
-                                      void ***samplesVoid,
+                                      sample_t **samples,
                                       int nsamps,
                                       int nbAnt,
-                                      std::vector<int> tx_beams,
+                                      std::vector<float> tx_gains_db,
                                       int flags)
 {
   mutexlock(t->Sockmutex);
@@ -966,20 +917,12 @@ static int rfsimulator_write_internal(rfsimulator_state_t *t,
     buffer_t *b = &t->buf[i];
 
     if (b->conn_sock >= 0) {
-      samplesBlockHeader_t header = {(uint32_t)nsamps, (uint32_t)nbAnt, (uint64_t)timestamp, 0, 0, beams_to_beam_map(tx_beams)};
+      samplesBlockHeader_t header = {(uint32_t)nsamps, (uint32_t)nbAnt, (uint64_t)timestamp, 0, 0};
       fullwrite(b->conn_sock, &header, sizeof(header), t);
-      int num_beams = tx_beams.size();
-      // Send beams in order of beam index. This is required for beam_map to work correctly on the receiver side.
-      std::vector<size_t> indices(tx_beams.size());
-      std::iota(indices.begin(), indices.end(), 0);
-      std::sort(indices.begin(), indices.end(), [&](size_t i, size_t j) { return tx_beams[i] < tx_beams[j]; });
-
-      AssertFatal(num_beams > 0, "Must set at least one bit in beam_map\n");
-      for (int beam = 0; beam < num_beams; beam++) {
-        for (int a = 0; a < nbAnt; a++) {
-          sample_t *in = (sample_t *)samplesVoid[indices[beam]][a];
-          fullwrite(b->conn_sock, (void *)in, sampleToByte(nsamps, 1), t);
-        }
+      AssertFatal((uint)nbAnt == tx_gains_db.size(), "rfsim requires one gain value per IQ stream\n");
+      fullwrite(b->conn_sock, tx_gains_db.data(), sizeof(float) * nbAnt, t);
+      for (int a = 0; a < nbAnt; a++) {
+        fullwrite(b->conn_sock, (void *)samples[a], sampleToByte(nsamps, 1), t);
       }
     }
   }
@@ -1002,54 +945,54 @@ static int rfsimulator_write_internal(rfsimulator_state_t *t,
         nsamps,
         timestamp,
         timestamp + nsamps,
-        signal_energy(static_cast<int32_t *>(samplesVoid[0][0]), nsamps));
+        signal_energy_nodc(samples[0], nsamps));
 
   /* trace only first antenna */
-  T(T_USRP_TX_ANT0, T_INT(timestamp), T_BUFFER(samplesVoid[0][0], (int)sampleToByte(nsamps, 1)));
+  T(T_USRP_TX_ANT0, T_INT(timestamp), T_BUFFER(samples[0], (int)sampleToByte(nsamps, 1)));
 
   return nsamps;
 }
 
-static int rfsimulator_write_beams(openair0_device_t *device,
-                                   openair0_timestamp_t timestamp,
-                                   void ***samplesVoid,
-                                   int nsamps,
-                                   int nbAnt,
-                                   int num_beams,
-                                   int flags)
+static int rfsimulator_write(openair0_device_t *device,
+                             openair0_timestamp_t timestamp,
+                             void **samplesVoid,
+                             int nsamps,
+                             int nbAnt,
+                             int flags)
 {
   timestamp -= device->openair0_cfg->command_line_sample_advance;
   int nsamps_initial = nsamps;
   rfsimulator_state_t *t = static_cast<rfsimulator_state_t *>(device->priv);
-  void *samples[num_beams][nbAnt];
-  void **samples_ptr[num_beams];
-  for (int beam = 0; beam < num_beams; beam++) {
-    samples_ptr[beam] = samples[beam];
-    for (int aatx = 0; aatx < nbAnt; aatx++) {
-      samples[beam][aatx] = samplesVoid[beam][aatx];
-    }
+  sample_t *samples[nbAnt];
+  for (int aatx = 0; aatx < nbAnt; aatx++) {
+    samples[aatx] = (sample_t *)samplesVoid[aatx];
   }
   while (nsamps > 0) {
     uint32_t nsamps_beam_map;
-    std::vector<int> beams = get_beams(&t->beam_ctrl->tx, timestamp, nsamps, &nsamps_beam_map);
-    rfsimulator_write_internal(t, timestamp, samples_ptr, nsamps_beam_map, nbAnt, beams, flags);
-    for (int beam = 0; beam < num_beams; beam++) {
-      for (int aatx = 0; aatx < nbAnt; aatx++) {
-        char *ptr = (char *)samples_ptr[beam][aatx];
-        samples_ptr[beam][aatx] = (void *)(ptr + nsamps_beam_map * sizeof(sample_t));
-      }
+    std::vector<uint16_t> tx_beams = get_beams(&t->beam_ctrl->active, BeamSide::kTx, timestamp, nsamps, &nsamps_beam_map);
+    if (t->beam_ctrl->enable_beams && (int)tx_beams.size() != nbAnt) {
+      LOG_W(HW, "Number of beams does not match application request nbAnt %d, beams %lu\n", nbAnt, tx_beams.size());
+    }
+    while ((int)tx_beams.size() < nbAnt)
+      tx_beams.push_back(0);
+
+    // Look up our own beam gain once per antenna and put it on the wire. The peer just gets 
+    // a plain per-antenna dB value and folds it into its own per-sample pass over the buffer 
+    // (see combine_received_beams() and the no-channel-model loop)
+    std::vector<float> tx_gains_db(nbAnt);
+    for (int aatx = 0; aatx < nbAnt; aatx++) {
+      tx_gains_db[aatx] = get_beam_gain_db(t, tx_beams[aatx]);
+    }
+    rfsimulator_write_internal(t, timestamp, samples, nsamps_beam_map, nbAnt, tx_gains_db, flags);
+
+    for (int aatx = 0; aatx < nbAnt; aatx++) {
+      samples[aatx] += nsamps_beam_map;
     }
     timestamp += nsamps_beam_map;
     nsamps -= nsamps_beam_map;
   }
-  clear_beam_queue(&t->beam_ctrl->tx, timestamp + nsamps);
+  clear_beam_queue(&t->beam_ctrl->active, BeamSide::kTx, timestamp + nsamps);
   return nsamps_initial;
-}
-
-static int rfsimulator_write(openair0_device_t *device, openair0_timestamp_t timestamp, void **buff, int nsamps, int cc, int flags)
-{
-  void **tmp = buff;
-  return rfsimulator_write_beams(device, timestamp, &tmp, nsamps, cc, 1, flags);
 }
 
 static bool add_client(rfsimulator_state_t *t)
@@ -1075,13 +1018,17 @@ static bool add_client(rfsimulator_state_t *t)
   getnameinfo((struct sockaddr *)&sa, socklen, ip, sizeof(ip), NULL, 0, NI_NUMERICHOST);
   uint16_t port = ((struct sockaddr_in *)&sa)->sin_port;
   LOG_I(HW, "Client connects from %s:%d\n", ip, port);
-  c16_t v = {0};
-  void *samplesVoid[t->tx_num_channels];
-  for (int i = 0; i < t->tx_num_channels; i++)
-    samplesVoid[i] = (void *)&v;
-  samplesBlockHeader_t header = {1, (uint32_t)t->tx_num_channels, (uint64_t)t->lastWroteTS, 0, 0, 1};
+  samplesBlockHeader_t header = {1, (uint32_t)t->tx_num_channels, (uint64_t)t->lastWroteTS, 0, 0};
+
   fullwrite(conn_sock, &header, sizeof(header), t);
-  fullwrite(conn_sock, samplesVoid, sampleToByte(1, t->tx_num_channels), t);
+  float gains_db[t->tx_num_channels];
+  for (int i = 0; i < t->tx_num_channels; i++)
+    gains_db[i] = 0.0f;
+  fullwrite(conn_sock, gains_db, sizeof(gains_db), t);
+
+  c16_t v[t->tx_num_channels];
+  memset(v, 0, sizeof(v));
+  fullwrite(conn_sock, v, sizeof(v), t);
 
   if (new_buf->channel_model)
     new_buf->channel_model->start_TS = t->lastWroteTS;
@@ -1089,9 +1036,10 @@ static bool add_client(rfsimulator_state_t *t)
   return true;
 }
 
-static void process_recv_header(rfsimulator_state_t *t, buffer_t *b, bool first_time)
+static void process_recv_header(buffer_t *b, bool first_time)
 {
   b->headerMode = false; // We got the header
+  b->headerReceived = true;
   AssertFatal(b->th.nbAnt != 0, "Number of antennas not set\n");
   if (b->nbAnt != b->th.nbAnt) {
     LOG_A(HW, "RFsim: Number of antennas changed from %d to %d\n", b->nbAnt, b->th.nbAnt);
@@ -1101,6 +1049,7 @@ static void process_recv_header(rfsimulator_state_t *t, buffer_t *b, bool first_
     b->lastReceivedTS = b->th.timestamp;
     b->trashingPacket = true;
   } else {
+    b->trashingPacket = false;
     if (b->lastReceivedTS < (int64_t)b->th.timestamp) {
       int nbAnt = b->th.nbAnt;
       if (!nbAnt)
@@ -1112,14 +1061,12 @@ static void process_recv_header(rfsimulator_state_t *t, buffer_t *b, bool first_
     }
   }
 
-  int num_beams = __builtin_popcountll(b->th.beam_map);
-  AssertFatal(b->th.beam_map == 1ULL || t->beam_ctrl->enable_beams == 1,
-              "The transmitter has enabled beam simulation while this receiver has not\n");
-  size_t payload_sz = sampleToByte(b->th.size, b->th.nbAnt) * num_beams;
-  b->packet_ptr = static_cast<rfsim_packet_t *>(calloc_or_fail(1, payload_sz + sizeof(samplesBlockHeader_t)));
+  size_t gains_payload_size = b->th.nbAnt * sizeof(float);
+  size_t payload_sz = sampleToByte(b->th.size, b->th.nbAnt);
+  b->packet_ptr = static_cast<rfsim_packet_t *>(malloc_or_fail(gains_payload_size + payload_sz + sizeof(samplesBlockHeader_t)));
   b->packet_ptr->header = b->th;
   b->transferPtr = b->packet_ptr->payload;
-  b->remainToTransfer = payload_sz;
+  b->remainToTransfer = payload_sz + gains_payload_size;
   return;
 }
 
@@ -1143,7 +1090,6 @@ static void process_recv_header(rfsimulator_state_t *t, buffer_t *b, bool first_
 static void combine_received_beams(rfsimulator_state_t *t,
                                    std::queue<rfsim_packet_t *> &received_packets,
                                    uint64_t start_timestamp,
-                                   int num_aatx,
                                    size_t num_samples,
                                    int rx_beam_id,
                                    c16_t **samples)
@@ -1162,47 +1108,25 @@ static void combine_received_beams(rfsimulator_state_t *t,
       break;
     }
 
-    // The beams transmitted in are ordered by beam index
-    std::vector<int> tx_beams = beam_map_to_beams(pkt->header.beam_map);
-    for (uint beam = 0; beam < tx_beams.size(); beam++) {
-      float gain_dB = get_rx_gain_db(t, rx_beam_id, tx_beams[beam]);
-      float gain_linear = powf(10, gain_dB / 20.0);
-      uint64_t overlap_start = std::max(start_timestamp, pkt->header.timestamp);
-      uint64_t overlap_end = std::min(start_timestamp + num_samples, pkt->header.timestamp + pkt->header.size);
-      int write_start_idx = overlap_start - start_timestamp;
-      int write_end_idx = overlap_end - start_timestamp;
-      int read_start_idx = overlap_start - pkt->header.timestamp;
-      for (int aatx = 0; aatx < num_aatx; aatx++) {
-        c16_t *buffer = (c16_t *)pkt->payload;
-        c16_t *tx_ant_buffer_in = &buffer[(num_aatx * beam + aatx) * pkt->header.size + read_start_idx];
-        if (beam == 0) {
-          // For the first beam, we can directly copy the samples
-          if (gain_dB == 0.0f) {
-            // If gain is 0 dB, we can use memcpy for efficiency
-            memcpy(&samples[aatx][write_start_idx], tx_ant_buffer_in, (write_end_idx - write_start_idx) * sizeof(c16_t));
-          } else {
-            for (int s = write_start_idx; s < write_end_idx; s++) {
-              samples[aatx][s].r = tx_ant_buffer_in->r * gain_linear;
-              samples[aatx][s].i = tx_ant_buffer_in->i * gain_linear;
-              tx_ant_buffer_in++;
-            }
-          }
-        } else {
-          // For subsequent beams, we need to ensure we accumulate the samples
-          if (gain_dB == 0.0f) {
-            for (int s = write_start_idx; s < write_end_idx; s++) {
-              samples[aatx][s].r += tx_ant_buffer_in->r;
-              samples[aatx][s].i += tx_ant_buffer_in->i;
-              tx_ant_buffer_in++;
-            }
-          } else {
-            for (int s = write_start_idx; s < write_end_idx; s++) {
-              samples[aatx][s].r += tx_ant_buffer_in->r * gain_linear;
-              samples[aatx][s].i += tx_ant_buffer_in->i * gain_linear;
-              tx_ant_buffer_in++;
-            }
-          }
-        }
+    // The sender already looked up its own beam gain once per antenna and put it on the wire (see
+    // rfsimulator_write()) -- it never had to touch a sample to do that. Combine it with our own
+    // beam gain (dB values add when the corresponding linear gains multiply) and fold both into
+    // this same per-sample accumulation loop
+    const float *sender_gain_db = reinterpret_cast<const float *>(pkt->payload);
+    c16_t *buffer = (c16_t *)&pkt->payload[sizeof(float) * pkt->header.nbAnt];
+    float own_gain_dB = get_beam_gain_db(t, rx_beam_id);
+    uint64_t overlap_start = std::max(start_timestamp, pkt->header.timestamp);
+    uint64_t overlap_end = std::min(start_timestamp + num_samples, pkt->header.timestamp + pkt->header.size);
+    int write_start_idx = overlap_start - start_timestamp;
+    int write_end_idx = overlap_end - start_timestamp;
+    int read_start_idx = overlap_start - pkt->header.timestamp;
+    for (uint aatx = 0; aatx < pkt->header.nbAnt; aatx++) {
+      float gain_linear = powf(10, (own_gain_dB + sender_gain_db[aatx]) / 20.0);
+      c16_t *tx_ant_buffer_in = &buffer[aatx * pkt->header.size + read_start_idx];
+      for (int s = write_start_idx; s < write_end_idx; s++) {
+        samples[aatx][s].r += tx_ant_buffer_in->r * gain_linear;
+        samples[aatx][s].i += tx_ant_buffer_in->i * gain_linear;
+        tx_ant_buffer_in++;
       }
     }
     packets_copy.pop();
@@ -1213,7 +1137,7 @@ static bool flushInput(rfsimulator_state_t *t, int timeout, bool first_time)
 {
   // Process all incoming events on sockets
   // store the data in lists
-  struct epoll_event events[MAX_FD_RFSIMU] = {{0}};
+  struct epoll_event events[MAX_FD_RFSIMU];
   int nfds = epoll_wait(t->epollfd, events, MAX_FD_RFSIMU, timeout);
 
   if (nfds == -1) {
@@ -1253,7 +1177,7 @@ static bool flushInput(rfsimulator_state_t *t, int timeout, bool first_time)
     b->transferPtr += sz;
     if (b->remainToTransfer == 0) {
       if (b->headerMode)
-        process_recv_header(t, b, first_time);
+        process_recv_header(b, first_time);
       else {
         LOG_D(HW, "UEsock: %d Completed block reception: %ld\n", b->conn_sock, b->lastReceivedTS);
         b->headerMode = true;
@@ -1276,17 +1200,15 @@ static bool flushInput(rfsimulator_state_t *t, int timeout, bool first_time)
 }
 
 static void rfsimulator_read_internal(rfsimulator_state_t *t,
-                                      c16_t **samples,
+                                      sample_t **samples,
                                       openair0_timestamp_t timestamp,
                                       int nsamps,
                                       int nbAnt,
-                                      int rx_beam_id,
-                                      bool is_first_beam)
+                                      std::vector<uint16_t> rx_beams)
 {
   cf_t temp_array[nbAnt][nsamps];
   bool channel_modelling = false;
   // Add all input nodes signal in the output buffer
-  bool is_first_peer = true;
   for (int sock = 0; sock < MAX_FD_RFSIMU; sock++) {
     buffer_t *ptr = &t->buf[sock];
 
@@ -1312,46 +1234,65 @@ static void rfsimulator_read_internal(rfsimulator_state_t *t,
           input[aatx] = ant_buffers[aatx].data();
         }
 
-        combine_received_beams(t,
-                               ptr->received_packets,
-                               timestamp - channel_offset - (channel_length - 1),
-                               ptr->nbAnt,
-                               nsamps + channel_length - 1,
-                               rx_beam_id,
-                               input);
-
         for (int aarx = 0; aarx < nbAnt; aarx++) {
+          combine_received_beams(t,
+                                 ptr->received_packets,
+                                 timestamp - channel_offset - (channel_length - 1),
+                                 nsamps + channel_length - 1,
+                                 rx_beams[aarx],
+                                 input);
+
           rxAddInput(input, temp_array[aarx], aarx, ptr->channel_model, nsamps);
         }
       } else {
-        if (is_first_beam && is_first_peer && (ptr->nbAnt == 1 && nbAnt == 1)) {
-          // optimization: The buffer is uninitialized so samples can be written directly in the buffer
-          combine_received_beams(t, ptr->received_packets, timestamp - t->chan_offset, 1, nsamps, rx_beam_id, samples);
-        } else {
-          std::vector<std::vector<c16_t>> ant_buffers(ptr->nbAnt, std::vector<c16_t>(nsamps, {0, 0}));
-          c16_t *input[ant_buffers.size()];
-          for (uint aatx = 0; aatx < ant_buffers.size(); aatx++) {
-            input[aatx] = ant_buffers[aatx].data();
+        // Apply propagation delay
+        const int64_t read_timestamp = timestamp - t->chan_offset;
+        // Assume received_packets is ordered by timestamp
+        std::queue<rfsim_packet_t *> packets_copy = ptr->received_packets;
+        while (!packets_copy.empty()) {
+          rfsim_packet_t *pkt = packets_copy.front();
+          if (static_cast<int64_t>(pkt->header.timestamp + pkt->header.size) <= read_timestamp) {
+            // This packet is before the start timestamp, discard it
+            packets_copy.pop();
+            continue;
           }
-          combine_received_beams(t, ptr->received_packets, timestamp - t->chan_offset, ptr->nbAnt, nsamps, rx_beam_id, input);
+          if (static_cast<int64_t>(pkt->header.timestamp) > read_timestamp + nsamps) {
+            // This packet is after the end of the buffer, stop processing
+            break;
+          }
+
+          // The sender already looked up its own beam gain once per antenna and put it on the wire
+          // (see rfsimulator_write()) -- combine it with our own beam gain below
+          uint64_t overlap_start = std::max(read_timestamp, static_cast<int64_t>(pkt->header.timestamp));
+          uint64_t overlap_end = std::min(read_timestamp + nsamps, static_cast<int64_t>(pkt->header.timestamp + pkt->header.size));
+          int write_start_idx = overlap_start - read_timestamp;
+          int write_end_idx = overlap_end - read_timestamp;
+          int read_start_idx = overlap_start - pkt->header.timestamp;
+          const float *sender_gain_db = reinterpret_cast<const float *>(pkt->payload);
+          c16_t *buffer = (c16_t *)&pkt->payload[sizeof(float) * pkt->header.nbAnt];
+
           for (int aarx = 0; aarx < nbAnt; aarx++) {
-            double H_awgn_mimo_coeff[ant_buffers.size()];
-            for (int aatx = 0; aatx < (int)ant_buffers.size(); aatx++) {
+            float own_gain_dB = get_beam_gain_db(t, rx_beams[aarx]);
+            double H_awgn_mimo_coeff[pkt->header.nbAnt];
+            for (int aatx = 0; aatx < (int)pkt->header.nbAnt; aatx++) {
               uint32_t ant_diff = std::abs(aatx - aarx);
-              H_awgn_mimo_coeff[aatx] = ant_diff ? (0.2 / ant_diff) : 1.0;
+              float gain_linear = powf(10, (own_gain_dB + sender_gain_db[aatx]) / 20.0);
+              H_awgn_mimo_coeff[aatx] = (ant_diff ? (0.2 / ant_diff) : 1.0) * gain_linear;
             }
 
-            for (uint aatx = 0; aatx < ant_buffers.size(); aatx++) {
-              for (int i = 0; i < nsamps; i++) {
-                samples[aarx][i].r += ant_buffers[aatx][i].r * H_awgn_mimo_coeff[aatx];
-                samples[aarx][i].i += ant_buffers[aatx][i].i * H_awgn_mimo_coeff[aatx];
+            for (uint aatx = 0; aatx < pkt->header.nbAnt; aatx++) {
+              c16_t *tx_ant_buffer_in = &buffer[aatx * pkt->header.size + read_start_idx];
+              for (int i = write_start_idx; i < write_end_idx; i++) {
+                samples[aarx][i].r += tx_ant_buffer_in->r * H_awgn_mimo_coeff[aatx];
+                samples[aarx][i].i += tx_ant_buffer_in->i * H_awgn_mimo_coeff[aatx];
+                tx_ant_buffer_in++;
               }
             }
           }
+          packets_copy.pop();
         }
       }
     }
-    is_first_peer = false;
   }
 
   bool apply_global_noise = get_noise_power_dBFS() != INVALID_DBFS_VALUE;
@@ -1379,12 +1320,7 @@ static void rfsimulator_read_internal(rfsimulator_state_t *t,
   }
 }
 
-static int rfsimulator_read_beams(openair0_device_t *device,
-                                  openair0_timestamp_t *ptimestamp,
-                                  void ***samplesVoid,
-                                  int nsamps,
-                                  int nbAnt,
-                                  int num_beams)
+static int rfsimulator_read(openair0_device_t *device, openair0_timestamp_t *ptimestamp, void **samplesVoid, int nsamps, int nbAnt)
 {
   rfsimulator_state_t *t = static_cast<rfsimulator_state_t *>(device->priv);
   LOG_D(HW,
@@ -1407,9 +1343,8 @@ static int rfsimulator_read_beams(openair0_device_t *device,
       LOG_I(HW, "No connected device, generating void samples...\n");
 
     if (!flushInput(t, t->wait_timeout, false)) {
-      for (int beam = 0; beam < num_beams; beam++)
-        for (int x = 0; x < nbAnt; x++)
-          memset(samplesVoid[beam][x], 0, sampleToByte(nsamps, 1));
+      for (int x = 0; x < nbAnt; x++)
+        memset(samplesVoid[x], 0, sampleToByte(nsamps, 1));
 
       t->nextRxTstamp += nsamps;
 
@@ -1458,52 +1393,40 @@ static int rfsimulator_read_beams(openair0_device_t *device,
     t->poll_telnetcmdq(t->telnetcmd_qid, t);
 
   // Clear the output buffer
-  for (int beam = 0; beam < num_beams; beam++)
-    for (int a = 0; a < nbAnt; a++)
-      memset(samplesVoid[beam][a], 0, sampleToByte(nsamps, 1));
+  for (int a = 0; a < nbAnt; a++)
+    memset(samplesVoid[a], 0, sampleToByte(nsamps, 1));
 
   openair0_timestamp_t timestamp = t->nextRxTstamp;
+  sample_t *samples[nbAnt];
+  for (int a = 0; a < nbAnt; a++)
+    samples[a] = (sample_t *)samplesVoid[a];
   int nsamps_to_process = nsamps;
   while (nsamps_to_process > 0) {
     uint32_t nsamps_beam_map;
-    std::vector<int> rx_beams = get_beams(&t->beam_ctrl->tx, timestamp, nsamps_to_process, &nsamps_beam_map);
-    if ((int)rx_beams.size() != num_beams) {
-      LOG_D(HW,
-            "Number of beams does not match application request num_beams %d, beam_map beams %lu\n",
-            num_beams,
-            rx_beams.size());
+    std::vector<uint16_t> rx_beams = get_beams(&t->beam_ctrl->active, BeamSide::kRx, timestamp, nsamps_to_process, &nsamps_beam_map);
+    if (t->beam_ctrl->enable_beams && (int)rx_beams.size() != nbAnt) {
+      LOG_D(HW, "Number of beams does not match application request nbAnt %d, beams %lu\n", nbAnt, rx_beams.size());
     }
-    for (int beam = 0; beam < num_beams && beam < (int)rx_beams.size(); beam++) {
-      c16_t *samples_beam[nbAnt];
-      for (int i = 0; i < nbAnt; i++) {
-        samples_beam[i] = (c16_t *)samplesVoid[beam][i] + timestamp - t->nextRxTstamp;
-      }
-      rfsimulator_read_internal(t, samples_beam, timestamp, nsamps_beam_map, nbAnt, rx_beams[beam], beam == 0);
+    while ((int)rx_beams.size() < nbAnt)
+      rx_beams.push_back(0);
+
+    rfsimulator_read_internal(t, samples, timestamp, nsamps_beam_map, nbAnt, rx_beams);
+    for (int a = 0; a < nbAnt; a++) {
+      samples[a] += nsamps_beam_map;
     }
     timestamp += nsamps_beam_map;
     nsamps_to_process -= nsamps_beam_map;
   }
 
-  struct timespec end_time;
-  ret = clock_gettime(CLOCK_REALTIME, &end_time);
-  AssertFatal(ret == 0, "clock_gettime() failed: errno %d, %s\n", errno, strerror(errno));
-  double diff_ns = (end_time.tv_sec - start_time.tv_sec) * 1000000000 + (end_time.tv_nsec - start_time.tv_nsec);
-  static double average = 0.0;
-  average = (average * 0.98) + (nsamps / (diff_ns / 1e9) * 0.02);
-  static int calls = 0;
-  if (calls++ % 10000 == 0) {
-    LOG_D(HW, "Rfsimulator: velocity %.2f Msps, realtime requirements %.2f Msps\n", average / 1e6, t->sample_rate / 1e6);
-  }
-
   *ptimestamp = t->nextRxTstamp; // return the time of the first sample
   t->nextRxTstamp += nsamps;
-  clear_beam_queue(&t->beam_ctrl->rx, t->nextRxTstamp);
+  clear_beam_queue(&t->beam_ctrl->active, BeamSide::kRx, t->nextRxTstamp);
   LOG_D(HW,
         "Rx to upper layer: %d from %ld to %ld, energy in first antenna %d\n",
         nsamps,
         *ptimestamp,
         t->nextRxTstamp,
-        signal_energy(static_cast<int32_t *>(samplesVoid[0][0]), nsamps));
+        signal_energy_nodc(samples[0], nsamps));
 
   /* trace only first antenna */
   T(T_USRP_RX_ANT0, T_INT(t->nextRxTstamp), T_BUFFER(samplesVoid[0], (int)sampleToByte(nsamps, 1)));
@@ -1526,21 +1449,18 @@ static int rfsimulator_read_beams(openair0_device_t *device,
   return nsamps;
 }
 
-static int rfsimulator_read(openair0_device_t *device, openair0_timestamp_t *ptimestamp, void **samplesVoid, int nsamps, int nbAnt)
-{
-  return rfsimulator_read_beams(device, ptimestamp, &samplesVoid, nsamps, nbAnt, 1);
-}
-
 static int rfsimulator_get_stats(openair0_device_t *device)
 {
   UNUSED(device);
   return 0;
 }
+
 static int rfsimulator_reset_stats(openair0_device_t *device)
 {
   UNUSED(device);
   return 0;
 }
+
 static void rfsimulator_end(openair0_device_t *device)
 {
   rfsimulator_state_t *s = static_cast<rfsimulator_state_t *>(device->priv);
@@ -1549,11 +1469,12 @@ static void rfsimulator_end(openair0_device_t *device)
     if (b->conn_sock >= 0)
       removeCirBuf(s, b);
   }
-  clear_beam_queue(&s->beam_ctrl->tx, INT64_MAX);
-  clear_beam_queue(&s->beam_ctrl->rx, INT64_MAX);
+  clear_beam_queue(&s->beam_ctrl->active, BeamSide::kTx, INT64_MAX);
+  clear_beam_queue(&s->beam_ctrl->active, BeamSide::kRx, INT64_MAX);
   delete s->beam_ctrl;
   close(s->epollfd);
-  free(s);
+  free(s->ip);
+  delete s;
 }
 
 static void stopServer(openair0_device_t *device)
@@ -1591,7 +1512,7 @@ extern "C" __attribute__((__visibility__("default"))) int device_init(openair0_d
 {
   // to change the log level, use this on command line
   // --log_config.hw_log_level debug
-  rfsimulator_state_t *rfsimulator = static_cast<rfsimulator_state_t *>(calloc(sizeof(rfsimulator_state_t), 1));
+  rfsimulator_state_t *rfsimulator = new rfsimulator_state_t();
   // initialize channel simulation
   rfsimulator->ru_id = openair0_cfg->ru_id;
   rfsimulator->tx_num_channels = openair0_cfg->tx_num_channels;
@@ -1601,6 +1522,11 @@ extern "C" __attribute__((__visibility__("default"))) int device_init(openair0_d
   rfsimulator->tx_bw = openair0_cfg->tx_bw;
   rfsimulator->beam_ctrl = new rfsim_beam_ctrl_t;
   rfsimulator_readconfig(rfsimulator);
+  AssertFatal(!rfsimulator->beam_ctrl->enable_beams || rfsimulator->tx_num_channels == rfsimulator->rx_num_channels,
+              "rfsimulator beam simulation does not support uneven tx/rx antenna counts (tx_num_channels=%d, "
+              "rx_num_channels=%d): trx_set_beams() assigns the same beam list to both tx and rx\n",
+              rfsimulator->tx_num_channels,
+              rfsimulator->rx_num_channels);
   if (rfsimulator->prop_delay_ms > 0.0)
     rfsimulator->chan_offset = ceil(rfsimulator->sample_rate * rfsimulator->prop_delay_ms / 1000);
   if (rfsimulator->chan_offset != 0) {
@@ -1621,18 +1547,15 @@ extern "C" __attribute__((__visibility__("default"))) int device_init(openair0_d
   device->trx_set_gains_func = rfsimulator_set_gains;
   device->trx_write_func = rfsimulator_write;
   device->trx_read_func = rfsimulator_read;
-  if (rfsimulator->beam_ctrl->enable_beams) {
-    device->trx_write_beams_func = rfsimulator_write_beams;
-    device->trx_read_beams_func = rfsimulator_read_beams;
-  }
+
   /* let's pretend to be a b2x0 */
   device->type = RFSIMULATOR;
+  device->host_type = RAU_HOST;
   openair0_cfg->rx_gain[0] = 0;
   device->openair0_cfg = openair0_cfg;
   device->priv = rfsimulator;
   device->trx_write_init = rfsimulator_write_init;
-  device->trx_set_beams = rfsimulator_set_beams;
-  device->trx_set_beams2 = rfsimulator_set_beams_vector;
+  device->trx_set_beams = rfsimulator->beam_ctrl->enable_beams ? rfsimulator_set_beams_vector : nullptr;
 
   for (int i = 0; i < MAX_FD_RFSIMU; i++)
     rfsimulator->buf[i].conn_sock = -1;

@@ -30,7 +30,6 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#include "common_lib.h"
 #include "defs_common.h"
 #include "defs_RU.h"
 #include "impl_defs_top.h"

@@ -37,13 +37,13 @@ int eth_socket_init_raw(openair0_device_t *device)
   int sock_proto=0;  
  
   if (device->host_type == RRU_HOST ) {  /* RRU doesn't know remote MAC(will be retrieved from first packet send from RAU) and remote port(don't care) */
-    local_mac = device->eth_params->my_addr; 
+    local_mac = device->eth_params.my_addr;
     remote_mac = malloc(ETH_ALEN);
     memset((void*)remote_mac,0,ETH_ALEN);
     printf("[%s] local MAC addr (user) %s remote MAC addr (user) %s\n","RRU", local_mac,remote_mac);    
   } else {
-    local_mac = device->eth_params->my_addr;
-    remote_mac = device->eth_params->remote_addr;
+    local_mac = device->eth_params.my_addr;
+    remote_mac = device->eth_params.remote_addr;
     printf("[%s] local MAC addr (user) %s remote MAC addr (user) %s\n","RAU", local_mac,remote_mac);    
   }
    
@@ -77,7 +77,7 @@ int eth_socket_init_raw(openair0_device_t *device)
   eth->local_addrd_ll.sll_family   = AF_PACKET;
   eth->local_addrd_ll.sll_ifindex  = eth->if_index.ifr_ifindex;
   /* hear traffic from specific protocol*/
-  eth->local_addrd_ll.sll_protocol = htons((short)device->eth_params->my_portd);
+  eth->local_addrd_ll.sll_protocol = htons((short)device->eth_params.my_portd);
 
   eth->local_addrd_ll.sll_halen    = ETH_ALEN;
   eth->local_addrd_ll.sll_pkttype  = PACKET_OTHERHOST;
@@ -92,8 +92,8 @@ int eth_socket_init_raw(openair0_device_t *device)
  /* Construct the Ethernet header */ 
  ether_aton_r(local_mac, (struct ether_addr *)(&(eth->ehd.ether_shost)));
  ether_aton_r(remote_mac, (struct ether_addr *)(&(eth->ehd.ether_dhost)));
- eth->ehc.ether_type = htons((short)device->eth_params->my_portc);
- eth->ehd.ether_type = htons((short)device->eth_params->my_portd);
+ eth->ehc.ether_type = htons((short)device->eth_params.my_portc);
+ eth->ehd.ether_type = htons((short)device->eth_params.my_portd);
   
  printf("[%s] binding to hardware address %x:%x:%x:%x:%x:%x\n",((device->host_type == RAU_HOST) ? "RAU": "RRU"),eth->ehd.ether_shost[0],eth->ehd.ether_shost[1],eth->ehd.ether_shost[2],eth->ehd.ether_shost[3],eth->ehd.ether_shost[4],eth->ehd.ether_shost[5]);
  

@@ -110,6 +110,7 @@ add_physim_test(physim.5g.nr_dlsim.offset.test2 "106 PRB 51 PDSCH-Offset" nr_dls
 add_physim_test(physim.5g.nr_dlsim.offset.test3 "217 PRB 100 PDSCH-PRBs" nr_dlsim -P -n300 -R217 -b100 -s5)
 add_physim_test(physim.5g.nr_dlsim.offset.test4 "217 PRB 80 PDSCH-Offset" nr_dlsim -P -n300 -R217 -a80 -s5)
 add_physim_test(physim.5g.nr_dlsim.offset.test5 "217 PRB 100 PDSCH-PRBs 110 PDSCH-Offset" nr_dlsim -P -n300 -R217 -a110 -s5 -b100)
+add_physim_test(physim.5g.nr_dlsim.offset.test6 "106 PRB TYPE0 32:47 64:79" nr_dlsim -P -n300 -R106 -D 32:16,64:16 -s5)
 add_physim_test(physim.5g.nr_dlsim.mcs.mimo.test1 "106 PRBs 50 PDSCH-PRBs MCS Index 27" nr_dlsim -P -n300 -e27 -s30)
 add_physim_test(physim.5g.nr_dlsim.mcs.mimo.test2 "106 PRBs 50 PDSCH-PRBs MCS Index 16" nr_dlsim -P -n300 -e16 -s11 -S13)
 add_physim_test(physim.5g.nr_dlsim.mcs.mimo.test3 "106 MCS-TABLE 256 QAM MCS Index 26" nr_dlsim -P -n300 -q1 -e26 -s30)
@@ -142,6 +143,8 @@ add_physim_test(physim.5g.smallblocktest.test1 "3 bits" smallblocktest -l 3 -s -
 add_physim_test(physim.5g.smallblocktest.test2 "6 bits" smallblocktest -l 6 -s -4 -d 1 -i 10000)
 add_physim_test(physim.5g.smallblocktest.test3 "7 bits" smallblocktest -l 7 -s -4 -d 1 -i 10000)
 add_physim_test(physim.5g.smallblocktest.test4 "11 bits" smallblocktest -l 11 -s -4 -d 1 -i 10000)
+add_physim_test(physim.5g.smallblocktest.test5 "2 bits" smallblocktest -l 2 -s -4 -f 7 -d 1 -i 10000)
+add_physim_test(physim.5g.smallblocktest.test6 "1 bit Qm 6" smallblocktest -l 1 -s -4 -f 10 -d 1 -q 6 -i 10000)
 
 ####################################################################################
 ######                           nr_ulschsim unit test                        ######
@@ -180,8 +183,8 @@ add_physim_test(physim.5g.nr_pucchsim.test21 "Format 0 2-bit Ack miss 273 PRB" n
 add_physim_test(physim.5g.nr_pucchsim.test22 "Format 0 2-bit Ack miss+SR 273 PRB" nr_pucchsim -R 273 -z8 -i 1 -P 0 -b 2 -s-2 -c -n3000)
 add_physim_test(physim.5g.nr_pucchsim.test23 "Format 2 4-bit 2/273 PRB" nr_pucchsim -R 273 -z8 -i 1 -P 2 -b 4 -s-8 -S0 -n3000)
 add_physim_test(physim.5g.nr_pucchsim.test24 "Format 2 7-bit 2/273 PRB" nr_pucchsim -R 273 -z8 -i 1 -P 2 -b 7 -s3 -n3000)
-add_physim_test(physim.5g.nr_pucchsim.test25 "Format 2 11-bit 2/273 PRB" nr_pucchsim -R 273 -z8 -i 1 -P 2 -b 11 -s6 -n3000)
-add_physim_test(physim.5g.nr_pucchsim.test26 "Format 2 12-bit 8/273 PRB" nr_pucchsim -R 273 -z8 -i 1 -P 2 -q8 -b 12 -s-3 -n3000)
+add_physim_test(physim.5g.nr_pucchsim.test25 "Format 2 11-bit 2/273 PRB" nr_pucchsim -R 273 -z8 -i 1 -P 2 -b 11 -s6 -n3000 -C)
+add_physim_test(physim.5g.nr_pucchsim.test26 "Format 2 12-bit 8/273 PRB" nr_pucchsim -R 273 -z8 -i 1 -P 2 -q8 -b 12 -s-3 -n3000 -C)
 add_physim_test(physim.5g.nr_pucchsim.test27 "Format 2 19-bit 8/273 PRB" nr_pucchsim -R 273 -z8 -i 1 -P 2 -q8 -b 19 -s-3 -n3000)
 add_physim_test(physim.5g.nr_pucchsim.test28 "Format 2 64-bit 16/273 PRB" nr_pucchsim -R 273 -z8 -i 1 -P 2 -q16 -b 64 -s-3 -n3000)
 add_physim_test(physim.5g.nr_pucchsim.test29 "Format 2 64-bit 16/273 PRB Delay 2us" nr_pucchsim -R 273 -z8 -i 1 -P 2 -q16 -b 64 -s0 -S7 -d 2 -n3000)
@@ -203,6 +206,7 @@ add_physim_test(physim.5g.nr_pucchsim.test44 "Format 1 (NACK,NACK) number of sym
 add_physim_test(physim.5g.nr_pucchsim.test45 "Format 1 (ACK,NACK) number of symbols = 14, 273PRB"  nr_pucchsim -R 273 -z8 -i 14 -P 1 -b 2 -B 1 -s-8 -n1000)
 add_physim_test(physim.5g.nr_pucchsim.test46 "Format 1 (NACK,ACK) number of symbols = 14, 273PRB with SR"  nr_pucchsim -R 273 -z8 -i 14 -P 1 -b 2 -B 2 -s-8 -c -n1000)
 add_physim_test(physim.5g.nr_pucchsim.test47 "Format 1 (ACK,ACK) number of symbols = 14, 273PRB"   nr_pucchsim -R 273 -z8 -i 14 -P 1 -b 2 -B 3 -s-8 -n1000)
+add_physim_test(physim.5g.nr_pucchsim.test48 "Format 2 13-bit 16/273 PRB" nr_pucchsim -R 273 -i 1 -P 2 -q 16 -b 13 -n300)
 
 ####################################################################################
 ######                           nr_ulsim unit test                           ######
@@ -261,6 +265,17 @@ add_physim_test(physim.5g.nr_ulsim.3gpp.test25 "3GPP G-FR1-A3-27, PUSCH Type B, 
 add_physim_test(physim.5g.nr_ulsim.3gpp.test26 "3GPP G-FR1-A3-27, PUSCH Type B, 40 MHz BW, 30 kHz SCS, 4 RX Antennas Requirements Test, 2 layers" nr_ulsim -P -n300 -b14 -I15 -i 0,1 -g B,l -t70 -u 1 -m2 -R106 -r106 -U 1,1,1,2 -W2 -y2 -z4 -s-2.1 -S-2.1)
 add_physim_test(physim.5g.nr_ulsim.3gpp.test27 "3GPP G-FR1-A4-27, PUSCH Type B, 40 MHz BW, 30 kHz SCS, 2 RX Antennas Requirements Test, 2 layers" nr_ulsim -P -n300 -b14 -I15 -i 0,1 -g C,l -t70 -u 1 -m16 -R106 -r106 -U 1,1,1,2 -W2 -y2 -z2 -s18.7 -S18.7)
 add_physim_test(physim.5g.nr_ulsim.3gpp.test28 "3GPP G-FR1-A4-27, PUSCH Type B, 40 MHz BW, 30 kHz SCS, 4 RX Antennas Requirements Test, 2 layers" nr_ulsim -P -n300 -b14 -I15 -i 0,1 -g C,l -t70 -u 1 -m16 -R106 -r106 -U 1,1,1,2 -W2 -y2 -z4 -s11.2 -S11.2)
+
+####################################################################################
+######                           nr_ulsim_mu_mimo unit test                   ######
+####################################################################################
+
+add_physim_test(physim.5g.nr_ulsim_mu_mimo.test1 "UEs 2 MCS 2 PRBs 106 SNR 1.7" nr_ulsim_mu_mimo -P -n300 -b14 -I15 -i 0,1 -g B,l -t90 -u 1 -m2 -R106 -r106 -U 1,1,1,2 -W1 -y1 -z2 -s1.7 -S1.7 -N2)
+add_physim_test(physim.5g.nr_ulsim_mu_mimo.test2 "UEs 2 MCS 2 PRBs 106 SNR -2.1" nr_ulsim_mu_mimo -P -n300 -b14 -I15 -i 0,1 -g B,l -t90 -u 1 -m2 -R106 -r106 -U 1,1,1,2 -W1 -y1 -z4 -s-2.1 -S-2.1 -N2)
+add_physim_test(physim.5g.nr_ulsim_mu_mimo.test3 "UEs 2 MCS 16 PRBs 217 SNR 18.7" nr_ulsim_mu_mimo -P -n300 -b14 -I15 -i 0,1 -g C,l -t90 -u 1 -m16 -R217 -r217 -U 1,1,1,2 -W1 -y1 -z2 -s18.7 -S18.7 -N2)
+add_physim_test(physim.5g.nr_ulsim_mu_mimo.test4 "UEs 2 MCS 16 PRBs 273 SNR 11.2" nr_ulsim_mu_mimo -P -n300 -b14 -I15 -i 0,1 -g C,l -t90 -u 1 -m16 -R273 -r273 -U 1,1,1,2 -W1 -y1 -z4 -s11.2 -S11.2 -N2)
+add_physim_test(physim.5g.nr_ulsim_mu_mimo.test5 "UEs 2 MCS 27 PRBs 106 SNR 30 QAM 256 " nr_ulsim_mu_mimo -P -n300 -b14 -I15 -i 0,1 -g C,l -t65 -u 1 -m27 -q1 -R106 -r106 -U 1,1,1,2 -W1 -y1 -z4 -s30 -S30 -N2)
+
 
 ####################################################################################
 ######                           nr_prachsim unit test                        ######
@@ -355,6 +370,20 @@ add_physim_test(physim.5g-offload.nr_ulsim.testT2.9  "T2 LDPC offload: SNR = 30,
 
 endif()
 
+if(ENABLE_LDPC_ORS)
+
+add_physim_test(physim.5g-offload.nr_ulsim.testAurora.1  "Aurora LDPC offload: SNR = 30, MCS = 5, 106 PRBs, 1 layer" nr_ulsim -n1000 -s30 -S30.2 -m5 -r106 -R106 -P -C10 --loader.ldpc.shlibversion _ors)
+add_physim_test(physim.5g-offload.nr_ulsim.testAurora.2  "Aurora LDPC offload: SNR = 30, MCS = 15, 106 PRBs, 1 layer" nr_ulsim -n1000 -s30 -S30.2 -m15 -r106 -R106 -P -C10 --loader.ldpc.shlibversion _ors)
+add_physim_test(physim.5g-offload.nr_ulsim.testAurora.3  "Aurora LDPC offload: SNR = 30, MCS = 25, 106 PRBs, 1 layer" nr_ulsim -n1000 -s30 -S30.2 -m25 -r106 -R106 -P -C10 --loader.ldpc.shlibversion _ors)
+add_physim_test(physim.5g-offload.nr_ulsim.testAurora.4  "Aurora LDPC offload: SNR = 30, MCS = 5, 273 PRBs, 1 layer" nr_ulsim -n1000 -s30 -S30.2 -m5 -r273 -R273 -P -C10 --loader.ldpc.shlibversion _ors)
+add_physim_test(physim.5g-offload.nr_ulsim.testAurora.5  "Aurora LDPC offload: SNR = 30, MCS = 15, 273 PRBs, 1 layer" nr_ulsim -n1000 -s30 -S30.2 -m15 -r273 -R273 -P -C10 --loader.ldpc.shlibversion _ors)
+add_physim_test(physim.5g-offload.nr_ulsim.testAurora.6  "Aurora LDPC offload: SNR = 30, MCS = 25, 273 PRBs, 1 layer" nr_ulsim -n1000 -s30 -S30.2 -m25 -r273 -R273 -P -C10 --loader.ldpc.shlibversion _ors)
+add_physim_test(physim.5g-offload.nr_ulsim.testAurora.7  "Aurora LDPC offload: SNR = 30, MCS = 5, 273 PRBs, 2 layers" nr_ulsim -n1000 -s30 -S30.2 -m5 -r273 -R273 -W2 -z2 -y2 -P -C10 --loader.ldpc.shlibversion _ors)
+add_physim_test(physim.5g-offload.nr_ulsim.testAurora.8  "Aurora LDPC offload: SNR = 30, MCS = 15, 273 PRBs, 2 layers" nr_ulsim -n1000 -s30 -S30.2 -m15 -r273 -R273 -W2 -z2 -y2 -P -C10 --loader.ldpc.shlibversion _ors)
+add_physim_test(physim.5g-offload.nr_ulsim.testAurora.9  "Aurora LDPC offload: SNR = 30, MCS = 25, 273 PRBs, 2 layers" nr_ulsim -n1000 -s30 -S30.2 -m25 -r273 -R273 -W2 -z2 -y2 -P -C10 --loader.ldpc.shlibversion _ors)
+
+endif()
+
 ####################################################################################
 ######                           cuda-specific tests                       ######
 ####################################################################################
@@ -445,5 +474,55 @@ endif()
 if(PHYSIM_CHECK_FILES)
   foreach(PHYSIM_CHECK_FILE IN LISTS PHYSIM_CHECK_FILES)
     include("${CMAKE_CURRENT_SOURCE_DIR}/${PHYSIM_CHECK_FILE}")
+  endforeach()
+endif()
+
+####################################################################################
+######   "quick_physim" subset: fast, representative cases across each        ######
+######   physim executable, meant to run in well under 3 minutes total        ######
+####################################################################################
+
+if(ENABLE_PHYSIM_TESTS)
+  set(QUICK_PHYSIM_TESTS
+    physim.5g.nr_pbchsim.106rb.test1
+    physim.5g.nr_pbchsim.217rb.test1
+    physim.5g.nr_pbchsim.otherSCS.test1
+    physim.5g.nr_pbchsim.otherSCS.test2
+    physim.5g.nr_dlsim.basic.test1
+    physim.5g.nr_dlsim.basic.test2
+    physim.5g.nr_dlsim.basic.test4
+    physim.5g.nr_dlsim.offset.test1
+    physim.5g.nr_dlsim.mcs.mimo.test1
+    physim.5g.nr_dlsim.mcs.mimo.test6
+    physim.5g.nr_dlsim.dmrs.ptrs.test1
+    physim.5g.nr_dlschsim.test1
+    physim.5g.nr_dlschsim.test2
+    physim.5g.nr_dlschsim.test3
+    physim.5g.nr_ulsim.misc.test1
+    physim.5g.nr_ulsim.misc.test2
+    physim.5g.nr_ulsim.misc.test5
+    physim.5g.nr_ulsim.sc-fdma.test1
+    physim.5g.nr_ulsim.mimo.test2
+    physim.5g.nr_ulschsim.test1
+    physim.5g.nr_ulschsim.test2
+    physim.5g.nr_ulschsim.test4
+    physim.5g.nr_pucchsim.test1
+    physim.5g.nr_pucchsim.test2
+    physim.5g.nr_pucchsim.test4
+    physim.5g.nr_pucchsim.test5
+    physim.5g.ldpctest.test1
+    physim.5g.ldpctest.test5
+    physim.5g.ldpctest.test11
+    physim.5g.polartest.test1
+    physim.5g.polartest.test2
+    physim.5g.polartest.test3
+    physim.5g.polartest.test4
+    physim.5g.smallblocktest.test1
+    physim.5g.smallblocktest.test4
+  )
+  foreach(QUICK_TEST IN LISTS QUICK_PHYSIM_TESTS)
+    if(TEST ${QUICK_TEST})
+      set_property(TEST ${QUICK_TEST} APPEND PROPERTY LABELS "quick_physim")
+    endif()
   endforeach()
 endif()

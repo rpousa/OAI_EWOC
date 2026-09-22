@@ -72,9 +72,10 @@ bool tap_config(const char* ifname);
  * in same subnet).
  * \param[in] ifname name of the interface
  * \param[in] instance_id unique instance number, used to create the table
+ * \param[in] pdu_session_id PDU session ID, used to create the table
  * \param[in] ipv4 IPv4 address of the UE
  */
-void setup_ue_ipv4_route(const char* ifname, int instance_id, const char *ipv4);
+void setup_ue_ipv4_route(const char* ifname, int instance_id, int pdu_session_id, const char *ipv4);
 
 /*!
  * \brief This function allocates a TUN or TAP interface
@@ -89,5 +90,13 @@ int tuntap_alloc(int flag, const char *dev);
  * \param[in] dev name of the interface
  */
 void tuntap_destroy(const char *dev);
+
+/*!
+ * \brief Bring a TUN/TAP interface administratively up (IOCTL SIOCSIFFLAGS, set IFF_UP).
+ * \param[in] ifname name of the interface
+ * \param[in] sock_fd IPv4 SOCK_DGRAM fd for ioctl (opened by the caller)
+ * \return interface flags with IFF_UP set, or -1 on failure
+ */
+short tuntap_set_up(const char *ifname, int sock_fd);
 
 #endif /*TUN_IF_H_*/

@@ -25,7 +25,8 @@ static void configure_dlsch(NR_UE_DLSCH_t *dlsch,
                             fapi_nr_dl_config_dlsch_pdu_rel15_t *dlsch_config_pdu,
                             NR_UE_MAC_INST_t *mac,
                             int cw_idx,
-                            int rnti)
+                            int rnti,
+                            const fapi_nr_dl_config_request_t *dl_config)
 {
   const uint8_t current_harq_pid = dlsch_config_pdu->harq_process_nbr;
   dlsch->active = true;
@@ -44,14 +45,16 @@ static void configure_dlsch(NR_UE_DLSCH_t *dlsch,
     return;
   }
 
+  /* Do not clear first_rx on a retransmission: decode never ran still needs to re-segment. */
   if (dlsch->cw_info.new_data_indicator) {
     dlsch_harq->first_rx = true;
     dlsch_harq->DLround = 0;
   } else {
-    dlsch_harq->first_rx = false;
     dlsch_harq->DLround++;
   }
   downlink_harq_process(dlsch_harq, current_harq_pid, dlsch->cw_info.new_data_indicator, dlsch->cw_info.rv, dlsch->rnti_type);
+  dlsch_harq->activated_frame = dl_config->sfn;
+  dlsch_harq->activated_slot = dl_config->slot;
   if (dlsch_harq->status != NR_ACTIVE) {
     // dlsch_harq->status not ACTIVE due to false retransmission
     // Reset the following flag to skip PDSCH procedures in that case and retrasmit harq status
@@ -108,19 +111,25 @@ static void configure_ta_command(PHY_VARS_NR_UE *ue, fapi_nr_ta_command_pdu *ta_
   if (ta_command_pdu->is_rar) {
     ue->ta_slot = ta_command_pdu->ta_slot;
     ue->ta_frame = ta_command_pdu->ta_frame;
-    ue->ta_command = ta_command_pdu->ta_command + 31; // To use TA adjustment algo in ue_ta_procedures()
+    ue->ta_command = ta_command_pdu->ta_command;
   } else {
-    ue->ta_slot = (ta_command_pdu->ta_slot + ul_tx_timing_adjustment) % slots_per_frame;
-    if (ta_command_pdu->ta_slot + ul_tx_timing_adjustment > slots_per_frame)
-      ue->ta_frame = (ta_command_pdu->ta_frame + 1) % 1024;
-    else
-      ue->ta_frame = ta_command_pdu->ta_frame;
+    const int target_slot = ta_command_pdu->ta_slot + ul_tx_timing_adjustment;
+    ue->ta_slot = target_slot % slots_per_frame;
+    ue->ta_frame = (ta_command_pdu->ta_frame + target_slot / slots_per_frame) % 1024;
     ue->ta_command = ta_command_pdu->ta_command;
   }
+  ue->ta_command_is_rar = ta_command_pdu->is_rar;
 
   LOG_D(PHY,
-        "TA command received in %d.%d Starting UL time alignment procedures. TA update will be applied at frame %d slot %d\n",
-        ta_command_pdu->ta_frame, ta_command_pdu->ta_slot, ue->ta_frame, ue->ta_slot);
+        "[UE %d] TA command received in %d.%d: %s command %d, apply in %d.%d (application-delay %d slots)\n",
+        ue->Mod_id,
+        ta_command_pdu->ta_frame,
+        ta_command_pdu->ta_slot,
+        ta_command_pdu->is_rar ? "RAR" : "relative MAC CE",
+        ue->ta_command,
+        ue->ta_frame,
+        ue->ta_slot,
+        ta_command_pdu->is_rar ? 0 : ul_tx_timing_adjustment);
 }
 
 static void nr_ue_scheduled_response_dl(NR_UE_MAC_INST_t *mac,
@@ -150,33 +159,48 @@ static void nr_ue_scheduled_response_dl(NR_UE_MAC_INST_t *mac,
         phy_data->csiim_vars.active = true;
         break;
       case FAPI_NR_DL_CONFIG_TYPE_CSI_RS:
-        phy_data->csirs_vars.csirs_config_pdu = pdu->csirs_config_pdu.csirs_config_rel15;
-        phy_data->csirs_vars.active = true;
+        AssertFatal(phy_data->num_csirs < MAX_CSI_RES_SLOT, "CSI resources per slot exceeded limit\n");
+        const int c = phy_data->num_csirs;
+        if (phy_data->csirs_vars[c].active) {
+          AssertFatal(false, "Resource should not be active before its configured\n");
+        }
+        phy_data->csirs_vars[c].csirs_config_pdu = pdu->csirs_config_pdu.csirs_config_rel15;
+        phy_data->csirs_vars[c].active = true;
+        phy_data->num_csirs++;
         break;
-      case FAPI_NR_DL_CONFIG_TYPE_RA_DLSCH: {
-        fapi_nr_dl_config_dlsch_pdu_rel15_t *dlsch_config_pdu = &pdu->dlsch_config_pdu.dlsch_config_rel15;
-        NR_UE_DLSCH_t *dlsch0 = phy_data->dlsch + 0;
-        phy_data->n_dlsch_codewords = dlsch_config_pdu->n_codewords;
-        phy_data->dlsch_config = *dlsch_config_pdu;
-        dlsch0->rnti_type = TYPE_RA_RNTI_;
-        configure_dlsch(dlsch0, phy->dl_harq_processes[0], dlsch_config_pdu, mac, 0, pdu->dlsch_config_pdu.rnti);
-      } break;
-      case FAPI_NR_DL_CONFIG_TYPE_SI_DLSCH: {
-        fapi_nr_dl_config_dlsch_pdu_rel15_t *dlsch_config_pdu = &pdu->dlsch_config_pdu.dlsch_config_rel15;
-        NR_UE_DLSCH_t *dlsch0 = phy_data->dlsch + 0;
-        phy_data->n_dlsch_codewords = dlsch_config_pdu->n_codewords;
-        phy_data->dlsch_config = *dlsch_config_pdu;
-        dlsch0->rnti_type = TYPE_SI_RNTI_;
-        configure_dlsch(dlsch0, phy->dl_harq_processes[0], dlsch_config_pdu, mac, 0, pdu->dlsch_config_pdu.rnti);
-      } break;
-      case FAPI_NR_DL_CONFIG_TYPE_DLSCH: {
+      case FAPI_NR_DL_CONFIG_TYPE_RA_DLSCH:
+      case FAPI_NR_DL_CONFIG_TYPE_SI_DLSCH:
+      case FAPI_NR_DL_CONFIG_TYPE_DLSCH:
+      case FAPI_NR_DL_CONFIG_TYPE_P_DLSCH: {
         fapi_nr_dl_config_dlsch_pdu_rel15_t *dlsch_config_pdu = &pdu->dlsch_config_pdu.dlsch_config_rel15;
         phy_data->n_dlsch_codewords = dlsch_config_pdu->n_codewords;
         phy_data->dlsch_config = *dlsch_config_pdu;
-        for (int c = 0; c < dlsch_config_pdu->n_codewords; c++) {
+
+        nr_rnti_type_t rnti_type;
+        int n_codewords = 1;
+        switch (pdu->pdu_type) {
+          case FAPI_NR_DL_CONFIG_TYPE_RA_DLSCH:
+            rnti_type = TYPE_RA_RNTI_;
+            break;
+          case FAPI_NR_DL_CONFIG_TYPE_SI_DLSCH:
+            rnti_type = TYPE_SI_RNTI_;
+            break;
+          case FAPI_NR_DL_CONFIG_TYPE_DLSCH:
+            rnti_type = TYPE_C_RNTI_;
+            n_codewords = dlsch_config_pdu->n_codewords;
+            break;
+          case FAPI_NR_DL_CONFIG_TYPE_P_DLSCH:
+            rnti_type = TYPE_P_RNTI_;
+            n_codewords = dlsch_config_pdu->n_codewords;
+            break;
+          default:
+            AssertFatal(false, "Unexpected DL DLSCH-family pdu_type %d\n", pdu->pdu_type);
+        }
+
+        for (int c = 0; c < n_codewords; c++) {
           NR_UE_DLSCH_t *dlsch = &phy_data->dlsch[c];
-          dlsch->rnti_type = TYPE_C_RNTI_;
-          configure_dlsch(dlsch, phy->dl_harq_processes[c], dlsch_config_pdu, mac, c, pdu->dlsch_config_pdu.rnti);
+          dlsch->rnti_type = rnti_type;
+          configure_dlsch(dlsch, phy->dl_harq_processes[c], dlsch_config_pdu, mac, c, pdu->dlsch_config_pdu.rnti, dl_config);
         }
       } break;
       case FAPI_NR_CONFIG_TA_COMMAND:
@@ -328,6 +352,7 @@ static void nr_ue_scheduled_response_ul(PHY_VARS_NR_UE *phy, fapi_nr_ul_config_r
       case FAPI_NR_UL_CONFIG_TYPE_PRACH: {
         phy->prach_vars[0]->prach_pdu = pdu->prach_config_pdu;
         phy->prach_vars[0]->active = true;
+        phy->timing_advance = 0;
         pdu->pdu_type = FAPI_NR_UL_CONFIG_TYPE_DONE; // not handle it any more
       } break;
 

@@ -14,6 +14,7 @@
 #else
   #include <uhd/utils/thread.hpp>
 #endif
+#include <uhd/convert.hpp>
 #include <uhd/usrp/multi_usrp.hpp>
 #include <uhd/version.hpp>
 #include <boost/lexical_cast.hpp>
@@ -35,6 +36,8 @@
 #include <sys/resource.h>
 
 #include "openair1/PHY/sse_intrin.h"
+#include "usrp_converters.hpp"
+
 
 /** @addtogroup _USRP_PHY_RF_INTERFACE_
  * @{
@@ -69,7 +72,9 @@ typedef struct {
 
   //! gpio bank to use
   char *gpio_bank;
-  
+  //! last beam id actually programmed via trx_set_beam(); UINT16_MAX means none yet
+  uint16_t last_beam_id;
+
   // --------------------------------
   // Debug and output control
   // --------------------------------
@@ -359,6 +364,52 @@ static void trx_usrp_finish_rx(usrp_state_t *s)
   } while (samples > 0);
 }
 
+// Does the same as removed get_gpio_flags(), except it only handles 1 beam
+static int trx_set_beam(openair0_device_t *device, uint16_t *beams, int num_beams, openair0_timestamp_t timestamp)
+{
+  AssertFatal(beams, "Invalid input for beams %p, vector not present\n", beams);
+  AssertFatal(num_beams == 1, "Invalid input for num_beams %d. USRP GPIO don't support multiple beams.\n", num_beams);
+  // Take beam_id of first antenna port
+  const int ant_port_idx = 0;
+  const uint16_t beam_id = beams[ant_port_idx];
+
+  // ctrl_rf() calls this once per slot regardless of whether the beam actually changed;
+  // avoid issuing a redundant GPIO write to real hardware when it didn't.
+  usrp_state_t *s = (usrp_state_t *)device->priv;
+  if (beam_id == s->last_beam_id)
+    return 0;
+  s->last_beam_id = beam_id;
+
+  uint32_t gpio = 0;
+  switch (device->openair0_cfg->gpio_controller) {
+    case RU_GPIO_CONTROL_GENERIC:
+      AssertFatal(beam_id < 8, "Only 3 bits available for setting beams\n");
+      gpio = beam_id | TX_GPIO_CHANGE;
+      break;
+    case RU_GPIO_CONTROL_INTERDIGITAL:
+      // the beam index is written in bits 8-10 of the flags
+      // bit 11 enables the gpio programming
+      /* the line `gpio = 1024; // hardcoded now for beam32 boresight`
+         should be under condition `if (slot % 10 == 0)`, but there is no notion of `slot` in this function
+         so I assume that beam ID 1024 is always used regardless of current `slot` */
+      gpio = 1024 | TX_GPIO_CHANGE;
+      break;
+    default:
+      AssertFatal(false, "illegal GPIO controller for beam handling %d\n", device->openair0_cfg->gpio_controller);
+  }
+  // bit 13 enables gpio
+  timestamp -= device->openair0_cfg->command_line_sample_advance + device->openair0_cfg->tx_sample_advance;
+  // trx_set_beam() can run concurrently with trx_usrp_write_thread() (--usrp-tx-thread-config 1),
+  // which writes s->tx_md that cannot be reused here. Instead, create a new time variable
+  const uhd::time_spec_t beam_time_spec = uhd::time_spec_t::from_ticks(timestamp, s->sample_rate);
+
+  // push GPIO bits
+  s->usrp->set_command_time(beam_time_spec);
+  s->usrp->set_gpio_attr(s->gpio_bank, "OUT", gpio, MAN_MASK);
+  s->usrp->clear_command_time();
+  return 0;
+}
+
 static void trx_usrp_write_reset(openair0_thread_t *wt);
 
 /*! \brief Terminate operation of the USRP transceiver -- free all associated resources
@@ -415,10 +466,8 @@ static int trx_usrp_write(openair0_device_t *device,
   int ret=0;
   usrp_state_t *s = (usrp_state_t *)device->priv;
   timestamp -= device->openair0_cfg->command_line_sample_advance + device->openair0_cfg->tx_sample_advance;
-  int nsamps2;  // aligned to upper 32 or 16 byte boundary
 
   radio_tx_burst_flag_t flags_burst = (radio_tx_burst_flag_t) (flags & 0xf);
-  radio_tx_gpio_flag_t flags_gpio = (radio_tx_gpio_flag_t) ((flags >> 4) & 0x1fff);
 
   int end;
   openair0_thread_t *write_thread = &device->write_thread;
@@ -458,47 +507,21 @@ static int trx_usrp_write(openair0_device_t *device,
     }
 
     if (usrp_tx_thread == 0) {
-      nsamps2 = (nsamps+7)>>3;
-      simde__m256i buff_tx[cc < 2 ? 2 : cc][nsamps2];
-
-      // bring TX data into 16 MSBs, assuming it is on the 12 LSB  after OAI computation
-      const int shift = 4;
-      for (int i = 0; i < cc; i++) {
-        for (int j = 0; j < nsamps2; j++) {
-          if ((((uintptr_t)buff[i]) & 0x1F) == 0) {
-            buff_tx[i][j] = simde_mm256_slli_epi16(((simde__m256i *)buff[i])[j], shift);
-          } else {
-            simde__m256i tmp = simde_mm256_loadu_si256(((simde__m256i *)buff[i]) + j);
-            buff_tx[i][j] = simde_mm256_slli_epi16(tmp, shift);
-          }
-        }
-      }
-
       s->tx_md.has_time_spec = true;
       s->tx_md.start_of_burst = (s->tx_count == 0) ? true : first_packet_state;
       s->tx_md.end_of_burst = last_packet_state;
       s->tx_md.time_spec = uhd::time_spec_t::from_ticks(timestamp, s->sample_rate);
       s->tx_count++;
 
-      VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME(VCD_SIGNAL_DUMPER_FUNCTIONS_BEAM_SWITCHING_GPIO, 1);
-      // bit 13 enables gpio
-      if ((flags_gpio & TX_GPIO_CHANGE) != 0) {
-        // push GPIO bits
-        s->usrp->set_command_time(s->tx_md.time_spec);
-        s->usrp->set_gpio_attr(s->gpio_bank, "OUT", flags_gpio, MAN_MASK);
-        s->usrp->clear_command_time();
-      }
-      VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME(VCD_SIGNAL_DUMPER_FUNCTIONS_BEAM_SWITCHING_GPIO, 0);
-
       if (cc > 1) {
         std::vector<void *> buff_ptrs;
 
         for (int i = 0; i < cc; i++)
-          buff_ptrs.push_back(&(((int16_t *)buff_tx[i])[0]));
+          buff_ptrs.push_back(buff[i]);
 
         ret = (int)s->tx_stream->send(buff_ptrs, nsamps, s->tx_md);
       } else {
-        ret = (int)s->tx_stream->send(&(((int16_t *)buff_tx[0])[0]), nsamps, s->tx_md);
+        ret = (int)s->tx_stream->send(buff[0], nsamps, s->tx_md);
       }
 
       if (ret != nsamps) {
@@ -524,7 +547,6 @@ static int trx_usrp_write(openair0_device_t *device,
       write_package[end].cc = cc;
       write_package[end].first_packet = first_packet_state;
       write_package[end].last_packet = last_packet_state;
-      write_package[end].flags_gpio = flags_gpio;
       for (int i = 0; i < cc; i++)
         write_package[end].buff[i] = buff[i];
       write_thread->count_write++;
@@ -553,7 +575,6 @@ void *trx_usrp_write_thread(void * arg)
   openair0_write_package_t *write_package = write_thread->write_package;
 
   usrp_state_t *s;
-  int nsamps2;  // aligned to upper 32 or 16 byte boundary
   int start;
   openair0_timestamp_t timestamp;
   void        **buff;
@@ -561,7 +582,6 @@ void *trx_usrp_write_thread(void * arg)
   int         cc;
   signed char first_packet;
   signed char last_packet;
-  int         flags_gpio;
 
   printf("trx_usrp_write_thread started on cpu %d\n",sched_getcpu());
   while(1){
@@ -580,30 +600,12 @@ void *trx_usrp_write_thread(void * arg)
     cc           = write_package[start].cc;
     first_packet = write_package[start].first_packet;
     last_packet  = write_package[start].last_packet;
-    flags_gpio    = write_package[start].flags_gpio;
     write_thread->start = (write_thread->start + 1)% MAX_WRITE_THREAD_PACKAGE;
     write_thread->count_write--;
     pthread_mutex_unlock(&write_thread->mutex_write);
     /*if(write_thread->count_write != 0){
       LOG_W(HW,"count write = %d, start = %d, end = %d\n", write_thread->count_write, write_thread->start, write_thread->end);
     }*/
-
-        nsamps2 = (nsamps+7)>>3;
-        simde__m256i buff_tx[cc < 2 ? 2 : cc][nsamps2];
-        // bring TX data into 16 MSBs, assuming it is on the 12 LSB  after OAI computation
-        const int shift = 4;
-        for (int i = 0; i < cc; i++) {
-          for (int j = 0; j < nsamps2; j++) {
-            if ((((uintptr_t) buff[i])&0x1F)==0) {
-              buff_tx[i][j] = simde_mm256_slli_epi16(((simde__m256i *)buff[i])[j], shift);
-            }
-            else
-            {
-              simde__m256i tmp = simde_mm256_loadu_si256(((simde__m256i *)buff[i]) + j);
-              buff_tx[i][j] = simde_mm256_slli_epi16(tmp, shift);
-            }
-          }
-        }
 
     s->tx_md.has_time_spec  = true;
     s->tx_md.start_of_burst = (s->tx_count==0) ? true : first_packet;
@@ -612,27 +614,19 @@ void *trx_usrp_write_thread(void * arg)
     LOG_D(PHY,"usrp_tx_write: tx_count %llu SoB %d, EoB %d, TS %llu\n",(unsigned long long)s->tx_count,s->tx_md.start_of_burst,s->tx_md.end_of_burst,(unsigned long long)timestamp); 
     s->tx_count++;
 
-    // bit 3 enables gpio (for backward compatibility)
-    if (flags_gpio&0x1000) {
-      // push GPIO bits 
-      s->usrp->set_command_time(s->tx_md.time_spec);
-      s->usrp->set_gpio_attr(s->gpio_bank, "OUT", flags_gpio, MAN_MASK);
-      s->usrp->clear_command_time();
-    }
-
     if (cc>1) {
       std::vector<void *> buff_ptrs;
 
       for (int i=0; i<cc; i++)
-        buff_ptrs.push_back(&(((int16_t *)buff_tx[i])[0]));
+        buff_ptrs.push_back(buff[i]);
 
       ret = (int)s->tx_stream->send(buff_ptrs, nsamps, s->tx_md);
     }
     else {
-      ret = (int)s->tx_stream->send(&(((int16_t *)buff_tx[0])[0]), nsamps, s->tx_md);
+      ret = (int)s->tx_stream->send(buff[0], nsamps, s->tx_md);
     }
 
-    T(T_USRP_TX_ANT0, T_INT(timestamp), T_BUFFER(buff_tx[0], nsamps*4));
+    T(T_USRP_TX_ANT0, T_INT(timestamp), T_BUFFER(buff[0], nsamps*4));
 
     if (ret != nsamps) LOG_E(HW,"[xmit] tx samples %d != %d\n",ret,nsamps);
     VCD_SIGNAL_DUMPER_DUMP_VARIABLE_BY_NAME( VCD_SIGNAL_DUMPER_VARIABLES_USRP_SEND_RETURN, ret );
@@ -693,23 +687,7 @@ static int trx_usrp_read(openair0_device_t *device, openair0_timestamp_t *ptimes
 {
   usrp_state_t *s = (usrp_state_t *)device->priv;
   int samples_received=0;
-  int nsamps2; // aligned to upper 32 or 16 byte boundary
-  nsamps2 = (nsamps+7)>>3;
-  simde__m256i buff_tmp[cc < 2 ? 2 : cc][nsamps2];
   static int read_count = 0;
-  int rxshift;
-  switch (device->type) {
-     case USRP_B200_DEV:
-        rxshift=4;
-        break;
-     case USRP_X300_DEV:
-     case USRP_N300_DEV:
-     case USRP_X400_DEV:
-        rxshift=2;
-        break;
-     default:
-       AssertFatal(1==0,"Shouldn't be here\n");
-  }
 
   samples_received=0;
   while (samples_received != nsamps) {
@@ -718,12 +696,12 @@ static int trx_usrp_read(openair0_device_t *device, openair0_timestamp_t *ptimes
       // receive multiple channels (e.g. RF A and RF B)
       std::vector<void *> buff_ptrs;
 
-      for (int i=0; i<cc; i++) buff_ptrs.push_back(buff_tmp[i]+samples_received);
+      for (int i=0; i<cc; i++) buff_ptrs.push_back((void*)((int32_t*)buff[i]+samples_received));
       samples_received += s->rx_stream->recv(buff_ptrs, nsamps-samples_received, s->rx_md);
     } else {
       // receive a single channel (e.g. from connector RF A)
 
-      samples_received += s->rx_stream->recv((void*)((int32_t*)buff_tmp[0]+samples_received),
+      samples_received += s->rx_stream->recv((void*)((int32_t*)buff[0]+samples_received),
                                              nsamps-samples_received, s->rx_md);
     }
     if  ((s->wait_for_first_pps == 0) && (s->rx_md.error_code!=uhd::rx_metadata_t::ERROR_CODE_NONE))
@@ -734,22 +712,6 @@ static int trx_usrp_read(openair0_device_t *device, openair0_timestamp_t *ptimes
     }
   }
   if (samples_received == nsamps) s->wait_for_first_pps=0;
-
-  // bring RX data into 12 LSBs for softmodem RX
-  for (int i=0; i<cc; i++) {
-    for (int j = 0; j < nsamps2; j++) {
-      // bring RX data into 12 LSBs for softmodem RX,
-      // this keeps the significant bits of B210 and may loose better ADC results,
-      // but it makes free bits in MSB for signal processing on int16
-      if ((((uintptr_t) buff[i])&0x1F)==0) {
-        ((simde__m256i *)buff[i])[j] = simde_mm256_srai_epi16(buff_tmp[i][j], rxshift);
-      } else {
-        // FK: in some cases the buffer might not be 32 byte aligned, so we cannot use avx2
-        simde__m256i tmp = simde_mm256_srai_epi16(buff_tmp[i][j], rxshift);
-        simde_mm256_storeu_si256(((simde__m256i *)buff[i]) + j, tmp);
-      }
-    }
-  }
 
   if (samples_received < nsamps) {
     LOG_E(HW,"[recv] received %d samples out of %d\n",samples_received,nsamps);
@@ -1051,11 +1013,13 @@ extern "C" {
       s=(usrp_state_t *)calloc(1, sizeof(usrp_state_t));
       device->priv=s;
       AssertFatal( s!=NULL,"USRP device: memory allocation failure\n");
+      s->last_beam_id = UINT16_MAX;
     } else {
       LOG_E(HW, "multiple device init detected\n");
       return 0;
     }
 
+    device->host_type = RAU_HOST;
     device->openair0_cfg = openair0_cfg;
     device->trx_start_func = trx_usrp_start;
     device->trx_get_stats_func = trx_usrp_get_stats;
@@ -1458,8 +1422,29 @@ extern "C" {
   LOG_I(HW,"Actual clock source %s...\n",s->usrp->get_clock_source(0).c_str());
   LOG_I(HW,"Actual time source %s...\n",s->usrp->get_time_source(0).c_str());
 
+  // register custom OAI converters
+  int rxshift;
+  switch (device->type) {
+    case USRP_B200_DEV:
+      // AD9361: 12-bit ADC
+      rxshift = 4;
+      break;
+    case USRP_X400_DEV:
+      // X410/X440 (Xilinx RFSoC ZU28DR): 12-bit ADC
+      rxshift = 4;
+      break;
+    case USRP_X300_DEV:
+    case USRP_N300_DEV:
+      // X3xx (ADS62P48): 14-bit ADC
+      rxshift = 2;
+      break;
+    default:
+      AssertFatal(1 == 0, "Shouldn't be here\n");
+  }
+  register_oai_converters(rxshift);
+
   // create tx & rx streamer
-  uhd::stream_args_t stream_args_rx("sc16", "sc16");
+  uhd::stream_args_t stream_args_rx("sc16_oai", "sc16");
   for (int i = 0; i<openair0_cfg[0].rx_num_channels; i++) {
     LOG_I(HW,"setting rx channel %d\n",i+choffset);
     stream_args_rx.channels.push_back(i+choffset);
@@ -1478,7 +1463,7 @@ extern "C" {
   LOG_I(HW,"rx_max_num_samps %zu\n",
         s->rx_stream->get_max_num_samps());
 
-  uhd::stream_args_t stream_args_tx("sc16", "sc16");
+  uhd::stream_args_t stream_args_tx("sc16_oai", "sc16");
 
   for (int i = 0; i<openair0_cfg[0].tx_num_channels; i++)
     stream_args_tx.channels.push_back(i+choffset);
@@ -1519,6 +1504,7 @@ extern "C" {
   LOG_I(HW,"Device timestamp: %f...\n", s->usrp->get_time_now().get_real_secs());
   device->trx_write_func = trx_usrp_write;
   device->trx_read_func  = trx_usrp_read;
+  device->trx_set_beams = (device->openair0_cfg->gpio_controller != RU_GPIO_CONTROL_NONE) ? trx_set_beam : NULL;
   s->sample_rate = openair0_cfg[0].sample_rate;
 
   // TODO:

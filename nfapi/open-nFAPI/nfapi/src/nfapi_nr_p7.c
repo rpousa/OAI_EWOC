@@ -147,7 +147,7 @@ int pack_nr_srs_normalized_channel_iq_matrix(void *pMessageBuf, void *pPackedBuf
     return 0;
   }
 
-  uint16_t channel_matrix_size = nr_srs_normalized_channel_iq_matrix->num_prgs
+  uint32_t channel_matrix_size = (uint32_t)nr_srs_normalized_channel_iq_matrix->num_prgs
                                  * nr_srs_normalized_channel_iq_matrix->num_ue_srs_ports
                                  * nr_srs_normalized_channel_iq_matrix->num_gnb_antenna_elements;
   if (nr_srs_normalized_channel_iq_matrix->normalized_iq_representation == 0) {
@@ -157,8 +157,11 @@ int pack_nr_srs_normalized_channel_iq_matrix(void *pMessageBuf, void *pPackedBuf
     // 1: 32-bit normalized complex number (iqSize = 4)
     channel_matrix_size <<= 2;
   }
+  if (channel_matrix_size > sizeof(nr_srs_normalized_channel_iq_matrix->channel_matrix)) {
+    return 0;
+  }
 
-  for (int i = 0; i < channel_matrix_size; i++) {
+  for (uint32_t i = 0; i < channel_matrix_size; i++) {
     if (!push8(nr_srs_normalized_channel_iq_matrix->channel_matrix[i], &pWritePackedMessage, end)) {
       return 0;
     }
@@ -277,6 +280,10 @@ int nfapi_nr_p7_message_pack(void *pMessageBuf, void *pPackedBuf, uint32_t packe
 
     case NFAPI_NR_PHY_MSG_TYPE_SRS_INDICATION:
       result = pack_nr_srs_indication(pMessageHeader, &pWritePackedMessage, end);
+      break;
+
+    case NFAPI_NR_PHY_MSG_TYPE_SRS_TOA_VENDOR_EXTENSION_INDICATION:
+      result = pack_nr_srs_toa_vendor_ext_indication(pMessageHeader, &pWritePackedMessage, end);
       break;
 
     case NFAPI_NR_PHY_MSG_TYPE_RACH_INDICATION:
@@ -409,7 +416,7 @@ int unpack_nr_srs_normalized_channel_iq_matrix(void *pMessageBuf,
     return -1;
   }
 
-  uint16_t channel_matrix_size = nr_srs_normalized_channel_iq_matrix->num_prgs
+  uint32_t channel_matrix_size = (uint32_t)nr_srs_normalized_channel_iq_matrix->num_prgs
                                  * nr_srs_normalized_channel_iq_matrix->num_ue_srs_ports
                                  * nr_srs_normalized_channel_iq_matrix->num_gnb_antenna_elements;
   if (nr_srs_normalized_channel_iq_matrix->normalized_iq_representation == 0) {
@@ -419,8 +426,11 @@ int unpack_nr_srs_normalized_channel_iq_matrix(void *pMessageBuf,
     // 1: 32-bit normalized complex number (iqSize = 4)
     channel_matrix_size <<= 2;
   }
+  if (channel_matrix_size > sizeof(nr_srs_normalized_channel_iq_matrix->channel_matrix)) {
+    return -1;
+  }
 
-  for (int i = 0; i < channel_matrix_size; i++) {
+  for (uint32_t i = 0; i < channel_matrix_size; i++) {
     if (!pull8(&pReadPackedMessage, &nr_srs_normalized_channel_iq_matrix->channel_matrix[i], end)) {
       return 0;
     }
@@ -647,6 +657,12 @@ bool nfapi_nr_p7_message_unpack(void *pMessageBuf,
     case NFAPI_NR_PHY_MSG_TYPE_SRS_INDICATION:
       if (check_nr_fapi_unpack_length(NFAPI_NR_PHY_MSG_TYPE_SRS_INDICATION, unpackedBufLen)) {
         result = unpack_nr_srs_indication(&pReadPackedMessage,  end, pMessageHeader);
+      }
+      break;
+
+    case NFAPI_NR_PHY_MSG_TYPE_SRS_TOA_VENDOR_EXTENSION_INDICATION:
+      if (check_nr_fapi_unpack_length(NFAPI_NR_PHY_MSG_TYPE_SRS_TOA_VENDOR_EXTENSION_INDICATION, unpackedBufLen)) {
+        result = unpack_nr_srs_toa_vendor_ext_indication(&pReadPackedMessage,  end, pMessageHeader);
       }
       break;
 

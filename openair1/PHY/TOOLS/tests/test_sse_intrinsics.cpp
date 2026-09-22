@@ -86,6 +86,33 @@ TEST(swap_vectors, 256) {
     }
 }
 
+#if defined(__AVX512BW__) || defined(__AVX512F__)
+#include <simde/x86/avx512/set.h>
+#include <simde/x86/avx512/storeu.h>
+TEST(swap_vectors, 512) {
+    // Create a 512-bit input vector with 32 16-bit integers in natural order.
+    simde__m512i in = simde_mm512_set_epi16(31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16,
+                                            15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0);
+
+    // Call function to test
+    simde__m512i out = oai_mm512_swap(in);
+
+    // Store the results for comparison
+    int16_t out_result[32];
+    simde_mm512_storeu_si512((simde__m512i*)out_result, out);
+
+    // Create the expected vector
+    int16_t out_expected[32] = {1, 0, 3, 2, 5, 4, 7, 6, 9, 8, 11, 10, 13, 12, 15, 14,
+                                17, 16, 19, 18, 21, 20, 23, 22, 25, 24, 27, 26, 29, 28, 31, 30};
+
+    // Check for mismatch
+    for (int i = 0; i < 32; i++) {
+        EXPECT_EQ(out_result[i], out_expected[i]) << "IQ swap mismatch on index " << i;
+    }
+}
+#endif
+
+
 TEST(ShiftedMultiplyAndAdd, 128) {
   
   // Set up two 128-bit vectors with 8 16-bit elements each.

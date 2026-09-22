@@ -46,18 +46,24 @@ RB_GENERATE(rrc_nr_ue_tree_s, rrc_gNB_ue_context_s, entries,
             rrc_gNB_compare_ue_rnti_id);
 
 //------------------------------------------------------------------------------
-rrc_gNB_ue_context_t *rrc_gNB_allocate_new_ue_context(gNB_RRC_INST *rrc_instance_pP)
+static rrc_gNB_ue_context_t *rrc_gNB_allocate_new_ue_context(gNB_RRC_INST *rrc_instance_pP)
 //------------------------------------------------------------------------------
 {
   rrc_gNB_ue_context_t *new_p = calloc(1, sizeof(*new_p));
-
   if (new_p == NULL) {
-    LOG_E(NR_RRC, "Cannot allocate new ue context\n");
+    LOG_E(NR_RRC, "Cannot allocate new ue context, no free memory\n");
     return NULL;
   }
-  new_p->ue_context.rrc_ue_id = uid_linear_allocator_new(&rrc_instance_pP->uid_allocator) + 1;
-  rrc_gNB_ue_context_update_time(new_p);
 
+  uid_t uid = uid_linear_allocator_new(&rrc_instance_pP->uid_allocator);
+  if (uid == UINT_MAX) {
+    LOG_E(NR_RRC, "Cannot allocate new UE context, no free UID\n");
+    rrc_gNB_free_mem_ue_context(new_p);
+    return NULL;
+  }
+
+  new_p->ue_context.rrc_ue_id = uid + 1;
+  rrc_gNB_ue_context_update_time(new_p);
   LOG_D(NR_RRC, "Returning new RRC UE context RRC ue id: %d\n", new_p->ue_context.rrc_ue_id);
   return(new_p);
 }
@@ -184,8 +190,10 @@ rrc_gNB_ue_context_t *rrc_gNB_create_ue_context(sctp_assoc_t assoc_id,
 //-----------------------------------------------------------------------------
 {
   rrc_gNB_ue_context_t *ue_context_p = rrc_gNB_allocate_new_ue_context(rrc_instance_pP);
-  if (ue_context_p == NULL)
+  if (ue_context_p == NULL) {
+    LOG_E(NR_RRC, "Cannot create UE context\n");
     return NULL;
+  }
 
   gNB_RRC_UE_t *ue = &ue_context_p->ue_context;
   ue->rnti = rnti;

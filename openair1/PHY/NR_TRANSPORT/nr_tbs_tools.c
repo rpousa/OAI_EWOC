@@ -19,13 +19,15 @@ nr_get_G(uint16_t nb_rb, uint16_t nb_symb_sch, uint8_t nb_re_dmrs, uint16_t leng
   return (G);
 }
 
-uint32_t nr_get_E(uint32_t G, uint8_t C, uint8_t Qm, uint8_t Nl, uint8_t r)
+int nr_get_E(uint32_t G, uint8_t C, uint8_t Qm, uint8_t Nl, uint8_t r)
 {
+  if (Nl <= 0 || Qm <= 0) {
+    LOG_E(PHY, "Invalid input parameter in nr_get_E: Qm %d Nl %d\n", Qm, Nl);
+    return -1;
+  }
+
   uint32_t E;
   uint8_t Cprime = C; // assume CBGTI not present
-
-  AssertFatal(Nl > 0, "Nl is 0\n");
-  AssertFatal(Qm > 0, "Qm is 0\n");
   if (r <= Cprime - ((G / (Nl * Qm)) % Cprime) - 1)
     E = Nl * Qm * (G / (Nl * Qm * Cprime));
   else

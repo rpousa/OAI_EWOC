@@ -150,19 +150,14 @@ library](https://docs.o-ran-sc.org/projects/o-ran-sc-o-du-phy/en/latest/wls-lib.
 must first be compiled and installed to the system.
 
 The WLS library has a few dependencies:
-  - [DPDK](https://doc.dpdk.org/guides/prog_guide/build-sdk-meson.html), specifically version [20.11.3](https://fast.dpdk.org/rel/dpdk-20.11.3.tar.xz).
+  - [DPDK](https://doc.dpdk.org/guides/prog_guide/build-sdk-meson.html) in version [22.11.11](http://fast.dpdk.org/rel/dpdk-22.11.11.tar.xz).  
   - libelf-dev
   - libhugetlbfs-dev
 
-Additionally, a patch needs to be applied to the WLS lib Makefile in order for
-the shared library and headers to be installed into the system, the necessary
-patch is available [here](../cmake_targets/tools/install_wls_lib.patch)
+Clone the code (from tag 11.1.4. onward):
 
-Clone the code and apply the patch
-
-    git clone -b oran_f_release https://github.com/openairinterface/o-du-phy.git
+    git clone https://github.com/openairinterface/o-du-phy.git
     cd phy/wls_lib/
-    git apply ~/openairinterface5g/cmake_targets/tools/install_wls_lib.patch
 
 Then compile and install the library
 

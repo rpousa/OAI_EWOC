@@ -90,9 +90,9 @@ the [MAC configuration](../MAC/mac-usage.md) as well for SIB configuration.
       `0xffffff` is a reserved value and means "no SD"
     Note that: SST=1, no SD is "eMBB"; SST=2, no SD is "URLLC"; SST=3, no SD
     is "mMTC"
-- `enable_sdap` (default: true): enable the use of the SDAP layer. If
-  deactivated, a transparent SDAP header is prepended to packets, but no
-  further processing is being done.
+- `enable_sdap` (default: true): set `sdap-HeaderUL` and `sdap-HeaderDL` to
+  present in the RRC `SDAP-Config` IE for SA PDU sessions. If false, both
+  headers are absent (per DRB). SDAP entities are still created, SDAP layer always enabled.
 - `cu_sibs` (default: `[]`) list of SIBs to give to the DU for transmission.
   Currently supported:
   - SIB2: serving-cell reselection parameters (configured in `sib2_config`)

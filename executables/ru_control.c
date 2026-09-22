@@ -24,7 +24,6 @@
 #include "PHY/types.h"
 
 #include "PHY/defs_common.h"
-#include "radio/COMMON/common_lib.h"
 #include "radio/ETHERNET/ethernet_lib.h"
 
 #include "PHY/if4_tools.h"
@@ -538,57 +537,63 @@ void* ru_thread_control( void* param )
 				
 	    case RRU_config: // RRU
 	      if (ru->if_south == LOCAL_RF){
-		LOG_I(PHY,"Configuration received from RAU  (num_bands %d,band0 %d,txfreq %u,rxfreq %u,att_tx %d,att_rx %d,N_RB_DL %d,N_RB_UL %d,3/4FS %d, prach_FO %d, prach_CI %d)\n",
-		      ((RRU_config_t *)&rru_config_msg.msg[0])->num_bands,
-		      ((RRU_config_t *)&rru_config_msg.msg[0])->band_list[0],
-		      ((RRU_config_t *)&rru_config_msg.msg[0])->tx_freq[0],
-		      ((RRU_config_t *)&rru_config_msg.msg[0])->rx_freq[0],
-		      ((RRU_config_t *)&rru_config_msg.msg[0])->att_tx[0],
-		      ((RRU_config_t *)&rru_config_msg.msg[0])->att_rx[0],
-		      ((RRU_config_t *)&rru_config_msg.msg[0])->N_RB_DL[0],
-		      ((RRU_config_t *)&rru_config_msg.msg[0])->N_RB_UL[0],
-		      ((RRU_config_t *)&rru_config_msg.msg[0])->threequarter_fs[0],
-		      ((RRU_config_t *)&rru_config_msg.msg[0])->prach_FreqOffset[0],
-		      ((RRU_config_t *)&rru_config_msg.msg[0])->prach_ConfigIndex[0]);
-	      
-		ru->frame_parms = calloc(1, sizeof(*ru->frame_parms));
-		configure_rru(ru, (void*)&rru_config_msg.msg[0]);
+          LOG_I(PHY,
+                "Configuration received from RAU  (num_bands %d,band0 %d,txfreq %u,rxfreq %u,att_tx %d,att_rx %d,N_RB_DL "
+                "%d,N_RB_UL %d,3/4FS %d, prach_FO %d, prach_CI %d)\n",
+                ((RRU_config_t *)&rru_config_msg.msg[0])->num_bands,
+                ((RRU_config_t *)&rru_config_msg.msg[0])->band_list[0],
+                ((RRU_config_t *)&rru_config_msg.msg[0])->tx_freq[0],
+                ((RRU_config_t *)&rru_config_msg.msg[0])->rx_freq[0],
+                ((RRU_config_t *)&rru_config_msg.msg[0])->att_tx[0],
+                ((RRU_config_t *)&rru_config_msg.msg[0])->att_rx[0],
+                ((RRU_config_t *)&rru_config_msg.msg[0])->N_RB_DL[0],
+                ((RRU_config_t *)&rru_config_msg.msg[0])->N_RB_UL[0],
+                ((RRU_config_t *)&rru_config_msg.msg[0])->threequarter_fs[0],
+                ((RRU_config_t *)&rru_config_msg.msg[0])->prach_FreqOffset[0],
+                ((RRU_config_t *)&rru_config_msg.msg[0])->prach_ConfigIndex[0]);
 
- 					  
-		fill_rf_config(ru,ru->rf_config_file);
-		init_frame_parms(ru->frame_parms,1);
-		ru->frame_parms->nb_antennas_rx = ru->nb_rx;
-		phy_init_RU(ru);
-					 
-		//if (ru->is_slave == 1) lte_sync_time_init(&ru->frame_parms);
+          ru->frame_parms = calloc(1, sizeof(*ru->frame_parms));
+          configure_rru(ru, (void *)&rru_config_msg.msg[0]);
 
-		if (ru->rfdevice.is_init != 1) openair0_device_load(&ru->rfdevice,&ru->openair0_cfg);
-		
-		if (ru->rfdevice.trx_config_func) AssertFatal((ru->rfdevice.trx_config_func(&ru->rfdevice,&ru->openair0_cfg)==0), 
-							      "Failed to configure RF device for RU %d\n",ru->idx);
+          fill_rf_config(ru, ru->rf_config_file);
+          init_frame_parms(ru->frame_parms, 1);
+          ru->frame_parms->nb_antennas_rx = ru->nb_rx;
+          phy_init_RU(ru);
 
-		if (setup_RU_buffers(ru)!=0) {
-		  printf("Exiting, cannot initialize RU Buffers\n");
-		  exit(-1);
-		}
+          // if (ru->is_slave == 1) lte_sync_time_init(&ru->frame_parms);
 
-		// send CONFIG_OK
+          int ret = openair0_device_load(&ru->rfdevice, &ru->openair0_cfg);
+          AssertFatal(ret == 0, "could not load device library\n");
+          if (ru->rfdevice.trx_config_func)
+            AssertFatal((ru->rfdevice.trx_config_func(&ru->rfdevice, &ru->openair0_cfg) == 0),
+                        "Failed to configure RF device for RU %d\n",
+                        ru->idx);
 
-		rru_config_msg.type = RRU_config_ok; 
-		rru_config_msg.len  = sizeof(RRU_CONFIG_msg_t);
-		LOG_I(PHY,"Sending CONFIG_OK to RAU %d\n", ru->idx);
+          if (setup_RU_buffers(ru) != 0) {
+            printf("Exiting, cannot initialize RU Buffers\n");
+            exit(-1);
+          }
 
-		AssertFatal((ru->ifdevice.trx_ctlsend_func(&ru->ifdevice,&rru_config_msg,rru_config_msg.len)!=-1),
-			    "RU %d failed send CONFIG_OK to RAU\n",ru->idx);
-                reset_proc(ru);
-		ru->state = RU_READY;
-	      } else LOG_E(PHY,"Received RRU_config msg...Ignoring\n");
-	      	
-	      break;	
+          // send CONFIG_OK
 
-	    case RRU_config_ok: // RAU
-	      if (ru->if_south == LOCAL_RF) LOG_E(PHY,"Received RRU_config_ok msg...Ignoring\n");
-	      else{
+          rru_config_msg.type = RRU_config_ok;
+          rru_config_msg.len = sizeof(RRU_CONFIG_msg_t);
+          LOG_I(PHY, "Sending CONFIG_OK to RAU %d\n", ru->idx);
+
+          AssertFatal((ru->ifdevice.trx_ctlsend_func(&ru->ifdevice, &rru_config_msg, rru_config_msg.len) != -1),
+                      "RU %d failed send CONFIG_OK to RAU\n",
+                      ru->idx);
+          reset_proc(ru);
+          ru->state = RU_READY;
+        } else
+          LOG_E(PHY, "Received RRU_config msg...Ignoring\n");
+
+        break;
+
+      case RRU_config_ok: // RAU
+        if (ru->if_south == LOCAL_RF)
+          LOG_E(PHY, "Received RRU_config_ok msg...Ignoring\n");
+        else{
 
 		if (setup_RU_buffers(ru)!=0) {
 		  printf("Exiting, cannot initialize RU Buffers\n");

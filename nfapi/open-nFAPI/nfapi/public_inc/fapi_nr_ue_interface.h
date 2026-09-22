@@ -18,10 +18,7 @@
 #define NFAPI_MAX_NUM_UL_PDU 255
 #define NFAPI_MAX_NUM_CSI_RATEMATCH 4
 // Maximum number of neighboring cells that can be tracked simultaneously
-// Set to 1 due to PSS search limitation: pss_search_time_nr() returns only
-// the single strongest PSS correlation peak, making it impossible to reliably
-// detect multiple neighbor cells in the same measurement cycle
-#define NUMBER_OF_NEIGHBORING_CELLS_MAX 1
+#define NUMBER_OF_NEIGHBORING_CELLS_MAX 8
 
 /*
   typedef unsigned int	   uint32_t;
@@ -57,8 +54,10 @@ typedef struct {
   int rsrp_dBm;
   float sinr_dB;  
   uint8_t rank_indicator;
-  uint16_t i1;
-  uint8_t i2;
+  uint8_t i_1_1;
+  uint8_t i_1_2;
+  uint8_t i_1_3;
+  uint8_t i_2;
   uint8_t cqi;
   rlm_t radiolink_monitoring;
 } fapi_nr_l1_measurements_t;
@@ -155,8 +154,6 @@ typedef struct {
 ///
 #define NFAPI_RX_IND_MAX_PDU 100
 typedef struct {
-  uint16_t sfn;
-  uint16_t slot;
   uint16_t number_pdus;
   fapi_nr_rx_indication_body_t rx_indication_body[NFAPI_RX_IND_MAX_PDU];
 } fapi_nr_rx_indication_t;
@@ -174,8 +171,6 @@ typedef struct {
 
 ///
 typedef struct {
-  uint16_t sfn;
-  uint16_t slot;
   fapi_nr_tx_config_t tx_config;
   uint16_t number_of_pdus;
   fapi_nr_tx_request_body_t tx_request_body[NFAPI_MAX_NUM_UL_PDU];
@@ -205,7 +200,7 @@ typedef struct {
   uint16_t freq_msg1;
   /// Preamble index for PRACH (0-63)
   uint8_t ra_PreambleIndex;
-  /// PRACH TX power (TODO possibly modify to uint)
+  /// Requested PRACH transmit power in dBm
   int16_t prach_tx_power;
 } fapi_nr_ul_config_prach_pdu;
 
@@ -463,6 +458,7 @@ typedef struct {
   uint8_t power_control_offset;     // Ratio of PDSCH EPRE to NZP CSI-RSEPRE [3GPP TS 38.214, sec 5.2.2.3.1], Value: 0->23 representing -8 to 15 dB in 1dB steps; 255: L1 is configured with ProfileSSS
   uint8_t power_control_offset_ss;  // Ratio of NZP CSI-RS EPRE to SSB/PBCH block EPRE [3GPP TS 38.214, sec 5.2.2.3.1], Values: 0: -3dB; 1: 0dB; 2: 3dB; 3: 6dB; 255: L1 is configured with ProfileSSS
   uint8_t measurement_bitmap;       // bit 0 RSRP, bit 1 RI, bit 2 LI, bit 3 PMI, bit 4 CQI, bit 5 i1
+  uint8_t last_trs_slot;            // indicates to PHY if the slot is end of TRS burst
 } fapi_nr_dl_config_csirs_pdu_rel15_t;
 
 typedef enum{vrb_to_prb_mapping_non_interleaved = 0, vrb_to_prb_mapping_interleaved = 1} vrb_to_prb_mapping_t;
@@ -723,6 +719,8 @@ typedef struct {
   uint16_t Nid_cell;
   uint8_t active;
   uint32_t ssb_freq;
+  bool Nid_cell_was_configured; // False = Nid_cell wasn't configured, and if it exists, it's because it was measured.
+  bool is_candidate;
 } fapi_nr_neighboring_cell_t;
 
 typedef struct {

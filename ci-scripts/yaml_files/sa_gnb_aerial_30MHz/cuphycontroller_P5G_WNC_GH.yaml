@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-aerial_sdk_version: 25-3-cubb
+aerial_sdk_version: 26-1-cubb
 l2adapter_filename: l2_adapter_config_P5G_GH.yaml
 aerial_metrics_backend_address: 127.0.0.1:8081
 
@@ -50,7 +50,7 @@ cuphydriver_config:
   dpdk_file_prefix: cuphycontroller
   nics:
     - nic: '0000:01:00.0'
-      mtu: 9216
+      mtu: 8192
       cpu_mbufs: 196608
       uplane_tx_handles: 64
       txq_size: 8192
@@ -172,25 +172,6 @@ cuphydriver_config:
   enable_l1_param_sanity_check: 0
   pusch_nMaxLdpcHetConfigs: 32
   notify_ul_harq_buffer_release: 0
-
-  # data_config:
-    # datalake_core: 12           # This must be set for Data Lake and/or E3 Agent to be used
-    # datalake_db_write_enable: 1   # Enable/disable ClickHouse writes based on datalake_data_types
-    # datalake_samples: 1000000
-    # datalake_address: localhost
-    # datalake_engine: "MergeTree() PRIMARY KEY (TsTaiNs)"
-    # # datalake_drop_tables: 0   # Set to 1 to drop Clickhouse tables at startup
-    # datalake_data_types: [fh, pusch, hest]  # Data types to write to ClickHouse DB (all types always collected in memory for E3 Agent):
-                                            # fh = Fronthaul IQ samples,pusch = PUSCH/FAPI data, hest = channel estimates
-    # datalake_store_failed_pdu: 0      # Set to 1 to store PDU data even when CRC fails
-    # e3_agent_enable: 0          # Enable/disable E3 Agent and dApp capabilities
-    # num_rows_fh: 120
-    # num_rows_pusch: 200
-    # num_rows_hest: 140
-    # e3_pub_port: 5555           # E3 publisher port for indication messages
-    # e3_rep_port: 5556           # E3 reply port for E3AP requests
-    # e3_sub_port: 5560           # E3 subscriber port for Manager messages
-
   cells:
     - name: O-RU 0
       cell_id: 1
@@ -220,10 +201,13 @@ cuphydriver_config:
       exponent_ul: 4
       max_amp_ul: 65504
       mu: 1
-      T1a_max_up_ns: 280000
-      T1a_max_cp_ul_ns: 405000
-      Ta4_min_ns: 50000
-      Ta4_max_ns: 331000
+      T1a_max_cp_ul_ns: 392000
+      T1a_min_cp_ul_ns: 36000
+      T1a_max_cp_dl_ns: 464000
+      T1a_min_cp_dl_ns: 7600
+      T1a_max_up_ns: 339000
+      Ta4_min_ns: 84000
+      Ta4_max_ns: 280000
       Tcp_adv_dl_ns: 125000
       ul_u_plane_tx_offset_ns: 280000
       fh_len_range: 0

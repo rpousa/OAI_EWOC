@@ -25,6 +25,11 @@
 #include "PHY/NR_REFSIG/ul_ref_seq_nr.h"
 #include <string.h>
 #include "nfapi/open-nFAPI/fapi/inc/nr_fapi_p5_utils.h"
+#include "nr_phy_common.h"
+
+#ifdef LDPC_CUDA
+#include <cuda_runtime.h>
+#endif
 
 static void init_DLSCH_struct(PHY_VARS_gNB *gNB);
 static void destroy_DLSCH_struct(const PHY_VARS_gNB *gNB);
@@ -175,18 +180,24 @@ void phy_init_nr_gNB(PHY_VARS_gNB *gNB)
   for (int ULSCH_id = 0; ULSCH_id < gNB->max_nb_pusch; ULSCH_id++) {
     NR_gNB_PUSCH *pusch = &gNB->pusch_vars[ULSCH_id];
     pusch->ul_ch_estimates = (int32_t **)malloc16(n_buf * sizeof(int32_t *));
-    pusch->ptrs_phase_per_slot = (int32_t **)malloc16(n_buf * sizeof(int32_t *));
     for (int i = 0; i < n_buf; i++) {
       pusch->ul_ch_estimates[i] = (int32_t *)malloc16_clear(sizeof(int32_t) * fp->ofdm_symbol_size * fp->symbols_per_slot);
-      pusch->ptrs_phase_per_slot[i] = (int32_t *)malloc16_clear(sizeof(int32_t) * fp->symbols_per_slot); // symbols per slot
     }
 
     pusch->rxdataF_comp = (c16_t **)malloc16(max_ul_mimo_layers * sizeof(*pusch->rxdataF_comp));
     for (int i = 0; i < max_ul_mimo_layers; i++) {
       pusch->rxdataF_comp[i] = (c16_t *)malloc16_clear(sizeof(**pusch->rxdataF_comp) * nb_re_pusch2 * fp->symbols_per_slot);
     }
-    pusch->llr = (int16_t *)malloc16_clear((8 * ((3 * 8 * 6144) + 12))
-                                           * sizeof(int16_t)); // [hna] 6144 is LTE and (8*((3*8*6144)+12)) is not clear
+#ifdef LDPC_CUDA
+    cudaError_t err = cudaHostAlloc((void **)&pusch->llr,
+                                    (144 * 3 * 8448) * sizeof(int16_t),
+                                    cudaHostAllocMapped); // 144 segments 8448*3 coded bits per segment
+    AssertFatal(err == cudaSuccess, "CUDA Error (pusch_llr): %s\n", cudaGetErrorString(err));
+    err = cudaHostGetDevicePointer((void **)&pusch->llr_dev, pusch->llr, 0);
+    AssertFatal(err == cudaSuccess, "CUDA Error (harq_f_dev): %s\n", cudaGetErrorString(err));
+#else
+    pusch->llr = (int16_t *)malloc16_clear((144 * 3 * 8448) * sizeof(int16_t)); // 144 segments 3*8448 coded bits per segment
+#endif
     pusch->ul_valid_re_per_slot = (int16_t *)malloc16_clear(sizeof(int16_t) * fp->symbols_per_slot);
   } // ulsch_id
 }
@@ -231,17 +242,19 @@ void phy_free_nr_gNB(PHY_VARS_gNB *gNB)
     NR_gNB_PUSCH *pusch_vars = &gNB->pusch_vars[ULSCH_id];
     for (int i = 0; i < n_buf; i++) {
       free_and_zero(pusch_vars->ul_ch_estimates[i]);
-      free_and_zero(pusch_vars->ptrs_phase_per_slot[i]);
     }
     for (int i = 0; i < max_ul_mimo_layers; i++)
       free_and_zero(pusch_vars->rxdataF_comp[i]);
 
     free_and_zero(pusch_vars->ul_ch_estimates);
-    free_and_zero(pusch_vars->ptrs_phase_per_slot);
     free_and_zero(pusch_vars->ul_valid_re_per_slot);
     free_and_zero(pusch_vars->rxdataF_comp);
 
+#ifdef LDPC_CUDA
+    cudaFreeHost(pusch_vars->llr_dev);
+#else
     free_and_zero(pusch_vars->llr);
+#endif
   } // ULSCH_id
   free(gNB->pusch_vars);
 
@@ -309,14 +322,18 @@ void nr_phy_config_request_sim(PHY_VARS_gNB *gNB,
 
   fp->ofdm_offset_divisor = UINT_MAX;
   init_symbol_rotation(fp);
-  init_timeshift_rotation(fp->ofdm_symbol_size, fp->nb_prefix_samples, fp->ofdm_offset_divisor, fp->timeshift_symbol_rotation);
+  init_timeshift_rotation(fp->ofdm_symbol_size,
+                          fp->N_RB_UL * NR_NB_SC_PER_RB,
+                          fp->nb_prefix_samples,
+                          fp->ofdm_offset_divisor,
+                          fp->timeshift_symbol_rotation);
 
   gNB->configured = 1;
 }
 
 void nr_phy_config_request(NR_PHY_Config_t *phy_config)
 {
-  uint8_t Mod_id = phy_config->Mod_id;
+  uint8_t Mod_id = 0;
   uint8_t short_sequence, num_sequences, rootSequenceIndex, fd_occasion;
   NR_DL_FRAME_PARMS *fp = &RC.gNB[Mod_id]->frame_parms;
   nfapi_nr_config_request_scf_t *gNB_config = &RC.gNB[Mod_id]->gNB_config;
@@ -361,7 +378,11 @@ void nr_phy_config_request(NR_PHY_Config_t *phy_config)
 
   fp->ofdm_offset_divisor = RC.gNB[Mod_id]->ofdm_offset_divisor;
   init_symbol_rotation(fp);
-  init_timeshift_rotation(fp->ofdm_symbol_size, fp->nb_prefix_samples, fp->ofdm_offset_divisor, fp->timeshift_symbol_rotation);
+  init_timeshift_rotation(fp->ofdm_symbol_size,
+                          fp->N_RB_UL * NR_NB_SC_PER_RB,
+                          fp->nb_prefix_samples,
+                          fp->ofdm_offset_divisor,
+                          fp->timeshift_symbol_rotation);
 }
 
 static void init_DLSCH_struct(PHY_VARS_gNB *gNB)

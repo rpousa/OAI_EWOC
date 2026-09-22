@@ -90,12 +90,12 @@ static bool create_proc_elem_v2(const ru_session_t *ru_session, const size_t idx
 
 typedef enum { UP_CH_RX, UP_CH_TX, UP_CH_PRACH } uplane_dir_t;
 
-static LY_ERR fill_uplane_ch_common_v2(const uplane_dir_t dir, const xran_mplane_t *xran_mplane, const openair0_config_t *oai, const size_t idx, struct lyd_node **root)
+static LY_ERR fill_uplane_ch_common_v2(const uplane_dir_t dir, const xran_mplane_t *xran_mplane, const split7_config_t *cfg, const size_t idx, struct lyd_node **root)
 {
   LY_ERR ret = LY_SUCCESS;
 
   char frame_str[8];
-  snprintf(frame_str, sizeof(frame_str), "%d", (oai->split7.fftSize << 4) + oai->nr_scs_for_raster); // 3GPP TS 38.211
+  snprintf(frame_str, sizeof(frame_str), "%d", (cfg->fftSize << 4) + cfg->mu); // 3GPP TS 38.211
   ret = lyd_new_term(*root, NULL, "frame-structure", frame_str, 0, NULL);
   VERIFY_SUCCESS(ret == LY_SUCCESS, "[MPLANE] Failed to create \"frame-structure\" node.\n");
 
@@ -106,20 +106,20 @@ static LY_ERR fill_uplane_ch_common_v2(const uplane_dir_t dir, const xran_mplane
   VERIFY_SUCCESS(ret == LY_SUCCESS, "[MPLANE] Failed to create \"cp-type\" node.\n");
 
   char cp_len[8];
-  snprintf(cp_len, sizeof(cp_len), "%d", oai->split7.cp_prefix0);
+  snprintf(cp_len, sizeof(cp_len), "%d", cfg->cp_prefix0);
   ret = lyd_new_term(*root, NULL, "cp-length", cp_len, 0, NULL);
   VERIFY_SUCCESS(ret == LY_SUCCESS, "[MPLANE] Failed to create \"cp-length\" node.\n");
 
   char cp_len_other[8];
-  snprintf(cp_len_other, sizeof(cp_len_other), "%d", oai->split7.cp_prefix_other);
+  snprintf(cp_len_other, sizeof(cp_len_other), "%d", cfg->cp_prefix_other);
   ret = lyd_new_term(*root, NULL, "cp-length-other", cp_len_other, 0, NULL);
   VERIFY_SUCCESS(ret == LY_SUCCESS, "[MPLANE] Failed to create \"cp-length-other\" node.\n");
 
   char freq_offset[8];
   if (dir == UP_CH_RX || dir == UP_CH_PRACH) {
-    snprintf(freq_offset, sizeof(freq_offset), "%d", oai->split7.ul_k0[oai->nr_scs_for_raster]);
+    snprintf(freq_offset, sizeof(freq_offset), "%d", cfg->ul_k0[cfg->mu]);
   } else {
-    snprintf(freq_offset, sizeof(freq_offset), "%d", oai->split7.dl_k0[oai->nr_scs_for_raster]);
+    snprintf(freq_offset, sizeof(freq_offset), "%d", cfg->dl_k0[cfg->mu]);
   }
   ret = lyd_new_term(*root, NULL, "offset-to-absolute-frequency-center", freq_offset, 0, NULL);
   VERIFY_SUCCESS(ret == LY_SUCCESS, "[MPLANE] Failed to create \"offset-to-absolute-frequency-center\" node.\n");
@@ -177,11 +177,11 @@ static LY_ERR fill_uplane_ch_common_v2(const uplane_dir_t dir, const xran_mplane
   return LY_SUCCESS;
 }
 
-static bool fill_uplane_ch_rx_v2(const uplane_dir_t dir, const xran_mplane_t *xran_mplane, const openair0_config_t *oai, const size_t idx, struct lyd_node **root)
+static bool fill_uplane_ch_rx_v2(const uplane_dir_t dir, const xran_mplane_t *xran_mplane, const split7_config_t *cfg, const size_t idx, struct lyd_node **root)
 {
   LY_ERR ret = LY_SUCCESS;
 
-  ret = fill_uplane_ch_common_v2(dir, xran_mplane, oai, idx, root);
+  ret = fill_uplane_ch_common_v2(dir, xran_mplane, cfg, idx, root);
   VERIFY_SUCCESS(ret == LY_SUCCESS, "[MPLANE] Failed to create common nodes.\n");
 
   const char *managed_delay = xran_mplane->managed_delay ? "true" : "false";
@@ -189,16 +189,16 @@ static bool fill_uplane_ch_rx_v2(const uplane_dir_t dir, const xran_mplane_t *xr
   VERIFY_SUCCESS(ret == LY_SUCCESS, "[MPLANE] Failed to create \"non-time-managed-delay-enabled\" node.\n");
 
   struct lyd_node *fft_offset = NULL;
-  ret = lyd_new_list(*root, NULL, "ul-fft-sampling-offsets", 0, &fft_offset, scs_name[oai->nr_scs_for_raster]);
+  ret = lyd_new_list(*root, NULL, "ul-fft-sampling-offsets", 0, &fft_offset, scs_name[cfg->mu]);
   VERIFY_SUCCESS(ret == LY_SUCCESS, "[MPLANE] Failed to create \"ul-fft-sampling-offsets\" node.\n");
 
   // Note: set of allowed values is restricted by SCS derived from values in supported-frame-structures.
   char ul_fft_offset[8];
   int frame = 0;
   if (dir == UP_CH_RX) {
-    frame = (oai->split7.fftSize << 4) + oai->nr_scs_for_raster;
+    frame = (cfg->fftSize << 4) + cfg->mu;
   } else if (dir == UP_CH_PRACH) {
-    frame = (oai->split7.prach_fftSize << 4) + oai->nr_scs_for_raster; // TODO: handle long PRACH
+    frame = (cfg->prach_fftSize << 4) + cfg->mu; // TODO: handle long PRACH
   }
   snprintf(ul_fft_offset, sizeof(ul_fft_offset), "%d", xran_mplane->frame_str - frame);
   ret = lyd_new_term(fft_offset, NULL, "ul-fft-sampling-offset", ul_fft_offset, 0, NULL);
@@ -207,11 +207,11 @@ static bool fill_uplane_ch_rx_v2(const uplane_dir_t dir, const xran_mplane_t *xr
   return true;
 }
 
-static bool fill_uplane_ch_tx_v2(const xran_mplane_t *xran_mplane, const openair0_config_t *oai, const size_t idx, struct lyd_node **root)
+static bool fill_uplane_ch_tx_v2(const xran_mplane_t *xran_mplane, const split7_config_t *cfg, const size_t idx, struct lyd_node **root)
 {
   LY_ERR ret = LY_SUCCESS;
 
-  ret = fill_uplane_ch_common_v2(UP_CH_TX, xran_mplane, oai, idx, root);
+  ret = fill_uplane_ch_common_v2(UP_CH_TX, xran_mplane, cfg, idx, root);
   VERIFY_SUCCESS(ret == LY_SUCCESS, "[MPLANE] Failed to create common nodes.\n");
 
   return true;
@@ -320,7 +320,7 @@ static bool create_uplane_conf_v2(const ru_session_t *ru_session, const openair0
     ret = lyd_new_list(*root, NULL, "low-level-rx-endpoints", 0, &pusch_node, ru_session->ru_mplane_config.rx_endpoints.name[i * i_rx]);
     VERIFY_SUCCESS(ret == LY_SUCCESS, "[MPLANE] Failed to create \"low-level-rx-endpoints\" node.\n");
     
-    success = fill_uplane_ch_rx_v2(UP_CH_RX, &ru_session->xran_mplane, oai, i, &pusch_node);
+    success = fill_uplane_ch_rx_v2(UP_CH_RX, &ru_session->xran_mplane, &oai->split7, i, &pusch_node);
     VERIFY_SUCCESS(success, "[MPLANE] Failed to fill \"low-level-rx-endpoints\" node for %s.\n", ru_session->ru_mplane_config.rx_endpoints.name[i * i_rx]);
 
     const size_t prach_endpoint_name_offset = i * i_rx + (ru_session->ru_mplane_config.rx_endpoints.num / 2);
@@ -328,7 +328,7 @@ static bool create_uplane_conf_v2(const ru_session_t *ru_session, const openair0
     ret = lyd_new_list(*root, NULL, "low-level-rx-endpoints", 0, &prach_node, ru_session->ru_mplane_config.rx_endpoints.name[prach_endpoint_name_offset]);
     VERIFY_SUCCESS(ret == LY_SUCCESS, "[MPLANE] Failed to create \"low-level-rx-endpoints\" node.\n");
 
-    success = fill_uplane_ch_rx_v2(UP_CH_PRACH, &ru_session->xran_mplane, oai, i + ru_session->xran_mplane.prach_offset, &prach_node);
+    success = fill_uplane_ch_rx_v2(UP_CH_PRACH, &ru_session->xran_mplane, &oai->split7, i + ru_session->xran_mplane.prach_offset, &prach_node);
     VERIFY_SUCCESS(success, "[MPLANE] Failed to fill \"low-level-rx-endpoints\" node for %s.\n", ru_session->ru_mplane_config.rx_endpoints.name[prach_endpoint_name_offset]);
   }
 
@@ -338,7 +338,7 @@ static bool create_uplane_conf_v2(const ru_session_t *ru_session, const openair0
     ret = lyd_new_list(*root, NULL, "low-level-tx-endpoints", 0, &pdsch_node, ru_session->ru_mplane_config.tx_endpoints.name[i * i_tx]);
     VERIFY_SUCCESS(ret == LY_SUCCESS, "[MPLANE] Failed to create \"low-level-tx-endpoints\" node.\n");
 
-    success = fill_uplane_ch_tx_v2(&ru_session->xran_mplane, oai, i, &pdsch_node);
+    success = fill_uplane_ch_tx_v2(&ru_session->xran_mplane, &oai->split7, i, &pdsch_node);
     VERIFY_SUCCESS(success, "[MPLANE] Failed to fill \"low-level-tx-endpoints\" node for %s.\n", ru_session->ru_mplane_config.tx_endpoints.name[i * i_tx]);
   }
 

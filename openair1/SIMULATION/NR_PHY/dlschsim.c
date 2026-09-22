@@ -460,6 +460,8 @@ int main(int argc, char **argv)
 	NR_UE_DLSCH_t *dlsch0_ue = &dlsch_ue[0];
   NR_DL_UE_HARQ_t *harq_process = &UE->dl_harq_processes[0][harq_pid];
   harq_process->first_rx = 1;
+  harq_process->activated_frame = proc.frame_rx;
+  harq_process->activated_slot = proc.nr_slot_rx;
   fapi_nr_dl_config_dlsch_pdu_rel15_t dlsch_config;
   dlsch_config.cw_info[0].mcs = Imcs;
   dlsch_config.mcs_table = mcs_table;
@@ -495,7 +497,7 @@ int main(int argc, char **argv)
   unsigned char output[nb_rb * NR_SYMBOLS_PER_SLOT * NR_NB_SC_PER_RB * NR_MAX_NB_LAYERS] __attribute__((aligned(64)));
   bzero(output, sizeof(output));
         if (input_fd == NULL) {
-          nr_dlsch_encoding(gNB, 1, dlsch, frame, slot, output, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+          nr_dlsch_encoding(gNB, 1, dlsch, frame, slot, output);
 	}
 
 	for (SNR = snr0; SNR < snr1 && !stop; SNR += snr_step) {

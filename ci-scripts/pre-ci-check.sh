@@ -52,6 +52,12 @@ while getopts ":s:t:h" opt; do
     esac
 done
 
+# For fork PRs the head commit is often not in the workspace; fetch it so the
+# rev-list ranges below resolve and forks are checked like in-repo branches.
+if ! git rev-parse --verify --quiet "${SOURCE_BRANCH}^{commit}" >/dev/null; then
+    git fetch --no-tags --quiet origin "$SOURCE_BRANCH" || true
+fi
+
 # ----------------------------
 # Merged commits
 # ----------------------------

@@ -77,3 +77,15 @@ void nrppa_free_ue_context(nrppa_gNB_ue_context_t *ue_info)
   }
   free(ue_info);
 }
+
+struct nrppa_gNB_ue_context_s *nrppa_get_context_by_ue_id(uint32_t gNB_ue_ngap_id)
+{
+  struct nrppa_gNB_ue_context_s *ue_info = NULL;
+
+  RB_FOREACH (ue_info, nrppa_ue_map, &nrppa_ue_head) {
+    if (ue_info->gNB_ue_ngap_id == gNB_ue_ngap_id) {
+      return ue_info;
+    }
+  }
+  return NULL;
+}

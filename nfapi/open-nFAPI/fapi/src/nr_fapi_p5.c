@@ -84,7 +84,7 @@ int fapi_nr_p5_message_pack(void *pMessageBuf,
 
   // PHY API message header
   push8(1, &pWritePackedMessage, pPackMessageEnd); // Number of messages
-  push8(0, &pWritePackedMessage, pPackMessageEnd); // Opaque handle
+  push8(pMessageHeader->phy_id, &pWritePackedMessage, pPackMessageEnd); // Opaque handle
 
   // PHY API Message structure
   push16(pMessageHeader->message_id, &pWritePackedMessage, pPackMessageEnd); // Message type ID

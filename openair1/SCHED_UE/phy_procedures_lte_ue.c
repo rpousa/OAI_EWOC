@@ -17,6 +17,7 @@
 
 #include "PHY/LTE_UE_TRANSPORT/transport_proto_ue.h"
 #include "SCHED_UE/sched_UE.h"
+#include "PHY/MODULATION/phy_ofdm_mod.h"
 #include "PHY/MODULATION/modulation_UE.h"
 #include "PHY/LTE_ESTIMATION/lte_estimation.h"
 
@@ -3959,7 +3960,8 @@ int phy_procedures_slot_parallelization_UE_RX(PHY_VARS_UE *ue,
   }
 
   //AssertFatal(pthread_cond_signal(&proc->cond_slot1_dl_processing) ==0 ,"");
-  AssertFatal(pthread_mutex_unlock(&proc->mutex_slot1_dl_processing) ==0,"");
+  int ret = pthread_mutex_unlock(&proc->mutex_slot1_dl_processing);
+  AssertFatal(!ret, "%s", strerror(ret));
 
   /**** Slot0 FE Processing ****/
   // I- start main thread for FFT/ChanEst symbol: 0/1 --> 7
@@ -4671,7 +4673,7 @@ int phy_procedures_UE_RX(PHY_VARS_UE *ue,
         LOG_M("rxdataF_comp00.m","rxdataF_comp00",     &ue->pdsch_vars[ue->current_thread_id[subframe_rx]][0]->rxdataF_comp0[0][0],14*ue->frame_parms.N_RB_DL*12,1,1);
         //LOG_M("magDLFirst.m", "magDLFirst", &phy_vars_ue->pdsch_vars[ue->current_thread_id[subframe_rx]][0]->dl_ch_mag0[0][0],14*frame_parms->N_RB_DL*12,1,1);
         //LOG_M("magDLSecond.m", "magDLSecond", &phy_vars_ue->pdsch_vars[ue->current_thread_id[subframe_rx]][0]->dl_ch_magb0[0][0],14*frame_parms->N_RB_DL*12,1,1);
-        AssertFatal (0,"");
+        AssertFatal(0, "for tests");
       }
     }
 

@@ -34,8 +34,8 @@
               3 /*PDU_SESSION_TYPE_IPV4V6*/,         \
               5 /*PDU_SESSION_TYPE_ETHER*/},         \
              4}},                                    \
-    {.s2 = {config_check_intrange, {1, 4}}},         \
-    {.s2 = {config_check_intrange, {1, 0xffffff}}},  \
+    {.s2 = {config_check_intrange, {0, 127}}},       \
+    {.s2 = {config_check_intrange, {0, 0xffffff}}},  \
     {.s4 = {config_check_dnn}},                      \
 }
 // clang-format on

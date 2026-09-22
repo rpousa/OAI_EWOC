@@ -126,6 +126,16 @@ static ngap_gNB_amf_data_t *select_amf(ngap_gNB_instance_t *instance_p, const ng
   return amf;
 }
 
+/** @brief Map UE EstablishmentCause (TS 38.331) to NGAP RRCEstablishmentCause (clause 9.3.1.111).
+ *  Values 0-9 pass through, otherwise return notAvailable. */
+static NGAP_RRCEstablishmentCause_t rrc2ngap_establishment_cause(ngap_rrc_establishment_cause_t cause)
+{
+  if (cause <= NGAP_RRC_CAUSE_MCS_PRIORITY_ACCESS)
+    return cause;
+  /* clause 9.3.1.111: notAvailable when the UE cause does not map to any other value */
+  return NGAP_RRCEstablishmentCause_notAvailable;
+}
+
 /** @brief NAS Transport Messages: Initial UE Message
  *         forward the first received (layer 3) uplink NAS message
  *         from the radio interface to the AMF over N2
@@ -201,16 +211,13 @@ int ngap_gNB_handle_nas_first_req(instance_t instance, ngap_nas_first_req_t *UEf
     MCC_MNC_TO_PLMNID(plmn->mcc, plmn->mnc, plmn->mnc_digit_length, &userinfo_nr_p->tAI.pLMNIdentity);
   }
 
-  /* Set the establishment cause according to those provided by RRC */
-  DevCheck(UEfirstReq->establishment_cause < NGAP_RRC_CAUSE_LAST, UEfirstReq->establishment_cause, NGAP_RRC_CAUSE_LAST, 0);
-
   // RRC Establishment Cause (M)
   {
     asn1cSequenceAdd(out->protocolIEs.list, NGAP_InitialUEMessage_IEs_t, ie);
     ie->id = NGAP_ProtocolIE_ID_id_RRCEstablishmentCause;
     ie->criticality = NGAP_Criticality_ignore;
     ie->value.present = NGAP_InitialUEMessage_IEs__value_PR_RRCEstablishmentCause;
-    ie->value.choice.RRCEstablishmentCause = UEfirstReq->establishment_cause;
+    ie->value.choice.RRCEstablishmentCause = rrc2ngap_establishment_cause(UEfirstReq->establishment_cause);
   }
 
   // 5G-S-TMSI (O)
@@ -608,6 +615,11 @@ int ngap_gNB_initial_ctxt_resp(instance_t instance, ngap_initial_context_setup_r
       item->pDUSessionID = initial_ctxt_resp_p->pdusessions[i].pdusession_id;
       // PDU Session Resource Setup Response Transfer (Mandatory)
       byte_array_t ba = encode_ngap_pdusession_setup_response_transfer(&initial_ctxt_resp_p->pdusessions[i]);
+      if (ba.buf == NULL) {
+        NGAP_ERROR("Failed to encode PDUSessionResourceSetupResponseTransfer for PDU session %ld\n", item->pDUSessionID);
+        ASN_STRUCT_FREE_CONTENTS_ONLY(asn_DEF_NGAP_NGAP_PDU, &pdu);
+        return -1;
+      }
       item->pDUSessionResourceSetupResponseTransfer.buf = ba.buf;
       item->pDUSessionResourceSetupResponseTransfer.size = ba.len;
     }
@@ -621,21 +633,18 @@ int ngap_gNB_initial_ctxt_resp(instance_t instance, ngap_initial_context_setup_r
 
     for (i = 0; i < initial_ctxt_resp_p->nb_of_pdusessions_failed; i++) {
       asn1cSequenceAdd(ie->value.choice.PDUSessionResourceFailedToSetupListCxtRes.list, NGAP_PDUSessionResourceFailedToSetupItemCxtRes_t, item);
-      NGAP_PDUSessionResourceSetupUnsuccessfulTransfer_t pdusessionUnTransfer = {0};
-    
       /* pDUSessionID */
       item->pDUSessionID = initial_ctxt_resp_p->pdusessions_failed[i].pdusession_id;
-
-      /* cause */
-      encode_ngap_cause(&pdusessionUnTransfer.cause, &initial_ctxt_resp_p->pdusessions_failed[i].cause);
-
       NGAP_INFO("initial context setup response: failed pdusession ID %ld\n", item->pDUSessionID);
-      asn_encode_to_new_buffer_result_t res = asn_encode_to_new_buffer(NULL, ATS_ALIGNED_CANONICAL_PER, &asn_DEF_NGAP_PDUSessionResourceSetupUnsuccessfulTransfer, &pdusessionUnTransfer);
-      AssertFatal(res.buffer, "ASN1 message encoding failed (%s, %lu)!\n", res.result.failed_type->name, res.result.encoded);
-      item->pDUSessionResourceSetupUnsuccessfulTransfer.buf = res.buffer;
-      item->pDUSessionResourceSetupUnsuccessfulTransfer.size = res.result.encoded;
 
-      ASN_STRUCT_FREE_CONTENTS_ONLY(asn_DEF_NGAP_PDUSessionResourceSetupUnsuccessfulTransfer, &pdusessionUnTransfer);
+      byte_array_t ba = encode_ngap_pdusession_setup_unsuccessful_transfer(&initial_ctxt_resp_p->pdusessions_failed[i].cause);
+      if (ba.buf == NULL) {
+        NGAP_ERROR("Failed to encode PDUSessionResourceSetupUnsuccessfulTransfer for PDU session %ld\n", item->pDUSessionID);
+        ASN_STRUCT_FREE_CONTENTS_ONLY(asn_DEF_NGAP_NGAP_PDU, &pdu);
+        return -1;
+      }
+      item->pDUSessionResourceSetupUnsuccessfulTransfer.buf = ba.buf;
+      item->pDUSessionResourceSetupUnsuccessfulTransfer.size = ba.len;
     }
   }
 

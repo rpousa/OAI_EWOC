@@ -20,6 +20,12 @@
 #include "ldpc_encode_parity_check.c"
 #include "ldpc_generate_coefficient.c"
 
+/* not used, only for compat with LDPC CUDA implementation */
+uint32_t **LDPCencoder32(uint8_t **input, encoder_implemparams_t *impp)
+{
+  abort();
+}
+
 int LDPCencoder(uint8_t **input, uint8_t *output, encoder_implemparams_t *impp)
 {
   //set_log(PHY, 4);
@@ -172,7 +178,7 @@ int LDPCencoder(uint8_t **input, uint8_t *output, encoder_implemparams_t *impp)
   if ((BG == 1 && Zc >= 176) || (BG == 2 && Zc >= 72)) {
     //parity check part
     if(impp->tparity != NULL) start_meas(impp->tparity);
-    encode_parity_check_part_optim(cc, dd, BG, Zc, simd_size, ncols, impp->tinput_memcpy);
+    encode_parity_check_part_optim(cc, dd, BG, Zc, simd_size, ncols);
     if(impp->tparity != NULL) stop_meas(impp->tparity);
   } else {
     if (encode_parity_check_part_orig(cc, dd, BG, Zc, Kb, block_length)!=0) {

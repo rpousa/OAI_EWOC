@@ -48,3 +48,38 @@ MESSAGE_DEF(F1AP_UE_CONTEXT_MODIFICATION_REFUSE, MESSAGE_PRIORITY_MED, f1ap_ue_c
 
 /* CU -> DU*/
 MESSAGE_DEF(F1AP_PAGING, MESSAGE_PRIORITY_MED, f1ap_paging_t, f1ap_paging)
+
+/* CU -> DU*/
+MESSAGE_DEF(F1AP_TRP_INFORMATION_REQ, MESSAGE_PRIORITY_MED, f1ap_trp_information_req_t, f1ap_trp_information_req)
+MESSAGE_DEF(F1AP_POSITIONING_INFORMATION_REQ,
+            MESSAGE_PRIORITY_MED,
+            f1ap_positioning_information_req_t,
+            f1ap_positioning_information_req)
+MESSAGE_DEF(F1AP_POSITIONING_ACTIVATION_REQ,
+            MESSAGE_PRIORITY_MED,
+            f1ap_positioning_activation_req_t,
+            f1ap_positioning_activation_req)
+MESSAGE_DEF(F1AP_POSITIONING_MEASUREMENT_REQ,
+            MESSAGE_PRIORITY_MED,
+            f1ap_positioning_measurement_req_t,
+            f1ap_positioning_measurement_req)
+
+/* DU -> CU*/
+MESSAGE_DEF(F1AP_TRP_INFORMATION_RESP, MESSAGE_PRIORITY_MED, f1ap_trp_information_resp_t, f1ap_trp_information_resp)
+MESSAGE_DEF(F1AP_TRP_INFORMATION_FAILURE, MESSAGE_PRIORITY_MED, f1ap_trp_information_failure_t, f1ap_trp_information_failure)
+MESSAGE_DEF(F1AP_POSITIONING_INFORMATION_RESP,
+            MESSAGE_PRIORITY_MED,
+            f1ap_positioning_information_resp_t,
+            f1ap_positioning_information_resp)
+MESSAGE_DEF(F1AP_POSITIONING_ACTIVATION_RESP,
+            MESSAGE_PRIORITY_MED,
+            f1ap_positioning_activation_resp_t,
+            f1ap_positioning_activation_resp)
+MESSAGE_DEF(F1AP_POSITIONING_MEASUREMENT_RESP,
+            MESSAGE_PRIORITY_MED,
+            f1ap_positioning_measurement_resp_t,
+            f1ap_positioning_measurement_resp)
+MESSAGE_DEF(F1AP_POSITIONING_MEASUREMENT_FAILURE,
+            MESSAGE_PRIORITY_MED,
+            f1ap_positioning_measurement_failure_t,
+            f1ap_positioning_measurement_failure)

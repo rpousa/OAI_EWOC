@@ -140,7 +140,13 @@ static void nr_pdcp_entity_recv_pdu(nr_pdcp_entity_t *entity,
 
   if (rcvd_count < entity->rx_deliv
       || nr_pdcp_sdu_in_list(entity->rx_list, rcvd_count)) {
-    LOG_W(PDCP, "discard NR PDU rcvd_count=%d, entity->rx_deliv %d,sdu_in_list %d\n", rcvd_count,entity->rx_deliv,nr_pdcp_sdu_in_list(entity->rx_list,rcvd_count));
+    /* 1280 ms = 128 frames @ 10 ms, to match MAC cadence */
+    if (entity->pdu_discarded != 0 && entity->t_current > entity->t_log_pdu_discard + 1280) {
+      LOG_W(PDCP, "%d NR PDU discarded (rcvd_count < rx_deliv or duplicate)\n", entity->pdu_discarded);
+      entity->pdu_discarded = 0;
+      entity->t_log_pdu_discard = entity->t_current;
+    }
+    entity->pdu_discarded++;
     entity->stats.rxpdu_dd_pkts++;
     entity->stats.rxpdu_dd_bytes += size;
 

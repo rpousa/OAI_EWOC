@@ -53,7 +53,7 @@ static int get_ssb_scs(const f1ap_served_cell_info_t *cell_info)
   return cell_info->mode == F1AP_MODE_TDD ? cell_info->tdd.tbw.scs : cell_info->fdd.dl_tbw.scs;
 }
 
-static NR_SSB_MTC_t *get_ssb_mtc(const NR_MeasurementTimingConfiguration_t *mtc)
+NR_SSB_MTC_t *get_ssb_mtc(const NR_MeasurementTimingConfiguration_t *mtc)
 {
   // TODO verify which element of the list to pick
   NR_MeasTimingList_t *mtlist = mtc->criticalExtensions.choice.c1->choice.measTimingConf->measTiming;
@@ -1298,4 +1298,20 @@ void rrc_send_paging_to_dus(gNB_RRC_INST *rrc, const nr_tai_t tais[], uint8_t n_
   }
 
   msg->cells = NULL; // Stack allocation, no need to free
+}
+
+void rrc_send_trp_information_request_to_dus(gNB_RRC_INST *rrc, f1ap_trp_information_req_t *msg)
+{
+  nr_rrc_du_container_t *du = NULL;
+  RB_FOREACH (du, rrc_du_tree, &rrc->dus) {
+    rrc->mac_rrc.trp_information_request(du->assoc_id, msg);
+  }
+}
+
+void rrc_send_positioning_measurement_request_to_dus(gNB_RRC_INST *rrc, f1ap_positioning_measurement_req_t *msg)
+{
+  nr_rrc_du_container_t *du = NULL;
+  RB_FOREACH (du, rrc_du_tree, &rrc->dus) {
+    rrc->mac_rrc.positioning_measurement_request(du->assoc_id, msg);
+  }
 }
