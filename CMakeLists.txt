@@ -1155,6 +1155,7 @@ set(L2_NR_SRC
   ${NR_RRC_DIR}/rrc_gNB_NGAP.c
   ${NR_RRC_DIR}/rrc_gNB_radio_bearers.c
   ${NR_RRC_DIR}/rrc_gNB_cuup.c
+  ${NR_RRC_DIR}/rrc_gNB_cuup_reloc.c
   ${NR_RRC_DIR}/rrc_gNB_du.c
   ${NR_RRC_DIR}/rrc_gNB_mobility.c
   ${NR_RRC_DIR}/rrc_gNB_NRPPA.c

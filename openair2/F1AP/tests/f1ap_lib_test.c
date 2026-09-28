@@ -1073,6 +1073,19 @@ static void test_f1ap_ue_context_modification_request()
   _F1_MALLOC(drb1->dl_pdcp_sn_len, F1AP_PDCP_SN_12B);
   _F1_MALLOC(drb1->ul_pdcp_sn_len, F1AP_PDCP_SN_18B);
 
+  /* DRBs to be modified: existing DRBs whose CU-UP-side uplink endpoint moved,
+   * as sent when a UE's bearers are relocated to another CU-UP */
+  orig.drbs_mod_len = 2;
+  orig.drbs_mod = calloc_or_fail(orig.drbs_mod_len, sizeof(*orig.drbs_mod));
+  orig.drbs_mod[0].id = 7;
+  orig.drbs_mod[0].up_ul_tnl_len = 1;
+  inet_pton(AF_INET, "10.0.0.7", &orig.drbs_mod[0].up_ul_tnl[0].tl_address);
+  orig.drbs_mod[0].up_ul_tnl[0].teid = 0x1122334;
+  orig.drbs_mod[1].id = 8;
+  orig.drbs_mod[1].up_ul_tnl_len = 1;
+  inet_pton(AF_INET, "10.0.0.8", &orig.drbs_mod[1].up_ul_tnl[0].tl_address);
+  orig.drbs_mod[1].up_ul_tnl[0].teid = 0x1122335;
+
   orig.drbs_rel_len = 3;
   orig.drbs_rel = calloc_or_fail(orig.drbs_rel_len, sizeof(*orig.drbs_rel));
   orig.drbs_rel[0].id = 13;

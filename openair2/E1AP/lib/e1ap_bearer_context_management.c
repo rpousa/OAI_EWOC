@@ -1441,6 +1441,12 @@ static E1AP_PDU_Session_Resource_To_Modify_Item_t e1_encode_pdu_session_to_mod_i
 {
   E1AP_PDU_Session_Resource_To_Modify_Item_t out = {0};
   out.pDU_Session_ID = in->sessionId;
+  /* NG UL UP Transport Layer Information (O): a new uplink endpoint towards the
+   * core, e.g. after the SMF relocated the UPF. */
+  if (in->UP_TL_information) {
+    out.nG_UL_UP_TNL_Information = calloc_or_fail(1, sizeof(*out.nG_UL_UP_TNL_Information));
+    *out.nG_UL_UP_TNL_Information = e1_encode_up_tnl_info(in->UP_TL_information);
+  }
   if (in->numDRB2Modify > 0) {
     out.dRB_To_Modify_List_NG_RAN = calloc_or_fail(1, sizeof(*out.dRB_To_Modify_List_NG_RAN));
   }
@@ -1727,10 +1733,16 @@ static bool e1_decode_pdu_session_to_mod_item(pdu_session_to_mod_t *out, const E
 {
   // PDU Session ID
   out->sessionId = in->pDU_Session_ID;
-  // DRB to modify list
+  // NG UL UP Transport Layer Information (O)
+  if (in->nG_UL_UP_TNL_Information) {
+    out->UP_TL_information = calloc_or_fail(1, sizeof(*out->UP_TL_information));
+    CHECK_E1AP_DEC(e1_decode_up_tnl_info(out->UP_TL_information, in->nG_UL_UP_TNL_Information));
+  }
+  /* DRB to modify list (O): an item may carry only a new uplink endpoint and no
+   * DRB at all, so the list can be absent. */
   E1AP_DRB_To_Modify_List_NG_RAN_t *drb2ModList = in->dRB_To_Modify_List_NG_RAN;
-  out->numDRB2Modify = drb2ModList->list.count;
-  for (int j = 0; j < drb2ModList->list.count; j++) {
+  out->numDRB2Modify = drb2ModList != NULL ? drb2ModList->list.count : 0;
+  for (int j = 0; j < out->numDRB2Modify; j++) {
     DRB_nGRAN_to_mod_t *drb = out->DRBnGRanModList + j;
     // DRB to modify item
     E1AP_DRB_To_Modify_Item_NG_RAN_t *drb2Mod = drb2ModList->list.array[j];

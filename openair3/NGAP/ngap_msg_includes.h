@@ -105,4 +105,18 @@
 #include "NGAP_PDUSessionResourceNotify.h"
 #include "NGAP_PDUSessionResourceReleasedItemNot.h"
 #include "NGAP_PDUSessionResourceNotifyReleasedTransfer.h"
+/* PDU Session Resource Modify Indication / Confirm (9.2.1.8, 9.2.1.9) */
+#include "NGAP_PDUSessionResourceModifyIndication.h"
+#include "NGAP_PDUSessionResourceModifyListModInd.h"
+#include "NGAP_PDUSessionResourceModifyItemModInd.h"
+#include "NGAP_PDUSessionResourceModifyIndicationTransfer.h"
+#include "NGAP_QosFlowPerTNLInformation.h"
+#include "NGAP_PDUSessionResourceModifyConfirm.h"
+#include "NGAP_PDUSessionResourceModifyListModCfm.h"
+#include "NGAP_PDUSessionResourceModifyItemModCfm.h"
+#include "NGAP_PDUSessionResourceModifyConfirmTransfer.h"
+#include "NGAP_QosFlowModifyConfirmList.h"
+#include "NGAP_QosFlowModifyConfirmItem.h"
+#include "NGAP_PDUSessionResourceFailedToModifyListModCfm.h"
+#include "NGAP_PDUSessionResourceFailedToModifyItemModCfm.h"
 #endif // NGAP_MSG_INCLUDES_H

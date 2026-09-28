@@ -18,6 +18,7 @@
 #include "NR_RRCReconfiguration.h"
 #include "RRC/NR/MESSAGES/asn1_msg.h"
 #include "f1ap_messages_types.h"
+#include "e1ap_messages_types.h"
 
 #define SRB1 1
 #define SRB2 2
@@ -46,6 +47,11 @@ void *rrc_gnb_task(void *args_p);
 bool ue_associated_to_cuup(const gNB_RRC_UE_t *ue);
 sctp_assoc_t get_existing_cuup_for_ue(const gNB_RRC_UE_t *ue);
 sctp_assoc_t get_new_cuup_for_ue(const gNB_RRC_INST *rrc, const gNB_RRC_UE_t *ue, int sst, int sd);
+/* CU-UP selection and binding as separate steps, for inter-CU-UP relocation */
+sctp_assoc_t rrc_select_other_cuup_for_ue(const gNB_RRC_INST *rrc, const gNB_RRC_UE_t *ue, int64_t wanted_cuup_id, int sst, int sd);
+bool rrc_bind_cuup_to_ue(const gNB_RRC_UE_t *ue, sctp_assoc_t assoc_id);
+int64_t rrc_get_cuup_id_by_assoc(gNB_RRC_INST *rrc, sctp_assoc_t assoc_id);
+nr_rrc_cuup_container_t *get_cuup_by_assoc_id(gNB_RRC_INST *rrc, sctp_assoc_t assoc_id);
 int rrc_gNB_process_e1_setup_req(sctp_assoc_t assoc_id, const e1ap_setup_req_t *req);
 bool is_cuup_associated(gNB_RRC_INST *rrc);
 
@@ -67,6 +73,49 @@ void ue_cxt_mod_direct(MessageDef *msg,
 void prepare_and_send_ue_context_modification_f1(rrc_gNB_ue_context_t *ue_context_p,
                                                  e1ap_bearer_setup_resp_t *e1ap_resp);
 void trigger_bearer_setup(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE, uint64_t ueAggMaxBitRateDownlink);
+
+/** @brief Which PDU sessions an E1 Bearer Context Setup should carry. */
+typedef enum {
+  /// only sessions marked NEW: normal PDU session establishment
+  E1_BEARER_SETUP_NEW_SESSIONS,
+  /// every established session: rebuild the whole bearer context on another CU-UP
+  E1_BEARER_SETUP_ESTABLISHED_SESSIONS,
+} e1_bearer_setup_scope_t;
+
+/** @brief E1 Bearer Context Setup towards a specific CU-UP.
+ * @param assoc_id CU-UP to send to; 0 selects and binds one as trigger_bearer_setup() does.
+ * @param scope which PDU sessions to include. */
+void trigger_bearer_setup_on_cuup(gNB_RRC_INST *rrc,
+                                  gNB_RRC_UE_t *UE,
+                                  uint64_t ueAggMaxBitRateDownlink,
+                                  sctp_assoc_t assoc_id,
+                                  e1_bearer_setup_scope_t scope);
+
+/* E1 helpers used by the inter-CU-UP relocation state machine. A zero assoc_id
+ * means "the CU-UP this UE is bound to". */
+void e1_request_pdcp_status_on(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE, sctp_assoc_t assoc_id);
+void e1_notify_pdcp_status_drbs(gNB_RRC_INST *rrc,
+                                gNB_RRC_UE_t *UE,
+                                sctp_assoc_t assoc_id,
+                                int n_drb,
+                                const int *drb_ids,
+                                const e1_pdcp_status_info_t *status);
+void e1_release_bearer_context_on(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE, sctp_assoc_t assoc_id);
+void e1_update_n3_uplink_tunnels(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE, sctp_assoc_t assoc_id, int n_pdu, const int *pdu_ids);
+
+/** @brief Note down / put back the F1-U endpoint of every DRB, i.e. where the
+ * gNB-DU sends uplink. A change of gNB-CU-UP overwrites them with the target's
+ * when the Bearer Context Setup Response arrives, and has to be able to undo
+ * that. Defined in rrc_gNB.c.
+ * @return the number of DRBs whose endpoint was noted down. */
+int rrc_save_cuup_tunnels(const gNB_RRC_UE_t *ue, int *drb_ids, gtpu_tunnel_t *tunnels);
+void rrc_restore_cuup_tunnels(gNB_RRC_UE_t *ue, int n, const int *drb_ids, const gtpu_tunnel_t *tunnels);
+
+/** @brief F1 UE Context Modification Request that repoints the DU's F1-U
+ * tunnels of all existing DRBs at the CU-UP the UE is now bound to, and changes
+ * nothing else (inter-CU-UP relocation). Defined in rrc_gNB.c.
+ * @return the number of DRBs announced to the DU, 0 when nothing was sent. */
+int rrc_send_f1_ue_context_modification_for_cuup_change(const gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue);
 
 int rrc_gNB_generate_pcch_msg(sctp_assoc_t assoc_id, const NR_SIB1_t *sib, uint32_t tmsi, uint8_t paging_drx);
 

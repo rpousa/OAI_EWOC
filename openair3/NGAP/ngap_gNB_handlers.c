@@ -1185,6 +1185,47 @@ static int ngap_gNB_handle_ng_path_switch_request_ack(sctp_assoc_t assoc_id, uin
   return 0;
 }
 
+/** @brief Handle PDU Session Resource Modify Confirm (9.2.1.9 of TS 38.413).
+ *
+ * The successful outcome of a PDU Session Resource Modify Indication the NG-RAN
+ * node sent: the core has switched the downlink to the endpoint we announced,
+ * and tells us the uplink endpoint to use, which is a new one when the SMF
+ * relocated the UPF in the process. */
+static int ngap_gNB_handle_pdusession_modify_confirm(sctp_assoc_t assoc_id, uint32_t stream, NGAP_NGAP_PDU_t *pdu)
+{
+  DevAssert(pdu != NULL);
+  NGAP_INFO("Received PDU Session Resource Modify Confirm\n");
+
+  ngap_gNB_amf_data_t *amf_desc_p = ngap_gNB_get_AMF(NULL, assoc_id, 0);
+  if (amf_desc_p == NULL) {
+    NGAP_ERROR("[SCTP %u] Received PDU Session Resource Modify Confirm for non existing AMF context\n", assoc_id);
+    return -1;
+  }
+
+  MessageDef *message_p = itti_alloc_new_message(TASK_NGAP, 0, NGAP_PDUSESSION_MODIFY_CONFIRM);
+  ngap_pdusession_modify_confirm_t *msg = &NGAP_PDUSESSION_MODIFY_CONFIRM(message_p);
+  memset(msg, 0, sizeof(*msg));
+
+  if (!decode_ngap_pdusession_modify_confirm(msg, pdu)) {
+    NGAP_ERROR("Failed to decode PDU Session Resource Modify Confirm\n");
+    itti_free(TASK_NGAP, message_p);
+    return -1;
+  }
+
+  ngap_gNB_ue_context_t *ue_desc_p = ngap_get_ue_context(msg->gNB_ue_ngap_id);
+  if (ue_desc_p == NULL) {
+    NGAP_ERROR("[SCTP %u] Received PDU Session Resource Modify Confirm for non existing UE context (gNB_ue_ngap_id %u)\n",
+               assoc_id,
+               msg->gNB_ue_ngap_id);
+    itti_free(TASK_NGAP, message_p);
+    return -1;
+  }
+  ue_desc_p->rx_stream = stream;
+
+  itti_send_msg_to_task(TASK_RRC_GNB, amf_desc_p->ngap_gNB_instance->instance, message_p);
+  return 0;
+}
+
 /**
  * @brief Handle NGAP Paging message from AMF
  * @param assoc_id SCTP association ID
@@ -1633,7 +1674,7 @@ const ngap_message_decoded_callback ngap_messages_callback[][3] = {
     {ngap_gNB_handle_paging, 0, 0}, /* Paging */
     {0, ngap_gNB_handle_ng_path_switch_request_ack, 0}, /* PathSwitchRequest */
     {ngap_gNB_handle_pdusession_modify_request, 0, 0}, /* PDUSessionResourceModify */
-    {0, 0, 0}, /* PDUSessionResourceModifyIndication */
+    {0, ngap_gNB_handle_pdusession_modify_confirm, 0}, /* PDUSessionResourceModifyIndication */
     {ngap_gNB_handle_pdusession_release_command, 0, 0}, /* PDUSessionResourceRelease */
     {ngap_gNB_handle_pdusession_setup_request, 0, 0}, /* PDUSessionResourceSetup */
     {0, 0, 0}, /* PDUSessionResourceNotify */

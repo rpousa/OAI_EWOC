@@ -913,3 +913,182 @@ int decode_ng_path_switch_request_acknowledge(ngap_path_switch_req_ack_t *msg, N
 
   return 0;
 }
+
+/** @brief Encode the PDU Session Resource Modify Indication Transfer IE
+ * (9.3.4.6 of TS 38.413): the downlink QoS-flow-per-TNL information, i.e. the
+ * NG-RAN node's new N3 downlink endpoint and the flows carried on it. */
+static byte_array_t encode_ngap_pdusession_modify_indication_transfer(const pdusession_modify_ind_item_t *item)
+{
+  byte_array_t out = {0};
+  NGAP_PDUSessionResourceModifyIndicationTransfer_t transfer = {0};
+
+  /* DL QoS Flow per TNL Information (M) */
+  NGAP_UPTransportLayerInformation_t *up = &transfer.dLQosFlowPerTNLInformation.uPTransportLayerInformation;
+  up->present = NGAP_UPTransportLayerInformation_PR_gTPTunnel;
+  asn1cCalloc(up->choice.gTPTunnel, tunnel);
+  GTP_TEID_TO_ASN1(item->n3_outgoing.teid, &tunnel->gTP_TEID);
+  tnl_to_bitstring(&tunnel->transportLayerAddress, item->n3_outgoing.addr);
+
+  for (int i = 0; i < item->nb_of_qos_flow; i++) {
+    asn1cSequenceAdd(transfer.dLQosFlowPerTNLInformation.associatedQosFlowList.list, NGAP_AssociatedQosFlowItem_t, flow);
+    flow->qosFlowIdentifier = item->qfi[i];
+  }
+
+  void *buffer = NULL;
+  ssize_t encoded = aper_encode_to_new_buffer(&asn_DEF_NGAP_PDUSessionResourceModifyIndicationTransfer, NULL, &transfer, &buffer);
+  ASN_STRUCT_FREE_CONTENTS_ONLY(asn_DEF_NGAP_PDUSessionResourceModifyIndicationTransfer, &transfer);
+  if (encoded <= 0) {
+    NGAP_ERROR("Failed to encode PDUSessionResourceModifyIndicationTransfer\n");
+    return out;
+  }
+  out.buf = buffer;
+  out.len = encoded;
+  return out;
+}
+
+NGAP_NGAP_PDU_t *encode_ngap_pdusession_modify_indication(const ngap_pdusession_modify_ind_t *msg)
+{
+  DevAssert(msg != NULL);
+  if (msg->nb_of_pdusessions == 0) {
+    NGAP_ERROR("PDU Session Resource Modify Indication without any PDU session\n");
+    return NULL;
+  }
+
+  NGAP_NGAP_PDU_t pdu = {0};
+  pdu.present = NGAP_NGAP_PDU_PR_initiatingMessage;
+  asn1cCalloc(pdu.choice.initiatingMessage, initiatingMessage);
+  initiatingMessage->procedureCode = NGAP_ProcedureCode_id_PDUSessionResourceModifyIndication;
+  initiatingMessage->criticality = NGAP_Criticality_reject;
+  initiatingMessage->value.present = NGAP_InitiatingMessage__value_PR_PDUSessionResourceModifyIndication;
+  NGAP_PDUSessionResourceModifyIndication_t *out = &initiatingMessage->value.choice.PDUSessionResourceModifyIndication;
+
+  /* AMF UE NGAP ID (M) */
+  {
+    asn1cSequenceAdd(out->protocolIEs.list, NGAP_PDUSessionResourceModifyIndicationIEs_t, ie);
+    ie->id = NGAP_ProtocolIE_ID_id_AMF_UE_NGAP_ID;
+    ie->criticality = NGAP_Criticality_reject;
+    ie->value.present = NGAP_PDUSessionResourceModifyIndicationIEs__value_PR_AMF_UE_NGAP_ID;
+    asn_uint642INTEGER(&ie->value.choice.AMF_UE_NGAP_ID, msg->amf_ue_ngap_id);
+  }
+  /* RAN UE NGAP ID (M) */
+  {
+    asn1cSequenceAdd(out->protocolIEs.list, NGAP_PDUSessionResourceModifyIndicationIEs_t, ie);
+    ie->id = NGAP_ProtocolIE_ID_id_RAN_UE_NGAP_ID;
+    ie->criticality = NGAP_Criticality_reject;
+    ie->value.present = NGAP_PDUSessionResourceModifyIndicationIEs__value_PR_RAN_UE_NGAP_ID;
+    ie->value.choice.RAN_UE_NGAP_ID = msg->gNB_ue_ngap_id;
+  }
+  /* PDU Session Resource Modify List (M) */
+  {
+    asn1cSequenceAdd(out->protocolIEs.list, NGAP_PDUSessionResourceModifyIndicationIEs_t, ie);
+    ie->id = NGAP_ProtocolIE_ID_id_PDUSessionResourceModifyListModInd;
+    ie->criticality = NGAP_Criticality_reject;
+    ie->value.present = NGAP_PDUSessionResourceModifyIndicationIEs__value_PR_PDUSessionResourceModifyListModInd;
+
+    for (int i = 0; i < msg->nb_of_pdusessions; i++) {
+      const pdusession_modify_ind_item_t *pdu_item = &msg->pdusessions[i];
+      asn1cSequenceAdd(ie->value.choice.PDUSessionResourceModifyListModInd.list, NGAP_PDUSessionResourceModifyItemModInd_t, item);
+      item->pDUSessionID = pdu_item->pdusession_id;
+
+      byte_array_t ba = encode_ngap_pdusession_modify_indication_transfer(pdu_item);
+      if (ba.buf == NULL) {
+        NGAP_ERROR("Failed to encode the transfer IE for PDU session %ld\n", item->pDUSessionID);
+        ASN_STRUCT_FREE_CONTENTS_ONLY(asn_DEF_NGAP_NGAP_PDU, &pdu);
+        return NULL;
+      }
+      item->pDUSessionResourceModifyIndicationTransfer.buf = ba.buf;
+      item->pDUSessionResourceModifyIndicationTransfer.size = ba.len;
+    }
+  }
+
+  NGAP_NGAP_PDU_t *out = calloc_or_fail(1, sizeof(*out));
+  *out = pdu;
+  return out;
+}
+
+/** @brief Decode one PDU Session Resource Modify Confirm Transfer (9.3.4.7):
+ * the UL NG-U TNL the NG-RAN node shall send uplink to from now on. */
+static bool decode_modify_confirm_transfer(pdusession_modify_confirm_item_t *out, const OCTET_STRING_t in)
+{
+  void *decoded = decode_pdusession_transfer(&asn_DEF_NGAP_PDUSessionResourceModifyConfirmTransfer, in);
+  if (!decoded) {
+    NGAP_ERROR("Failed to decode PDUSessionResourceModifyConfirmTransfer\n");
+    return false;
+  }
+  NGAP_PDUSessionResourceModifyConfirmTransfer_t *transfer = (NGAP_PDUSessionResourceModifyConfirmTransfer_t *)decoded;
+
+  /* UL NG-U UP TNL Information (M) */
+  const NGAP_UPTransportLayerInformation_t *up = &transfer->uLNGU_UP_TNLInformation;
+  if (up->present != NGAP_UPTransportLayerInformation_PR_gTPTunnel || up->choice.gTPTunnel == NULL) {
+    NGAP_ERROR("PDUSessionResourceModifyConfirmTransfer without a GTP tunnel\n");
+    ASN_STRUCT_FREE(asn_DEF_NGAP_PDUSessionResourceModifyConfirmTransfer, transfer);
+    return false;
+  }
+  OCTET_STRING_TO_INT32(&up->choice.gTPTunnel->gTP_TEID, out->n3_incoming.teid);
+  bitstring_to_tnl(&out->n3_incoming.addr, up->choice.gTPTunnel->transportLayerAddress);
+
+  /* QoS Flow Modify Confirm List (M) */
+  out->nb_of_qos_flow = 0;
+  for (int i = 0; i < transfer->qosFlowModifyConfirmList.list.count && out->nb_of_qos_flow < MAX_QOS_FLOWS; i++)
+    out->qfi[out->nb_of_qos_flow++] = transfer->qosFlowModifyConfirmList.list.array[i]->qosFlowIdentifier;
+
+  ASN_STRUCT_FREE(asn_DEF_NGAP_PDUSessionResourceModifyConfirmTransfer, transfer);
+  return true;
+}
+
+bool decode_ngap_pdusession_modify_confirm(ngap_pdusession_modify_confirm_t *out, NGAP_NGAP_PDU_t *pdu)
+{
+  DevAssert(out != NULL);
+  DevAssert(pdu != NULL);
+  NGAP_PDUSessionResourceModifyConfirmIEs_t *ie = NULL;
+  NGAP_PDUSessionResourceModifyConfirm_t *container = &pdu->choice.successfulOutcome->value.choice.PDUSessionResourceModifyConfirm;
+
+  /* AMF UE NGAP ID (M) */
+  NGAP_FIND_PROTOCOLIE_BY_ID(NGAP_PDUSessionResourceModifyConfirmIEs_t, ie, container, NGAP_ProtocolIE_ID_id_AMF_UE_NGAP_ID, true);
+  if (ie == NULL)
+    return false;
+  asn_INTEGER2ulong(&ie->value.choice.AMF_UE_NGAP_ID, &out->amf_ue_ngap_id);
+
+  /* RAN UE NGAP ID (M) */
+  NGAP_FIND_PROTOCOLIE_BY_ID(NGAP_PDUSessionResourceModifyConfirmIEs_t, ie, container, NGAP_ProtocolIE_ID_id_RAN_UE_NGAP_ID, true);
+  if (ie == NULL)
+    return false;
+  out->gNB_ue_ngap_id = ie->value.choice.RAN_UE_NGAP_ID;
+
+  /* PDU Session Resource Modify List (O) */
+  NGAP_FIND_PROTOCOLIE_BY_ID(NGAP_PDUSessionResourceModifyConfirmIEs_t,
+                             ie,
+                             container,
+                             NGAP_ProtocolIE_ID_id_PDUSessionResourceModifyListModCfm,
+                             false);
+  if (ie != NULL) {
+    int count = ie->value.choice.PDUSessionResourceModifyListModCfm.list.count;
+    for (int i = 0; i < count && out->nb_of_pdusessions < NR_MAX_NB_PDU_SESSIONS; i++) {
+      NGAP_PDUSessionResourceModifyItemModCfm_t *item = ie->value.choice.PDUSessionResourceModifyListModCfm.list.array[i];
+      pdusession_modify_confirm_item_t *dst = &out->pdusessions[out->nb_of_pdusessions];
+      dst->pdusession_id = item->pDUSessionID;
+      if (!decode_modify_confirm_transfer(dst, item->pDUSessionResourceModifyConfirmTransfer)) {
+        NGAP_WARN("Ignoring PDU session %ld of the Modify Confirm: undecodable transfer\n", item->pDUSessionID);
+        continue;
+      }
+      out->nb_of_pdusessions++;
+    }
+  }
+
+  /* PDU Session Resource Failed to Modify List (O) */
+  NGAP_FIND_PROTOCOLIE_BY_ID(NGAP_PDUSessionResourceModifyConfirmIEs_t,
+                             ie,
+                             container,
+                             NGAP_ProtocolIE_ID_id_PDUSessionResourceFailedToModifyListModCfm,
+                             false);
+  if (ie != NULL) {
+    int count = ie->value.choice.PDUSessionResourceFailedToModifyListModCfm.list.count;
+    for (int i = 0; i < count && out->nb_of_pdusessions_failed < NR_MAX_NB_PDU_SESSIONS; i++) {
+      NGAP_PDUSessionResourceFailedToModifyItemModCfm_t *item =
+          ie->value.choice.PDUSessionResourceFailedToModifyListModCfm.list.array[i];
+      out->pdusessions_failed[out->nb_of_pdusessions_failed++].pdusession_id = item->pDUSessionID;
+    }
+  }
+
+  return true;
+}

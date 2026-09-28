@@ -592,6 +592,15 @@ static void test_bearer_context_modification_request(void)
       .drbs_to_remove[0].id = 4,
   };
 
+  /* Only a new NG UL UP TNL, no DRB: the core moved this session's uplink to
+   * another UPF and the CU-UP has to repoint its N3 tunnel. */
+  pdu_session_to_mod_t pdusession_mod_item_3 = {
+      .sessionId = 3,
+      .UP_TL_information = malloc_or_fail(sizeof(*pdusession_mod_item_3.UP_TL_information)),
+  };
+  pdusession_mod_item_3.UP_TL_information->teId = 0x32345;
+  pdusession_mod_item_3.UP_TL_information->tlAddress = 167772163;
+
   DRB_nGRAN_to_setup_t drb_to_setup = drb_to_setup_template(1);
   drb_to_setup.pdcp_config = dummy_pdcp_config;
   drb_to_setup.sdap_config = dummy_sdap_config;
@@ -628,15 +637,16 @@ static void test_bearer_context_modification_request(void)
       .bearerContextStatus = malloc_or_fail(sizeof(*orig.bearerContextStatus)),
       .inactivityTimer = malloc_or_fail(sizeof(*orig.inactivityTimer)),
       .numPDUSessions = 2,
-      .numPDUSessionsMod = 2,
+      .numPDUSessionsMod = 3,
       .numPDUSessionsRem = 2,
   };
   orig.pduSession = calloc_or_fail(2, sizeof(*orig.pduSession));
   orig.pduSession[0] = pdusession_setup_item;
   orig.pduSession[1] = pdusession_setup_item_2;
-  orig.pduSessionMod = calloc_or_fail(2, sizeof(*orig.pduSessionMod));
+  orig.pduSessionMod = calloc_or_fail(3, sizeof(*orig.pduSessionMod));
   orig.pduSessionMod[0] = pdusession_mod_item;
   orig.pduSessionMod[1] = pdusession_mod_item_2;
+  orig.pduSessionMod[2] = pdusession_mod_item_3;
   orig.pduSessionRem = calloc_or_fail(2, sizeof(*orig.pduSessionRem));
   orig.pduSessionRem[0] = pdu_session_to_remove;
   orig.pduSessionRem[1] = pdu_session_to_remove_2;

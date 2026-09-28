@@ -89,4 +89,16 @@ int rrc_gNB_send_NGAP_ul_ran_status_transfer(gNB_RRC_INST *rrc,
 
 int rrc_gNB_process_NGAP_DL_RAN_STATUS_TRANSFER(MessageDef *msg_p, instance_t instance);
 
+/** @brief Announce a new downlink N3 endpoint for every established PDU session
+ * of this UE (PDU Session Resource Modify Indication, 9.2.1.8 of TS 38.413).
+ * Sent when the RAN moved those sessions' user plane on its own, i.e. after an
+ * inter-CU-UP relocation, so the core repoints the UPF's downlink.
+ * @return the number of PDU sessions announced, 0 when nothing was sent. */
+int rrc_gNB_send_NGAP_PDUSESSION_MODIFY_INDICATION(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE);
+
+/** @brief Process PDU Session Resource Modify Confirm: store the uplink N3
+ * endpoint the core wants us to use for each session, which is a new UPF when
+ * the SMF relocated one, and let a pending relocation finish. */
+void rrc_gNB_process_NGAP_PDUSESSION_MODIFY_CONFIRM(gNB_RRC_INST *rrc, const ngap_pdusession_modify_confirm_t *confirm);
+
 #endif

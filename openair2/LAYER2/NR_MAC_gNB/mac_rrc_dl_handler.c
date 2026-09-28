@@ -357,6 +357,33 @@ int handle_ue_context_drbs_setup(NR_UE_info_t *UE,
   return drbs_len;
 }
 
+/** @brief Repoint existing DRBs at another gNB-CU-UP.
+ *
+ * Only where the DU sends uplink changes. The radio bearer is untouched: same
+ * RLC entity, same logical channel, same QoS, so neither the cell group nor the
+ * UE is reconfigured and the response carries no DRB list (the DU's own
+ * downlink endpoints have not moved either). */
+static void handle_ue_context_drbs_modify(NR_UE_info_t *UE, int drbs_len, const f1ap_drb_to_modify_t *req_drbs)
+{
+  DevAssert(req_drbs != NULL);
+  instance_t f1inst = get_f1_gtp_instance();
+  if (f1inst < 0) {
+    LOG_W(NR_MAC, "UE %04x: DRBs to modify, but this DU does not use F1-U\n", UE->rnti);
+    return;
+  }
+
+  for (int i = 0; i < drbs_len; i++) {
+    const f1ap_drb_to_modify_t *drb = &req_drbs[i];
+    if (drb->up_ul_tnl_len != 1) {
+      LOG_E(NR_MAC, "UE %04x: DRB %ld has %d uplink endpoints, expected exactly one\n", UE->rnti, drb->id, drb->up_ul_tnl_len);
+      continue;
+    }
+    LOG_I(NR_MAC, "UE %04x: DRB %ld sends uplink to TEID 0x%08x from now on\n", UE->rnti, drb->id, drb->up_ul_tnl[0].teid);
+    /* the F1-U tunnel of a DRB is keyed by (UE, DRB ID), as created above */
+    GtpuUpdateTunnelOutgoingAddressAndTeid(f1inst, UE->rnti, drb->id, drb->up_ul_tnl[0].tl_address, drb->up_ul_tnl[0].teid);
+  }
+}
+
 static int handle_ue_context_drbs_release(NR_UE_info_t *UE,
                                           int drbs_len,
                                           const f1ap_drb_to_release_t *req_drbs,
@@ -846,6 +873,10 @@ void ue_context_modification_request(const f1ap_ue_context_mod_req_t *req)
 
   if (req->drbs_len > 0) {
     resp.drbs_len = handle_ue_context_drbs_setup(UE, req->drbs_len, req->drbs, &resp.drbs, new_CellGroup, &mac->rlc_config);
+  }
+
+  if (req->drbs_mod_len > 0) {
+    handle_ue_context_drbs_modify(UE, req->drbs_mod_len, req->drbs_mod);
   }
 
   if (req->drbs_rel_len > 0) {

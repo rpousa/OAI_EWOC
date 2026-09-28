@@ -54,6 +54,8 @@
 #define NGAP_PDUSESSION_RELEASE_COMMAND(mSGpTR)      (mSGpTR)->ittiMsg.ngap_pdusession_release_command
 #define NGAP_PDUSESSION_RELEASE_RESPONSE(mSGpTR)     (mSGpTR)->ittiMsg.ngap_pdusession_release_resp
 #define NGAP_PDUSESSION_RESOURCE_NOTIFY(mSGpTR)      (mSGpTR)->ittiMsg.ngap_pdusession_resource_notify
+#define NGAP_PDUSESSION_MODIFY_IND(mSGpTR) (mSGpTR)->ittiMsg.ngap_pdusession_modify_ind
+#define NGAP_PDUSESSION_MODIFY_CONFIRM(mSGpTR) (mSGpTR)->ittiMsg.ngap_pdusession_modify_confirm
 
 #define NGAP_UL_RAN_STATUS_TRANSFER(mSGpTR) (mSGpTR)->ittiMsg.ngap_ul_ran_status_transfer
 #define NGAP_DL_RAN_STATUS_TRANSFER(mSGpTR) (mSGpTR)->ittiMsg.ngap_dl_ran_status_transfer
@@ -754,6 +756,58 @@ typedef struct ngap_path_switch_req_ack_s {
   uint8_t nb_allowed_nssais;
   nssai_t allowed_nssai[NR_MAX_NB_ALLOWED_SNSSAI];
 } ngap_path_switch_req_ack_t;
+
+/* PDU Session Resource Modify Indication Transfer (9.3.4.6 3GPP TS 38.413)
+ * The NG-RAN node telling the core where to send this session's downlink from
+ * now on. Used when the RAN moves a session's N3 endpoint on its own, for
+ * instance when a UE's bearers are relocated between two CU-UPs of one CU-CP. */
+typedef struct pdusession_modify_ind_item_s {
+  // PDU Session ID (M)
+  int pdusession_id;
+  // DL QoS Flow per TNL Information: the new NG-RAN N3 downlink endpoint (M)
+  gtpu_tunnel_t n3_outgoing;
+  // QoS flows carried on that endpoint (M, at least one)
+  uint8_t nb_of_qos_flow;
+  uint8_t qfi[MAX_QOS_FLOWS];
+} pdusession_modify_ind_item_t;
+
+/* PDU Session Resource Modify Indication (9.2.1.8 3GPP TS 38.413) */
+typedef struct ngap_pdusession_modify_ind_s {
+  // AMF UE NGAP ID (M)
+  uint64_t amf_ue_ngap_id;
+  // RAN UE NGAP ID (M)
+  uint32_t gNB_ue_ngap_id;
+  // PDU Session Resource Modify List (M, at least one)
+  uint16_t nb_of_pdusessions;
+  pdusession_modify_ind_item_t pdusessions[NR_MAX_NB_PDU_SESSIONS];
+} ngap_pdusession_modify_ind_t;
+
+/* PDU Session Resource Modify Confirm Transfer (9.3.4.7 3GPP TS 38.413) */
+typedef struct pdusession_modify_confirm_item_s {
+  // PDU Session ID (M)
+  int pdusession_id;
+  /* UL NG-U UP TNL Information (M in the transfer): the UPF-side N3 endpoint the
+   * NG-RAN node shall use. It differs from the one in use when the SMF has
+   * relocated the UPF while handling the indication. */
+  gtpu_tunnel_t n3_incoming;
+  // QoS flows the core confirmed
+  uint8_t nb_of_qos_flow;
+  uint8_t qfi[MAX_QOS_FLOWS];
+} pdusession_modify_confirm_item_t;
+
+/* PDU Session Resource Modify Confirm (9.2.1.9 3GPP TS 38.413) */
+typedef struct ngap_pdusession_modify_confirm_s {
+  // AMF UE NGAP ID (M)
+  uint64_t amf_ue_ngap_id;
+  // RAN UE NGAP ID (M)
+  uint32_t gNB_ue_ngap_id;
+  // PDU Session Resource Modify List (O)
+  uint16_t nb_of_pdusessions;
+  pdusession_modify_confirm_item_t pdusessions[NR_MAX_NB_PDU_SESSIONS];
+  // PDU Session Resource Failed to Modify List (O)
+  uint16_t nb_of_pdusessions_failed;
+  pdusession_failed_t pdusessions_failed[NR_MAX_NB_PDU_SESSIONS];
+} ngap_pdusession_modify_confirm_t;
 
 typedef struct ngap_ue_cap_info_ind_s {
   uint32_t  gNB_ue_ngap_id;

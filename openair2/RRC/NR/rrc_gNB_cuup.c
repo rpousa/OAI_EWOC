@@ -27,6 +27,7 @@
 #include "e1ap_interface_management.h"
 #include "rrc_gNB_NGAP.h"
 #include "rrc_cell_management.h"
+#include "rrc_gNB_cuup_reloc.h"
 
 static int cuup_compare(const nr_rrc_cuup_container_t *a, const nr_rrc_cuup_container_t *b)
 {
@@ -37,14 +38,28 @@ static int cuup_compare(const nr_rrc_cuup_container_t *a, const nr_rrc_cuup_cont
   return -1; /* a->assoc_id < b->assoc_id */
 }
 
-/* Tree management functions */
+/* Tree management functions.
+ *
+ * Note the key: gNB-CU-UPs are held by SCTP association, not by gNB-CU-UP ID.
+ * The association is what every other layer works with -- a UE is bound to one
+ * (f1_ue_data_t::e1_assoc_id), E1 messages are sent on one, and an incoming E1
+ * message is attributed to one. The gNB-CU-UP ID only lives inside the stored
+ * E1 Setup Request, so looking a gNB-CU-UP up by ID means walking the tree; see
+ * rrc_get_cuup_id_by_assoc() and rrc_select_other_cuup_for_ue() below, the only
+ * two places that need it, both off the data path. */
 RB_GENERATE/*_STATIC*/(rrc_cuup_tree, nr_rrc_cuup_container_t, entries, cuup_compare);
 
-static const nr_rrc_cuup_container_t *select_cuup_slice(const struct rrc_cuup_tree *t, const gNB_RRC_UE_t *ue, int sst, int sd)
+static const nr_rrc_cuup_container_t *select_cuup_slice(const struct rrc_cuup_tree *t,
+                                                        const gNB_RRC_UE_t *ue,
+                                                        int sst,
+                                                        int sd,
+                                                        sctp_assoc_t exclude_assoc)
 {
   nr_rrc_cuup_container_t *second_best_match = NULL; /* if no NSSAI matches exactly */
   nr_rrc_cuup_container_t *cuup = NULL;
   RB_FOREACH(cuup, rrc_cuup_tree, (struct rrc_cuup_tree *)&t) {
+    if (exclude_assoc != 0 && cuup->assoc_id == exclude_assoc)
+      continue; /* caller wants a CU-UP other than this one (relocation) */
     e1ap_setup_req_t *sr = cuup->setup_req;
     for (int p = 0; p < sr->supported_plmns; ++p) {
       /* actually we should also check that the PLMN selected by the UE matches */
@@ -63,13 +78,18 @@ static const nr_rrc_cuup_container_t *select_cuup_slice(const struct rrc_cuup_tr
   return second_best_match;
 }
 
-static const nr_rrc_cuup_container_t *select_cuup_round_robin(size_t n_t, const struct rrc_cuup_tree *t, const gNB_RRC_UE_t *ue)
+static const nr_rrc_cuup_container_t *select_cuup_round_robin(size_t n_t,
+                                                              const struct rrc_cuup_tree *t,
+                                                              const gNB_RRC_UE_t *ue,
+                                                              sctp_assoc_t exclude_assoc)
 {
   /* pick the CU-UP following a "round-robin" fashion: select CU-UP M = RRC UE
    * ID % N with N number of CU-UPs */
   int m = (ue->rrc_ue_id - 1) % n_t;
   nr_rrc_cuup_container_t *cuup = NULL;
   RB_FOREACH(cuup, rrc_cuup_tree, (struct rrc_cuup_tree *)&t) {
+    if (exclude_assoc != 0 && cuup->assoc_id == exclude_assoc)
+      continue;
     if (m == 0) {
       LOG_W(RRC, "round-robin match: select CU-UP ID %ld (no NSSAI match)\n", cuup->setup_req->gNB_cu_up_id);
       return cuup;
@@ -78,6 +98,29 @@ static const nr_rrc_cuup_container_t *select_cuup_round_robin(size_t n_t, const 
   }
   /* this should not happen: no CU-UP available? */
   return NULL;
+}
+
+/** @brief Pick a CU-UP for this UE: exact NSSAI match, then same SST, then
+ * round-robin, then the first one. A non-zero exclude_assoc is never returned,
+ * which is what an inter-CU-UP relocation needs to find a *different* CU-UP.
+ * Selection only; the caller decides whether to bind the UE to the result. */
+static const nr_rrc_cuup_container_t *select_cuup(const gNB_RRC_INST *rrc,
+                                                  const gNB_RRC_UE_t *ue,
+                                                  int sst,
+                                                  int sd,
+                                                  sctp_assoc_t exclude_assoc)
+{
+  if (RB_EMPTY(&rrc->cuups))
+    return NULL;
+
+  const nr_rrc_cuup_container_t *selected = NULL;
+  if (sst != 0) /* only do if there is slice information */
+    selected = select_cuup_slice(&rrc->cuups, ue, sst, sd, exclude_assoc);
+  if (selected == NULL) /* nothing found yet */
+    selected = select_cuup_round_robin(rrc->num_cuups, &rrc->cuups, ue, exclude_assoc);
+  if (selected == NULL && exclude_assoc == 0)
+    selected = RB_ROOT(&rrc->cuups);
+  return selected;
 }
 
 bool is_cuup_associated(gNB_RRC_INST *rrc)
@@ -120,14 +163,7 @@ sctp_assoc_t get_new_cuup_for_ue(const gNB_RRC_INST *rrc, const gNB_RRC_UE_t *ue
     return 0; /* no CUUP connected */
   }
 
-  const nr_rrc_cuup_container_t *selected = NULL;
-  if (sst != 0) /* only do if there is slice information */
-    selected = select_cuup_slice(&rrc->cuups, ue, sst, sd);
-  if (selected == NULL) /* nothing found yet */
-    selected = select_cuup_round_robin(rrc->num_cuups, &rrc->cuups, ue);
-  if (selected == NULL) {
-    selected = RB_ROOT(&rrc->cuups);
-  }
+  const nr_rrc_cuup_container_t *selected = select_cuup(rrc, ue, sst, sd, 0);
   AssertFatal(selected != NULL, "logic error: could not select CU-UP, is one connected?\n");
 
   /* update the association for the UE so it will be picked up later */
@@ -286,6 +322,10 @@ static void invalidate_cuup_connections(gNB_RRC_INST *rrc, sctp_assoc_t e1_assoc
   RB_FOREACH(ue_context_p, rrc_nr_ue_tree_s, &rrc->rrc_ue_head) {
     gNB_RRC_UE_t *UE = &ue_context_p->ue_context;
     uint32_t ue_id = UE->rrc_ue_id;
+    /* A relocation that involves this CU-UP cannot go on. This runs before the
+     * check below because the UE may be bound to the *other* CU-UP of the pair,
+     * and because it may rebind the UE to a CU-UP that is still up. */
+    nr_rrc_cuup_reloc_cuup_lost(rrc, UE, e1_assoc_id);
     f1_ue_data_t ue_data = cu_get_f1_ue_data(ue_id);
     if (ue_data.e1_assoc_id != e1_assoc_id)
       continue; /* UE is on another CU-UP */
@@ -360,4 +400,64 @@ void dump_cu_info(const gNB_RRC_INST *rrc, FILE *f){
 nr_rrc_cuup_container_t *get_cuup_by_assoc_id(gNB_RRC_INST *rrc, sctp_assoc_t assoc_id){
   nr_rrc_cuup_container_t e = {.assoc_id = assoc_id};
   return RB_FIND(rrc_cuup_tree, &rrc->cuups, &e);
+}
+
+/** @brief Select a gNB-CU-UP for this UE other than the one it is bound to.
+ *
+ * @param wanted_cuup_id a specific gNB-CU-UP ID to move to, or -1 for any. A
+ *        named ID costs a walk of the tree, which is keyed by SCTP association
+ *        (see RB_GENERATE above); it is a configuration-level choice made once
+ *        per relocation, so the walk does not matter.
+ * @return the SCTP association of the chosen gNB-CU-UP -- the handle everything
+ *         else uses -- or 0 when there is none. */
+sctp_assoc_t rrc_select_other_cuup_for_ue(const gNB_RRC_INST *rrc, const gNB_RRC_UE_t *ue, int64_t wanted_cuup_id, int sst, int sd)
+{
+  f1_ue_data_t ue_data = cu_get_f1_ue_data(ue->rrc_ue_id);
+  sctp_assoc_t current = ue_data.e1_assoc_id;
+
+  if (wanted_cuup_id >= 0) {
+    /* caller named a CU-UP: use it if it is connected and not the current one */
+    nr_rrc_cuup_container_t *cuup = NULL;
+    RB_FOREACH (cuup, rrc_cuup_tree, &((gNB_RRC_INST *)rrc)->cuups) {
+      if (cuup->setup_req->gNB_cu_up_id != (uint64_t)wanted_cuup_id)
+        continue;
+      if (cuup->assoc_id == current) {
+        LOG_W(NR_RRC, "UE %d is already served by CU-UP ID %ld\n", ue->rrc_ue_id, wanted_cuup_id);
+        return 0;
+      }
+      return cuup->assoc_id;
+    }
+    LOG_W(NR_RRC, "no CU-UP with ID %ld connected\n", wanted_cuup_id);
+    return 0;
+  }
+
+  const nr_rrc_cuup_container_t *selected = select_cuup(rrc, ue, sst, sd, current);
+  if (selected == NULL) {
+    LOG_W(NR_RRC, "UE %d: no CU-UP other than assoc_id %d is connected\n", ue->rrc_ue_id, current);
+    return 0;
+  }
+  return selected->assoc_id;
+}
+
+/** @brief Bind the UE to a CU-UP, replacing any previous binding. Every later
+ * E1 message for this UE that does not name an association explicitly goes to
+ * this one. */
+bool rrc_bind_cuup_to_ue(const gNB_RRC_UE_t *ue, sctp_assoc_t assoc_id)
+{
+  DevAssert(assoc_id != 0);
+  f1_ue_data_t ue_data = cu_get_f1_ue_data(ue->rrc_ue_id);
+  if (ue_data.e1_assoc_id == assoc_id)
+    return true;
+  LOG_I(NR_RRC, "UE %d: CU-UP binding assoc_id %d => %d\n", ue->rrc_ue_id, ue_data.e1_assoc_id, assoc_id);
+  ue_data.e1_assoc_id = assoc_id;
+  return cu_update_f1_ue_data(ue->rrc_ue_id, &ue_data);
+}
+
+/** @brief gNB-CU-UP ID behind an SCTP association, or -1 if unknown. Only for
+ * logging and for the telnet interface: the association is the identity used
+ * everywhere else. */
+int64_t rrc_get_cuup_id_by_assoc(gNB_RRC_INST *rrc, sctp_assoc_t assoc_id)
+{
+  const nr_rrc_cuup_container_t *cuup = get_cuup_by_assoc_id(rrc, assoc_id);
+  return cuup != NULL ? (int64_t)cuup->setup_req->gNB_cu_up_id : -1;
 }

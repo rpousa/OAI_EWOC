@@ -285,6 +285,43 @@ void ngap_gNB_handle_sctp_data_ind(sctp_data_ind_t *sctp_data_ind) {
   AssertFatal (result == EXIT_SUCCESS, "Failed to free memory (%d)!\n", result);
 }
 
+static int ngap_gNB_pdusession_modify_indication(instance_t instance, ngap_pdusession_modify_ind_t *msg)
+{
+  DevAssert(msg != NULL);
+  ngap_gNB_instance_t *ngap_gNB_instance_p = ngap_gNB_get_instance(instance);
+  DevAssert(ngap_gNB_instance_p != NULL);
+
+  struct ngap_gNB_ue_context_s *ue_context_p = ngap_get_ue_context(msg->gNB_ue_ngap_id);
+  if (ue_context_p == NULL) {
+    NGAP_WARN("Failed to find ue context associated with gNB ue ngap id: 0x%08x\n", msg->gNB_ue_ngap_id);
+    return -1;
+  }
+
+  NGAP_NGAP_PDU_t *pdu = encode_ngap_pdusession_modify_indication(msg);
+  if (pdu == NULL)
+    return -1;
+
+  uint8_t *buffer = NULL;
+  uint32_t length = 0;
+  if (ngap_gNB_encode_pdu(pdu, &buffer, &length) < 0) {
+    NGAP_ERROR("Failed to encode PDU Session Resource Modify Indication\n");
+    ASN_STRUCT_FREE(asn_DEF_NGAP_NGAP_PDU, pdu);
+    return -1;
+  }
+  ASN_STRUCT_FREE(asn_DEF_NGAP_NGAP_PDU, pdu);
+
+  NGAP_INFO("Send PDU Session Resource Modify Indication for UE %u (%d PDU session(s))\n",
+            msg->gNB_ue_ngap_id,
+            msg->nb_of_pdusessions);
+  /* UE associated signalling -> use the allocated stream */
+  ngap_gNB_itti_send_sctp_data_req(ngap_gNB_instance_p->instance,
+                                   ue_context_p->amf_ref->assoc_id,
+                                   buffer,
+                                   length,
+                                   ue_context_p->tx_stream);
+  return 0;
+}
+
 static int ngap_gNB_path_switch_request(instance_t instance, ngap_path_switch_req_t *msg)
 {
   DevAssert(msg != NULL);
@@ -669,6 +706,10 @@ void *ngap_gNB_process_itti_msg(void *notUsed)
 
       case NGAP_PDUSESSION_RESOURCE_NOTIFY:
         ngap_gNB_pdusession_resource_notify(instance, &NGAP_PDUSESSION_RESOURCE_NOTIFY(received_msg));
+        break;
+
+      case NGAP_PDUSESSION_MODIFY_IND:
+        ngap_gNB_pdusession_modify_indication(instance, &NGAP_PDUSESSION_MODIFY_IND(received_msg));
         break;
 
       case NGAP_PATH_SWITCH_REQ:

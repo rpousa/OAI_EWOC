@@ -177,6 +177,7 @@ typedef struct {
 
 /* forward declaration */
 typedef struct nr_handover_context_s nr_handover_context_t;
+typedef struct cuup_reloc_context_s cuup_reloc_context_t;
 
 typedef struct gNB_RRC_UE_s {
   time_t last_seen; // last time this UE has been accessed
@@ -184,6 +185,9 @@ typedef struct gNB_RRC_UE_s {
   NR_SRB_INFO_TABLE_ENTRY Srb[NR_NUM_SRB];
   NR_MeasConfig_t                   *measConfig;
   nr_handover_context_t *ho_context;
+  /* non-NULL while this UE's bearers are being moved between two CU-UPs of this
+   * CU-CP; see rrc_gNB_cuup_reloc.h */
+  cuup_reloc_context_t *cuup_reloc;
   NR_MeasResults_t                  *measResults;
 
   bool as_security_active;

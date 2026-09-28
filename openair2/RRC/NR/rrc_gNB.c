@@ -62,6 +62,7 @@
 #include "rrc_gNB_du.h"
 #include "rrc_cell_management.h"
 #include "rrc_gNB_mobility.h"
+#include "rrc_gNB_cuup_reloc.h"
 #include "rrc_gNB_radio_bearers.h"
 #include "rrc_cell_management.h"
 #include "rrc_messages_types.h"
@@ -2595,6 +2596,32 @@ void store_du_f1u_tunnel(const f1ap_drb_setup_t *drbs, int n, gNB_RRC_UE_t *ue)
   }
 }
 
+/** @brief E1 DRB To Modify item carrying PDCP COUNTs, from the E1-native type.
+ * Used when the COUNTs come from another CU-UP over E1 (inter-CU-UP relocation)
+ * rather than from the AMF over NGAP. */
+static DRB_nGRAN_to_mod_t get_e1_drb_mod_pdcp_count(const drb_t *drb,
+                                                    const bearer_context_pdcp_config_t *pdcp_config,
+                                                    const e1_pdcp_status_info_t *status)
+{
+  DevAssert(status);
+  DevAssert(pdcp_config);
+  DevAssert(drb);
+  DRB_nGRAN_to_mod_t drb_to_mod = {0};
+  drb_to_mod.id = drb->drb_id;
+  drb_to_mod.pdcp_sn_status_requested = false;
+  drb_to_mod.pdcp_config = calloc_or_fail(1, sizeof(*drb_to_mod.pdcp_config));
+  *drb_to_mod.pdcp_config = *pdcp_config;
+  drb_to_mod.pdcp_status = calloc_or_fail(1, sizeof(*drb_to_mod.pdcp_status));
+  *drb_to_mod.pdcp_status = *status;
+  /* A CU-UP that takes a DRB over also has to learn where to send its downlink.
+   * The DU's F1-U endpoint does not change during the relocation, so it is the
+   * one already on record; the E1 Bearer Context Setup has no IE to carry it. */
+  drb_to_mod.numDlUpParam = 1;
+  memcpy(&drb_to_mod.DlUpParamList[0].tl_info.tlAddress, drb->du_tunnel_config.addr.buffer, sizeof(in_addr_t));
+  drb_to_mod.DlUpParamList[0].tl_info.teId = drb->du_tunnel_config.teid;
+  return drb_to_mod;
+}
+
 static DRB_nGRAN_to_mod_t get_e1_drb_mod_pdcp_status(const drb_t *drb,
                                                      bearer_context_pdcp_config_t *pdcp_config,
                                                      const ngap_drb_status_t *drb_status)
@@ -2616,8 +2643,14 @@ static DRB_nGRAN_to_mod_t get_e1_drb_mod_pdcp_status(const drb_t *drb,
   return drb_to_mod;
 }
 
-/** @brief Send E1 bearer context modification request to CU-UP */
-static void e1_send_bearer_modification_request(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE, e1ap_bearer_mod_req_t *req)
+/** @brief Send E1 bearer context modification request to a CU-UP.
+ * @param assoc_id CU-UP to send to, or 0 for the one the UE is bound to. During
+ *        an inter-CU-UP relocation both CU-UPs are addressed explicitly, since
+ *        the binding moves in the middle of the procedure. */
+static void e1_send_bearer_modification_request(gNB_RRC_INST *rrc,
+                                                gNB_RRC_UE_t *UE,
+                                                e1ap_bearer_mod_req_t *req,
+                                                sctp_assoc_t assoc_id)
 {
   if (req->numPDUSessionsMod == 0) {
     LOG_W(NR_RRC, "UE %d: No PDU sessions to modify in E1 bearer update\n", UE->rrc_ue_id);
@@ -2628,7 +2661,8 @@ static void e1_send_bearer_modification_request(gNB_RRC_INST *rrc, gNB_RRC_UE_t 
   req->secInfo = malloc_or_fail(sizeof(*req->secInfo));
   fill_security_info(rrc, UE, req->secInfo);
 
-  sctp_assoc_t assoc_id = get_existing_cuup_for_ue(UE);
+  if (assoc_id == 0)
+    assoc_id = get_existing_cuup_for_ue(UE);
   rrc->cucp_cuup.bearer_context_mod(assoc_id, req);
 }
 
@@ -2658,12 +2692,16 @@ void e1_send_bearer_updates(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE, int n, f1ap_drb
     }
   }
 
-  e1_send_bearer_modification_request(rrc, UE, &req);
+  e1_send_bearer_modification_request(rrc, UE, &req, 0);
   free_e1ap_context_mod_request(&req);
 }
 
-/** @brief Request PDCP status from CU-UP during inter-CU handover */
-static void e1_request_pdcp_status(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE)
+/** @brief Ask a CU-UP for the PDCP SN status of every DRB of this UE.
+ *
+ * Used both by inter-CU handover (the COUNTs travel to the target gNB over
+ * NGAP) and by inter-CU-UP relocation (they travel to the target CU-UP over
+ * E1). @param assoc_id CU-UP to ask, or 0 for the one the UE is bound to. */
+void e1_request_pdcp_status_on(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE, sctp_assoc_t assoc_id)
 {
   if (!is_cuup_associated(rrc))
     return;
@@ -2684,7 +2722,7 @@ static void e1_request_pdcp_status(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE)
     }
   }
 
-  e1_send_bearer_modification_request(rrc, UE, &req);
+  e1_send_bearer_modification_request(rrc, UE, &req, assoc_id);
   free_e1ap_context_mod_request(&req);
 }
 
@@ -2709,8 +2747,110 @@ void e1_notify_pdcp_status(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE, const ngap_drb_s
     append_e1_drb_mod_req(&req, UE, drb->drb_id, &drb_to_mod);
   }
 
-  e1_send_bearer_modification_request(rrc, UE, &req);
+  e1_send_bearer_modification_request(rrc, UE, &req, 0);
   free_e1ap_context_mod_request(&req);
+}
+
+/** @brief Push per-DRB PDCP COUNTs to a CU-UP, so it resumes the DRBs where the
+ * previous CU-UP stopped (inter-CU-UP relocation).
+ * @param assoc_id CU-UP to push to, or 0 for the one the UE is bound to. */
+void e1_notify_pdcp_status_drbs(gNB_RRC_INST *rrc,
+                                gNB_RRC_UE_t *UE,
+                                sctp_assoc_t assoc_id,
+                                int n_drb,
+                                const int *drb_ids,
+                                const e1_pdcp_status_info_t *status)
+{
+  if (!is_cuup_associated(rrc) || n_drb <= 0)
+    return;
+  DevAssert(drb_ids != NULL && status != NULL);
+
+  e1ap_bearer_mod_req_t req = {
+      .gNB_cu_cp_ue_id = UE->rrc_ue_id,
+      .gNB_cu_up_ue_id = UE->rrc_ue_id,
+  };
+  uint16_t num_pdu_sessions = seq_arr_size(&UE->pduSessions);
+  DevAssert(num_pdu_sessions > 0);
+  req.pduSessionMod = calloc_or_fail(num_pdu_sessions, sizeof(*req.pduSessionMod));
+
+  for (int i = 0; i < n_drb; i++) {
+    drb_t *drb = get_drb(&UE->drbs, drb_ids[i]);
+    if (!drb) {
+      LOG_W(NR_RRC, "UE %d: DRB %d reported by CU-UP is unknown, skipping COUNT transfer\n", UE->rrc_ue_id, drb_ids[i]);
+      continue;
+    }
+    bearer_context_pdcp_config_t pdcp_config =
+        set_bearer_context_pdcp_config(drb->pdcp_config, rrc->configuration.um_on_default_drb, UE->redcap_cap);
+    DRB_nGRAN_to_mod_t drb_to_mod = get_e1_drb_mod_pdcp_count(drb, &pdcp_config, &status[i]);
+    LOG_I(NR_RRC,
+          "UE %d: forward PDCP COUNT to CU-UP assoc_id %d (DRB %d, UL %u/%u, DL %u/%u)\n",
+          UE->rrc_ue_id,
+          assoc_id,
+          drb->drb_id,
+          status[i].ul_count.hfn,
+          status[i].ul_count.sn,
+          status[i].dl_count.hfn,
+          status[i].dl_count.sn);
+    append_e1_drb_mod_req(&req, UE, drb->drb_id, &drb_to_mod);
+  }
+
+  e1_send_bearer_modification_request(rrc, UE, &req, assoc_id);
+  free_e1ap_context_mod_request(&req);
+}
+
+/** @brief Hand a CU-UP the (possibly new) UPF-side N3 uplink tunnel of some PDU
+ * sessions, after the core answered a PDU Session Resource Modify Indication.
+ * @param assoc_id CU-UP to update, or 0 for the one the UE is bound to. */
+void e1_update_n3_uplink_tunnels(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE, sctp_assoc_t assoc_id, int n_pdu, const int *pdu_ids)
+{
+  if (!is_cuup_associated(rrc) || n_pdu <= 0)
+    return;
+  DevAssert(pdu_ids != NULL);
+
+  e1ap_bearer_mod_req_t req = {
+      .gNB_cu_cp_ue_id = UE->rrc_ue_id,
+      .gNB_cu_up_ue_id = UE->rrc_ue_id,
+  };
+  uint16_t num_pdu_sessions = seq_arr_size(&UE->pduSessions);
+  DevAssert(num_pdu_sessions > 0);
+  req.pduSessionMod = calloc_or_fail(num_pdu_sessions, sizeof(*req.pduSessionMod));
+
+  for (int i = 0; i < n_pdu; i++) {
+    rrc_pdu_session_param_t *pdu = find_pduSession(&UE->pduSessions, pdu_ids[i]);
+    if (!pdu) {
+      LOG_W(NR_RRC, "UE %d: PDU session %d unknown, cannot update its N3 uplink\n", UE->rrc_ue_id, pdu_ids[i]);
+      continue;
+    }
+    pdu_session_to_mod_t *mod = &req.pduSessionMod[req.numPDUSessionsMod++];
+    mod->sessionId = pdu->param.pdusession_id;
+    mod->UP_TL_information = calloc_or_fail(1, sizeof(*mod->UP_TL_information));
+    memcpy(&mod->UP_TL_information->tlAddress, pdu->param.n3_incoming.addr.buffer, sizeof(in_addr_t));
+    mod->UP_TL_information->teId = pdu->param.n3_incoming.teid;
+    LOG_I(NR_RRC,
+          "UE %d: update N3 uplink of PDU session %d on CU-UP assoc_id %d (TEID 0x%x)\n",
+          UE->rrc_ue_id,
+          mod->sessionId,
+          assoc_id,
+          mod->UP_TL_information->teId);
+  }
+
+  e1_send_bearer_modification_request(rrc, UE, &req, assoc_id);
+  free_e1ap_context_mod_request(&req);
+}
+
+/** @brief Release a UE's bearer context on one specific CU-UP. Used to tear the
+ * source CU-UP down once the target is serving the UE. */
+void e1_release_bearer_context_on(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE, sctp_assoc_t assoc_id)
+{
+  DevAssert(assoc_id != 0);
+  e1ap_cause_t cause = {.type = E1AP_CAUSE_RADIO_NETWORK, .value = E1AP_RADIO_CAUSE_NORMAL_RELEASE};
+  e1ap_bearer_release_cmd_t cmd = {
+      .gNB_cu_cp_ue_id = UE->rrc_ue_id,
+      .gNB_cu_up_ue_id = UE->rrc_ue_id,
+      .cause = cause,
+  };
+  LOG_I(NR_RRC, "UE %d: release bearer context on CU-UP assoc_id %d\n", UE->rrc_ue_id, assoc_id);
+  rrc->cucp_cuup.bearer_context_release(assoc_id, &cmd);
 }
 
 static NR_MeasGapConfig_t *get_meas_gap_config(const f1ap_du_to_cu_rrc_info_t *du_to_cu_rrc_info)
@@ -2904,6 +3044,8 @@ static void rrc_delete_ue_data(gNB_RRC_UE_t *UE)
   /* Clean up handover context if it exists */
   if (UE->ho_context)
     nr_rrc_finalize_ho(UE);
+  /* Clean up an interrupted change of gNB-CU-UP */
+  nr_rrc_cuup_reloc_finalize(RC.nrrrc[0], UE);
   ASN_STRUCT_FREE(asn_DEF_NR_UE_NR_Capability, UE->UE_Capability_nr);
   free_byte_array(UE->mcg);
   ASN_STRUCT_FREE(asn_DEF_NR_MeasResults, UE->measResults);
@@ -2982,7 +3124,7 @@ static void rrc_CU_process_ue_context_modification_response(MessageDef *msg_p, i
     store_du_f1u_tunnel(resp->drbs, resp->drbs_len, UE);
     e1_send_bearer_updates(rrc, UE, resp->drbs_len, resp->drbs);
   } else if (is_inter_cu_ho) { // PDCP status request
-    e1_request_pdcp_status(rrc, UE);
+    e1_request_pdcp_status_on(rrc, UE, 0);
   }
 
   if (resp->du_to_cu_rrc_info) {
@@ -2995,9 +3137,16 @@ static void rrc_CU_process_ue_context_modification_response(MessageDef *msg_p, i
       // Store the encoded CellGroupConfig for transparent forwarding
       store_cgc(UE, cgc);
 
-      // Check if this is a re-establishment scenario by examining the CellGroupConfig
-      bool is_reestablishment = rrc_detect_reestablishment(cgc);
-      rrc_gNB_generate_dedicatedRRCReconfiguration(rrc, UE, is_reestablishment);
+      /* An inter-CU-UP relocation only repoints the F1-U tunnels of unchanged
+       * DRBs: there is nothing for the UE to be told, and reconfiguring it here
+       * would spend a transaction while the relocation is still in flight. */
+      if (UE->cuup_reloc != NULL) {
+        LOG_I(NR_RRC, "UE %d: CU-UP relocation ongoing, not reconfiguring the UE\n", UE->rrc_ue_id);
+      } else {
+        // Check if this is a re-establishment scenario by examining the CellGroupConfig
+        bool is_reestablishment = rrc_detect_reestablishment(cgc);
+        rrc_gNB_generate_dedicatedRRCReconfiguration(rrc, UE, is_reestablishment);
+      }
     } else {
       LOG_W(NR_RRC, "hack: UE %d: ignore empty CellGroupConfig in UEContextModificationResponse\n", UE->rrc_ue_id);
     }
@@ -3017,6 +3166,10 @@ static void rrc_CU_process_ue_context_modification_response(MessageDef *msg_p, i
       return;
     }
   }
+
+  /* The DU has repointed its F1-U tunnels at the target CU-UP: an inter-CU-UP
+   * relocation can now tell the core and drop the source CU-UP. */
+  nr_rrc_cuup_reloc_f1_mod_resp(rrc, UE);
 }
 
 static void rrc_CU_process_ue_modification_required(MessageDef *msg_p, instance_t instance, sctp_assoc_t assoc_id)
@@ -3395,6 +3548,71 @@ static void rrc_send_f1_ue_context_modification_request(const gNB_RRC_INST *rrc,
         n_rel_drbs);
 }
 
+int rrc_save_cuup_tunnels(const gNB_RRC_UE_t *ue, int *drb_ids, gtpu_tunnel_t *tunnels)
+{
+  DevAssert(ue && drb_ids && tunnels);
+  int n = 0;
+  FOR_EACH_SEQ_ARR (drb_t *, drb, &((gNB_RRC_UE_t *)ue)->drbs) {
+    DevAssert(n < MAX_DRBS_PER_UE);
+    drb_ids[n] = drb->drb_id;
+    tunnels[n++] = drb->cuup_tunnel_config;
+  }
+  return n;
+}
+
+void rrc_restore_cuup_tunnels(gNB_RRC_UE_t *ue, int n, const int *drb_ids, const gtpu_tunnel_t *tunnels)
+{
+  DevAssert(ue && drb_ids && tunnels);
+  for (int i = 0; i < n; i++) {
+    drb_t *drb = get_drb(&ue->drbs, drb_ids[i]);
+    if (drb == NULL) {
+      LOG_W(NR_RRC, "UE %d: DRB %d is gone, cannot put its F1-U endpoint back\n", ue->rrc_ue_id, drb_ids[i]);
+      continue;
+    }
+    drb->cuup_tunnel_config = tunnels[i];
+  }
+}
+
+int rrc_send_f1_ue_context_modification_for_cuup_change(const gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue)
+{
+  DevAssert(rrc);
+  DevAssert(ue);
+  AssertFatal(ue->f1_ue_context_active, "logic error: UE context not established\n");
+  AssertFatal(!NODE_IS_DU(rrc->node_type), "illegal node type DU!\n");
+
+  f1_ue_data_t ue_data = cu_get_f1_ue_data(ue->rrc_ue_id);
+  if (ue_data.du_assoc_id == 0) {
+    LOG_E(NR_RRC, "UE %d: cannot repoint the DU's tunnels, DU offline\n", ue->rrc_ue_id);
+    return 0;
+  }
+
+  f1ap_drb_to_modify_t drbs[MAX_DRBS_PER_UE] = {0};
+  int n_drbs = 0;
+  FOR_EACH_SEQ_ARR (drb_t *, drb, &ue->drbs) {
+    DevAssert(n_drbs < MAX_DRBS_PER_UE);
+    f1ap_drb_to_modify_t *mod = &drbs[n_drbs++];
+    mod->id = drb->drb_id;
+    mod->up_ul_tnl_len = 1;
+    memcpy(&mod->up_ul_tnl[0].tl_address, drb->cuup_tunnel_config.addr.buffer, sizeof(in_addr_t));
+    mod->up_ul_tnl[0].teid = drb->cuup_tunnel_config.teid;
+  }
+  if (n_drbs == 0) {
+    LOG_E(NR_RRC, "UE %d: no DRB to repoint at the new CU-UP\n", ue->rrc_ue_id);
+    return 0;
+  }
+
+  f1ap_ue_context_mod_req_t req = {
+      .gNB_CU_ue_id = ue->rrc_ue_id,
+      .gNB_DU_ue_id = ue_data.secondary_ue,
+      .drbs_mod = drbs,
+      .drbs_mod_len = n_drbs,
+  };
+  rrc->mac_rrc.ue_context_modification_request(ue_data.du_assoc_id, &req);
+  /* drbs is on the stack and holds no allocation, so there is nothing to free */
+  LOG_I(NR_RRC, "UE %d: asked the DU to send %d DRB(s) to the new CU-UP\n", ue->rrc_ue_id, n_drbs);
+  return n_drbs;
+}
+
 /** @brief Mark PDU sessions to remove and start local teardown.
  * NGAP PDU Session Resource Notify is sent after RRCReconfigurationComplete. */
 static void rrc_gNB_trigger_pdu_session_notify_on_release(gNB_RRC_INST *rrc,
@@ -3452,7 +3670,7 @@ static void rrc_gNB_trigger_pdu_session_notify_on_release(gNB_RRC_INST *rrc,
 /**
  * @brief E1AP Bearer Context Setup Response processing on CU-CP
 */
-static void rrc_gNB_process_e1_bearer_context_setup_resp(e1ap_bearer_setup_resp_t *resp)
+static void rrc_gNB_process_e1_bearer_context_setup_resp(e1ap_bearer_setup_resp_t *resp, sctp_assoc_t assoc_id)
 {
   gNB_RRC_INST *rrc = RC.nrrrc[0];
   rrc_gNB_ue_context_t *ue_context_p = rrc_gNB_get_ue_context(rrc, resp->gNB_cu_cp_ue_id);
@@ -3494,6 +3712,11 @@ static void rrc_gNB_process_e1_bearer_context_setup_resp(e1ap_bearer_setup_resp_
     }
   }
 
+  /* An inter-CU-UP relocation set this context up on the target CU-UP: the
+   * tunnels above are the target's, and the relocation drives what comes next. */
+  if (nr_rrc_cuup_reloc_e1_setup_resp(rrc, UE, assoc_id))
+    return;
+
   // If HO Preparation Info is stored, N2 handover is ongoing
   if (UE->ho_context) {
     LOG_I(NR_RRC, "Received Bearer Context Setup Response for UE %d with valid HO Context\n", UE->rrc_ue_id);
@@ -3512,13 +3735,17 @@ static void rrc_gNB_process_e1_bearer_context_setup_resp(e1ap_bearer_setup_resp_
 }
 
 /** @brief E1AP Bearer Context Setup Failure processing on CU-CP */
-void rrc_gNB_process_e1_bearer_context_setup_failure(e1ap_bearer_context_setup_failure_t *msg)
+void rrc_gNB_process_e1_bearer_context_setup_failure(e1ap_bearer_context_setup_failure_t *msg, sctp_assoc_t assoc_id)
 {
   LOG_E(RRC,
         "Received E1AP Bearer Context Setup Failure for UE CU-CP ID %d with cause (%d, %d)\n",
         msg->gNB_cu_cp_ue_id,
         msg->cause.type,
         msg->cause.value);
+  gNB_RRC_INST *rrc = RC.nrrrc[0];
+  rrc_gNB_ue_context_t *ue_context_p = rrc_gNB_get_ue_context(rrc, msg->gNB_cu_cp_ue_id);
+  if (ue_context_p != NULL)
+    nr_rrc_cuup_reloc_e1_failure(rrc, &ue_context_p->ue_context, assoc_id);
 }
 
 /**
@@ -3527,9 +3754,12 @@ void rrc_gNB_process_e1_bearer_context_setup_failure(e1ap_bearer_context_setup_f
  * Accumulates DRB-related state from the E1 Bearer Context Modification Response
  * (new DRBs to setup, DRBs to release, PDCP status via UL RAN Status Transfer, QoS changes)
  * and then either sends F1 UE Context Modification or a direct RRCReconfiguration. */
-void rrc_gNB_process_e1_bearer_context_modif_resp(const e1ap_bearer_modif_resp_t *resp)
+void rrc_gNB_process_e1_bearer_context_modif_resp(const e1ap_bearer_modif_resp_t *resp, sctp_assoc_t assoc_id)
 {
-  LOG_I(NR_RRC, "Received E1AP Bearer Context Modification Response for UE CU-CP ID %d\n", resp->gNB_cu_cp_ue_id);
+  LOG_I(NR_RRC,
+        "Received E1AP Bearer Context Modification Response for UE CU-CP ID %d from CU-UP assoc_id %d\n",
+        resp->gNB_cu_cp_ue_id,
+        assoc_id);
   gNB_RRC_INST *rrc = RC.nrrrc[0];
   rrc_gNB_ue_context_t *ue_context_p = rrc_gNB_get_ue_context(rrc, resp->gNB_cu_cp_ue_id);
   if (ue_context_p == NULL) {
@@ -3623,6 +3853,11 @@ void rrc_gNB_process_e1_bearer_context_modif_resp(const e1ap_bearer_modif_resp_t
     }
   }
 
+  /* During an inter-CU-UP relocation these responses carry the PDCP COUNTs
+   * between the two CU-UPs; the relocation consumes them. */
+  if (nr_rrc_cuup_reloc_e1_modif_resp(rrc, ue, assoc_id, n_drb_mod, drb_ids, pdcp_status))
+    return;
+
   // Trigger UL RAN Status Transfer if PDCP status is available
   if (n_drb_mod) {
     LOG_I(NR_RRC, "UE %d: received PDU Status Info - send UL RAN Status Transfer\n", resp->gNB_cu_cp_ue_id);
@@ -3651,7 +3886,7 @@ void rrc_gNB_process_e1_bearer_context_modif_resp(const e1ap_bearer_modif_resp_t
 }
 
 /** @brief E1AP Bearer Context Modification Failure processing on CU-CP */
-static void rrc_gNB_process_e1_bearer_context_modif_fail(const e1ap_bearer_context_mod_failure_t *fail)
+static void rrc_gNB_process_e1_bearer_context_modif_fail(const e1ap_bearer_context_mod_failure_t *fail, sctp_assoc_t assoc_id)
 {
   gNB_RRC_INST *rrc = RC.nrrrc[0];
   rrc_gNB_ue_context_t *ue_context_p = rrc_gNB_get_ue_context(rrc, fail->gNB_cu_cp_ue_id);
@@ -3665,6 +3900,7 @@ static void rrc_gNB_process_e1_bearer_context_modif_fail(const e1ap_bearer_conte
         fail->gNB_cu_cp_ue_id,
         fail->gNB_cu_up_ue_id,
         fail->cause.value);
+  nr_rrc_cuup_reloc_e1_failure(rrc, &ue_context_p->ue_context, assoc_id);
 }
 
 /** @brief E1AP Bearer Context Modification Required processing on CU-CP */
@@ -4011,23 +4247,29 @@ void *rrc_gnb_task(void *args_p)
         free_e1ap_cuup_setup_request(&E1AP_SETUP_REQ(msg_p));
         break;
 
+      /* the CU-UP that answered is only identified by the association the
+       * message arrived on: two CU-UPs use the same CU-CP UE ID for one UE
+       * while its bearers are being relocated between them */
       case E1AP_BEARER_CONTEXT_SETUP_RESP:
-        rrc_gNB_process_e1_bearer_context_setup_resp(&E1AP_BEARER_CONTEXT_SETUP_RESP(msg_p));
+        rrc_gNB_process_e1_bearer_context_setup_resp(&E1AP_BEARER_CONTEXT_SETUP_RESP(msg_p), msg_p->ittiMsgHeader.originInstance);
         free_e1ap_context_setup_response(&E1AP_BEARER_CONTEXT_SETUP_RESP(msg_p));
         break;
 
       case E1AP_BEARER_CONTEXT_SETUP_FAILURE:
-        rrc_gNB_process_e1_bearer_context_setup_failure(&E1AP_BEARER_CONTEXT_SETUP_FAILURE(msg_p));
+        rrc_gNB_process_e1_bearer_context_setup_failure(&E1AP_BEARER_CONTEXT_SETUP_FAILURE(msg_p),
+                                                        msg_p->ittiMsgHeader.originInstance);
         free_e1_bearer_context_setup_failure(&E1AP_BEARER_CONTEXT_SETUP_FAILURE(msg_p));
         break;
 
       case E1AP_BEARER_CONTEXT_MODIFICATION_RESP:
-        rrc_gNB_process_e1_bearer_context_modif_resp(&E1AP_BEARER_CONTEXT_MODIFICATION_RESP(msg_p));
+        rrc_gNB_process_e1_bearer_context_modif_resp(&E1AP_BEARER_CONTEXT_MODIFICATION_RESP(msg_p),
+                                                     msg_p->ittiMsgHeader.originInstance);
         free_e1ap_context_mod_response(&E1AP_BEARER_CONTEXT_MODIFICATION_RESP(msg_p));
         break;
 
       case E1AP_BEARER_CONTEXT_MODIFICATION_FAIL:
-        rrc_gNB_process_e1_bearer_context_modif_fail(&E1AP_BEARER_CONTEXT_MODIFICATION_FAIL(msg_p));
+        rrc_gNB_process_e1_bearer_context_modif_fail(&E1AP_BEARER_CONTEXT_MODIFICATION_FAIL(msg_p),
+                                                     msg_p->ittiMsgHeader.originInstance);
         break;
 
       case E1AP_BEARER_CONTEXT_MODIFICATION_REQUIRED:
@@ -4042,6 +4284,10 @@ void *rrc_gnb_task(void *args_p)
 
       case E1AP_LOST_CONNECTION: /* CUCP */
         rrc_gNB_process_e1_lost_connection(RC.nrrrc[0], msg_p->ittiMsgHeader.originInstance);
+        break;
+
+      case NGAP_PDUSESSION_MODIFY_CONFIRM:
+        rrc_gNB_process_NGAP_PDUSESSION_MODIFY_CONFIRM(RC.nrrrc[instance], &NGAP_PDUSESSION_MODIFY_CONFIRM(msg_p));
         break;
 
       case NGAP_PAGING_IND:
@@ -4185,7 +4431,9 @@ void rrc_gNB_generate_RRCRelease(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE)
 /* F1AP UE Context Management Procedures */
 
 /** @brief Fill DRB to Be Setup List for F1 UE Context Setup Request
- * Returns number of DRBs filled, 0 if none */
+ * Returns number of DRBs filled, 0 if none.
+ * Also used to repoint the DU's F1-U tunnels at another CU-UP, since it reads
+ * the current cuup_tunnel_config of every DRB. */
 static int rrc_fill_f1_drb_to_setup(const gNB_RRC_INST *rrc, const gNB_RRC_UE_t *ue, f1ap_drb_to_setup_t drbs[MAX_DRBS_PER_UE])
 {
   int nb_drb = 0;

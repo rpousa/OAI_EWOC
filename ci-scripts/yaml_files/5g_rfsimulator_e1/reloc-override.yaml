@@ -1,0 +1,56 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+#
+# Overrides for testing a change of gNB-CU-UP (clause 8.9.5 of TS 38.401) on top
+# of the F1+E1 RFsim deployment in this directory.
+#
+#   docker compose -f docker-compose.yaml -f reloc-override.yaml up -d \
+#       oai-cucp oai-cuup oai-cuup2 oai-du
+#
+# Two things differ from the base deployment:
+#
+#  - CU-UP2 joins DU1's F1-U network and binds F1-U there. The base deployment
+#    gives every DU/CU-UP pair its own f1u_N_net on purpose, so that a UE only
+#    works if it landed on the right CU-UP; a relocation needs DU1 to be able to
+#    reach CU-UP2. Its slice is set to the one UE1 uses, so that both CU-UPs are
+#    legitimate choices for that UE.
+#  - The CU-CP runs the telnet server, which is how the change is triggered:
+#    "rrc cuup_reloc <rrc_ue_id> <cuup_id>" on port 9090.
+services:
+    oai-cucp:
+        image: oai-gnb:reloc
+        environment:
+            USE_ADDITIONAL_OPTIONS: --log_config.global_log_options level,nocolor,time
+                                    --gNBs.[0].E1_INTERFACE.[0].ipv4_cucp 192.168.77.2
+                                    --gNBs.[0].local_s_address 192.168.72.2
+                                    --telnetsrv --telnetsrv.shrmod rrc
+                                    --telnetsrv.listenaddr 0.0.0.0
+        ports:
+            - "9090:9090"
+
+    oai-cuup:
+        image: oai-nr-cuup:reloc
+
+    oai-cuup2:
+        image: oai-nr-cuup:reloc
+        environment:
+            USE_ADDITIONAL_OPTIONS: --log_config.global_log_options level,nocolor,time
+                                    --gNBs.[0].gNB_CU_UP_ID 0xe01
+                                    --gNBs.[0].E1_INTERFACE.[0].ipv4_cucp 192.168.77.2
+                                    --gNBs.[0].E1_INTERFACE.[0].ipv4_cuup 192.168.77.4
+                                    --gNBs.[0].local_s_address 192.168.73.4
+                                    --gNBs.[0].remote_s_address 127.0.0.1
+                                    --gNBs.[0].NETWORK_INTERFACES.GNB_IPV4_ADDRESS_FOR_NGU 192.168.71.162
+                                    --gNBs.[0].plmn_list.[0].snssaiList.[0].sst 1
+        networks:
+            core_net:
+                ipv4_address: 192.168.71.162
+            f1u_1_net:
+                ipv4_address: 192.168.73.4
+            e1_net:
+                ipv4_address: 192.168.77.4
+
+    oai-du:
+        image: oai-gnb:reloc
+
+    oai-nr-ue:
+        image: oai-nr-ue:reloc

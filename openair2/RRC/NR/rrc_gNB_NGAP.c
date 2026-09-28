@@ -70,6 +70,7 @@
 #include "s1ap_messages_types.h"
 #include "uper_encoder.h"
 #include "rrc_gNB_mobility.h"
+#include "rrc_gNB_cuup_reloc.h"
 #include "rrc_gNB_du.h"
 #include "rrc_cell_management.h"
 #include "common/utils/alg/find.h"
@@ -372,6 +373,25 @@ static DRB_nGRAN_to_setup_t fill_e1_drb_to_setup(const drb_t *rrc_drb,
  * Precondition: CU-UP association is checked by callers before invocation. */
 void trigger_bearer_setup(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE, uint64_t ueAggMaxBitRateDownlink)
 {
+  trigger_bearer_setup_on_cuup(rrc, UE, ueAggMaxBitRateDownlink, 0, E1_BEARER_SETUP_NEW_SESSIONS);
+}
+
+/** @brief E1 Bearer Context Setup towards a given CU-UP.
+ *
+ * With assoc_id 0 and scope NEW_SESSIONS this is the ordinary PDU session
+ * establishment: a CU-UP is selected and the UE is bound to it. An inter-CU-UP
+ * relocation instead names the target CU-UP and asks for every established
+ * session, so the whole bearer context is rebuilt there while the source CU-UP
+ * keeps serving the UE. */
+void trigger_bearer_setup_on_cuup(gNB_RRC_INST *rrc,
+                                  gNB_RRC_UE_t *UE,
+                                  uint64_t ueAggMaxBitRateDownlink,
+                                  sctp_assoc_t assoc_id,
+                                  e1_bearer_setup_scope_t scope)
+{
+  const pdu_session_status_t wanted_status =
+      scope == E1_BEARER_SETUP_ESTABLISHED_SESSIONS ? PDU_SESSION_STATUS_ESTABLISHED : PDU_SESSION_STATUS_NEW;
+
   if (ueAggMaxBitRateDownlink == UINT64_MAX) {
     LOG_E(NR_RRC, "UE %d: UE aggregate maximum bitrate must be known by the NG-RAN node\n", UE->rrc_ue_id);
     return;
@@ -387,11 +407,11 @@ void trigger_bearer_setup(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE, uint64_t ueAggMax
       .anl = activity_notification_level_pdu_session,
   };
 
-  // Collect PDU sessions with NEW status first - store pdusession_t directly to avoid stack overflow
+  // Collect the PDU sessions in scope - store pdusession_t directly to avoid stack overflow
   pdusession_t to_setup[MAX_PDUS_PER_UE];
   uint16_t n_to_setup = 0;
   FOR_EACH_SEQ_ARR (rrc_pdu_session_param_t *, pduSession, &UE->pduSessions) {
-    if (pduSession->status == PDU_SESSION_STATUS_NEW) {
+    if (pduSession->status == wanted_status) {
       if (n_to_setup >= MAX_PDUS_PER_UE) {
         LOG_E(NR_RRC, "UE %d: Maximum number of PDU sessions (%d) exceeded\n", UE->rrc_ue_id, MAX_PDUS_PER_UE);
         break;
@@ -441,12 +461,19 @@ void trigger_bearer_setup(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE, uint64_t ueAggMax
     free_e1ap_context_setup_request(&bearer_req);
     return;
   }
-  /* Limitation: we assume one fixed CU-UP per UE. We base the selection on
-   * NSSAI, but the UE might have multiple PDU sessions with differing slices,
-   * in which we might need to select different CU-UPs. In this case, we would
-   * actually need to group the E1 bearer context setup for the different
-   * CU-UPs, and send them to the different CU-UPs. */
-  sctp_assoc_t assoc_id = get_new_cuup_for_ue(rrc, UE, cuup_nssai.sst, cuup_nssai.sd);
+  /* Limitation: a UE has one CU-UP at a time. We base the selection on NSSAI,
+   * but the UE might have multiple PDU sessions with differing slices, in which
+   * we might need to select different CU-UPs. In this case, we would actually
+   * need to group the E1 bearer context setup for the different CU-UPs, and
+   * send them to the different CU-UPs. A relocation passes the target CU-UP in,
+   * and binds the UE to it only once the target is serving the UE. */
+  if (assoc_id == 0)
+    assoc_id = get_new_cuup_for_ue(rrc, UE, cuup_nssai.sst, cuup_nssai.sd);
+  if (assoc_id == 0) {
+    LOG_E(NR_RRC, "UE %d: no CU-UP to send the E1 Bearer Context Setup to\n", UE->rrc_ue_id);
+    free_e1ap_context_setup_request(&bearer_req);
+    return;
+  }
   rrc->cucp_cuup.bearer_context_setup(assoc_id, &bearer_req);
   free_e1ap_context_setup_request(&bearer_req);
 }
@@ -2219,4 +2246,107 @@ int rrc_gNB_process_NGAP_DL_RAN_STATUS_TRANSFER(MessageDef *msg_p, instance_t in
   }
 
   return 0;
+}
+
+/** @brief Announce a new downlink N3 endpoint for the UE's established PDU
+ * sessions (PDU Session Resource Modify Indication, 9.2.1.8 of TS 38.413).
+ *
+ * TS 23.501 clause 6.3.3.1 leaves it to the SMF whether it also reselects the
+ * UPF while handling this, so the Confirm may come back with a different uplink
+ * endpoint; rrc_gNB_process_NGAP_PDUSESSION_MODIFY_CONFIRM() applies it. */
+int rrc_gNB_send_NGAP_PDUSESSION_MODIFY_INDICATION(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE)
+{
+  DevAssert(rrc != NULL);
+  DevAssert(UE != NULL);
+
+  MessageDef *msg_p = itti_alloc_new_message(TASK_RRC_GNB, 0, NGAP_PDUSESSION_MODIFY_IND);
+  ngap_pdusession_modify_ind_t *ind = &NGAP_PDUSESSION_MODIFY_IND(msg_p);
+  memset(ind, 0, sizeof(*ind));
+  ind->amf_ue_ngap_id = UE->amf_ue_ngap_id;
+  ind->gNB_ue_ngap_id = UE->rrc_ue_id;
+
+  FOR_EACH_SEQ_ARR (rrc_pdu_session_param_t *, pduSession, &UE->pduSessions) {
+    if (pduSession->status != PDU_SESSION_STATUS_ESTABLISHED)
+      continue;
+    if (ind->nb_of_pdusessions >= NR_MAX_NB_PDU_SESSIONS) {
+      LOG_E(NR_RRC, "UE %d: too many PDU sessions for one Modify Indication\n", UE->rrc_ue_id);
+      break;
+    }
+    pdusession_modify_ind_item_t *item = &ind->pdusessions[ind->nb_of_pdusessions];
+    item->pdusession_id = pduSession->param.pdusession_id;
+    item->n3_outgoing = pduSession->param.n3_outgoing;
+    item->nb_of_qos_flow = 0;
+    FOR_EACH_SEQ_ARR (nr_rrc_qos_t *, qos, &pduSession->param.qos) {
+      if (item->nb_of_qos_flow >= MAX_QOS_FLOWS)
+        break;
+      item->qfi[item->nb_of_qos_flow++] = qos->qos.qfi;
+    }
+    if (item->nb_of_qos_flow == 0) {
+      LOG_W(NR_RRC, "UE %d: PDU session %d has no QoS flow, not announcing it\n", UE->rrc_ue_id, item->pdusession_id);
+      continue;
+    }
+    LOG_I(NR_RRC,
+          "UE %d: announce new N3 downlink of PDU session %d to the AMF (TEID 0x%x)\n",
+          UE->rrc_ue_id,
+          item->pdusession_id,
+          item->n3_outgoing.teid);
+    ind->nb_of_pdusessions++;
+  }
+
+  if (ind->nb_of_pdusessions == 0) {
+    LOG_W(NR_RRC, "UE %d: no established PDU session to announce, not sending Modify Indication\n", UE->rrc_ue_id);
+    itti_free(TASK_RRC_GNB, msg_p);
+    return 0;
+  }
+
+  int n = ind->nb_of_pdusessions;
+  itti_send_msg_to_task(TASK_NGAP, rrc->module_id, msg_p);
+  return n;
+}
+
+void rrc_gNB_process_NGAP_PDUSESSION_MODIFY_CONFIRM(gNB_RRC_INST *rrc, const ngap_pdusession_modify_confirm_t *confirm)
+{
+  DevAssert(rrc != NULL);
+  DevAssert(confirm != NULL);
+
+  rrc_gNB_ue_context_t *ue_context_p = rrc_gNB_get_ue_context(rrc, confirm->gNB_ue_ngap_id);
+  if (ue_context_p == NULL) {
+    LOG_E(NR_RRC, "no UE with RRC UE ID %u for PDU Session Resource Modify Confirm\n", confirm->gNB_ue_ngap_id);
+    return;
+  }
+  gNB_RRC_UE_t *UE = &ue_context_p->ue_context;
+
+  for (int i = 0; i < confirm->nb_of_pdusessions_failed; i++)
+    LOG_W(NR_RRC, "UE %d: core failed to modify PDU session %d\n", UE->rrc_ue_id, confirm->pdusessions_failed[i].pdusession_id);
+
+  /* Store the uplink endpoint the core wants us to use. A changed address or
+   * TEID means the SMF put a different UPF on the path while handling our
+   * indication; the CU-UP has to be told, which the caller below does. */
+  int changed_ids[NR_MAX_NB_PDU_SESSIONS] = {0};
+  int n_changed = 0;
+  for (int i = 0; i < confirm->nb_of_pdusessions; i++) {
+    const pdusession_modify_confirm_item_t *item = &confirm->pdusessions[i];
+    rrc_pdu_session_param_t *pdu = find_pduSession(&UE->pduSessions, item->pdusession_id);
+    if (pdu == NULL) {
+      LOG_W(NR_RRC, "UE %d: Modify Confirm for unknown PDU session %d\n", UE->rrc_ue_id, item->pdusession_id);
+      continue;
+    }
+    bool same = pdu->param.n3_incoming.teid == item->n3_incoming.teid
+                && memcmp(pdu->param.n3_incoming.addr.buffer, item->n3_incoming.addr.buffer, sizeof(in_addr_t)) == 0;
+    if (same)
+      continue;
+    LOG_I(NR_RRC,
+          "UE %d: core moved the N3 uplink of PDU session %d (TEID 0x%x => 0x%x): the UPF changed\n",
+          UE->rrc_ue_id,
+          item->pdusession_id,
+          pdu->param.n3_incoming.teid,
+          item->n3_incoming.teid);
+    pdu->param.n3_incoming = item->n3_incoming;
+    changed_ids[n_changed++] = item->pdusession_id;
+  }
+
+  /* Hand the new uplink endpoints, if any, to the CU-UP now serving the UE and
+   * let a pending relocation complete. */
+  if (!nr_rrc_cuup_reloc_path_update_confirm(rrc, UE, n_changed, changed_ids) && n_changed > 0)
+    e1_update_n3_uplink_tunnels(rrc, UE, 0, n_changed, changed_ids);
 }

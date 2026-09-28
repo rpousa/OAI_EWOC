@@ -741,6 +741,79 @@ static F1AP_DRBs_ToBeSetup_List_t encode_drbs_to_setup(int n, const f1ap_drb_to_
   return list;
 }
 
+/* Encode a DRBs_ToBeModified list for UE Context Modification Request. Only the
+ * DRB ID and the uplink endpoint(s) the DU shall use are sent: QoS Information
+ * and UL Configuration are optional and nothing about them changes when a DRB's
+ * CU-UP-side endpoint moves. */
+static F1AP_DRBs_ToBeModified_List_t encode_drbs_to_modified(int n, const f1ap_drb_to_modify_t *drbs)
+{
+  F1AP_DRBs_ToBeModified_List_t list = {0};
+  for (int i = 0; i < n; ++i) {
+    const f1ap_drb_to_modify_t *drb = &drbs[i];
+    asn1cSequenceAdd(list, F1AP_DRBs_ToBeModified_ItemIEs_t, itie);
+    itie->id = F1AP_ProtocolIE_ID_id_DRBs_ToBeModified_Item;
+    itie->criticality = F1AP_Criticality_reject;
+    itie->value.present = F1AP_DRBs_ToBeModified_ItemIEs__value_PR_DRBs_ToBeModified_Item;
+
+    F1AP_DRBs_ToBeModified_Item_t *it = &itie->value.choice.DRBs_ToBeModified_Item;
+    it->dRBID = drb->id;
+    DevAssert(drb->up_ul_tnl_len > 0);
+    for (int j = 0; j < drb->up_ul_tnl_len; j++) {
+      DevAssert(drb->up_ul_tnl[j].teid > 0);
+      asn1cSequenceAdd(it->uLUPTNLInformation_ToBeSetup_List.list, F1AP_ULUPTNLInformation_ToBeSetup_Item_t, tnl_it);
+      tnl_it->uLUPTNLInformation = encode_up_tnl(&drb->up_ul_tnl[j]);
+    }
+  }
+  return list;
+}
+
+static bool decode_drbs_to_modified(const F1AP_DRBs_ToBeModified_List_t *f1ap, int *n, f1ap_drb_to_modify_t **out)
+{
+  *n = f1ap->list.count;
+  if (*n == 0)
+    return true;
+  *out = calloc_or_fail(*n, sizeof(**out));
+  for (int i = 0; i < f1ap->list.count; ++i) {
+    f1ap_drb_to_modify_t *drb = &(*out)[i];
+    const F1AP_DRBs_ToBeModified_ItemIEs_t *itie = (const F1AP_DRBs_ToBeModified_ItemIEs_t *)f1ap->list.array[i];
+    _EQ_CHECK_LONG(itie->id, F1AP_ProtocolIE_ID_id_DRBs_ToBeModified_Item);
+    _EQ_CHECK_INT(itie->value.present, F1AP_DRBs_ToBeModified_ItemIEs__value_PR_DRBs_ToBeModified_Item);
+    const F1AP_DRBs_ToBeModified_Item_t *it = &itie->value.choice.DRBs_ToBeModified_Item;
+    drb->id = it->dRBID;
+    int n_tnl = it->uLUPTNLInformation_ToBeSetup_List.list.count;
+    _F1_CHECK_EXP(n_tnl > 0 && n_tnl <= (int)(sizeof(drb->up_ul_tnl) / sizeof(drb->up_ul_tnl[0])));
+    drb->up_ul_tnl_len = n_tnl;
+    for (int j = 0; j < n_tnl; ++j) {
+      const F1AP_ULUPTNLInformation_ToBeSetup_Item_t *it_tnl = it->uLUPTNLInformation_ToBeSetup_List.list.array[j];
+      _F1_CHECK_EXP(decode_up_tnl(&it_tnl->uLUPTNLInformation, &drb->up_ul_tnl[j]));
+    }
+  }
+  return true;
+}
+
+static f1ap_drb_to_modify_t cp_drb_to_modify(const f1ap_drb_to_modify_t *orig)
+{
+  f1ap_drb_to_modify_t cp = {.id = orig->id, .up_ul_tnl_len = orig->up_ul_tnl_len};
+  for (int i = 0; i < orig->up_ul_tnl_len; ++i)
+    cp.up_ul_tnl[i] = cp_up_tnl(&orig->up_ul_tnl[i]);
+  return cp;
+}
+
+static bool eq_drb_to_modify(const f1ap_drb_to_modify_t *a, const f1ap_drb_to_modify_t *b)
+{
+  _EQ_CHECK_LONG(a->id, b->id);
+  _EQ_CHECK_INT(a->up_ul_tnl_len, b->up_ul_tnl_len);
+  for (int i = 0; i < a->up_ul_tnl_len; ++i)
+    _F1_CHECK_EXP(eq_up_tnl(&a->up_ul_tnl[i], &b->up_ul_tnl[i]));
+  return true;
+}
+
+static void free_drb_to_modify(const f1ap_drb_to_modify_t *drb)
+{
+  for (int i = 0; i < drb->up_ul_tnl_len; ++i)
+    free_up_tnl(&drb->up_ul_tnl[i]);
+}
+
 /* Encode a DRBs_ToBeSetupMod list for UE Context Modification Request, from
  * f1ap_drb_to_setup_t. The ToBeSetup/ToBeSetupMod lists are almost the same
  * (with the exception that one field is optional in the latter), so that we
@@ -1728,6 +1801,16 @@ F1AP_F1AP_PDU_t *encode_ue_context_mod_req(const f1ap_ue_context_mod_req_t *req)
     ie12->value.choice.DRBs_ToBeSetupMod_List = encode_drbs_to_setupmod(req->drbs_len, req->drbs);
   }
 
+  /* optional: DRBs_ToBeModified */
+  if (req->drbs_mod_len > 0) {
+    DevAssert(req->drbs_mod);
+    asn1cSequenceAdd(out->protocolIEs.list, F1AP_UEContextModificationRequestIEs_t, ie13);
+    ie13->id = F1AP_ProtocolIE_ID_id_DRBs_ToBeModified_List;
+    ie13->criticality = F1AP_Criticality_reject;
+    ie13->value.present = F1AP_UEContextModificationRequestIEs__value_PR_DRBs_ToBeModified_List;
+    ie13->value.choice.DRBs_ToBeModified_List = encode_drbs_to_modified(req->drbs_mod_len, req->drbs_mod);
+  }
+
   /* optional: DRBs_ToBeReleased */
   if (req->drbs_rel_len > 0) {
     asn1cSequenceAdd(out->protocolIEs.list, F1AP_UEContextModificationRequestIEs_t, ie15);
@@ -1834,6 +1917,10 @@ bool decode_ue_context_mod_req(const F1AP_F1AP_PDU_t *pdu, f1ap_ue_context_mod_r
         _EQ_CHECK_INT(ie->value.present, F1AP_UEContextModificationRequestIEs__value_PR_DRBs_ToBeSetupMod_List);
         _F1_CHECK_EXP(decode_drbs_to_setupmod(&ie->value.choice.DRBs_ToBeSetupMod_List, &out->drbs_len, &out->drbs));
         break;
+      case F1AP_ProtocolIE_ID_id_DRBs_ToBeModified_List:
+        _EQ_CHECK_INT(ie->value.present, F1AP_UEContextModificationRequestIEs__value_PR_DRBs_ToBeModified_List);
+        _F1_CHECK_EXP(decode_drbs_to_modified(&ie->value.choice.DRBs_ToBeModified_List, &out->drbs_mod_len, &out->drbs_mod));
+        break;
       case F1AP_ProtocolIE_ID_id_DRBs_ToBeReleased_List:
         _EQ_CHECK_INT(ie->value.present, F1AP_UEContextModificationRequestIEs__value_PR_DRBs_ToBeReleased_List);
         _F1_CHECK_EXP(decode_drbs_to_release(&ie->value.choice.DRBs_ToBeReleased_List, &out->drbs_rel_len, &out->drbs_rel));
@@ -1902,6 +1989,13 @@ f1ap_ue_context_mod_req_t cp_ue_context_mod_req(const f1ap_ue_context_mod_req_t 
     for (int i = 0; i < cp.drbs_len; ++i)
       cp.drbs[i] = cp_drb_to_setup(&orig->drbs[i]);
   }
+  if (orig->drbs_mod_len > 0) {
+    DevAssert(orig->drbs_mod);
+    cp.drbs_mod = calloc_or_fail(orig->drbs_mod_len, sizeof(*cp.drbs_mod));
+    cp.drbs_mod_len = orig->drbs_mod_len;
+    for (int i = 0; i < cp.drbs_mod_len; ++i)
+      cp.drbs_mod[i] = cp_drb_to_modify(&orig->drbs_mod[i]);
+  }
   if (orig->drbs_rel_len > 0) {
     DevAssert(orig->drbs_rel);
     cp.drbs_rel = calloc_or_fail(orig->drbs_rel_len, sizeof(*cp.drbs_rel));
@@ -1943,6 +2037,11 @@ bool eq_ue_context_mod_req(const f1ap_ue_context_mod_req_t *a, const f1ap_ue_con
   for (int i = 0; i < a->drbs_len; ++i)
     _F1_CHECK_EXP(eq_drb_to_setup(&a->drbs[i], &b->drbs[i]));
 
+  _EQ_CHECK_INT(a->drbs_mod_len, b->drbs_mod_len);
+  _F1_CHECK_EXP(a->drbs_mod_len == 0 || (a->drbs_mod && b->drbs_mod));
+  for (int i = 0; i < a->drbs_mod_len; ++i)
+    _F1_CHECK_EXP(eq_drb_to_modify(&a->drbs_mod[i], &b->drbs_mod[i]));
+
   _EQ_CHECK_INT(a->drbs_rel_len, b->drbs_rel_len);
   _F1_CHECK_EXP(a->drbs_rel_len == 0 || (a->drbs_rel_len && b->drbs_rel_len));
   for (int i = 0; i < a->drbs_rel_len; ++i)
@@ -1973,6 +2072,9 @@ void free_ue_context_mod_req(f1ap_ue_context_mod_req_t *req)
   for (int i = 0; i < req->drbs_len; ++i)
     free_drb_to_setup(&req->drbs[i]);
   free(req->drbs);
+  for (int i = 0; i < req->drbs_mod_len; ++i)
+    free_drb_to_modify(&req->drbs_mod[i]);
+  free(req->drbs_mod);
   for (int i = 0; i < req->drbs_rel_len; ++i)
     free_drb_to_release(&req->drbs_rel[i]);
   free(req->drbs_rel);

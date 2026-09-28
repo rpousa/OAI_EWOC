@@ -12,6 +12,7 @@
 
 #include "openair2/RRC/NR/rrc_gNB_UE_context.h"
 #include "openair2/RRC/NR/rrc_gNB_NGAP.h"
+#include "openair2/RRC/NR/rrc_gNB_cuup_reloc.h"
 #include "openair3/NGAP/ngap_gNB_ue_context.h"
 
 #define TELNETSERVERCODE
@@ -148,11 +149,61 @@ static int rrc_gNB_trigger_ue_context_release_req(char *buf, int debug, telnet_p
   return 0;
 }
 
+/**
+ * @brief Move a UE's bearers to another CU-UP of this CU-CP.
+ * @param buf "[rrc_ue_id [cuup_id]]": the UE to move, and the gNB-CU-UP ID to
+ *        move it to. Without a CU-UP ID any connected CU-UP other than the
+ *        current one is picked; without arguments the only connected UE is used.
+ */
+static int rrc_gNB_trigger_cuup_relocation(char *buf, int debug, telnet_printfunc_t prnt)
+{
+  UNUSED(debug);
+  long ue_id = -1;
+  long long target_cuup_id = -1;
+
+  if (buf == NULL || *buf == '\0') {
+    ue_id = get_single_ue_id();
+    if (ue_id < 1)
+      ERROR_MSG_RET("No UE found!\n");
+  } else {
+    /* base 0: gNB-CU-UP IDs are usually written in hex, e.g. 0xe01 */
+    char *end = NULL;
+    errno = 0;
+    ue_id = strtol(buf, &end, 0);
+    if (end == buf || errno != 0 || ue_id < 1 || ue_id >= 0xfffffe)
+      ERROR_MSG_RET("UE ID needs to be [1,0xfffffe]\n");
+    while (*end == ' ' || *end == ',')
+      end++;
+    if (*end != '\0') {
+      char *id_end = NULL;
+      errno = 0;
+      target_cuup_id = strtoll(end, &id_end, 0);
+      if (id_end == end || errno != 0 || target_cuup_id < 0)
+        ERROR_MSG_RET("Usage: cuup_reloc [rrc_ue_id [cuup_id]]\n");
+    }
+  }
+
+  gNB_RRC_INST *rrc = RC.nrrrc[0];
+  rrc_gNB_ue_context_t *ue_context_p = rrc_gNB_get_ue_context(rrc, ue_id);
+  if (ue_context_p == NULL)
+    ERROR_MSG_RET("No RRC UE context for ue_id %ld\n", ue_id);
+
+  if (nr_rrc_trigger_cuup_reloc(rrc, &ue_context_p->ue_context, target_cuup_id) != 0)
+    ERROR_MSG_RET("Could not start the CU-UP relocation of UE %ld, see the gNB log\n", ue_id);
+
+  if (target_cuup_id < 0)
+    prnt("CU-UP relocation started for UE %ld\n", ue_id);
+  else
+    prnt("CU-UP relocation started for UE %ld towards CU-UP ID %lld\n", ue_id, target_cuup_id);
+  return 0;
+}
+
 static telnetshell_cmddef_t rrc_cmds[] = {
-  {"release_rrc", "[rrc_ue_id(int,opt)]", rrc_gNB_trigger_release},
-  {"release_rrc_all", "", rrc_gNB_trigger_release_all},
-  {"ctx_rel_req", "[rrc_ue_id(int,opt)]", rrc_gNB_trigger_ue_context_release_req},
-  {"", "", NULL},
+    {"release_rrc", "[rrc_ue_id(int,opt)]", rrc_gNB_trigger_release},
+    {"release_rrc_all", "", rrc_gNB_trigger_release_all},
+    {"ctx_rel_req", "[rrc_ue_id(int,opt)]", rrc_gNB_trigger_ue_context_release_req},
+    {"cuup_reloc", "[rrc_ue_id(int,opt)] [cuup_id(int,opt)]", rrc_gNB_trigger_cuup_relocation},
+    {"", "", NULL},
 };
 
 static telnetshell_vardef_t rrc_vars[] = {

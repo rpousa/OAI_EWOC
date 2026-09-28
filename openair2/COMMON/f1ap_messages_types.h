@@ -532,6 +532,19 @@ typedef struct f1ap_ue_context_setup_resp_s {
   f1ap_srb_setup_t *srbs;
 } f1ap_ue_context_setup_resp_t;
 
+/** @brief DRBs to Be Modified Item (9.3.1.21 of TS 38.473)
+ *
+ * Only the gNB-CU-UP-side uplink endpoint of an existing DRB changes; its QoS,
+ * RLC mode and logical channel stay as they are, which is why the QoS
+ * Information IE is left out. Used to repoint a gNB-DU at another CU-UP without
+ * touching the radio bearer. */
+typedef struct f1ap_drb_to_modify_s {
+  long id;
+  /// UL UP TNL Information to Be Setup List: where the DU shall send uplink
+  int up_ul_tnl_len;
+  f1ap_up_tnl_t up_ul_tnl[2];
+} f1ap_drb_to_modify_t;
+
 typedef struct f1ap_ue_context_mod_req_s {
   uint32_t gNB_CU_ue_id;
   uint32_t gNB_DU_ue_id;
@@ -556,6 +569,10 @@ typedef struct f1ap_ue_context_mod_req_s {
 
   int drbs_len;
   f1ap_drb_to_setup_t *drbs; // as for SRBs
+
+  /* DRBs to Be Modified: existing DRBs whose CU-UP-side uplink endpoint moved */
+  int drbs_mod_len;
+  f1ap_drb_to_modify_t *drbs_mod;
 
   int drbs_rel_len;
   f1ap_drb_to_release_t *drbs_rel;

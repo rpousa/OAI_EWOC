@@ -402,6 +402,31 @@ void e1_bearer_context_modif(const e1ap_bearer_mod_req_t *req)
     resp_pdu_mod->numDRBSetup = req_pdu_mod->numDRB2Setup;
     modif.numPDUSessionsMod++;
 
+    /* NG UL UP Transport Layer Information (O): the CU-CP gives us a new uplink
+     * endpoint for this session, because the core moved it to another UPF. The
+     * N3 tunnel is keyed by the PDU session ID (see the create above), and only
+     * where it sends changes: our own downlink TEID stays as it is. */
+    if (req_pdu_mod->UP_TL_information) {
+      instance_t n3inst = get_n3_gtp_instance();
+      if (n3inst >= 0) {
+        LOG_I(E1AP,
+              "UE %d: PDU session %ld now sends uplink to TEID 0x%08x\n",
+              req->gNB_cu_up_ue_id,
+              req_pdu_mod->sessionId,
+              req_pdu_mod->UP_TL_information->teId);
+        GtpuUpdateTunnelOutgoingAddressAndTeid(n3inst,
+                                               req->gNB_cu_up_ue_id,
+                                               req_pdu_mod->sessionId,
+                                               req_pdu_mod->UP_TL_information->tlAddress,
+                                               req_pdu_mod->UP_TL_information->teId);
+      } else {
+        LOG_E(E1AP,
+              "UE %d: no N3 instance, cannot move the uplink of PDU session %ld\n",
+              req->gNB_cu_up_ue_id,
+              req_pdu_mod->sessionId);
+      }
+    }
+
     /* DRBs to setup */
     NR_DRB_ToAddModList_t DRB_configList = {0};
     for (int d = 0; d < req_pdu_mod->numDRB2Setup; d++) {
