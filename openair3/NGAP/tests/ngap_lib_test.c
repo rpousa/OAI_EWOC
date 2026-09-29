@@ -134,12 +134,15 @@ static void test_ngap_pdusession_modify_indication_encode(void)
   AssertFatal(dec_pdu->present == NGAP_NGAP_PDU_PR_initiatingMessage, "not an initiating message\n");
   NGAP_PDUSessionResourceModifyIndication_t *container =
       &dec_pdu->choice.initiatingMessage->value.choice.PDUSessionResourceModifyIndication;
+  /* NGAP_FIND_PROTOCOLIE_BY_ID() ends in "return -1", so it cannot be used from
+   * a void function; walk the list directly instead. */
   NGAP_PDUSessionResourceModifyIndicationIEs_t *ie = NULL;
-  NGAP_FIND_PROTOCOLIE_BY_ID(NGAP_PDUSessionResourceModifyIndicationIEs_t,
-                             ie,
-                             container,
-                             NGAP_ProtocolIE_ID_id_PDUSessionResourceModifyListModInd,
-                             true);
+  for (int i = 0; i < container->protocolIEs.list.count; i++) {
+    if (container->protocolIEs.list.array[i]->id == NGAP_ProtocolIE_ID_id_PDUSessionResourceModifyListModInd) {
+      ie = container->protocolIEs.list.array[i];
+      break;
+    }
+  }
   AssertFatal(ie != NULL, "no PDU Session Resource Modify List in the encoded message\n");
   AssertFatal(ie->value.choice.PDUSessionResourceModifyListModInd.list.count == 1, "expected one PDU session\n");
 

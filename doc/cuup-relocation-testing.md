@@ -125,17 +125,210 @@ This stage needs no core, no radio and no containers beyond the build image. It
 is also the only stage that tests the new ASN.1 code directly, so run it first
 and do not move on until it passes.
 
-```bash
-docker build . -f docker/Dockerfile.base.ubuntu  -t ran-base:latest
-docker build . -f docker/Dockerfile.build.ubuntu -t ran-build:latest
+Only `ran-base` is needed — that is the image whose `build_oai -I` installs the
+toolchain and puts `asn1c` in `/opt/asn1c/bin`. Do **not** build `ran-build` for
+this stage: it compiles every softmodem target and takes far longer than the
+tests do.
 
-docker run --rm -it -v ~/OAI_EWOC:/oai -w /oai ran-build:latest bash
-# inside the container:
-mkdir -p build && cd build
-cmake .. -GNinja -DENABLE_TESTS=ON
-ninja e1ap_lib_test f1ap_lib_test ngap_lib_test
-ctest -R 'e1ap_lib_test|f1ap_lib_test|ngap_lib_test' --output-on-failure
+```bash
+cd ~/comnetsemu/examples/5g/OAI_EWOC
+docker build . -f docker/Dockerfile.base.ubuntu -t ran-base:latest   # once, ~15 min
 ```
+
+### 1.1 Do not put the build tree on the shared folder
+
+Two separate traps, both caused by `~/comnetsemu/...` being a VirtualBox shared
+folder (vboxsf):
+
+* **The mount source must exist.** Docker creates an empty directory instead of
+  failing when a `-v` source is missing, which produces `The source directory
+  does not appear to contain CMakeLists.txt` from a container that otherwise
+  looks fine. `ran-base` holds only `cmake_targets/build_oai` and `oaienv` under
+  `/oai-ran`, no `CMakeLists.txt`, so there is nothing to fall back on.
+* **vboxsf cannot execute what the build produces.** The build generates and
+  then *runs* helper binaries — `common/utils/T/genids`, which turns
+  `T_messages.txt` into `T_IDs.h` — and on a shared folder that fails with:
+
+  ```
+  /bin/sh: 1: .../common/utils/T/genids: Permission denied
+  ```
+
+  This is not a mode problem. `ls -l` shows the binary as `-rwxrwxrwx`, and the
+  mount carries no `noexec`:
+
+  ```
+  home_vagrant_comnetsemu on /oai type vboxsf (rw,nodev,relatime,iocharset=utf8,uid=1000,gid=1000)
+  ```
+
+  `execve` needs to map the file's pages privately, and the vboxsf driver does
+  not support that, so the kernel returns `EACCES` however the permissions look.
+  The giveaway is exactly this combination: an executable file, no `noexec`, and
+  `vboxsf` as the filesystem.
+
+The fix is to keep the build tree off vboxsf. A named Docker volume is the least
+fuss, because it lives under `/var/lib/docker` on the VM's own disk and survives
+`--rm`:
+
+```bash
+docker volume create oai-build
+mkdir -p ~/.cache/cpm ~/.cache/ccache
+```
+
+### 1.2 Configure the same way `ran-build` does
+
+`docker/Dockerfile.build.ubuntu` drops `/oai-ran` from the base image, copies
+the source there, and configures with `cmake ../../..` from
+`cmake_targets/ran_build/build`. The flags below are the ones the image build
+uses, so a warning caught here is a warning that would have failed stage 2.
+
+```bash
+docker run --rm -it \
+  -v ~/comnetsemu/examples/5g/OAI_EWOC:/oai-ran \
+  -v oai-build:/build \
+  -v ~/.cache/cpm:/root/.cache/cpm \
+  -v ~/.cache/ccache:/root/.cache/ccache \
+  -w /oai-ran ran-base:latest bash
+
+# inside the container:
+ls CMakeLists.txt             # if this fails, the mount is wrong — stop here
+git config --global --add safe.directory /oai-ran
+apt-get update && apt-get install -y libgtest-dev libbenchmark-dev   # optional; see note
+
+cmake -S /oai-ran -B /build -GNinja \
+  -DENABLE_TESTS=ON \
+  -DAVX512=OFF \
+  -DCMAKE_C_FLAGS="-Werror -Wno-error=psabi" \
+  -DCMAKE_CXX_FLAGS="-Werror -Wno-error=psabi"
+cmake --build /build --target e1ap_lib_test f1ap_lib_test ngap_lib_test
+cd /build && ctest -R 'e1ap_lib_test|f1ap_lib_test|ngap_lib_test' --output-on-failure
+```
+
+Only the source is read off vboxsf; everything the build writes and executes
+lands in the volume. Copying the source to `~/OAI_EWOC` on the VM disk first
+works too and is faster to read, but it is not sufficient on its own — the build
+tree is what has to be off the shared folder.
+
+The `safe.directory` line silences three `fatal: detected dubious ownership`
+messages during configure. They are not fatal to the build: `CMakeLists.txt`
+runs `git rev-parse` and `git log` only to stamp `GIT_BRANCH`, `GIT_COMMIT_HASH`
+and `GIT_COMMIT_DATE`, which otherwise stay `UNKNOWN` in the softmodem's startup
+banner. Worth fixing before the live run in stage 3, when that banner is how you
+tell which build is running.
+
+Where each flag comes from:
+
+| Flag | Why |
+|---|---|
+| `-GNinja` | `--ninja` in the image build. |
+| `-DAVX512=OFF` | what `--noavx512` expands to. `CMakeLists.txt` otherwise auto-detects from the CPU flags the VM exposes, so the test build and the image build could disagree. |
+| `-DCMAKE_C_FLAGS` / `-DCMAKE_CXX_FLAGS` | `-Werror` is what the image build passes (it *replaces* the flags rather than appending, there too). `-Wno-error=psabi` is required on this VM — see §1.3. |
+| `-DENABLE_TESTS=ON` | not in the image build — it is what creates the `tests` target and registers the three executables with ctest. |
+
+The image build's remaining options — `--build-e2`, `-DT_RECORD_DB=ON`,
+`-DOAI_VRTSIM_TAPS_CLIENT=ON`, `-w USRP -w BLADERF`, `-t Ethernet` — only add
+targets none of these tests link against, so leaving them out just makes the
+configure faster.
+
+Two things not to copy from the Dockerfile: `/bin/sh oaienv` does nothing useful
+here (it exports variables into a subshell that then exits, and `CMakeLists.txt`
+uses `CMAKE_SOURCE_DIR`, reading only `CPM_SOURCE_CACHE` from the environment),
+and `-c` / `--clean`, which would wipe the build tree on every run.
+
+> To start the build over, `docker volume rm oai-build` and recreate it. The
+> volume is root-owned and not visible from the VM's filesystem, which is the
+> point — nothing the build writes touches the repository.
+
+> `ENABLE_TESTS=ON` makes the top-level `CMakeLists.txt` look for GTest and
+> google-benchmark and, not finding them, download both through CPM at configure
+> time. None of the three tests use them — they are plain C — so installing the
+> two `-dev` packages above just skips that download. The `~/.cache/cpm` mount
+> keeps whatever it does download, so stage 2 does not fetch it again.
+
+### 1.3 `-Wno-error=psabi` is not optional on this VM
+
+`CMakeLists.txt` assumes AVX exists on every x86_64 host — it defines
+`SIMDE_X86_AVX_NATIVE` unconditionally, with the comment *"the following
+intrinsics are assumed to be available on any x86 system"* — but never passes
+`-mavx`. It relies on the `-march=native` that the non-AVX512 branch adds.
+
+VirtualBox masks AVX and AVX2 out of the guest's CPUID, which is why configure
+prints `AVX2 intrinsics are OFF` and `GFNI intrinsics are OFF`. So SIMDe emits
+real `__m256` values while the compiler has AVX switched off, and every
+translation unit that reaches `openair1/PHY/sse_intrin.h` fails:
+
+```
+openair1/PHY/sse_intrin.h: In function 'oai_mm256_conj':
+openair1/PHY/sse_intrin.h:227:1: error: AVX vector return without AVX enabled
+                                        changes the ABI [-Werror=psabi]
+```
+
+None of the three tests use PHY code, but `UTIL` and the `T` tracer reach that
+header transitively (`openair2/UTIL/OPT/opt.h` -> `PHY/defs_RU.h` ->
+`PHY/defs_common.h` -> `PHY/TOOLS/tools_defs.h`), so the build stops before it
+compiles anything of ours. This is upstream code and a property of the VM's CPU,
+not of the relocation work.
+
+If further pre-existing warnings surface, drop `-Werror` from both flags for
+this stage — it exists to police the image build, and stage 2 needs the same
+treatment anyway.
+
+### 1.4 Stage 2 needs the same suppression
+
+`docker/Dockerfile.build.ubuntu` hard-codes `--cmake-opt
+-DCMAKE_C_FLAGS="-Werror"`, so the image build fails at the same header, tens of
+minutes in. `$BUILD_OPTION` is appended after those two options, and `build_oai`
+hands every `--cmake-opt` to `cmake` in order, so the later value wins:
+
+```bash
+docker build . -f docker/Dockerfile.build.ubuntu -t ran-build:latest \
+  --build-arg BUILD_OPTION="--cmake-opt -DCMAKE_C_FLAGS=-Wno-psabi --cmake-opt -DCMAKE_CXX_FLAGS=-Wno-psabi"
+```
+
+Keep each option free of spaces: `$BUILD_OPTION` is unquoted in the `RUN` line,
+so `-DCMAKE_C_FLAGS="-Werror -Wno-error=psabi"` would word-split into two broken
+arguments. The form above replaces `-Werror` rather than extending it, which is
+the right trade on a VM whose CPU cannot satisfy it.
+
+### 1.5 Making the build faster
+
+In rough order of payoff on this VM:
+
+**vCPUs and RAM.** `nproc` inside the VM is the ceiling — ninja defaults to
+`nproc + 2` jobs. The comnetsemu Vagrantfile ships 2 vCPUs, which caps the whole
+build. With the VM powered off, on the Windows host:
+
+```
+VBoxManage modifyvm comnetsemu --cpus 6 --memory 8192
+```
+
+(or raise `vb.cpus` / `vb.memory` in the Vagrantfile and `vagrant reload`). Keep
+a couple of cores for Windows.
+
+**Get the source off vboxsf.** Every `#include` is resolved against ~60 `-I`
+paths, so a C build opens headers tens of thousands of times, and each open on a
+shared folder is a round trip to the host filesystem. Copying to the VM's own
+disk is often a 2-3x win on its own:
+
+```bash
+rsync -a --delete ~/comnetsemu/examples/5g/OAI_EWOC/ ~/OAI_EWOC/
+```
+
+then mount `~/OAI_EWOC:/oai-ran` instead. Re-run that `rsync` after any edit on
+the Windows side; the build tree stays in the Docker volume either way, so this
+does not reintroduce the exec problem from §1.1.
+
+**Build only what is needed.** The seven targets in §1.2 cover all 23 changed
+files. A bare `cmake --build /build` builds ~8000 targets — every softmodem,
+simulator and tool — which is only worth it as a dress rehearsal for the image
+build in stage 2.
+
+**Drop the optimiser while iterating.** `-DCMAKE_BUILD_TYPE=Debug` removes `-O2
+-funroll-loops` and the heavy inlining. Nothing here is performance-sensitive,
+and `-Werror` behaves the same. Switch back to the default `RelWithDebInfo`
+before the last run, since a few warnings only appear with optimisation on.
+
+**Check ccache is actually hitting**: `ccache -s`. The default 5 GB ceiling is
+small next to the generated ASN.1 code, so `ccache -M 20G` once is worth it.
 
 What each one proves:
 
@@ -148,12 +341,16 @@ What each one proves:
 Then the whole suite, which must not regress:
 
 ```bash
-ctest -E '^physim\.|^benchmark_' --output-on-failure
+ninja tests && ctest --output-on-failure
 ```
 
-> The Docker build compiles with `-Werror` (`docker/Dockerfile.build.ubuntu`).
-> A warning that a plain local build tolerates will fail the image build in stage
-> 2, so fix anything `ninja` reports here even if it is only a warning.
+(`ENABLE_PHYSIM_TESTS` is off, so this does not pull in the physical-layer
+simulators.)
+
+> `docker/Dockerfile.build.ubuntu` passes `-DCMAKE_C_FLAGS="-Werror"`, which a
+> plain local build does not. That is why `-DCMAKE_C_FLAGS=-Werror` is on the
+> `cmake` line above: a warning tolerated here would fail the image build in
+> stage 2.
 
 ---
 

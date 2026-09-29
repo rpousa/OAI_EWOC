@@ -2827,7 +2827,7 @@ void e1_update_n3_uplink_tunnels(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE, sctp_assoc
     memcpy(&mod->UP_TL_information->tlAddress, pdu->param.n3_incoming.addr.buffer, sizeof(in_addr_t));
     mod->UP_TL_information->teId = pdu->param.n3_incoming.teid;
     LOG_I(NR_RRC,
-          "UE %d: update N3 uplink of PDU session %d on CU-UP assoc_id %d (TEID 0x%x)\n",
+          "UE %d: update N3 uplink of PDU session %ld on CU-UP assoc_id %d (TEID 0x%x)\n",
           UE->rrc_ue_id,
           mod->sessionId,
           assoc_id,

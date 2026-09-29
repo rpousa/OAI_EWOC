@@ -954,13 +954,13 @@ NGAP_NGAP_PDU_t *encode_ngap_pdusession_modify_indication(const ngap_pdusession_
     return NULL;
   }
 
-  NGAP_NGAP_PDU_t pdu = {0};
-  pdu.present = NGAP_NGAP_PDU_PR_initiatingMessage;
-  asn1cCalloc(pdu.choice.initiatingMessage, initiatingMessage);
-  initiatingMessage->procedureCode = NGAP_ProcedureCode_id_PDUSessionResourceModifyIndication;
-  initiatingMessage->criticality = NGAP_Criticality_reject;
-  initiatingMessage->value.present = NGAP_InitiatingMessage__value_PR_PDUSessionResourceModifyIndication;
-  NGAP_PDUSessionResourceModifyIndication_t *out = &initiatingMessage->value.choice.PDUSessionResourceModifyIndication;
+  NGAP_NGAP_PDU_t *pdu = calloc_or_fail(1, sizeof(*pdu));
+  pdu->present = NGAP_NGAP_PDU_PR_initiatingMessage;
+  asn1cCalloc(pdu->choice.initiatingMessage, head);
+  head->procedureCode = NGAP_ProcedureCode_id_PDUSessionResourceModifyIndication;
+  head->criticality = NGAP_Criticality_reject;
+  head->value.present = NGAP_InitiatingMessage__value_PR_PDUSessionResourceModifyIndication;
+  NGAP_PDUSessionResourceModifyIndication_t *out = &head->value.choice.PDUSessionResourceModifyIndication;
 
   /* AMF UE NGAP ID (M) */
   {
@@ -993,7 +993,7 @@ NGAP_NGAP_PDU_t *encode_ngap_pdusession_modify_indication(const ngap_pdusession_
       byte_array_t ba = encode_ngap_pdusession_modify_indication_transfer(pdu_item);
       if (ba.buf == NULL) {
         NGAP_ERROR("Failed to encode the transfer IE for PDU session %ld\n", item->pDUSessionID);
-        ASN_STRUCT_FREE_CONTENTS_ONLY(asn_DEF_NGAP_NGAP_PDU, &pdu);
+        ASN_STRUCT_FREE(asn_DEF_NGAP_NGAP_PDU, pdu);
         return NULL;
       }
       item->pDUSessionResourceModifyIndicationTransfer.buf = ba.buf;
@@ -1001,9 +1001,7 @@ NGAP_NGAP_PDU_t *encode_ngap_pdusession_modify_indication(const ngap_pdusession_
     }
   }
 
-  NGAP_NGAP_PDU_t *out = calloc_or_fail(1, sizeof(*out));
-  *out = pdu;
-  return out;
+  return pdu;
 }
 
 /** @brief Decode one PDU Session Resource Modify Confirm Transfer (9.3.4.7):
@@ -1044,13 +1042,15 @@ bool decode_ngap_pdusession_modify_confirm(ngap_pdusession_modify_confirm_t *out
   NGAP_PDUSessionResourceModifyConfirm_t *container = &pdu->choice.successfulOutcome->value.choice.PDUSessionResourceModifyConfirm;
 
   /* AMF UE NGAP ID (M) */
-  NGAP_FIND_PROTOCOLIE_BY_ID(NGAP_PDUSessionResourceModifyConfirmIEs_t, ie, container, NGAP_ProtocolIE_ID_id_AMF_UE_NGAP_ID, true);
+  /* not "mandatory": the macro's mandatory branch ends in "return -1", which is true here */
+  NGAP_FIND_PROTOCOLIE_BY_ID(NGAP_PDUSessionResourceModifyConfirmIEs_t, ie, container, NGAP_ProtocolIE_ID_id_AMF_UE_NGAP_ID, false);
   if (ie == NULL)
     return false;
   asn_INTEGER2ulong(&ie->value.choice.AMF_UE_NGAP_ID, &out->amf_ue_ngap_id);
 
   /* RAN UE NGAP ID (M) */
-  NGAP_FIND_PROTOCOLIE_BY_ID(NGAP_PDUSessionResourceModifyConfirmIEs_t, ie, container, NGAP_ProtocolIE_ID_id_RAN_UE_NGAP_ID, true);
+  /* not "mandatory": the macro's mandatory branch ends in "return -1", which is true here */
+  NGAP_FIND_PROTOCOLIE_BY_ID(NGAP_PDUSessionResourceModifyConfirmIEs_t, ie, container, NGAP_ProtocolIE_ID_id_RAN_UE_NGAP_ID, false);
   if (ie == NULL)
     return false;
   out->gNB_ue_ngap_id = ie->value.choice.RAN_UE_NGAP_ID;
