@@ -150,6 +150,9 @@ else()
   message(WARNING "did not find /proc/cpuinfo -- not setting any x86-specific compilation variables")
 endif()
 
+eval_boolean(AUTODETECT_AVX DEFINED CPUFLAGS AND CPUFLAGS MATCHES "avx")
+add_boolean_option(AVX ${AUTODETECT_AVX} "Whether AVX intrinsics is available on the host processor" ON)
+
 eval_boolean(AUTODETECT_AVX512 DEFINED CPUFLAGS AND CPUFLAGS MATCHES "avx512")
 add_boolean_option(AVX512 ${AUTODETECT_AVX512} "Whether AVX512 intrinsics is available on the host processor" ON)
 
@@ -164,9 +167,19 @@ if (CROSS_COMPILE)
   message(STATUS "setting as aarch64")
   set(C_FLAGS_PROCESSOR "${C_FLAGS_PROCESSOR} -gdwarf-2 -lgcc -lrt")
 elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
-  # The following intrinsics are assumed to be available on any x86 system
-  # (avx, f16c, fma, mmx, pclmul, sse, sse2, sse3, xop)
-  set(C_FLAGS_PROCESSOR "${C_FLAGS_PROCESSOR} -DSIMDE_X86_AVX_NATIVE -DSIMDE_X86_AVX_NATIVE -DSIMDE_X86_F16C_NATIVE -DSIMDE_X86_FMA_NATIVE -DSIMDE_X86_MMX_NATIVE -DSIMDE_X86_PCLMUL_NATIVE -DSIMDE_X86_SSE2_NATIVE -DSIMDE_X86_SSE3_NATIVE -DSIMDE_X86_SSE_NATIVE -DSIMDE_X86_XOP_HAVE_COM_ -DSIMDE_X86_XOP_NATIVE")
+  # The SSE-era intrinsics are baseline on x86_64 and can be assumed
+  # (mmx, pclmul, sse, sse2, sse3)
+  set(C_FLAGS_PROCESSOR "${C_FLAGS_PROCESSOR} -DSIMDE_X86_MMX_NATIVE -DSIMDE_X86_PCLMUL_NATIVE -DSIMDE_X86_SSE2_NATIVE -DSIMDE_X86_SSE3_NATIVE -DSIMDE_X86_SSE_NATIVE")
+  # AVX and the VEX-encoded extensions built on it (f16c, fma, xop) cannot be
+  # assumed: a hypervisor may mask them out of CPUID, in which case -march=native
+  # leaves AVX disabled. Claiming them native anyway makes SIMDe call the real
+  # _mm256_* intrinsics, which gcc then refuses to inline into a function
+  # compiled without AVX ("target specific option mismatch"). Left off, SIMDe
+  # falls back to its portable implementation, which is the point of SIMDe.
+  message(STATUS "AVX intrinsics are ${AVX}")
+  if(${AVX})
+    set(C_FLAGS_PROCESSOR "${C_FLAGS_PROCESSOR} -DSIMDE_X86_AVX_NATIVE -DSIMDE_X86_F16C_NATIVE -DSIMDE_X86_FMA_NATIVE -DSIMDE_X86_XOP_HAVE_COM_ -DSIMDE_X86_XOP_NATIVE")
+  endif()
   message(STATUS "AVX512 intrinsics are ${AVX512}")
   if(${AVX512})
     set(C_FLAGS_PROCESSOR "${C_FLAGS_PROCESSOR} -DSIMDE_X86_AVX512BW_NATIVE -DSIMDE_X86_AVX512F_NATIVE -DSIMDE_X86_AVX512VL_NATIVE -mavx512bw -march=skylake-avx512 -mtune=skylake-avx512")

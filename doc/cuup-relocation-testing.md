@@ -8,114 +8,112 @@ each one rules out a whole class of problem for the next.
 
 ---
 
-## 0. Host setup (once)
+## 0. Bringing up a machine
 
-The build host is the **`comnetsemu` Vagrant VM**, not Windows and not WSL2. The
-repository lives on the Windows Desktop and reaches the VM as a VirtualBox shared
-folder:
+Nothing here is specific to one host. Run §0.1 on any candidate machine and it
+tells you in one pass whether it can do this.
 
-```
-C:\Users\Ricardo Pousa\Desktop\comnetsemu\...\OAI_EWOC   (Windows)
-~/comnetsemu/examples/5g/OAI_EWOC                            (inside the VM)
-```
-
-### 0.1 Line endings
-
-The tree was cloned on Windows with `core.autocrlf=true`, so every text file in
-the working copy has CRLF endings while the blobs in `HEAD` have LF. Two
-consequences, both of which have to be cleared before anything else:
-
-* `git status` reports ~700 files as modified, which hides the ones that actually
-  changed;
-* `cmake_targets/build_oai` and the other shell scripts carry `\r` at the end of
-  every line, so `bash` fails on them with `$'\r': command not found`. Since
-  `docker/Dockerfile.build.ubuntu` runs `./build_oai`, the **image build fails**
-  too, not just a local build.
-
-Fix it once, from inside the VM, in this order — the save/restore around
-`git checkout` is what keeps the CU-UP-relocation work:
+### 0.1 Preflight
 
 ```bash
-cd ~/comnetsemu/examples/5g/OAI_EWOC
-
-# 1. set the 27 files of this patch aside
-cat > /tmp/cuup-files.txt <<'EOF'
-CMakeLists.txt
-ci-scripts/yaml_files/5g_rfsimulator_e1/reloc-override.yaml
-common/utils/telnetsrv/telnetsrv_rrc.c
-doc/cuup-relocation-testing.md
-openair2/COMMON/f1ap_messages_types.h
-openair2/COMMON/ngap_messages_def.h
-openair2/COMMON/ngap_messages_types.h
-openair2/E1AP/lib/e1ap_bearer_context_management.c
-openair2/E1AP/tests/e1ap_lib_test.c
-openair2/F1AP/lib/f1ap_ue_context.c
-openair2/F1AP/tests/f1ap_lib_test.c
-openair2/LAYER2/NR_MAC_gNB/mac_rrc_dl_handler.c
-openair2/LAYER2/nr_pdcp/cucp_cuup_handler.c
-openair2/RRC/NR/nr_rrc_defs.h
-openair2/RRC/NR/nr_rrc_proto.h
-openair2/RRC/NR/rrc_gNB.c
-openair2/RRC/NR/rrc_gNB_NGAP.c
-openair2/RRC/NR/rrc_gNB_NGAP.h
-openair2/RRC/NR/rrc_gNB_cuup.c
-openair2/RRC/NR/rrc_gNB_cuup_reloc.c
-openair2/RRC/NR/rrc_gNB_cuup_reloc.h
-openair3/NGAP/ngap_gNB.c
-openair3/NGAP/ngap_gNB_handlers.c
-openair3/NGAP/ngap_gNB_mobility_management.c
-openair3/NGAP/ngap_gNB_mobility_management.h
-openair3/NGAP/ngap_msg_includes.h
-openair3/NGAP/tests/ngap_lib_test.c
-EOF
-tar -cf /tmp/cuup-files.tar -T /tmp/cuup-files.txt
-
-# 2. stop git rewriting endings, for this repo
-git config core.autocrlf false
-git config core.eol lf
-
-# 3. restore the whole tree from HEAD, now with LF
-git checkout -- .
-
-# 4. put our files back
-tar -xf /tmp/cuup-files.tar
-
-git status --short        # expect exactly 23 M + 4 ??
+./ci-scripts/cuup-reloc-preflight.sh
 ```
 
-Step 3 discards every uncommitted change in the tree. Step 1 captured the
-CU-UP-relocation files, but if anything else of yours is uncommitted, commit it
-on a branch first.
+It is read-only: loads no modules, installs nothing, changes no configuration.
+Exit status 0 means every hard requirement is met. What it checks and why:
 
-If the VM's `git` is older than 2.10 and refuses `core.eol`, `core.autocrlf
-false` alone is enough.
+| Check | Why it is hard, not advisory |
+|---|---|
+| `avx`, `avx2`, `xsave` | `openair1/PHY/TOOLS/oai_dfts.c` calls `_mm256_*` unconditionally — no `#ifdef`, no runtime dispatch, no 128-bit fallback. Without AVX2 the file will not compile; without `xsave` the kernel cannot enable YMM state, so the instructions fault even if it did. |
+| `sse4_2` | assumed throughout the PHY. |
+| SCTP | F1AP, E1AP and NGAP all run over it. Without it nothing connects. |
+| docker + compose v2 | the deployment is a compose file. |
+| source not on a shared folder | vboxsf/9p/cifs cannot execute binaries the build generates and then runs (`common/utils/T/genids`), and a header-heavy build pays enormously for every `#include`. |
 
-### 0.2 Where to build
+Cores, memory and disk are reported as advisories: 4 cores, 8 GB and 40 GB free
+are comfortable; less works but slowly.
 
-Building directly in the shared folder works but is slow, and vboxsf does not
-carry the executable bit reliably. Copy into the VM's own disk first:
+**If AVX2 is missing and the machine is a VM**, that is the hypervisor, not the
+CPU. See §0.5.
+
+### 0.2 Get the source
+
+On the machine where the work was done, publish the branch once:
 
 ```bash
-cp -r ~/comnetsemu/examples/5g/OAI_EWOC ~/OAI_EWOC
-cd ~/OAI_EWOC
-chmod +x cmake_targets/build_oai ci-scripts/*.sh
+cd <your working copy>
+git checkout -b cuup-reloc              # if not already on it
+git add -A -- . ':!openair2/E2AP/flexric'
+git commit -m "inter-CU-UP relocation (TS 38.401 8.9.5)"
+git push -u origin cuup-reloc
 ```
 
-Everything below runs from `~/OAI_EWOC`. Copy results back to the shared folder
-only when you want them on Windows.
-
-### 0.3 Resources
-
-Give the VM (or Docker Desktop, if you build the images on Windows instead)
-**8 GB RAM, 4 CPUs, 40 GB disk** minimum. The deployment below is a core plus
-five RAN containers plus a UE.
-
-Work on a branch, so `git diff` stays available as the record of what changed:
+On each test machine:
 
 ```bash
-git checkout -b cuup-reloc
-git add -A && git commit -m "inter-CU-UP relocation: TS 38.401 8.9.5"
+git clone --branch cuup-reloc --single-branch https://github.com/rpousa/OAI_EWOC.git
+cd OAI_EWOC
+git submodule update --init --recursive openair2/E2AP/flexric
+./ci-scripts/cuup-reloc-preflight.sh
 ```
+
+The submodule is needed because `docker/Dockerfile.build.ubuntu` builds FlexRIC.
+Clone onto local disk, never a shared folder.
+
+### 0.3 Build the dependency image
+
+```bash
+docker build . -f docker/Dockerfile.base.ubuntu -t ran-base:latest
+```
+
+Roughly 15 minutes. This is the image whose `build_oai -I` installs the
+toolchain and puts `asn1c` in `/opt/asn1c/bin`; everything else builds on it.
+It needs network access to Docker Hub and GitHub.
+
+### 0.4 Two ways forward
+
+**For the unit tests** (§1), do not build `ran-build` — run the seven targets in
+a throwaway container over `ran-base`. Minutes, not an hour.
+
+**For the live run** (§2 onwards), build the full image. On a machine that
+passed preflight the stock command works:
+
+```bash
+docker build . -f docker/Dockerfile.build.ubuntu -t ran-build:latest
+```
+
+### 0.5 When the machine is a VM
+
+Three things bite, in this order:
+
+**AVX2 masked out of CPUID.** `/proc/cpuinfo` shows no `avx`, `avx2` or `xsave`
+even though the host CPU has them. On VirtualBox under Windows the cause is
+Hyper-V: with it active VirtualBox runs on the Hyper-V backend and cannot pass
+CPU features through. Turn it off — `bcdedit /set hypervisorlaunchtype off`,
+Core Isolation → Memory Integrity off, and uncheck the Hyper-V, Virtual Machine
+Platform and Windows Hypervisor Platform features — reboot, then with the VM
+powered off:
+
+```
+VBoxManage modifyvm <vm> --cpu-profile host
+```
+
+On KVM use `-cpu host`; on VMware enable "Expose hardware assisted
+virtualization"; cloud instances essentially all expose AVX2 already.
+
+**Shared folders.** A VirtualBox shared folder cannot execute what the build
+produces, so the build dies at `genids: Permission denied` even though the file
+is `-rwxrwxrwx` and the mount has no `noexec` — `execve` needs to map the pages
+privately and vboxsf does not support that. It is also punishingly slow: a build
+on one showed `0.5% us, 34% sy` with load 10, almost all time in the kernel
+serving file operations. Clone to the VM's own disk.
+
+**Line endings.** A tree checked out on Windows with `core.autocrlf=true` and
+read from Linux leaves `cmake_targets/build_oai` with `#!/bin/bash\r`, which
+fails as `bad interpreter`, and reports hundreds of files as modified. A fresh
+`git clone` on Linux avoids this entirely; an existing tree is fixed with
+`git config core.autocrlf false` and `git checkout -- .` (which discards
+uncommitted work — commit first).
 
 ---
 
@@ -135,161 +133,79 @@ cd ~/comnetsemu/examples/5g/OAI_EWOC
 docker build . -f docker/Dockerfile.base.ubuntu -t ran-base:latest   # once, ~15 min
 ```
 
-### 1.1 Do not put the build tree on the shared folder
+### 1.1 Build the seven targets
 
-Two separate traps, both caused by `~/comnetsemu/...` being a VirtualBox shared
-folder (vboxsf):
-
-* **The mount source must exist.** Docker creates an empty directory instead of
-  failing when a `-v` source is missing, which produces `The source directory
-  does not appear to contain CMakeLists.txt` from a container that otherwise
-  looks fine. `ran-base` holds only `cmake_targets/build_oai` and `oaienv` under
-  `/oai-ran`, no `CMakeLists.txt`, so there is nothing to fall back on.
-* **vboxsf cannot execute what the build produces.** The build generates and
-  then *runs* helper binaries — `common/utils/T/genids`, which turns
-  `T_messages.txt` into `T_IDs.h` — and on a shared folder that fails with:
-
-  ```
-  /bin/sh: 1: .../common/utils/T/genids: Permission denied
-  ```
-
-  This is not a mode problem. `ls -l` shows the binary as `-rwxrwxrwx`, and the
-  mount carries no `noexec`:
-
-  ```
-  home_vagrant_comnetsemu on /oai type vboxsf (rw,nodev,relatime,iocharset=utf8,uid=1000,gid=1000)
-  ```
-
-  `execve` needs to map the file's pages privately, and the vboxsf driver does
-  not support that, so the kernel returns `EACCES` however the permissions look.
-  The giveaway is exactly this combination: an executable file, no `noexec`, and
-  `vboxsf` as the filesystem.
-
-The fix is to keep the build tree off vboxsf. A named Docker volume is the least
-fuss, because it lives under `/var/lib/docker` on the VM's own disk and survives
-`--rm`:
+`ran-base` carries only `cmake_targets/build_oai` and `oaienv` under `/oai-ran`,
+so the source comes in over a bind mount. Keep the *build tree* in a named
+Docker volume rather than in the mounted source: it is faster, it survives
+`--rm`, and on a VM it is what makes the generated helper binaries executable.
 
 ```bash
 docker volume create oai-build
 mkdir -p ~/.cache/cpm ~/.cache/ccache
-```
 
-### 1.2 Configure the same way `ran-build` does
-
-`docker/Dockerfile.build.ubuntu` drops `/oai-ran` from the base image, copies
-the source there, and configures with `cmake ../../..` from
-`cmake_targets/ran_build/build`. The flags below are the ones the image build
-uses, so a warning caught here is a warning that would have failed stage 2.
-
-```bash
 docker run --rm -it \
-  -v ~/comnetsemu/examples/5g/OAI_EWOC:/oai-ran \
+  -v $PWD:/oai-ran \
   -v oai-build:/build \
   -v ~/.cache/cpm:/root/.cache/cpm \
   -v ~/.cache/ccache:/root/.cache/ccache \
   -w /oai-ran ran-base:latest bash
+```
 
-# inside the container:
-ls CMakeLists.txt             # if this fails, the mount is wrong — stop here
+```bash
+# inside the container
+ls CMakeLists.txt                      # if this fails, the mount source was wrong
+ccache -M 20G
 git config --global --add safe.directory /oai-ran
-apt-get update && apt-get install -y libgtest-dev libbenchmark-dev   # optional; see note
+apt-get update && apt-get install -y libgtest-dev libbenchmark-dev   # optional
 
 cmake -S /oai-ran -B /build -GNinja \
   -DENABLE_TESTS=ON \
-  -DAVX512=OFF \
-  -DCMAKE_C_FLAGS="-Werror -Wno-error=psabi" \
-  -DCMAKE_CXX_FLAGS="-Werror -Wno-error=psabi"
-cmake --build /build --target e1ap_lib_test f1ap_lib_test ngap_lib_test
-cd /build && ctest -R 'e1ap_lib_test|f1ap_lib_test|ngap_lib_test' --output-on-failure
+  -DCMAKE_C_FLAGS=-Werror -DCMAKE_CXX_FLAGS=-Werror
+
+cd /build
+ninja -k 0 ngap e1ap_lib f1ap_lib L2_NR e1ap_lib_test f1ap_lib_test ngap_lib_test
+ctest -R 'e1ap_lib_test|f1ap_lib_test|ngap_lib_test' --output-on-failure
 ```
 
-Only the source is read off vboxsf; everything the build writes and executes
-lands in the volume. Copying the source to `~/OAI_EWOC` on the VM disk first
-works too and is faster to read, but it is not sufficient on its own — the build
-tree is what has to be off the shared folder.
+Docker creates an empty directory instead of failing when a `-v` source does not
+exist, which produces a confusing *"source directory does not appear to contain
+CMakeLists.txt"* from a container that otherwise looks fine — hence the `ls`.
 
-The `safe.directory` line silences three `fatal: detected dubious ownership`
-messages during configure. They are not fatal to the build: `CMakeLists.txt`
-runs `git rev-parse` and `git log` only to stamp `GIT_BRANCH`, `GIT_COMMIT_HASH`
-and `GIT_COMMIT_DATE`, which otherwise stay `UNKNOWN` in the softmodem's startup
-banner. Worth fixing before the live run in stage 3, when that banner is how you
-tell which build is running.
+### 1.2 Why these seven targets
 
-Where each flag comes from:
-
-| Flag | Why |
+| Target | Covers |
 |---|---|
-| `-GNinja` | `--ninja` in the image build. |
-| `-DAVX512=OFF` | what `--noavx512` expands to. `CMakeLists.txt` otherwise auto-detects from the CPU flags the VM exposes, so the test build and the image build could disagree. |
-| `-DCMAKE_C_FLAGS` / `-DCMAKE_CXX_FLAGS` | `-Werror` is what the image build passes (it *replaces* the flags rather than appending, there too). `-Wno-error=psabi` is required on this VM — see §1.3. |
-| `-DENABLE_TESTS=ON` | not in the image build — it is what creates the `tests` target and registers the three executables with ctest. |
+| `ngap` | `ngap_gNB.c`, `ngap_gNB_handlers.c`, `ngap_gNB_mobility_management.c` |
+| `e1ap_lib` | `e1ap_bearer_context_management.c` |
+| `f1ap_lib` | `f1ap_ue_context.c` |
+| `L2_NR` | `rrc_gNB.c`, `rrc_gNB_NGAP.c`, `rrc_gNB_cuup.c`, **`rrc_gNB_cuup_reloc.c`**, `mac_rrc_dl_handler.c`, `cucp_cuup_handler.c` |
+| the three tests | the test files, then `ctest` |
 
-The image build's remaining options — `--build-e2`, `-DT_RECORD_DB=ON`,
-`-DOAI_VRTSIM_TAPS_CLIENT=ON`, `-w USRP -w BLADERF`, `-t Ethernet` — only add
-targets none of these tests link against, so leaving them out just makes the
-configure faster.
+Together they cover all 24 changed files. The three test executables alone do
+not: the state machine lives in `L2_NR`, so a green `ctest` without it would
+prove nothing about whether the feature compiles.
 
-Two things not to copy from the Dockerfile: `/bin/sh oaienv` does nothing useful
-here (it exports variables into a subshell that then exits, and `CMakeLists.txt`
-uses `CMAKE_SOURCE_DIR`, reading only `CPM_SOURCE_CACHE` from the environment),
-and `-c` / `--clean`, which would wipe the build tree on every run.
+`-Werror` matches what `docker/Dockerfile.build.ubuntu` passes, so a warning
+caught here is a warning that would have failed the image build. `-k 0` reports
+every error in one pass instead of stopping at the first — worth it, since each
+round trip otherwise costs a full rebuild.
 
-> To start the build over, `docker volume rm oai-build` and recreate it. The
-> volume is root-owned and not visible from the VM's filesystem, which is the
-> point — nothing the build writes touches the repository.
-
-> `ENABLE_TESTS=ON` makes the top-level `CMakeLists.txt` look for GTest and
-> google-benchmark and, not finding them, download both through CPM at configure
-> time. None of the three tests use them — they are plain C — so installing the
-> two `-dev` packages above just skips that download. The `~/.cache/cpm` mount
-> keeps whatever it does download, so stage 2 does not fetch it again.
-
-### 1.3 `-Wno-error=psabi` is not optional on this VM
-
-`CMakeLists.txt` assumes AVX exists on every x86_64 host — it defines
-`SIMDE_X86_AVX_NATIVE` unconditionally, with the comment *"the following
-intrinsics are assumed to be available on any x86 system"* — but never passes
-`-mavx`. It relies on the `-march=native` that the non-AVX512 branch adds.
-
-VirtualBox masks AVX and AVX2 out of the guest's CPUID, which is why configure
-prints `AVX2 intrinsics are OFF` and `GFNI intrinsics are OFF`. So SIMDe emits
-real `__m256` values while the compiler has AVX switched off, and every
-translation unit that reaches `openair1/PHY/sse_intrin.h` fails:
-
-```
-openair1/PHY/sse_intrin.h: In function 'oai_mm256_conj':
-openair1/PHY/sse_intrin.h:227:1: error: AVX vector return without AVX enabled
-                                        changes the ABI [-Werror=psabi]
-```
-
-None of the three tests use PHY code, but `UTIL` and the `T` tracer reach that
-header transitively (`openair2/UTIL/OPT/opt.h` -> `PHY/defs_RU.h` ->
-`PHY/defs_common.h` -> `PHY/TOOLS/tools_defs.h`), so the build stops before it
-compiles anything of ours. This is upstream code and a property of the VM's CPU,
-not of the relocation work.
-
-If further pre-existing warnings surface, drop `-Werror` from both flags for
-this stage — it exists to police the image build, and stage 2 needs the same
-treatment anyway.
-
-### 1.4 Stage 2 needs the same suppression
-
-`docker/Dockerfile.build.ubuntu` hard-codes `--cmake-opt
--DCMAKE_C_FLAGS="-Werror"`, so the image build fails at the same header, tens of
-minutes in. `$BUILD_OPTION` is appended after those two options, and `build_oai`
-hands every `--cmake-opt` to `cmake` in order, so the later value wins:
+Then the whole suite, which must not regress:
 
 ```bash
-docker build . -f docker/Dockerfile.build.ubuntu -t ran-build:latest \
-  --build-arg BUILD_OPTION="--cmake-opt -DCMAKE_C_FLAGS=-Wno-psabi --cmake-opt -DCMAKE_CXX_FLAGS=-Wno-psabi"
+ninja tests && ctest --output-on-failure
 ```
 
-Keep each option free of spaces: `$BUILD_OPTION` is unquoted in the `RUN` line,
-so `-DCMAKE_C_FLAGS="-Werror -Wno-error=psabi"` would word-split into two broken
-arguments. The form above replaces `-Werror` rather than extending it, which is
-the right trade on a VM whose CPU cannot satisfy it.
+(`ENABLE_PHYSIM_TESTS` is off, so this does not pull in the physical-layer
+simulators.)
 
-### 1.5 Making the build faster
+> On a machine without AVX, `CMakeLists.txt` detects it and leaves the SIMDe
+> AVX defines off, so SIMDe uses its portable implementation. If you somehow see
+> `-Wpsabi` or `target specific option mismatch`, that detection was bypassed —
+> check that `cmake` printed `AVX intrinsics are OFF`.
+
+### 1.3 Making the build faster
 
 In rough order of payoff on this VM:
 
