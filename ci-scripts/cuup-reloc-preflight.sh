@@ -63,18 +63,39 @@ fi
 
 echo
 echo "Toolchain"
+# $1 actual, $2 minimum -- true when actual >= minimum
+ver_ge() { [ "$(printf '%s\n%s\n' "$2" "$1" | sort -V | head -1)" = "$2" ]; }
+
 if command -v docker >/dev/null; then
   if docker info >/dev/null 2>&1; then
-    pass "docker" "$(docker --version | cut -d, -f1)"
+    eng=$(docker version --format '{{.Server.Version}}' 2>/dev/null)
+    # The deployment pins which network lands on which interface with
+    # `interface_name`, which the UPF config relies on for N3 vs N6. The engine
+    # rejects it below 28.1, at container-create time rather than at validation.
+    if ver_ge "${eng:-0}" 28.1; then
+      pass "docker engine" "$eng"
+    else
+      bad "docker engine" "$eng -- 28.1+ required for 'interface_name' in the compose file"
+    fi
   else
     bad "docker" "installed but the daemon is unreachable (not running, or user not in the docker group)"
   fi
 else
   bad "docker" "not installed"
 fi
-docker compose version >/dev/null 2>&1 && pass "docker compose" "v2 plugin" \
-  || { command -v docker-compose >/dev/null && warn "docker compose" "only the v1 standalone binary found" \
-                                            || bad  "docker compose" "not available (needed for the deployment)"; }
+
+cver=$(docker compose version --short 2>/dev/null | tr -d 'v')
+if [ -n "$cver" ]; then
+  if ver_ge "$cver" 2.36; then
+    pass "docker compose" "$cver"
+  else
+    bad "docker compose" "$cver -- 2.36+ required to parse 'interface_name'"
+  fi
+elif command -v docker-compose >/dev/null; then
+  bad "docker compose" "only the v1 standalone binary found"
+else
+  bad "docker compose" "not available (needed for the deployment)"
+fi
 command -v git >/dev/null && pass "git" "$(git --version | awk '{print $3}')" || bad "git" "not installed"
 
 echo

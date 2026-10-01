@@ -1,6 +1,6 @@
 <!-- SPDX-License-Identifier: CC-BY-4.0 -->
 
-# Testing the change of gNB-CU-UP (comnetsemu VM, Docker)
+# Testing the change of gNB-CU-UP (Docker)
 
 Ordered so that each stage can fail on its own terms: encoding first (no core, no
 radio), then the build, then the live path. Stop at the first stage that fails —
@@ -12,6 +12,24 @@ each one rules out a whole class of problem for the next.
 
 Nothing here is specific to one host. Run §0.1 on any candidate machine and it
 tells you in one pass whether it can do this.
+
+### 0.0 Where each step happens
+
+Two machines, with git as the only channel between them:
+
+| | Authoring machine | Test machine |
+|---|---|---|
+| What it is | the `comnetsemu` Vagrant VM | a native Linux box |
+| What happens there | edit, commit, push | resync, build, deploy, capture |
+| Needs AVX2 | no | **yes** |
+| Needs Docker | no | yes |
+
+The authoring machine never builds, which is why it does not need AVX2 and why
+the shared-folder and line-ending caveats in §0.5 stop mattering there. The test
+machine is a pure consumer: nothing is edited on it, because
+`ci-scripts/cuup-reloc-sync.sh` resets it hard to the remote and would discard
+the edit. Anything that needs changing gets changed on the authoring machine and
+pushed.
 
 ### 0.1 Preflight
 
@@ -38,17 +56,16 @@ CPU. See §0.5.
 
 ### 0.2 Get the source
 
-On the machine where the work was done, publish the branch once:
+On the authoring machine, publish the branch:
 
 ```bash
-cd <your working copy>
-git checkout -b cuup-reloc              # if not already on it
+cd ~/comnetsemu/examples/5g/OAI_EWOC
 git add -A -- . ':!openair2/E2AP/flexric'
-git commit -m "inter-CU-UP relocation (TS 38.401 8.9.5)"
-git push -u origin cuup-reloc
+git commit -m "<what changed>"
+git push origin cuup-reloc
 ```
 
-On each test machine:
+On the test machine, clone once:
 
 ```bash
 git clone --branch cuup-reloc --single-branch https://github.com/rpousa/OAI_EWOC.git
@@ -57,8 +74,20 @@ git submodule update --init --recursive openair2/E2AP/flexric
 ./ci-scripts/cuup-reloc-preflight.sh
 ```
 
-The submodule is needed because `docker/Dockerfile.build.ubuntu` builds FlexRIC.
-Clone onto local disk, never a shared folder.
+Clone onto local disk, never a shared folder or a network mount. The submodule is
+needed because `docker/Dockerfile.build.ubuntu` builds FlexRIC even with the E2
+agent disabled.
+
+Every subsequent update is one command on the test machine:
+
+```bash
+./ci-scripts/cuup-reloc-sync.sh
+```
+
+It refuses to run on a dirty tree, fetches and hard-resets to `origin/cuup-reloc`,
+updates submodules, prints the commits that arrived, and rebuilds `ran-build` and
+the three images. `--full` also rebuilds `ran-base`, which is only needed when the
+toolchain or the installed dependencies change. `--no-build` resyncs and stops.
 
 ### 0.3 Build the dependency image
 
@@ -79,12 +108,20 @@ a throwaway container over `ran-base`. Minutes, not an hour.
 passed preflight the stock command works:
 
 ```bash
-docker build . -f docker/Dockerfile.build.ubuntu -t ran-build:latest
+docker build . -f docker/Dockerfile.build.ubuntu -t ran-build:latest \
+       --build-arg BUILD_OPTION="--cmake-opt -DE2_AGENT=OFF"
 ```
 
-### 0.5 When the machine is a VM
+`E2_AGENT=OFF` because the pinned FlexRIC commit does not compile against this
+tree; the relocation path does not touch E2, so nothing under test is lost.
+`cuup-reloc-sync.sh` does this and the three image builds in one go — the
+commands here are for when you want to run a single stage by hand.
 
-Three things bite, in this order:
+### 0.5 When the test machine is a VM
+
+Only relevant if you try to build inside a VM. The authoring machine in §0.0 is a
+VM and none of this applies to it, because it never compiles anything. Three
+things bite, in this order:
 
 **AVX2 masked out of CPUID.** `/proc/cpuinfo` shows no `avx`, `avx2` or `xsave`
 even though the host CPU has them. On VirtualBox under Windows the cause is
@@ -129,7 +166,7 @@ this stage: it compiles every softmodem target and takes far longer than the
 tests do.
 
 ```bash
-cd ~/comnetsemu/examples/5g/OAI_EWOC
+cd ~/OAI_EWOC                                                        # the test machine's clone
 docker build . -f docker/Dockerfile.base.ubuntu -t ran-base:latest   # once, ~15 min
 ```
 
@@ -469,7 +506,13 @@ Each is a one-line change and each takes a different branch of the state machine
   already in `ngap-15.8.0.cmake`, so a clean `cmake` re-run is usually enough.
 - Missing `F1AP_DRBs_ToBeModified_*`: same, generated from
   `f1ap-16.21.0.asn` and already listed in `f1ap-16.21.0.cmake`.
-- `ngap_lib_test` failing to link: the two new codec functions live in
-  `ngap_gNB_mobility_management.c` on purpose — that object has no ITTI
-  dependencies, which is what lets the test link against `ngap` alone. Moving
-  them back into `ngap_gNB_pdu_session_management.c` would break the link.
+- `ngap_lib_test` failing to link on `asn_DEF_NR_*`: the two new codec functions
+  live in `ngap_gNB_mobility_management.c`, the same object as
+  `decode_ng_handover_request`, which references NR RRC ASN.1 definitions. The
+  `ngap` library links only `asn1_nr_rrc_hdrs` (headers), so the softmodem gets
+  those definitions via `nr_rrc` while the test never did. The patch adds
+  `asn1_nr_rrc` to `openair3/NGAP/tests/CMakeLists.txt`. If `asn_DEF_LTE_*`
+  symbols appear too, add `asn1_lte_rrc` the same way.
+- `error: inlining failed ... target specific option mismatch` on `_mm256_*`:
+  the machine has no AVX2. See §0.1 and §0.5 — this is an environment problem,
+  not a code one.
