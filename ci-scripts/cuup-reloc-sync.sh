@@ -6,36 +6,52 @@
 # arrives here only through git -- never edit in place here, or the next resync
 # throws the edit away.
 #
-#   ./ci-scripts/cuup-reloc-sync.sh             resync, then rebuild ran-build + the 3 images
-#   ./ci-scripts/cuup-reloc-sync.sh --full      also rebuild ran-base (toolchain/deps changed)
-#   ./ci-scripts/cuup-reloc-sync.sh --no-build  resync only
-#   BRANCH=some-other ./ci-scripts/cuup-reloc-sync.sh
+#   ./ci-scripts/cuup-reloc-sync.sh              resync, rebuild what is stale
+#   ./ci-scripts/cuup-reloc-sync.sh --full       also rebuild ran-base
+#   ./ci-scripts/cuup-reloc-sync.sh --force      rebuild even if already current
+#   ./ci-scripts/cuup-reloc-sync.sh --no-build   resync only
 #
-# E2 is off: the relocation path does not touch it, and the pinned FlexRIC
-# commit does not compile.  Set E2=ON once that submodule is fixed.
+#   JOBS=28  how many compile jobs.  Defaults to the machine's online CPU count,
+#            NOT nproc -- nproc honours the affinity mask, so on a box with cores
+#            isolated for real-time threads it under-reports badly.
+#   E2=ON    the pinned FlexRIC commit does not compile against this tree, and
+#            the relocation path does not touch E2.  Turn it on once fixed.
+#   BRANCH, TAG
 
 set -euo pipefail
 
 BRANCH=${BRANCH:-cuup-reloc}
 E2=${E2:-OFF}
 TAG=${TAG:-reloc}
-full=0
-build=1
+JOBS=${JOBS:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || nproc)}
+LOGDIR=${LOGDIR:-/tmp/cuup-reloc-logs}
+
+full=0; build=1; force=0
 for a in "$@"; do
   case "$a" in
-    --full)     full=1 ;;
-    --no-build) build=0 ;;
-    -h|--help)  sed -n '2,20p' "$0"; exit 0 ;;
+    --full)      full=1 ;;
+    --force)     force=1 ;;
+    --no-build)  build=0 ;;
+    -h|--help)   sed -n '2,22p' "$0"; exit 0 ;;
     *) echo "unknown option: $a" >&2; exit 2 ;;
   esac
 done
 
-cd "$(dirname "$(readlink -f "$0")")/.."
-echo "== repo   $PWD"
-echo "== branch $BRANCH"
+# The build Dockerfile uses "RUN --mount=type=cache" for ccache and the CPM
+# package cache.  The classic builder cannot parse that, and even where it can
+# the cache does not persist -- which is the difference between a 20 minute
+# rebuild and an hour.
+if [ "${DOCKER_BUILDKIT:-1}" = "0" ]; then
+  echo "DOCKER_BUILDKIT=0 is set.  docker/Dockerfile.build.ubuntu needs BuildKit" >&2
+  echo "for its ccache mount -- unset it and rerun." >&2
+  exit 1
+fi
 
-# A dirty tree here means someone edited the test machine directly.  Stop rather
-# than silently discarding it -- resync is destructive by design.
+cd "$(dirname "$(readlink -f "$0")")/.."
+mkdir -p "$LOGDIR"
+echo "== repo   $PWD"
+echo "== branch $BRANCH    jobs $JOBS    E2 $E2"
+
 if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
   echo
   echo "working tree is dirty -- this machine is supposed to be a pure consumer."
@@ -51,46 +67,74 @@ git checkout -q -B "$BRANCH" "origin/$BRANCH"
 git submodule sync --recursive
 git submodule update --init --recursive
 after=$(git rev-parse HEAD)
+short=$(git rev-parse --short "$after")
 
 echo
 if [ "$before" = "$after" ]; then
-  echo "== already at $(git rev-parse --short HEAD) -- nothing new"
+  echo "== already at $short -- nothing new"
 else
-  echo "== $(git rev-parse --short "$before") -> $(git rev-parse --short "$after")"
+  echo "== $(git rev-parse --short "$before") -> $short"
   git log --oneline --no-decorate "$before..$after" | sed 's/^/     /'
 fi
 echo
 
 [ "$build" -eq 1 ] || exit 0
 
-# ran-base carries the toolchain and the installed dependencies.  It only needs
-# rebuilding when those change -- it is the slow one, so it is opt-in.
-if [ "$full" -eq 1 ]; then
-  echo "== ran-base"
-  docker build --progress=plain -t ran-base:latest -f docker/Dockerfile.base.ubuntu .
-elif ! docker image inspect ran-base:latest >/dev/null 2>&1; then
-  echo "== ran-base (absent, building it)"
-  docker build --progress=plain -t ran-base:latest -f docker/Dockerfile.base.ubuntu .
+# Every image is stamped with the commit it was built from, so a rerun that has
+# nothing to do says so instead of spending an hour proving it.
+stamp_of() { docker image inspect -f '{{index .Config.Labels "reloc.commit"}}' "$1" 2>/dev/null || true; }
+
+current=1
+for i in ran-build:latest "oai-gnb:$TAG" "oai-nr-cuup:$TAG" "oai-nr-ue:$TAG"; do
+  [ "$(stamp_of "$i")" = "$after" ] || current=0
+done
+if [ "$current" -eq 1 ] && [ "$force" -eq 0 ] && [ "$full" -eq 0 ]; then
+  echo "== all images already built from $short -- pass --force to rebuild anyway"
+  exit 0
+fi
+
+run() {   # run <logname> <docker build args...>
+  local name=$1; shift
+  local log="$LOGDIR/$name.log"
+  echo "== $name   ($log)"
+  if ! docker build --progress=plain "$@" . 2>&1 | tee "$log" | grep -E '^#[0-9]+ (DONE|ERROR)|^ERROR' ; then
+    echo "   -- $name failed, last 40 lines:" >&2
+    tail -40 "$log" >&2
+    return 1
+  fi
+}
+
+if [ "$full" -eq 1 ] || ! docker image inspect ran-base:latest >/dev/null 2>&1; then
+  run ran-base -t ran-base:latest -f docker/Dockerfile.base.ubuntu
 else
   echo "== ran-base    reusing $(docker image inspect -f '{{.Id}}' ran-base:latest | cut -c8-19)"
 fi
 
-# ran-build compiles the tree.  Always rebuilt: this is what carries the change.
-echo "== ran-build"
-docker build --progress=plain -t ran-build:latest -f docker/Dockerfile.build.ubuntu \
-       --build-arg BUILD_OPTION="--cmake-opt -DE2_AGENT=$E2" .
+# -j is appended after build_oai's own "-j$(nproc)"; ninja takes the last one.
+run ran-build -t ran-build:latest -f docker/Dockerfile.build.ubuntu \
+    --label "reloc.commit=$after" \
+    --build-arg BUILD_OPTION="--cmake-opt -DE2_AGENT=$E2 --build-tool-opt -j$JOBS"
 
-for t in gNB:Dockerfile.gNB.ubuntu \
+# The three leaf images only copy artefacts out of ran-build, so they are
+# independent of each other and run together.
+pids=()
+for t in gnb:Dockerfile.gNB.ubuntu \
          nr-cuup:Dockerfile.nr-cuup.ubuntu \
          nr-ue:Dockerfile.nrUE.ubuntu ; do
   name=${t%%:*}; dfile=${t#*:}
-  echo "== oai-${name,,}:$TAG"
-  docker build --progress=plain -t "oai-${name,,}:$TAG" -f "docker/$dfile" .
+  ( docker build --progress=plain -t "oai-$name:$TAG" -f "docker/$dfile" \
+        --label "reloc.commit=$after" . >"$LOGDIR/oai-$name.log" 2>&1 ) &
+  pids+=("$!:oai-$name")
 done
+fail=0
+for p in "${pids[@]}"; do
+  if wait "${p%%:*}"; then echo "== ${p#*:}   ok"
+  else echo "== ${p#*:}   FAILED, last 40 lines:" >&2; tail -40 "$LOGDIR/${p#*:}.log" >&2; fail=1; fi
+done
+[ "$fail" -eq 0 ] || exit 1
 
 echo
-echo "== images"
 docker images --filter "reference=oai-*:$TAG" \
   --format '   {{.Repository}}:{{.Tag}}  {{.ID}}  {{.CreatedSince}}  {{.Size}}'
 echo
-echo "built from $(git rev-parse --short HEAD) on $BRANCH"
+echo "built from $short on $BRANCH    logs in $LOGDIR"
