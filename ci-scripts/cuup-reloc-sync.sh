@@ -47,7 +47,10 @@ if [ "${DOCKER_BUILDKIT:-1}" = "0" ]; then
   exit 1
 fi
 
-cd "$(dirname "$(readlink -f "$0")")/.."
+self=$(readlink -f "$0")
+self_sum=$(md5sum "$self" | cut -d' ' -f1)
+
+cd "$(dirname "$self")/.."
 mkdir -p "$LOGDIR"
 echo "== repo   $PWD"
 echo "== branch $BRANCH    jobs $JOBS    E2 $E2"
@@ -68,6 +71,13 @@ git submodule sync --recursive
 git submodule update --init --recursive
 after=$(git rev-parse HEAD)
 short=$(git rev-parse --short "$after")
+
+# bash reads a script lazily, so the checkout above may have rewritten this file
+# out from under the interpreter.  If it changed, start over from the new one.
+if [ "$(md5sum "$self" | cut -d' ' -f1)" != "$self_sum" ] && [ -z "${CUUP_RELOC_REEXEC:-}" ]; then
+  echo "== sync script updated by the resync -- re-running it"
+  CUUP_RELOC_REEXEC=1 exec "$self" "$@"
+fi
 
 echo
 if [ "$before" = "$after" ]; then

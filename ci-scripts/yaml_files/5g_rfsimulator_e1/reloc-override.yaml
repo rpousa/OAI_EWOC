@@ -15,6 +15,10 @@
 #    legitimate choices for that UE.
 #  - The CU-CP runs the telnet server, which is how the change is triggered:
 #    "rrc cuup_reloc <rrc_ue_id> <cuup_id>" on port 9090.
+#  - A data-network host is added. Unlike the plain 5g_rfsimulator deployment,
+#    this one has nothing on traffic_net but the UPF itself, so there is no
+#    endpoint to send user-plane traffic to and no iperf3 server to measure the
+#    change against. Same definition as 5g_rfsimulator uses.
 services:
     oai-cucp:
         image: oai-gnb:reloc
@@ -54,3 +58,26 @@ services:
 
     oai-nr-ue:
         image: oai-nr-ue:reloc
+
+    # 12.1.1.0/24 is the UE pool: without that route the uplink arrives here and
+    # the reply never finds its way back through the UPF.
+    oai-ext-dn:
+        image: oaisoftwarealliance/trf-gen-cn5g:latest
+        container_name: rfsim5g-oai-ext-dn
+        privileged: true
+        init: true
+        entrypoint: /bin/bash -c \
+              "iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE;"\
+              "ip route add 12.1.1.0/24 via 192.168.72.134 dev eth0; sleep infinity"
+        depends_on:
+            - oai-upf
+        networks:
+            traffic_net:
+                ipv4_address: 192.168.72.135
+        healthcheck:
+            test: /bin/bash -c "ping -c 2 192.168.72.134"
+            start_period: 10s
+            start_interval: 500ms
+            interval: 10s
+            timeout: 5s
+            retries: 5
