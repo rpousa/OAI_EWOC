@@ -337,6 +337,13 @@ on the right CU-UP. A relocation needs DU1 to reach CU-UP2, so CU-UP2 has to joi
 
 **(b) The CU-CP needs the telnet server** to take the trigger.
 
+**(c) There is nowhere to send user-plane traffic.** Unlike the plain
+`5g_rfsimulator` deployment, this one puts nothing on `traffic_net` except the
+UPF, so a ping to `192.168.72.135` comes back as `Destination Host Unreachable`
+*from the UPF itself* — which incidentally proves the uplink path works all the
+way through GTP-U. A data-network host has to be added, both as a target and as
+the iperf3 server §5 measures against.
+
 Save this next to the compose file as `reloc-override.yaml`:
 
 ```yaml
@@ -381,6 +388,22 @@ services:
         image: oai-gnb:reloc
     oai-nr-ue:
         image: oai-nr-ue:reloc
+
+    # 12.1.1.0/24 is the UE pool: without that route the uplink arrives here and
+    # the reply never finds its way back through the UPF.
+    oai-ext-dn:
+        image: oaisoftwarealliance/trf-gen-cn5g:latest
+        container_name: rfsim5g-oai-ext-dn
+        privileged: true
+        init: true
+        entrypoint: /bin/bash -c \
+              "iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE;"\
+              "ip route add 12.1.1.0/24 via 192.168.72.134 dev eth0; sleep infinity"
+        depends_on:
+            - oai-upf
+        networks:
+            traffic_net:
+                ipv4_address: 192.168.72.135
 ```
 
 Bring it up — only the first DU and UE are needed, so start a subset:
@@ -389,7 +412,7 @@ Bring it up — only the first DU and UE are needed, so start a subset:
 cd ci-scripts/yaml_files/5g_rfsimulator_e1
 C="docker compose -f docker-compose.yaml -f reloc-override.yaml"
 
-$C up -d mysql oai-amf oai-smf oai-upf
+$C up -d mysql oai-amf oai-smf oai-upf oai-ext-dn
 $C ps -a                      # wait for healthy
 
 $C up -d oai-cucp oai-cuup oai-cuup2 oai-du
@@ -397,7 +420,9 @@ docker logs rfsim5g-oai-cucp | grep -i "CU-UP"
 # expect two: "Accepting new CU-UP ID 3584" (0xe00) and "ID 3585" (0xe01)
 
 $C up -d oai-nr-ue
-docker exec rfsim5g-oai-nr-ue ping -c 3 192.168.72.135   # traffic through CU-UP1
+# -I matters: without it the ping leaves on the container's own eth0 instead of
+# the PDU session, and tests nothing.
+docker exec rfsim5g-oai-nr-ue ping -c 3 -I oaitun_ue1 192.168.72.135
 ```
 
 ---
