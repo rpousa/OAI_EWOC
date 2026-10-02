@@ -398,7 +398,6 @@ int e1apCUCP_handle_BEARER_CONTEXT_MODIFICATION_RESPONSE(sctp_assoc_t assoc_id,
                                                          e1ap_upcp_inst_t *e1_inst,
                                                          const E1AP_E1AP_PDU_t *pdu)
 {
-  UNUSED(assoc_id);
   UNUSED(e1_inst);
   MessageDef *msg = itti_alloc_new_message(TASK_CUUP_E1, 0, E1AP_BEARER_CONTEXT_MODIFICATION_RESP);
   e1ap_bearer_modif_resp_t *modif = &E1AP_BEARER_CONTEXT_MODIFICATION_RESP(msg);
@@ -406,13 +405,15 @@ int e1apCUCP_handle_BEARER_CONTEXT_MODIFICATION_RESPONSE(sctp_assoc_t assoc_id,
     free_e1ap_context_mod_response(modif);
     return -1;
   }
+  /* The CU-UP that answered: the inter-CU-UP relocation state machine keys on
+   * it to tell the source's response from the target's. */
+  msg->ittiMsgHeader.originInstance = assoc_id;
   itti_send_msg_to_task(TASK_RRC_GNB, 0, msg);
   return 0;
 }
 
 int e1apCUCP_handle_BEARER_CONTEXT_MODIFICATION_FAILURE(sctp_assoc_t assoc_id, e1ap_upcp_inst_t *inst, const E1AP_E1AP_PDU_t *pdu)
 {
-  UNUSED(assoc_id);
   UNUSED(inst);
   e1ap_bearer_context_mod_failure_t failure = {0};
   if (!decode_E1_bearer_context_mod_failure(&failure, pdu)) {
@@ -425,6 +426,9 @@ int e1apCUCP_handle_BEARER_CONTEXT_MODIFICATION_FAILURE(sctp_assoc_t assoc_id, e
         failure.cause.value);
   MessageDef *msg = itti_alloc_new_message(TASK_CUUP_E1, 0, E1AP_BEARER_CONTEXT_MODIFICATION_FAIL);
   E1AP_BEARER_CONTEXT_MODIFICATION_FAIL(msg) = cp_E1_bearer_context_mod_failure(&failure);
+  /* The CU-UP that answered: the inter-CU-UP relocation state machine keys on
+   * it to tell the source's response from the target's. */
+  msg->ittiMsgHeader.originInstance = assoc_id;
   itti_send_msg_to_task(TASK_RRC_GNB, 0, msg);
   return 0;
 }
@@ -502,7 +506,6 @@ int e1apCUUP_handle_BEARER_CONTEXT_RELEASE_COMMAND(sctp_assoc_t assoc_id, e1ap_u
 
 int e1apCUCP_handle_BEARER_CONTEXT_RELEASE_COMPLETE(sctp_assoc_t assoc_id, e1ap_upcp_inst_t *e1_inst, const E1AP_E1AP_PDU_t *pdu)
 {
-  UNUSED(assoc_id);
   UNUSED(e1_inst);
   e1ap_bearer_release_cplt_t bearerCxt = {0};
   if(!decode_e1_bearer_context_release_complete(&bearerCxt, pdu)) {
@@ -512,6 +515,9 @@ int e1apCUCP_handle_BEARER_CONTEXT_RELEASE_COMPLETE(sctp_assoc_t assoc_id, e1ap_
   MessageDef *msg = itti_alloc_new_message(TASK_CUUP_E1, 0, E1AP_BEARER_CONTEXT_RELEASE_CPLT);
   e1ap_bearer_release_cplt_t *cplt = &E1AP_BEARER_CONTEXT_RELEASE_CPLT(msg);
   *cplt = cp_bearer_context_release_complete(&bearerCxt);
+  /* The CU-UP that answered: the inter-CU-UP relocation state machine keys on
+   * it to tell the source's response from the target's. */
+  msg->ittiMsgHeader.originInstance = assoc_id;
   itti_send_msg_to_task(TASK_RRC_GNB, 0, msg);
   return 0;
 }
