@@ -87,7 +87,18 @@ typedef struct cuup_reloc_context_s {
   bool target_has_context;
   /// the source's bearer context has been released (steps 13-14 are done)
   bool source_released;
+  /** Guard timer. Every state is a response being waited for, and nothing in
+   * E1, F1 or NGAP obliges a peer to answer: a lost or never-sent response
+   * would leave this context in place forever, which also blocks any further
+   * change of gNB-CU-UP for this UE. On expiry the change is given up and the
+   * UE put back where it can be. */
+  long guard_timer;
 } cuup_reloc_context_t;
+
+/** Seconds a change of gNB-CU-UP may spend waiting for any one response before
+ * it is given up. Generous: the whole procedure takes ~10 ms on rfsim, so this
+ * only ever fires on a peer that is not answering at all. */
+#define CUUP_RELOC_GUARD_S 5
 
 /** @brief Start moving a UE's bearers to another gNB-CU-UP.
  * @param target_cuup_id gNB-CU-UP ID to move to, or -1 to pick any connected
@@ -130,7 +141,16 @@ bool nr_rrc_cuup_reloc_path_update_confirm(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue, 
 
 bool nr_rrc_cuup_reloc_e1_failure(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue, sctp_assoc_t assoc_id);
 
+/** @brief An ITTI one-shot timer expired. Gives up the change of gNB-CU-UP it
+ * belongs to, if any. Returns true when the timer was a relocation guard, in
+ * which case the caller must not treat it as anything else. */
+bool nr_rrc_cuup_reloc_timer_expired(gNB_RRC_INST *rrc, long timer_id);
+
 /** @brief Trigger a change of gNB-CU-UP from the telnet shell. */
 void nr_cuup_reloc_trigger_telnet(gNB_RRC_INST *rrc, uint32_t rrc_ue_id, int64_t target_cuup_id);
+
+/** @brief Give up an ongoing change of gNB-CU-UP from the telnet shell. Also
+ * the only way to exercise the put-back path on demand. */
+void nr_cuup_reloc_abort_telnet(gNB_RRC_INST *rrc, uint32_t rrc_ue_id);
 
 #endif /* RRC_GNB_CUUP_RELOC_H_ */

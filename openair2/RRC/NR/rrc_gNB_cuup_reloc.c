@@ -38,6 +38,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 
 #include "assertions.h"
@@ -46,6 +47,7 @@
 #include "common/utils/alg/foreach.h"
 #include "nr_rrc_defs.h"
 #include "nr_rrc_proto.h"
+#include "intertask_interface.h"
 #include "openair2/F1AP/f1ap_ids.h"
 #include "rrc_gNB_NGAP.h"
 #include "rrc_gNB_UE_context.h"
@@ -84,6 +86,18 @@ static int count_established_sessions(const gNB_RRC_UE_t *ue, nssai_t *first_nss
   return n;
 }
 
+/** @brief Start the guard timer, covering steps 2-8: those are internal to the
+ * gNB and answer in milliseconds, so a peer that has not responded within
+ * CUUP_RELOC_GUARD_S is not going to. It is cancelled on the transition to
+ * WAIT_PATH_UPDATE, where the wait becomes the core's and is unbounded. */
+static void arm_guard(gNB_RRC_UE_t *ue, cuup_reloc_context_t *ctx)
+{
+  ctx->guard_timer = 0;
+  timer_setup(CUUP_RELOC_GUARD_S, 0, TASK_RRC_GNB, 0, TIMER_ONE_SHOT, NULL, &ctx->guard_timer);
+  if (ctx->guard_timer == 0)
+    LOG_W(NR_RRC, "UE %d: no guard timer on this change of gNB-CU-UP\n", ue->rrc_ue_id);
+}
+
 /** @brief Steps 13-14: release the bearer context the source still holds. */
 static void release_source(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue, cuup_reloc_context_t *ctx)
 {
@@ -101,6 +115,8 @@ void nr_rrc_cuup_reloc_finalize(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue)
    * release only reaches the gNB-CU-UP it is bound to, so the source would keep
    * a bearer context for a UE that is gone. */
   release_source(rrc, ue, ue->cuup_reloc);
+  if (ue->cuup_reloc->guard_timer != 0)
+    timer_remove(ue->cuup_reloc->guard_timer);
   free(ue->cuup_reloc);
   ue->cuup_reloc = NULL;
 }
@@ -244,6 +260,7 @@ int nr_rrc_trigger_cuup_reloc(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue, int64_t targe
     return -1;
   }
   ue->cuup_reloc = ctx;
+  arm_guard(ue, ctx);
 
   LOG_A(NR_RRC,
         "UE %d: moving %d PDU session(s) from gNB-CU-UP ID %ld (assoc_id %d) to gNB-CU-UP ID %ld (assoc_id %d)\n",
@@ -362,7 +379,16 @@ bool nr_rrc_cuup_reloc_e1_modif_resp(gNB_RRC_INST *rrc,
             "UE %d: target gNB-CU-UP is serving the bearers, announcing the new downlink endpoint to the core\n",
             ue->rrc_ue_id);
 
-      /* Steps 10-12 */
+      /* Steps 10-12. The guard timer stops here: everything up to this point
+       * is internal to the gNB and answers in milliseconds, but the Modify
+       * Confirm is the core's to send, on no deadline -- and with an SMF that
+       * does not implement PDU_RES_MOD_IND it never arrives at all (§3 of the
+       * code map). Letting the guard fire here would tear down a change that
+       * has in fact succeeded as far as the RAN can take it. */
+      if (ctx->guard_timer != 0) {
+        timer_remove(ctx->guard_timer);
+        ctx->guard_timer = 0;
+      }
       ctx->state = CUUP_RELOC_WAIT_PATH_UPDATE;
       if (rrc_gNB_send_NGAP_PDUSESSION_MODIFY_INDICATION(rrc, ue) == 0) {
         LOG_E(NR_RRC,
@@ -425,6 +451,39 @@ bool nr_rrc_cuup_reloc_e1_failure(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue, sctp_asso
     return true;
   }
   return false;
+}
+
+bool nr_rrc_cuup_reloc_timer_expired(gNB_RRC_INST *rrc, long timer_id)
+{
+  if (timer_id == 0)
+    return false;
+  rrc_gNB_ue_context_t *ue_context_p = NULL;
+  RB_FOREACH (ue_context_p, rrc_nr_ue_tree_s, &rrc->rrc_ue_head) {
+    gNB_RRC_UE_t *ue = &ue_context_p->ue_context;
+    if (ue->cuup_reloc == NULL || ue->cuup_reloc->guard_timer != timer_id)
+      continue;
+    /* the timer fired, so it is gone: do not try to remove it */
+    ue->cuup_reloc->guard_timer = 0;
+    char reason[64];
+    snprintf(reason, sizeof(reason), "no answer within %ds", CUUP_RELOC_GUARD_S);
+    nr_rrc_cuup_reloc_abort(rrc, ue, reason);
+    return true;
+  }
+  return false;
+}
+
+void nr_cuup_reloc_abort_telnet(gNB_RRC_INST *rrc, uint32_t rrc_ue_id)
+{
+  rrc_gNB_ue_context_t *ue_context_p = rrc_gNB_get_ue_context(rrc, rrc_ue_id);
+  if (ue_context_p == NULL) {
+    LOG_E(NR_RRC, "change of gNB-CU-UP: no UE context for UE ID %u\n", rrc_ue_id);
+    return;
+  }
+  if (ue_context_p->ue_context.cuup_reloc == NULL) {
+    LOG_W(NR_RRC, "UE %u: no change of gNB-CU-UP to give up\n", rrc_ue_id);
+    return;
+  }
+  nr_rrc_cuup_reloc_abort(rrc, &ue_context_p->ue_context, "asked to give up from the telnet shell");
 }
 
 void nr_cuup_reloc_trigger_telnet(gNB_RRC_INST *rrc, uint32_t rrc_ue_id, int64_t target_cuup_id)

@@ -4121,6 +4121,9 @@ void *rrc_gnb_task(void *args_p)
           nr_rrc_sample_conn_count(RC.nrrrc[0]);
           if (!write_rrc_stats(RC.nrrrc[0]))
             timer_remove(stats_timer_id);
+        } else if (nr_rrc_cuup_reloc_timer_expired(RC.nrrrc[0], TIMER_HAS_EXPIRED(msg_p).timer_id)) {
+          /* a change of gNB-CU-UP was given up; it carries no ITTI argument, so
+           * it must be caught before the forwarding branch below dereferences one */
         } else {
           itti_send_msg_to_task(TASK_RRC_GNB, 0, TIMER_HAS_EXPIRED(msg_p).arg); /* see rrc_gNB_process_NGAP_PDUSESSION_SETUP_REQ() */
         }

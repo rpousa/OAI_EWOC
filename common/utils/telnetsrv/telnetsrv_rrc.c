@@ -198,11 +198,39 @@ static int rrc_gNB_trigger_cuup_relocation(char *buf, int debug, telnet_printfun
   return 0;
 }
 
+/**
+ * @brief Give up an ongoing change of gNB-CU-UP, putting the UE back on the
+ *        source where the procedure has not gone too far for that.
+ * @param buf "[rrc_ue_id]"; without arguments the only connected UE is used.
+ */
+static int rrc_gNB_abort_cuup_relocation(char *buf, int debug, telnet_printfunc_t prnt)
+{
+  UNUSED(debug);
+  long ue_id = -1;
+
+  if (buf == NULL || *buf == '\0') {
+    ue_id = get_single_ue_id();
+    if (ue_id < 1)
+      ERROR_MSG_RET("No UE found!\n");
+  } else {
+    char *end = NULL;
+    errno = 0;
+    ue_id = strtol(buf, &end, 0);
+    if (end == buf || errno != 0 || ue_id < 1 || ue_id >= 0xfffffe)
+      ERROR_MSG_RET("UE ID needs to be [1,0xfffffe]\n");
+  }
+
+  nr_cuup_reloc_abort_telnet(RC.nrrrc[0], ue_id);
+  prnt("gave up any change of gNB-CU-UP of UE %ld, see the gNB log\n", ue_id);
+  return 0;
+}
+
 static telnetshell_cmddef_t rrc_cmds[] = {
     {"release_rrc", "[rrc_ue_id(int,opt)]", rrc_gNB_trigger_release},
     {"release_rrc_all", "", rrc_gNB_trigger_release_all},
     {"ctx_rel_req", "[rrc_ue_id(int,opt)]", rrc_gNB_trigger_ue_context_release_req},
     {"cuup_reloc", "[rrc_ue_id(int,opt)] [cuup_id(int,opt)]", rrc_gNB_trigger_cuup_relocation},
+    {"cuup_reloc_abort", "[rrc_ue_id(int,opt)]", rrc_gNB_abort_cuup_relocation},
     {"", "", NULL},
 };
 

@@ -57,7 +57,7 @@ static const nr_rrc_cuup_container_t *select_cuup_slice(const struct rrc_cuup_tr
 {
   nr_rrc_cuup_container_t *second_best_match = NULL; /* if no NSSAI matches exactly */
   nr_rrc_cuup_container_t *cuup = NULL;
-  RB_FOREACH(cuup, rrc_cuup_tree, (struct rrc_cuup_tree *)&t) {
+  RB_FOREACH(cuup, rrc_cuup_tree, (struct rrc_cuup_tree *)t) {
     if (exclude_assoc != 0 && cuup->assoc_id == exclude_assoc)
       continue; /* caller wants a CU-UP other than this one (relocation) */
     e1ap_setup_req_t *sr = cuup->setup_req;
@@ -87,7 +87,7 @@ static const nr_rrc_cuup_container_t *select_cuup_round_robin(size_t n_t,
    * ID % N with N number of CU-UPs */
   int m = (ue->rrc_ue_id - 1) % n_t;
   nr_rrc_cuup_container_t *cuup = NULL;
-  RB_FOREACH(cuup, rrc_cuup_tree, (struct rrc_cuup_tree *)&t) {
+  RB_FOREACH(cuup, rrc_cuup_tree, (struct rrc_cuup_tree *)t) {
     if (exclude_assoc != 0 && cuup->assoc_id == exclude_assoc)
       continue;
     if (m == 0) {
