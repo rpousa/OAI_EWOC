@@ -490,9 +490,9 @@ cannot confirm for you:
 
 ```bash
 # capture on the Docker bridges: N2 (core), E1, F1-C
-sudo tcpdump -i rfsim5g-core -w n2.pcap sctp
-sudo tcpdump -i rfsim5g-e1   -w e1.pcap sctp
-sudo tcpdump -i rfsim5g-f1c  -w f1c.pcap sctp
+sudo tcpdump -i rfsim5g-core -w n2.pcap sctp & 
+sudo tcpdump -i rfsim5g-e1   -w e1.pcap sctp &
+sudo tcpdump -i rfsim5g-f1c  -w f1c.pcap sctp & 
 ```
 
 Filter for, in order of the procedure:
