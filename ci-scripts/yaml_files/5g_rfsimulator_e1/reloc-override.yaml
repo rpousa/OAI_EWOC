@@ -20,6 +20,13 @@
 #    endpoint to send user-plane traffic to and no iperf3 server to measure the
 #    change against. Same definition as 5g_rfsimulator uses.
 services:
+    # The stock v2.2.1 SMF has no handler for a PDU Session Resource Modify
+    # Indication, so the downlink would stay on the source CU-UP whatever the
+    # RAN does.  This is the locally built SMF that handles it; override the
+    # tag if yours differs (docker images | grep oai-smf).
+    oai-smf:
+        image: ${SMF_IMG:-oai-smf}:${SMF_TAG:-modind}
+
     oai-cucp:
         image: oai-gnb:reloc
         environment:

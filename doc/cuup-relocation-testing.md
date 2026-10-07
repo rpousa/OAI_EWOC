@@ -429,10 +429,22 @@ docker exec rfsim5g-oai-nr-ue ping -c 3 -I oaitun_ue1 192.168.72.135
 
 ## 4. Trigger the change
 
+**First find out where the UE actually is.** The override gives CU-UP2 `sst 1`,
+which makes it an *exact* NSSAI match for UE1, so `select_cuup_slice` prefers it
+and the UE attaches to 0xe01 rather than 0xe00. Naming the CU-UP it is already on
+is correctly refused with `UE 1 is already served by CU-UP ID 3585`, which looks
+like a failure and is not one.
+
 ```bash
-# find the UE's RRC UE ID in the CU-CP log, then:
+docker logs rfsim5g-oai-cucp 2>&1 | grep -iE "selecting CU-UP ID|UE [0-9]+"
+```
+
+That gives both the UE's RRC UE ID and its current CU-UP. Then name the *other*
+one — with the slice configuration above, that is 0xe00:
+
+```bash
 telnet localhost 9090
-softmodem_gnb> rrc cuup_reloc 1 0xe01
+softmodem_gnb> rrc cuup_reloc 1 0xe00
 ```
 
 `cuup_reloc [rrc_ue_id [cuup_id]]`. Both numbers accept hex. **Name the target
@@ -475,24 +487,30 @@ The uplink rate should dip for the packets in flight and then continue. **Ping a
 any TCP test will stall at the trigger** and that is not a bug: it needs the
 downlink, which only returns once the core acts on the Modify Indication.
 
-**The OAI SMF will not act on it.** It has no `PDU_RES_MOD_IND` handling at all —
-not in its N2 SM info switch, not in its enum — so the procedure stops after the
-Indication is sent and the CU-CP stays in "waiting for the PDU Session Resource
-Modify Confirm". The source CU-UP's bearer context is deliberately held until
-that Confirm arrives (releasing it earlier would leave the UPF sending to a TEID
-that no longer exists, and the resulting GTP-U Error Indication can make the SMF
-tear the session down); it is released when the UE is released instead.
+**The stock core will not act on it.** The AMF in v2.2.1 decodes NGAP procedure
+27, finds no branch for it and drops it; the SMF behind it never hears about the
+message, and the enum value `PDU_RES_MOD_IND` it already carries is never
+reached. So out of the box the procedure stops after the Indication is sent and
+the CU-CP stays in "waiting for the PDU Session Resource Modify Confirm". The
+source CU-UP's bearer context is deliberately held until that Confirm arrives
+(releasing it earlier would leave the UPF sending to a TEID that no longer
+exists, and the resulting GTP-U Error Indication can make the SMF tear the
+session down); it is released when the UE is released instead.
 
-**So validate the encoding against a third party rather than against the core.**
+Section 6 closes that gap on the SMF side and shows how to prove the downlink
+actually moves. Until the AMF is done too, the RAN side is validated against a
+third party rather than against the core:
+
+**Validate the encoding with Wireshark.**
 Wireshark decodes NGAP, E1AP and F1AP, and it is an independent check that the
 three new messages are well-formed — which is the part of this work the core
 cannot confirm for you:
 
 ```bash
 # capture on the Docker bridges: N2 (core), E1, F1-C
-sudo tcpdump -i rfsim5g-core -w n2.pcap sctp & 
-sudo tcpdump -i rfsim5g-e1   -w e1.pcap sctp &
-sudo tcpdump -i rfsim5g-f1c  -w f1c.pcap sctp & 
+sudo tcpdump -i rfsim5g-core -w n2.pcap sctp
+sudo tcpdump -i rfsim5g-e1   -w e1.pcap sctp
+sudo tcpdump -i rfsim5g-f1c  -w f1c.pcap sctp
 ```
 
 Filter for, in order of the procedure:
@@ -508,7 +526,118 @@ correct and only the core is missing.
 
 ---
 
-## 6. Negative paths worth exercising
+## 6. Proving the downlink moves
+
+This is the test that makes the rest mean something. Everything above shows the
+RAN emitting a correct Modify Indication; this shows the user plane following it.
+
+### 6.1 What had to change in the core
+
+The gap is in two places and only one of them is closed so far.
+
+| NF | State | What it needs |
+|---|---|---|
+| AMF | **not done** | NGAP procedure 27 is decoded and dropped. It needs `PduSessionResourceModifyIndication`/`...Confirm` message classes, the `ListModInd`/`ListModCfm` IE wrappers, a procedure-27 handler and the N11 call out to the SMF. |
+| SMF | **done**, locally built | `PDU_SESSION_MODIFICATION_AN_INDICATED` procedure type, a `PDU_RES_MOD_IND` branch that reads `dLQosFlowPerTNLInformation` into the session's downlink F-TEID, the same Update-FAR handling an Xn path switch gets, and a `PDU_RES_MOD_CFM` response. |
+
+Because the AMF is the missing link, the SMF is driven directly:
+`ci-scripts/cuup-reloc-inject-mod-ind.py` posts the `UpdateSMContext` the AMF
+*would* have sent, carrying the exact N2 SM information bytes the CU-CP put on
+the wire. It does not invent the request: the SMF logs the raw body of every
+`UpdateSMContext` at debug level, so the script lifts the MIME envelope from the
+last real one in the container log and replaces only the `n2SmInfoType` and the
+NGAP part.
+
+Point the deployment at the locally built SMF first — `reloc-override.yaml` now
+does this, with the tag overridable:
+
+```bash
+docker images | grep oai-smf          # confirm the tag you built
+SMF_TAG=modind docker compose -f docker-compose.yaml -f reloc-override.yaml up -d
+```
+
+### 6.2 The run
+
+Downlink is the measurement here, so use ping, not the uplink iperf3 of §5.
+
+```bash
+# 1. UE attached, data path confirmed
+docker exec rfsim5g-oai-nr-ue ping -c3 -I oaitun_ue1 192.168.72.135
+
+# 2. capture N3 (GTP-U) and N4 (PFCP) on the core bridge
+sudo tcpdump -i rfsim5g-core -w n3n4.pcap 'udp port 2152 or udp port 8805' &
+
+# 3. a ping that runs across the whole thing, one per second
+docker exec rfsim5g-oai-nr-ue ping -i1 -I oaitun_ue1 192.168.72.135 \
+  | ts '%H:%M:%.S' | tee /tmp/ping.log &
+
+# 4. which CU-UP is it on now?
+docker logs rfsim5g-oai-cucp | grep -m1 "selecting CU-UP ID"
+
+# 5. relocate to the OTHER one
+docker exec -it rfsim5g-oai-cucp telnet 127.0.0.1 9090
+> rrc cuup_reloc 1 0xe00        # or 0xe01, whichever it is not
+
+# >>> the ping stops here <<<  uplink is through the new CU-UP, downlink is
+#     still addressed to the old one.  This is the broken state the core fixes.
+
+# 6. stand in for the AMF
+./ci-scripts/cuup-reloc-inject-mod-ind.py --from-cucp-log
+
+# >>> the ping resumes <<<
+```
+
+The gap in `/tmp/ping.log` between step 5 and step 6 is the proof: it opens when
+the RAN switches and closes when, and only when, the core is told. Run step 6 a
+few seconds late on purpose so the gap is unmistakable.
+
+If `--from-cucp-log` cannot find the endpoint, read it off the CU-CP's own line
+and pass it explicitly:
+
+```bash
+docker logs rfsim5g-oai-cucp | grep -A3 "Send PDU Session Resource Modify Indication"
+./ci-scripts/cuup-reloc-inject-mod-ind.py --addr 192.168.71.161 --teid 0x6d60de2c
+```
+
+`--dry-run` prints the request without sending it, which is the quickest way to
+check the borrowed envelope looks right.
+
+### 6.3 What the logs and the capture must show
+
+```bash
+docker logs rfsim5g-oai-smf | grep -E "Modify Indication|MIME parts|session management type"
+```
+
+| Line | Means |
+|---|---|
+| `Number of MIME parts 2` | the hand-made envelope parsed; `0` or `1` means the script's borrowed headers were wrong |
+| `PDU Session Resource Modify Indication, processing N2 SM Information` | the new dispatch branch was reached |
+| `downlink moves to 192.168.71.161, TEID 0x6d60de2c` | the transfer decoded and the endpoint was taken |
+| `Session procedure type: PDU_SESSION_MODIFICATION_AN_INDICATED` | the procedure type survived into the PFCP stage |
+| `Unknown session management type 25` | **regression** — `smf_procedure.cpp` is missing the new case in one of its two switches, and no N4 message will be sent |
+
+In `n3n4.pcap`:
+
+| Filter | Expect |
+|---|---|
+| `pfcp` | a **Session Modification Request** with an **Update FAR** whose Outer Header Creation carries the new CU-UP's N3 address and TEID, answered with cause Request accepted |
+| `gtp` | downlink GTP-U from `192.168.71.134` changing destination from the old CU-UP to the new one at the moment of the injection |
+
+The GTP-U destination change is the one measurement that cannot be faked by a
+log line: it is the UPF actually sending somewhere else.
+
+### 6.4 Known limits of this test
+
+- The Confirm goes back to the AMF, which still has no handler for it, so the
+  CU-CP will not leave `WAIT_PATH_UPDATE` and the source bearer context stays up
+  until the UE is released. The downlink has still moved — that is what is being
+  measured — but the procedure is not formally complete until the AMF work lands.
+- The injection carries no `pduSessionId`-level authorisation: it is a test tool
+  for this deployment and nothing more.
+
+---
+
+## 7. Negative paths worth exercising
 
 Each is a one-line change and each takes a different branch of the state machine:
 
@@ -524,7 +653,7 @@ Each is a one-line change and each takes a different branch of the state machine
 
 ---
 
-## 7. If the build fails
+## 8. If the build fails
 
 - Missing `NGAP_PDUSessionResourceModify*` types: the ASN.1 headers are added to
   `openair3/NGAP/ngap_msg_includes.h` by the patch; the generated sources were
