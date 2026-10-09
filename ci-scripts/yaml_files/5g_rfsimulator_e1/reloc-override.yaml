@@ -26,6 +26,9 @@ services:
     # tag if yours differs (docker images | grep oai-smf).
     oai-smf:
         image: ${SMF_IMG:-oai-smf}:${SMF_TAG:-modind}
+    
+    oai-amf:
+        image: ${AMF_IMG:-oai-amf}:${AMF_TAG:-modind}
 
     oai-cucp:
         image: oai-gnb:reloc
