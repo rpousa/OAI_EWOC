@@ -20,7 +20,12 @@ log_level:
 register_nf:
   general: no
 
-http_version: 1
+# 2 rather than 1 for debuggability only: with HTTP/1 the SBI requests are
+# served by a path that does not log the raw body, so the SMF never prints the
+# "Message content" of an UpdateSMContext -- which is how the n2SmInfoType and
+# the N2 SM payload of a change of gNB-CU-UP are checked. The procedure itself
+# works either way.
+http_version: 2
 
 ############## SBI Interfaces
 ### Each NF takes its local SBI interfaces and remote interfaces from here, unless it gets them using NRF discovery mechanisms
