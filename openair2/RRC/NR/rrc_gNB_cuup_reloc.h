@@ -46,6 +46,14 @@ typedef struct gNB_RRC_UE_s gNB_RRC_UE_t;
  *                                source is released once it arrives (steps
  *                                13-14).
  *
+ * PUTBACK is not part of clause 8.9.5: it is the F1 UE Context Modification
+ * that points the gNB-DU back at the source after giving up, and the context
+ * is kept until the gNB-DU answers it. Keeping it serves two purposes: the
+ * response is recognised as part of giving up rather than as an ordinary
+ * modification -- which would have the gNB-CU-CP reconfigure the UE, something
+ * the forward path deliberately avoids -- and the guard timer still covers the
+ * gNB-DU not answering at all.
+ *
  * Step 9, data forwarding from source to target, is not performed: the E1
  * messages in this implementation carry no data-forwarding IEs, so the packets
  * in flight at the source are lost.
@@ -57,6 +65,7 @@ typedef enum cuup_reloc_state_e {
   CUUP_RELOC_WAIT_SOURCE_STATUS,
   CUUP_RELOC_WAIT_TARGET_STATUS,
   CUUP_RELOC_WAIT_PATH_UPDATE,
+  CUUP_RELOC_WAIT_PUTBACK,
 } cuup_reloc_state_t;
 
 /** @brief Per-UE state of an ongoing change of gNB-CU-UP.
@@ -87,17 +96,29 @@ typedef struct cuup_reloc_context_s {
   bool target_has_context;
   /// the source's bearer context has been released (steps 13-14 are done)
   bool source_released;
-  /** Guard timer. Every state is a response being waited for, and nothing in
-   * E1, F1 or NGAP obliges a peer to answer: a lost or never-sent response
-   * would leave this context in place forever, which also blocks any further
-   * change of gNB-CU-UP for this UE. On expiry the change is given up and the
-   * UE put back where it can be. */
+  /** The gNB-DU answered step 4 with a UE Context Modification Failure, so it
+   * applied none of it and never stopped sending uplink to the source. Giving
+   * up then needs no F1 put-back -- unlike a step 4 that simply timed out,
+   * where whether the gNB-DU moved is unknown and the put-back is sent. */
+  bool du_refused;
+  /** Guard timer, re-armed on entering each state. Every state is a response
+   * being waited for, and nothing in E1 or F1 obliges a peer to answer: a lost
+   * or never-sent response would leave this context in place forever, which
+   * also blocks any further change of gNB-CU-UP for this UE. On expiry the
+   * change is given up and the UE put back where it can be.
+   *
+   * It is cancelled on entering WAIT_PATH_UPDATE, where what is awaited is the
+   * core's PDU Session Resource Modify Confirm: that is on no deadline, and
+   * against an SMF that does not implement the procedure it never arrives at
+   * all, so firing there would tear down a change that has in fact succeeded
+   * as far as the RAN can take it. */
   long guard_timer;
 } cuup_reloc_context_t;
 
 /** Seconds a change of gNB-CU-UP may spend waiting for any one response before
- * it is given up. Generous: the whole procedure takes ~10 ms on rfsim, so this
- * only ever fires on a peer that is not answering at all. */
+ * it is given up. Covers steps 2-8 and the put-back, one budget per response.
+ * Generous: the whole procedure takes ~12 ms on rfsim, so this only ever fires
+ * on a peer that is not answering at all. */
 #define CUUP_RELOC_GUARD_S 5
 
 /** @brief Start moving a UE's bearers to another gNB-CU-UP.
@@ -136,6 +157,11 @@ bool nr_rrc_cuup_reloc_e1_modif_resp(gNB_RRC_INST *rrc,
                                      const e1_pdcp_status_info_t *status);
 
 bool nr_rrc_cuup_reloc_f1_mod_resp(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue);
+
+/** @brief The gNB-DU refused the F1 UE Context Modification. Gives up the
+ * change of gNB-CU-UP at once rather than leaving it to the guard timer; the
+ * gNB-DU still sends uplink to the source, so the put-back is clean. */
+bool nr_rrc_cuup_reloc_f1_mod_failure(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue);
 
 bool nr_rrc_cuup_reloc_path_update_confirm(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue, int n_changed, const int *changed_pdu_ids);
 

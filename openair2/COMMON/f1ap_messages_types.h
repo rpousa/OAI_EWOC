@@ -623,6 +623,15 @@ typedef struct f1ap_ue_context_modif_refuse_s {
   long cause_value;
 } f1ap_ue_context_modif_refuse_t;
 
+/* Unsuccessful outcome of a gNB-CU initiated UE Context Modification: the
+ * gNB-DU applied none of it. Carries no DRB lists -- nothing changed. */
+typedef struct f1ap_ue_context_modif_failure_s {
+  uint32_t gNB_CU_ue_id;
+  uint32_t gNB_DU_ue_id;
+  f1ap_Cause_t cause;
+  long cause_value;
+} f1ap_ue_context_modif_failure_t;
+
 typedef struct f1ap_ue_context_rel_req_s {
   uint32_t gNB_CU_ue_id;
   uint32_t gNB_DU_ue_id;

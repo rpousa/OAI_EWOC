@@ -67,6 +67,8 @@ static const char *reloc_state2str(cuup_reloc_state_t state)
       return "waiting for the target to acknowledge the PDCP SN status";
     case CUUP_RELOC_WAIT_PATH_UPDATE:
       return "waiting for the PDU Session Resource Modify Confirm";
+    case CUUP_RELOC_WAIT_PUTBACK:
+      return "waiting for the DU to point back at the source";
     default:
       return "unknown";
   }
@@ -86,16 +88,34 @@ static int count_established_sessions(const gNB_RRC_UE_t *ue, nssai_t *first_nss
   return n;
 }
 
-/** @brief Start the guard timer, covering steps 2-8: those are internal to the
- * gNB and answer in milliseconds, so a peer that has not responded within
- * CUUP_RELOC_GUARD_S is not going to. It is cancelled on the transition to
- * WAIT_PATH_UPDATE, where the wait becomes the core's and is unbounded. */
-static void arm_guard(gNB_RRC_UE_t *ue, cuup_reloc_context_t *ctx)
+/** @brief Cancel the guard timer if one is running. */
+static void disarm_guard(cuup_reloc_context_t *ctx)
 {
-  ctx->guard_timer = 0;
+  if (ctx->guard_timer != 0) {
+    timer_remove(ctx->guard_timer);
+    ctx->guard_timer = 0;
+  }
+}
+
+/** @brief (Re-)start the guard timer for the state just entered.
+ *
+ * Called on entering every state that waits for an E1 or F1 response, so the
+ * budget is CUUP_RELOC_GUARD_S per response rather than for steps 2-8 together.
+ * Those steps are internal to the gNB and answer in milliseconds, so a peer
+ * that has not responded within the budget is not going to.
+ *
+ * @return false when no timer could be armed. The caller must not proceed
+ *         unguarded: a context that never completes blocks every later change
+ *         of gNB-CU-UP for this UE. */
+static bool arm_guard(gNB_RRC_UE_t *ue, cuup_reloc_context_t *ctx)
+{
+  disarm_guard(ctx);
   timer_setup(CUUP_RELOC_GUARD_S, 0, TASK_RRC_GNB, 0, TIMER_ONE_SHOT, NULL, &ctx->guard_timer);
-  if (ctx->guard_timer == 0)
-    LOG_W(NR_RRC, "UE %d: no guard timer on this change of gNB-CU-UP\n", ue->rrc_ue_id);
+  if (ctx->guard_timer == 0) {
+    LOG_E(NR_RRC, "UE %d: could not arm the guard timer of the change of gNB-CU-UP\n", ue->rrc_ue_id);
+    return false;
+  }
+  return true;
 }
 
 /** @brief Steps 13-14: release the bearer context the source still holds. */
@@ -115,8 +135,7 @@ void nr_rrc_cuup_reloc_finalize(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue)
    * release only reaches the gNB-CU-UP it is bound to, so the source would keep
    * a bearer context for a UE that is gone. */
   release_source(rrc, ue, ue->cuup_reloc);
-  if (ue->cuup_reloc->guard_timer != 0)
-    timer_remove(ue->cuup_reloc->guard_timer);
+  disarm_guard(ue->cuup_reloc);
   free(ue->cuup_reloc);
   ue->cuup_reloc = NULL;
 }
@@ -126,6 +145,17 @@ void nr_rrc_cuup_reloc_abort(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue, const char *re
   cuup_reloc_context_t *ctx = ue->cuup_reloc;
   if (ctx == NULL)
     return;
+
+  /* Already giving up and waiting for the DU to point back: there is nothing
+   * left to undo, so drop the context rather than starting over. */
+  if (ctx->state == CUUP_RELOC_WAIT_PUTBACK) {
+    LOG_W(NR_RRC,
+          "UE %d: already putting the change of gNB-CU-UP back when asked to give up again (%s)\n",
+          ue->rrc_ue_id,
+          reason);
+    nr_rrc_cuup_reloc_finalize(rrc, ue);
+    return;
+  }
 
   LOG_E(NR_RRC,
         "UE %d: change of gNB-CU-UP %d => %d given up while %s: %s\n",
@@ -140,26 +170,58 @@ void nr_rrc_cuup_reloc_abort(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue, const char *re
   const bool source_can_serve = ctx->state != CUUP_RELOC_WAIT_SOURCE_STATUS && ctx->state != CUUP_RELOC_WAIT_TARGET_STATUS
                                 && ctx->state != CUUP_RELOC_WAIT_PATH_UPDATE;
 
-  if (source_can_serve) {
-    rrc_bind_cuup_to_ue(ue, ctx->source_assoc);
-    if (ctx->state == CUUP_RELOC_WAIT_F1_MOD && ctx->n_source_tunnels > 0) {
-      /* the DU may already have been told to use the target: point it back */
-      rrc_restore_cuup_tunnels(ue, ctx->n_source_tunnels, ctx->source_tunnel_drb, ctx->source_tunnel);
-      rrc_send_f1_ue_context_modification_for_cuup_change(rrc, ue);
-    }
-    if (ctx->target_has_context)
-      e1_release_bearer_context_on(rrc, ue, ctx->target_assoc);
-    LOG_I(NR_RRC, "UE %d: stays on gNB-CU-UP assoc_id %d\n", ue->rrc_ue_id, ctx->source_assoc);
-    ctx->source_released = true; /* the source keeps serving: nothing to release */
-  } else {
+  if (!source_can_serve) {
     /* The source has reported its PDCP COUNTs, so it must not resume: the two
      * would diverge. The UE stays on the target with whatever it has. */
     LOG_E(NR_RRC,
           "UE %d: the user plane is on gNB-CU-UP assoc_id %d; downlink stays broken until the core accepts a new endpoint\n",
           ue->rrc_ue_id,
           ctx->target_assoc);
+    nr_rrc_cuup_reloc_finalize(rrc, ue);
+    return;
   }
 
+  rrc_bind_cuup_to_ue(ue, ctx->source_assoc);
+  ctx->source_released = true; /* the source keeps serving: nothing to release */
+  if (ctx->target_has_context) {
+    e1_release_bearer_context_on(rrc, ue, ctx->target_assoc);
+    ctx->target_has_context = false;
+  }
+
+  /* The DU may already have been told to use the target: point it back. The
+   * context lives on until the DU answers, so that response is recognised as
+   * part of giving up (see CUUP_RELOC_WAIT_PUTBACK) and the guard timer still
+   * covers a DU that does not answer at all. */
+  if (ctx->state == CUUP_RELOC_WAIT_F1_MOD && ctx->n_source_tunnels > 0) {
+    /* The target's Bearer Context Setup Response overwrote this UE's F1-U
+     * records: the source's go back in whatever happens on F1 next. */
+    rrc_restore_cuup_tunnels(ue, ctx->n_source_tunnels, ctx->source_tunnel_drb, ctx->source_tunnel);
+
+    if (ctx->du_refused) {
+      /* The DU applied none of the modification, so it never stopped sending
+       * uplink to the source. Asking it to point back would be a no-op that
+       * this procedure would then sit waiting for. */
+      LOG_I(NR_RRC, "UE %d: the DU never moved, nothing to put back on F1\n", ue->rrc_ue_id);
+    } else if (rrc_send_f1_ue_context_modification_for_cuup_change(rrc, ue) != 0) {
+      ctx->state = CUUP_RELOC_WAIT_PUTBACK;
+      if (arm_guard(ue, ctx)) {
+        LOG_I(NR_RRC,
+              "UE %d: asked the DU to send uplink to gNB-CU-UP assoc_id %d again\n",
+              ue->rrc_ue_id,
+              ctx->source_assoc);
+        return;
+      }
+      /* no guard: do not wait for a response that may never come */
+      LOG_W(NR_RRC, "UE %d: not waiting for the DU to confirm the put-back\n", ue->rrc_ue_id);
+    } else {
+      LOG_E(NR_RRC,
+            "UE %d: could not ask the DU to point back at gNB-CU-UP assoc_id %d; its uplink goes to a released bearer context\n",
+            ue->rrc_ue_id,
+            ctx->source_assoc);
+    }
+  }
+
+  LOG_I(NR_RRC, "UE %d: stays on gNB-CU-UP assoc_id %d\n", ue->rrc_ue_id, ctx->source_assoc);
   nr_rrc_cuup_reloc_finalize(rrc, ue);
 }
 
@@ -259,8 +321,14 @@ int nr_rrc_trigger_cuup_reloc(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue, int64_t targe
     free(ctx);
     return -1;
   }
+  /* Refuse to start unguarded: a change that never completes keeps its context
+   * for the life of the UE and blocks every later one. */
+  if (!arm_guard(ue, ctx)) {
+    disarm_guard(ctx);
+    free(ctx);
+    return -1;
+  }
   ue->cuup_reloc = ctx;
-  arm_guard(ue, ctx);
 
   LOG_A(NR_RRC,
         "UE %d: moving %d PDU session(s) from gNB-CU-UP ID %ld (assoc_id %d) to gNB-CU-UP ID %ld (assoc_id %d)\n",
@@ -304,6 +372,10 @@ bool nr_rrc_cuup_reloc_e1_setup_resp(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue, sctp_a
 
   /* Step 4 */
   ctx->state = CUUP_RELOC_WAIT_F1_MOD;
+  if (!arm_guard(ue, ctx)) {
+    nr_rrc_cuup_reloc_abort(rrc, ue, "could not re-arm the guard timer");
+    return true;
+  }
   if (rrc_send_f1_ue_context_modification_for_cuup_change(rrc, ue) == 0) {
     nr_rrc_cuup_reloc_abort(rrc, ue, "could not repoint the DU at the target gNB-CU-UP");
     return true;
@@ -314,7 +386,22 @@ bool nr_rrc_cuup_reloc_e1_setup_resp(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue, sctp_a
 bool nr_rrc_cuup_reloc_f1_mod_resp(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue)
 {
   cuup_reloc_context_t *ctx = ue->cuup_reloc;
-  if (ctx == NULL || ctx->state != CUUP_RELOC_WAIT_F1_MOD)
+  if (ctx == NULL)
+    return false;
+
+  /* The put-back is done: the DU sends uplink to the source again. Consume the
+   * response so the caller does not treat it as an ordinary modification and
+   * reconfigure the UE over it. */
+  if (ctx->state == CUUP_RELOC_WAIT_PUTBACK) {
+    LOG_I(NR_RRC,
+          "UE %d: the DU sends uplink to gNB-CU-UP assoc_id %d again, the change of gNB-CU-UP is given up\n",
+          ue->rrc_ue_id,
+          ctx->source_assoc);
+    nr_rrc_cuup_reloc_finalize(rrc, ue);
+    return true;
+  }
+
+  if (ctx->state != CUUP_RELOC_WAIT_F1_MOD)
     return false;
 
   /* The DU sends uplink to the target now, so the target is the gNB-CU-UP that
@@ -331,7 +418,40 @@ bool nr_rrc_cuup_reloc_f1_mod_resp(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue)
 
   /* Steps 5-6 */
   ctx->state = CUUP_RELOC_WAIT_SOURCE_STATUS;
+  if (!arm_guard(ue, ctx)) {
+    nr_rrc_cuup_reloc_abort(rrc, ue, "could not re-arm the guard timer");
+    return true;
+  }
   e1_request_pdcp_status_on(rrc, ue, ctx->source_assoc);
+  return true;
+}
+
+bool nr_rrc_cuup_reloc_f1_mod_failure(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue)
+{
+  cuup_reloc_context_t *ctx = ue->cuup_reloc;
+  if (ctx == NULL)
+    return false;
+
+  /* The DU refused to point back at the source. Nothing more can be done for
+   * this UE's uplink from here: the DU keeps sending it to the target, whose
+   * bearer context has just been released. */
+  if (ctx->state == CUUP_RELOC_WAIT_PUTBACK) {
+    LOG_E(NR_RRC,
+          "UE %d: the DU refused to send uplink to gNB-CU-UP assoc_id %d again; the UE has lost its uplink\n",
+          ue->rrc_ue_id,
+          ctx->source_assoc);
+    nr_rrc_cuup_reloc_finalize(rrc, ue);
+    return true;
+  }
+
+  if (ctx->state != CUUP_RELOC_WAIT_F1_MOD)
+    return false;
+
+  /* The DU applied none of the modification, so it still sends uplink to the
+   * source: the put-back has nothing to undo on the F1 side beyond restoring
+   * the endpoints the context holds. */
+  ctx->du_refused = true;
+  nr_rrc_cuup_reloc_abort(rrc, ue, "the gNB-DU refused the UE Context Modification");
   return true;
 }
 
@@ -367,6 +487,10 @@ bool nr_rrc_cuup_reloc_e1_modif_resp(gNB_RRC_INST *rrc,
 
       /* Steps 7-8 */
       ctx->state = CUUP_RELOC_WAIT_TARGET_STATUS;
+      if (!arm_guard(ue, ctx)) {
+        nr_rrc_cuup_reloc_abort(rrc, ue, "could not re-arm the guard timer");
+        return true;
+      }
       e1_notify_pdcp_status_drbs(rrc, ue, ctx->target_assoc, ctx->n_drb_status, ctx->drb_ids, ctx->drb_status);
       return true;
     }
@@ -385,10 +509,7 @@ bool nr_rrc_cuup_reloc_e1_modif_resp(gNB_RRC_INST *rrc,
        * does not implement PDU_RES_MOD_IND it never arrives at all (§3 of the
        * code map). Letting the guard fire here would tear down a change that
        * has in fact succeeded as far as the RAN can take it. */
-      if (ctx->guard_timer != 0) {
-        timer_remove(ctx->guard_timer);
-        ctx->guard_timer = 0;
-      }
+      disarm_guard(ctx);
       ctx->state = CUUP_RELOC_WAIT_PATH_UPDATE;
       if (rrc_gNB_send_NGAP_PDUSESSION_MODIFY_INDICATION(rrc, ue) == 0) {
         LOG_E(NR_RRC,

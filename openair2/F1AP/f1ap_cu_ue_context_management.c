@@ -153,13 +153,72 @@ int CU_handle_UE_CONTEXT_MODIFICATION_RESPONSE(instance_t instance, sctp_assoc_t
   return 0;
 }
 
+/* The gNB-DU refused a gNB-CU initiated UE Context Modification and applied
+ * none of it. Previously unhandled, which left a change of gNB-CU-UP waiting
+ * for a response that was never going to come: the F1AP dispatch table had no
+ * unsuccessfulOutcome entry for this procedure, so the PDU was dropped with
+ * "No handler present" and only the relocation guard timer eventually noticed.
+ * Nothing in the message changes state here; it is relayed to the RRC, which
+ * owns whatever procedure was in flight. */
 int CU_handle_UE_CONTEXT_MODIFICATION_FAILURE(instance_t instance, sctp_assoc_t assoc_id, uint32_t stream, F1AP_F1AP_PDU_t *pdu)
 {
-  UNUSED(instance);
-  UNUSED(assoc_id);
+  DevAssert(pdu != NULL);
   UNUSED(stream);
-  UNUSED(pdu);
-  AssertFatal(1 == 0, "Not implemented yet\n");
+
+  F1AP_UEContextModificationFailure_t *container = &pdu->choice.unsuccessfulOutcome->value.choice.UEContextModificationFailure;
+  F1AP_UEContextModificationFailureIEs_t *ie = NULL;
+
+  MessageDef *msg_p = itti_alloc_new_message(TASK_DU_F1, 0, F1AP_UE_CONTEXT_MODIFICATION_FAILURE);
+  msg_p->ittiMsgHeader.originInstance = assoc_id;
+  f1ap_ue_context_modif_failure_t *failure = &F1AP_UE_CONTEXT_MODIFICATION_FAILURE(msg_p);
+
+  /* mandatory: GNB_CU_UE_F1AP_ID */
+  F1AP_FIND_PROTOCOLIE_BY_ID(F1AP_UEContextModificationFailureIEs_t, ie, container, F1AP_ProtocolIE_ID_id_gNB_CU_UE_F1AP_ID, true);
+  failure->gNB_CU_ue_id = ie->value.choice.GNB_CU_UE_F1AP_ID;
+
+  /* mandatory: GNB_DU_UE_F1AP_ID */
+  F1AP_FIND_PROTOCOLIE_BY_ID(F1AP_UEContextModificationFailureIEs_t, ie, container, F1AP_ProtocolIE_ID_id_gNB_DU_UE_F1AP_ID, true);
+  failure->gNB_DU_ue_id = ie->value.choice.GNB_DU_UE_F1AP_ID;
+
+  /* mandatory: Cause */
+  F1AP_FIND_PROTOCOLIE_BY_ID(F1AP_UEContextModificationFailureIEs_t, ie, container, F1AP_ProtocolIE_ID_id_Cause, true);
+  switch (ie->value.choice.Cause.present) {
+    case F1AP_Cause_PR_radioNetwork:
+      failure->cause = F1AP_CAUSE_RADIO_NETWORK;
+      failure->cause_value = ie->value.choice.Cause.choice.radioNetwork;
+      break;
+    case F1AP_Cause_PR_transport:
+      failure->cause = F1AP_CAUSE_TRANSPORT;
+      failure->cause_value = ie->value.choice.Cause.choice.transport;
+      break;
+    case F1AP_Cause_PR_protocol:
+      failure->cause = F1AP_CAUSE_PROTOCOL;
+      failure->cause_value = ie->value.choice.Cause.choice.protocol;
+      break;
+    case F1AP_Cause_PR_misc:
+      failure->cause = F1AP_CAUSE_MISC;
+      failure->cause_value = ie->value.choice.Cause.choice.misc;
+      break;
+    default:
+      LOG_W(F1AP, "Unknown cause for UE Context Modification Failure\n");
+      /* fall through */
+    case F1AP_Cause_PR_NOTHING:
+      failure->cause = F1AP_CAUSE_NOTHING;
+      failure->cause_value = 0;
+      break;
+  }
+
+  /* optional: Criticality Diagnostics -- not forwarded, nothing acts on it */
+
+  LOG_W(F1AP,
+        "UE Context Modification Failure for CU UE ID %u (DU UE ID %u), cause %d/%ld\n",
+        failure->gNB_CU_ue_id,
+        failure->gNB_DU_ue_id,
+        failure->cause,
+        failure->cause_value);
+
+  itti_send_msg_to_task(TASK_RRC_GNB, instance, msg_p);
+  return 0;
 }
 
 int CU_handle_UE_CONTEXT_MODIFICATION_REQUIRED(instance_t instance, sctp_assoc_t assoc_id, uint32_t stream, F1AP_F1AP_PDU_t *pdu)

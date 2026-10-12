@@ -3172,6 +3172,31 @@ static void rrc_CU_process_ue_context_modification_response(MessageDef *msg_p, i
   nr_rrc_cuup_reloc_f1_mod_resp(rrc, UE);
 }
 
+/* The gNB-DU refused a UE Context Modification we sent. It applied none of it,
+ * so whatever procedure was waiting for the response has to be unwound. */
+static void rrc_CU_process_ue_context_modification_failure(MessageDef *msg_p, instance_t instance)
+{
+  f1ap_ue_context_modif_failure_t *failure = &F1AP_UE_CONTEXT_MODIFICATION_FAILURE(msg_p);
+  gNB_RRC_INST *rrc = RC.nrrrc[instance];
+  rrc_gNB_ue_context_t *ue_context_p = rrc_gNB_get_ue_context(rrc, failure->gNB_CU_ue_id);
+  if (!ue_context_p) {
+    LOG_E(RRC, "could not find UE context for CU UE ID %u, ignoring the failure\n", failure->gNB_CU_ue_id);
+    return;
+  }
+  gNB_RRC_UE_t *UE = &ue_context_p->ue_context;
+
+  /* A change of gNB-CU-UP owns the failure when one is in flight, and gives up
+   * here rather than CUUP_RELOC_GUARD_S later when the guard timer notices. */
+  if (nr_rrc_cuup_reloc_f1_mod_failure(rrc, UE))
+    return;
+
+  LOG_W(RRC,
+        "UE %d: the DU refused the UE Context Modification (cause %d/%ld), no procedure was waiting for it\n",
+        UE->rrc_ue_id,
+        failure->cause,
+        failure->cause_value);
+}
+
 static void rrc_CU_process_ue_modification_required(MessageDef *msg_p, instance_t instance, sctp_assoc_t assoc_id)
 {
   gNB_RRC_INST *rrc = RC.nrrrc[instance];
@@ -4181,6 +4206,11 @@ void *rrc_gnb_task(void *args_p)
       case F1AP_UE_CONTEXT_MODIFICATION_RESP:
         rrc_CU_process_ue_context_modification_response(msg_p, instance);
         free_ue_context_mod_resp(&F1AP_UE_CONTEXT_MODIFICATION_RESP(msg_p));
+        break;
+
+      /* no free: f1ap_ue_context_modif_failure_t holds no allocations */
+      case F1AP_UE_CONTEXT_MODIFICATION_FAILURE:
+        rrc_CU_process_ue_context_modification_failure(msg_p, instance);
         break;
 
       case F1AP_UE_CONTEXT_MODIFICATION_REQUIRED:
