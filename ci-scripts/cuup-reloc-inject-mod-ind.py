@@ -198,16 +198,45 @@ def last_smf_ref(log):
 
 
 def from_cucp_log():
+    """Read the endpoint out of the CU-CP's Modify Indication, or refuse.
+
+    Only values inside the window around the log line that announces the
+    Modify Indication count.  Scanning the whole log for "the last TEID" and
+    "the last address" finds a GTP-U TEID from some unrelated session and the
+    0.0.0.0 of a listening socket, and injects a plausible-looking endpoint
+    that means nothing.
+    """
     log = docker_logs(CUCP)
-    teids = re.findall(r"TEID\s+0x([0-9a-fA-F]{8})", log)
-    addrs = re.findall(r"(?:address|addr)\s+(\d+\.\d+\.\d+\.\d+)", log)
-    if not teids:
+    lines = log.split("\n")
+
+    marks = [
+        i for i, line in enumerate(lines)
+        if "PDU Session Resource Modify Indication" in line
+    ]
+    if not marks:
         sys.exit(
-            "could not find a TEID in the CU-CP log; read the\n"
-            "'Send PDU Session Resource Modify Indication' lines yourself and\n"
-            "pass --addr/--teid"
+            "the CU-CP has not sent a PDU Session Resource Modify Indication.\n"
+            "Trigger the change of gNB-CU-UP first and check it actually\n"
+            "started:\n"
+            "  docker logs %s | grep -i 'cuup\\|CU-UP'\n"
+            "There is nothing to inject until that message goes out." % CUCP
         )
-    return (addrs[-1] if addrs else None), int(teids[-1], 16)
+
+    lo = max(0, marks[-1] - 25)
+    window = "\n".join(lines[lo : marks[-1] + 6])
+
+    teids = re.findall(r"TEID\s+0x([0-9a-fA-F]{1,8})", window)
+    addrs = [
+        a for a in re.findall(r"\b(\d{1,3}(?:\.\d{1,3}){3})\b", window)
+        if not a.startswith(("0.", "127."))
+    ]
+    if not teids or not addrs:
+        sys.exit(
+            "found the Modify Indication but could not read an endpoint from "
+            "it.\nRead these lines and pass --addr/--teid yourself:\n\n"
+            + window
+        )
+    return addrs[-1], int(teids[-1], 16)
 
 
 def main():

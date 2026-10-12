@@ -470,11 +470,19 @@ UE xxxx: DRB 1 sends uplink to TEID 0x... from now on
 
 ---
 
-## 5. What to measure, and what will not work
+## 5. What to measure
 
-**Uplink is the test.** Between the DU switching over and the core answering,
-uplink works and downlink does not — by design, because the uplink destination
-(the UPF) never changed while the core still sends downlink to the old CU-UP. So:
+**Neither direction breaks, and that is the point.** It is tempting to expect a
+downlink outage between the DU switching over and the core answering, but there
+is none: the source CU-UP's bearer context is deliberately retained until the
+Modify Confirm arrives, and it still holds the DU's downlink F1-U endpoint. So
+downlink keeps flowing UPF -> source CU-UP -> DU -> UE while uplink already goes
+through the target. Asymmetric, but lossless. Measured on the deployment in this
+directory: 77 consecutive uplink packets and zero lost replies across a change.
+
+This means **loss is not the measurement** -- where the downlink is *addressed*
+is. Section 6 covers that. Uplink throughput is still worth watching as a
+smoke test:
 
 ```bash
 # on the traffic host, before triggering:
@@ -483,9 +491,9 @@ iperf3 -s
 docker exec rfsim5g-oai-nr-ue iperf3 -c 192.168.72.135 -t 60 -i 1
 ```
 
-The uplink rate should dip for the packets in flight and then continue. **Ping and
-any TCP test will stall at the trigger** and that is not a bug: it needs the
-downlink, which only returns once the core acts on the Modify Indication.
+The uplink rate should dip for the packets in flight and then continue. Ping and
+TCP keep working too, for the reason above -- so a passing ping proves the
+procedure is lossless, not that the core has acted.
 
 **The stock core will not act on it.** The AMF in v2.2.1 decodes NGAP procedure
 27, finds no branch for it and drops it; the SMF behind it never hears about the
@@ -538,7 +546,7 @@ The gap is in two places and only one of them is closed so far.
 | NF | State | What it needs |
 |---|---|---|
 | AMF | **not done** | NGAP procedure 27 is decoded and dropped. It needs `PduSessionResourceModifyIndication`/`...Confirm` message classes, the `ListModInd`/`ListModCfm` IE wrappers, a procedure-27 handler and the N11 call out to the SMF. |
-| SMF | **done**, locally built | `PDU_SESSION_MODIFICATION_AN_INDICATED` procedure type, a `PDU_RES_MOD_IND` branch that reads `dLQosFlowPerTNLInformation` into the session's downlink F-TEID, the same Update-FAR handling an Xn path switch gets, and a `PDU_RES_MOD_CFM` response. |
+| SMF | **done and verified live** | `PDU_SESSION_MODIFICATION_AN_INDICATED` procedure type, a `PDU_RES_MOD_IND` branch that reads `dLQosFlowPerTNLInformation` into the session's downlink F-TEID, the same Update-FAR handling an Xn path switch gets, and a `PDU_RES_MOD_CFM` response. |
 
 Because the AMF is the missing link, the SMF is driven directly:
 `ci-scripts/cuup-reloc-inject-mod-ind.py` posts the `UpdateSMContext` the AMF
@@ -558,73 +566,82 @@ SMF_TAG=modind docker compose -f docker-compose.yaml -f reloc-override.yaml up -
 
 ### 6.2 The run
 
-Downlink is the measurement here, so use ping, not the uplink iperf3 of §5.
+The measurement is the downlink's **destination**, not whether it breaks. Check
+where it goes before you touch anything:
 
 ```bash
-# 1. UE attached, data path confirmed
 docker exec rfsim5g-oai-nr-ue ping -c3 -I oaitun_ue1 192.168.72.135
+docker exec rfsim5g-oai-nr-ue ping -i1 -I oaitun_ue1 192.168.72.135 &
 
-# 2. capture N3 (GTP-U) and N4 (PFCP) on the core bridge
-sudo tcpdump -i rfsim5g-core -w n3n4.pcap 'udp port 2152 or udp port 8805' &
-
-# 3. a ping that runs across the whole thing, one per second
-docker exec rfsim5g-oai-nr-ue ping -i1 -I oaitun_ue1 192.168.72.135 \
-  | ts '%H:%M:%.S' | tee /tmp/ping.log &
-
-# 4. which CU-UP is it on now?
-docker logs rfsim5g-oai-cucp | grep -m1 "selecting CU-UP ID"
-
-# 5. relocate to the OTHER one
-docker exec -it rfsim5g-oai-cucp telnet 127.0.0.1 9090
-> rrc cuup_reloc 1 0xe00        # or 0xe01, whichever it is not
-
-# >>> the ping stops here <<<  uplink is through the new CU-UP, downlink is
-#     still addressed to the old one.  This is the broken state the core fixes.
-
-# 6. stand in for the AMF
-./ci-scripts/cuup-reloc-inject-mod-ind.py --from-cucp-log
-
-# >>> the ping resumes <<<
+sudo timeout 5 tcpdump -i rfsim5g-core -nn 'udp port 2152 and src host 192.168.71.134'
 ```
 
-The gap in `/tmp/ping.log` between step 5 and step 6 is the proof: it opens when
-the RAN switches and closes when, and only when, the core is told. Run step 6 a
-few seconds late on purpose so the gap is unmistakable.
-
-If `--from-cucp-log` cannot find the endpoint, read it off the CU-CP's own line
-and pass it explicitly:
+That prints the UPF sending downlink to whichever CU-UP currently serves the UE.
+Then:
 
 ```bash
-docker logs rfsim5g-oai-cucp | grep -A3 "Send PDU Session Resource Modify Indication"
-./ci-scripts/cuup-reloc-inject-mod-ind.py --addr 192.168.71.161 --teid 0x6d60de2c
+# capture across the whole thing
+sudo tcpdump -i rfsim5g-core -w dl-switch.pcap 'udp port 2152 or udp port 8805' &
+
+# which CU-UP is it on, and what is the UE's RRC id?
+docker logs rfsim5g-oai-cucp | grep "selecting CU-UP ID" | tail -1
+
+# relocate to the OTHER one (telnet runs on the host; the container has no client)
+telnet 127.0.0.1 9090
+> rrc cuup_reloc <ue_id> 0xe00        # or 0xe01, whichever it is not
+> exit
 ```
 
-`--dry-run` prints the request without sending it, which is the quickest way to
-check the borrowed envelope looks right.
+The ping keeps running. Uplink has moved; downlink is still addressed to the
+source CU-UP, which still forwards it. Confirm that with the same tcpdump: the
+destination has *not* changed yet.
+
+```bash
+# the endpoint the CU-CP asked the core for
+docker logs rfsim5g-oai-cucp 2>&1 | grep -B20 "Send PDU Session Resource Modify Indication" | tail -25
+
+# stand in for the AMF
+python3 ci-scripts/cuup-reloc-inject-mod-ind.py --from-cucp-log --dry-run
+python3 ci-scripts/cuup-reloc-inject-mod-ind.py --from-cucp-log
+
+sleep 5
+sudo timeout 5 tcpdump -i rfsim5g-core -nn 'udp port 2152 and src host 192.168.71.134'
+sudo pkill tcpdump
+```
+
+**That last tcpdump printing the target CU-UP's address is the result.** Run the
+script with `python3` rather than directly -- the executable bit does not
+survive a sync from a Windows share -- and without `sudo`.
 
 ### 6.3 What the logs and the capture must show
 
 ```bash
-docker logs rfsim5g-oai-smf | grep -E "Modify Indication|MIME parts|session management type"
+docker logs rfsim5g-oai-smf | grep -E "MIME parts|Modify Indication|downlink moves|session management type"
 ```
 
 | Line | Means |
 |---|---|
-| `Number of MIME parts 2` | the hand-made envelope parsed; `0` or `1` means the script's borrowed headers were wrong |
+| `Number of MIME parts 2` | the hand-made envelope parsed; `0` or `1` means the borrowed headers were wrong |
 | `PDU Session Resource Modify Indication, processing N2 SM Information` | the new dispatch branch was reached |
-| `downlink moves to 192.168.71.161, TEID 0x6d60de2c` | the transfer decoded and the endpoint was taken |
-| `Session procedure type: PDU_SESSION_MODIFICATION_AN_INDICATED` | the procedure type survived into the PFCP stage |
-| `Unknown session management type 25` | **regression** — `smf_procedure.cpp` is missing the new case in one of its two switches, and no N4 message will be sent |
+| `downlink moves to 192.168.71.162, TEID 0x4be092d3` | the transfer decoded and the endpoint was taken |
+| `Unknown session management type 25` | **regression** -- `smf_procedure.cpp` is missing the new case in one of its two switches, and no N4 message will be sent |
 
-In `n3n4.pcap`:
+In the capture, this is what a good run looks like (decoded from a real one):
 
-| Filter | Expect |
-|---|---|
-| `pfcp` | a **Session Modification Request** with an **Update FAR** whose Outer Header Creation carries the new CU-UP's N3 address and TEID, answered with cause Request accepted |
-| `gtp` | downlink GTP-U from `192.168.71.134` changing destination from the old CU-UP to the new one at the moment of the injection |
+```
+GTP-U
+  192.168.71.162 -> 192.168.71.134   TEID 0x00000001   n=77   t= 0.00 .. 77.82   uplink,   target
+  192.168.71.134 -> 192.168.71.162   TEID 0x4be092d3   n=34   t=44.04 .. 77.82   downlink, target
 
-The GTP-U destination change is the one measurement that cannot be faked by a
-log line: it is the UPF actually sending somewhere else.
+PFCP
+  t=43.91   192.168.71.133 -> .134   SessModReq (52) len=200
+  t=43.91   192.168.71.134 -> .133   SessModRsp (53)
+```
+
+The Session Modification Request carries the Update FAR. The downlink flow
+appears 0.13 s later with the address *and* the TEID the CU-CP announced. Both
+values matching the RAN's is the proof: a log line could be wrong, the UPF
+actually sending packets somewhere new cannot.
 
 ### 6.4 Known limits of this test
 
