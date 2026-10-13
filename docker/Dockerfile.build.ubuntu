@@ -13,6 +13,17 @@ ARG BUILD_OPTION
 ARG E2AP_VERSION=E2AP_V3
 ARG KPM_VERSION=KPM_V3_00
 
+# Build OAI's own E2 agent into the softmodem and nr-cuup binaries.  The agent
+# links against the in-tree FlexRIC submodule (openair2/E2AP/flexric), which the
+# second RUN block below builds and installs regardless of this setting -- the
+# service-model .so files land in /usr/local/lib/flexric either way, and the leaf
+# images copy them.  So E2_AGENT=OFF yields binaries that cannot register with a
+# RIC while still shipping the SM libraries, which is a confusing half state.
+# ON is the default because the inter-CU-UP relocation test bed drives the
+# handover from an xApp and needs the CU-CP, both CU-UPs and the DU to appear as
+# E2 nodes.  Pass OFF only to bisect a FlexRIC-vs-tree compile failure.
+ARG E2_AGENT=ON
+
 RUN rm -Rf /oai-ran
 WORKDIR /oai-ran
 COPY . .
@@ -30,7 +41,8 @@ RUN \
       --eNB --gNB --RU --UE --nrUE \
       --build-lib "telnetsrv enbscope uescope nrscope" \
       -w USRP -t Ethernet -w BLADERF \
-      --build-e2 --cmake-opt -DKPM_VERSION=$KPM_VERSION --cmake-opt -DE2AP_VERSION=$E2AP_VERSION \
+      --build-e2 --cmake-opt -DE2_AGENT=$E2_AGENT \
+      --cmake-opt -DKPM_VERSION=$KPM_VERSION --cmake-opt -DE2AP_VERSION=$E2AP_VERSION \
       --cmake-opt -DOAI_VRTSIM_TAPS_CLIENT=ON \
       --noavx512 \
       --build-tool-opt -k10 \

@@ -14,14 +14,21 @@
 #   JOBS=28  how many compile jobs.  Defaults to the machine's online CPU count,
 #            NOT nproc -- nproc honours the affinity mask, so on a box with cores
 #            isolated for real-time threads it under-reports badly.
-#   E2=ON    the pinned FlexRIC commit does not compile against this tree, and
-#            the relocation path does not touch E2.  Turn it on once fixed.
+#   E2=OFF   build without OAI's E2 agent.  Defaults to ON: the xApp-driven test
+#            bed needs the CU-CP, both CU-UPs and the DU to register with the
+#            RIC, so E2 is part of the deliverable, not an extra.  Pass OFF only
+#            to isolate a FlexRIC-vs-tree compile failure from everything else.
+#   EXTRA=   extra args appended to build_oai after every flag this script sets,
+#            so they win.  The usual need is relaxing warnings-as-errors while
+#            the E2 agent is being fixed:
+#              EXTRA='--cmake-opt -DCMAKE_C_FLAGS= --cmake-opt -DCMAKE_CXX_FLAGS='
 #   BRANCH, TAG
 
 set -euo pipefail
 
 BRANCH=${BRANCH:-cuup-reloc}
-E2=${E2:-OFF}
+E2=${E2:-ON}
+EXTRA=${EXTRA:-}
 TAG=${TAG:-reloc}
 JOBS=${JOBS:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || nproc)}
 LOGDIR=${LOGDIR:-/tmp/cuup-reloc-logs}
@@ -72,6 +79,11 @@ git submodule update --init --recursive
 after=$(git rev-parse HEAD)
 short=$(git rev-parse --short "$after")
 
+# The stamp carries the E2 setting as well as the commit.  Flipping E2 does not
+# move HEAD, so a commit-only stamp would make an E2=ON rerun report "already
+# built" and skip the very rebuild that was asked for.
+stamp="${after}+e2${E2}"
+
 # bash reads a script lazily, so the checkout above may have rewritten this file
 # out from under the interpreter.  If it changed, start over from the new one.
 if [ "$(md5sum "$self" | cut -d' ' -f1)" != "$self_sum" ] && [ -z "${CUUP_RELOC_REEXEC:-}" ]; then
@@ -96,10 +108,10 @@ stamp_of() { docker image inspect -f '{{index .Config.Labels "reloc.commit"}}' "
 
 current=1
 for i in ran-build:latest "oai-gnb:$TAG" "oai-nr-cuup:$TAG" "oai-nr-ue:$TAG"; do
-  [ "$(stamp_of "$i")" = "$after" ] || current=0
+  [ "$(stamp_of "$i")" = "$stamp" ] || current=0
 done
 if [ "$current" -eq 1 ] && [ "$force" -eq 0 ] && [ "$full" -eq 0 ]; then
-  echo "== all images already built from $short -- pass --force to rebuild anyway"
+  echo "== all images already built from $short with E2 $E2 -- pass --force to rebuild anyway"
   exit 0
 fi
 
@@ -122,8 +134,9 @@ fi
 
 # -j is appended after build_oai's own "-j$(nproc)"; ninja takes the last one.
 run ran-build -t ran-build:latest -f docker/Dockerfile.build.ubuntu \
-    --label "reloc.commit=$after" \
-    --build-arg BUILD_OPTION="--cmake-opt -DE2_AGENT=$E2 --build-tool-opt -j$JOBS"
+    --label "reloc.commit=$stamp" \
+    --build-arg E2_AGENT="$E2" \
+    --build-arg BUILD_OPTION="--build-tool-opt -j$JOBS $EXTRA"
 
 # The three leaf images only copy artefacts out of ran-build, so they are
 # independent of each other and run together.
@@ -133,7 +146,7 @@ for t in gnb:Dockerfile.gNB.ubuntu \
          nr-ue:Dockerfile.nrUE.ubuntu ; do
   name=${t%%:*}; dfile=${t#*:}
   ( docker build --progress=plain -t "oai-$name:$TAG" -f "docker/$dfile" \
-        --label "reloc.commit=$after" . >"$LOGDIR/oai-$name.log" 2>&1 ) &
+        --label "reloc.commit=$stamp" . >"$LOGDIR/oai-$name.log" 2>&1 ) &
   pids+=("$!:oai-$name")
 done
 fail=0
