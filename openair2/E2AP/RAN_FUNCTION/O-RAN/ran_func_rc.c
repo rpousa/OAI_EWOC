@@ -20,6 +20,34 @@
 #include <unistd.h>
 #include "common/ran_context.h"
 
+/* E2SM-RC REPORT Style 5 ("On Demand Report", E2SM-RC v01.03 7.4.6) needs two
+ * things the pinned FlexRIC submodule (openair2/E2AP/flexric, branch
+ * service-models-integration) does not provide:
+ *
+ *   - the Neighbour Relation Table RAN parameter types: neighbour_rela_tbl_t's
+ *     serving_cell_pci / serving_cell_arfcn / sz_neighbour_cell_list /
+ *     neighbour_cell_list, the neighbour_cell_item_t type, and the
+ *     NR_SERVING_CELL / NR_NEIGHBOUR_CELL / FDD_NR_MODE_INFO /
+ *     TDD_NR_MODE_INFO / XN_X2_ESTABLISHED / HO_VALIDATED _E2SM_RC enums.
+ *     That FlexRIC ships neighbour_relation_tbl.h as a 175-byte placeholder.
+ *
+ *   - susbcription_aperiod_t.imm_ind_data, which is how the immediate RIC
+ *     Indication for an On Demand subscription is handed back to the agent.
+ *     The rest of the aperiodic machinery (the APERIODIC_SUBSCRIPTION_FLRC
+ *     outcome, free_aper_subs) does exist.
+ *
+ * With this off, Style 5 is not advertised in the RAN Function Definition and
+ * a subscription asking for it is refused, so the RIC is never offered a style
+ * that cannot be served.  REPORT styles 1 and 4, every CONTROL action and the
+ * INSERT/POLICY paths are untouched, so the E2 agent registers and reports
+ * normally.  Nothing in this test bed subscribes to RC: the xApps use
+ * MAC/RLC/PDCP/GTP/SLICE plus KPM, and the change of gNB-CU-UP is triggered
+ * over the CU-CP's telnet interface because E2SM-RC defines no control action
+ * for it.  Set this to 1 once the submodule carries the types above. */
+#ifndef E2SM_RC_ON_DEMAND_REPORT
+#define E2SM_RC_ON_DEMAND_REPORT 0
+#endif
+
 static pthread_once_t once_rc_mutex = PTHREAD_ONCE_INIT;
 static rc_subs_data_t rc_subs_data = {0};
 static pthread_mutex_t rc_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -266,6 +294,7 @@ static seq_report_sty_t fill_report_style_1(const char *report_name)
   return report_style;
 }
 
+#if E2SM_RC_ON_DEMAND_REPORT
 static seq_report_sty_t fill_report_style_5(const char *report_name)
 {
   seq_report_sty_t report_style = {0};
@@ -330,18 +359,21 @@ static seq_report_sty_t fill_report_style_5(const char *report_name)
 
   return report_style;
 }
+#endif /* E2SM_RC_ON_DEMAND_REPORT */
 
 static void fill_rc_report(ran_func_def_report_t* report)
 {
   // Sequence of REPORT styles
   // [1 - 63]
-  report->sz_seq_report_sty = 3;
+  report->sz_seq_report_sty = 2 + E2SM_RC_ON_DEMAND_REPORT;
   report->seq_report_sty = calloc(report->sz_seq_report_sty, sizeof(seq_report_sty_t));
   assert(report->seq_report_sty != NULL && "Memory exhausted");
 
   report->seq_report_sty[0] = fill_report_style_1("Message Copy");
   report->seq_report_sty[1] = fill_report_style_4("UE Information");
+#if E2SM_RC_ON_DEMAND_REPORT
   report->seq_report_sty[2] = fill_report_style_5("On Demand Report");
+#endif
 }
 
 static void fill_rc_radio_bearer_ctrl(seq_ctrl_style_t* ctrl_style)
@@ -829,7 +861,9 @@ static void send_aper_ric_ind(const uint32_t ric_req_id, rc_ind_data_t* rc_ind_d
   printf("[E2 AGENT] Event for RIC request ID %d generated\n", ric_req_id);
 }
 
-#ifdef NGRAN_GNB_CUCP
+/* Only used by the On Demand Report fill below, so it follows the same guard --
+ * otherwise it is an unused static function and -Werror rejects the build. */
+#if defined(NGRAN_GNB_CUCP) && E2SM_RC_ON_DEMAND_REPORT
 static nr_cgi_t fill_nr_cgi(plmn_id_t *plmn, uint64_t cell_id)
 {
   nr_cgi_t cgi = {0};
@@ -847,6 +881,7 @@ static nr_cgi_t fill_nr_cgi(plmn_id_t *plmn, uint64_t cell_id)
  * Check if and which RAN Parameter IDs does the Action Definition carry.
  * Choices are described in section 8.2.5.
  * The Indication Header Format 1 with ev_trigger_id is optional, so left unset. */
+#if E2SM_RC_ON_DEMAND_REPORT
 static rc_ind_data_t* fill_context_info_on_demand(const e2sm_rc_act_def_frmt_1_t *ad)
 {
   assert(ad != NULL && "[E2 AGENT] Action Definition Format 1 empty.\n");
@@ -954,6 +989,7 @@ static rc_ind_data_t* fill_context_info_on_demand(const e2sm_rc_act_def_frmt_1_t
 
   return rc_ind;
 }
+#endif /* E2SM_RC_ON_DEMAND_REPORT */
 
 static rc_ind_data_t* fill_ue_id(const gNB_RRC_UE_t *rrc_ue_context, const uint16_t cond_id)
 {
@@ -1186,6 +1222,14 @@ sm_ag_if_ans_t write_subs_rc_sm(void const* src)
       }
       /* RAN Parameter IDs from `On Demand` Report Style 5 are not included in rc_subs_data_t.
        * Its intention is to send immeditately RIC Indication Message upon RIC Subscription reception. */
+#if !E2SM_RC_ON_DEMAND_REPORT
+      /* Style 5 is not advertised in the RAN Function Definition, so a
+       * subscription for it is a RIC-side error rather than something to
+       * accept and then never serve. */
+      if (report_style == 5) {
+        AssertError(false, return ans, "[E2 AGENT] REPORT Style 5 (On Demand) not supported against this FlexRIC; see E2SM_RC_ON_DEMAND_REPORT.\n");
+      }
+#endif
       if (report_style != 5)
         get_list_for_report_style(ric_req_id, &wr_rc->rc.et, wr_rc->rc.ad->frmt_1.sz_param_report_def, wr_rc->rc.ad->frmt_1.param_report_def);
       break;
@@ -1198,6 +1242,7 @@ sm_ag_if_ans_t write_subs_rc_sm(void const* src)
   ans.type = SUBS_OUTCOME_SM_AG_IF_ANS_V0;
   ans.subs_out.type = APERIODIC_SUBSCRIPTION_FLRC;
   ans.subs_out.aper.free_aper_subs = free_aperiodic_subscription;
+#if E2SM_RC_ON_DEMAND_REPORT
   ans.subs_out.aper.imm_ind_data = NULL;
 
   // REPORT Service Style 5 ("On Demand Report"): report immediately. The
@@ -1206,6 +1251,7 @@ sm_ag_if_ans_t write_subs_rc_sm(void const* src)
   // inside on_subscription and the agent hasn't registered ric_req_id yet.
   if (report_style == 5)
     ans.subs_out.aper.imm_ind_data = fill_context_info_on_demand(&wr_rc->rc.ad->frmt_1);
+#endif
 
   return ans;
 }
