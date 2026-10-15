@@ -425,8 +425,24 @@ meas_record_lst_t get_kpm_meas_value(char* kpm_meas_name, const label_info_lst_t
   ENTRY *found_entry = hsearch(search_entry, FIND);
   assert(found_entry != NULL && "Unsupported KPM measurement name");
 
+  /* The previous-period counters (last_pdcp_sdu_total_bytes, last_rlc_pdu_total_bytes,
+   * last_total_prbs) must be kept per UE.  ue_idx is the UE's position in *this*
+   * report, not its identity: when the RIC subscribes once per S-NSSAI, each UE sits
+   * alone at position 0 of its own report, so every UE shared slot 0 and each delta
+   * was taken against another UE's byte count.  An idle UE minus a busy UE wraps the
+   * uint32 counter, which is the ~34 Gbps UEThpDl/UEThpUl and the >100% PrbTot seen
+   * in the KPM xApp.  Key the slot by rrc_ue_id instead (cucp_ue_id on a CU-UP, the
+   * F1 CU UE ID on a DU -- both unique per UE in the gNB).  Node-level reports carry
+   * an empty ue_info, so they land in slot 0 as before.
+   *
+   * Still not handled: two subscriptions covering the *same* UE share its slot, so
+   * the second one in a period reads a zero delta.  Fixing that needs the counter
+   * keyed by ric_req_id as well, which this call does not receive. */
+  (void)ue_idx;
+  const size_t slot = ue_info.rrc_ue_id % MAX_MOBILES_PER_GNB;
+
   kv_measure_t *kv_found = (kv_measure_t *)found_entry->data;
-  meas_record_lst_t meas_record = kv_found->value(label, gran_period_ms, ue_info, ue_idx, node_stats);
+  meas_record_lst_t meas_record = kv_found->value(label, gran_period_ms, ue_info, slot, node_stats);
 
   return meas_record;
 }
