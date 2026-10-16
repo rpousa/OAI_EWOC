@@ -172,18 +172,16 @@ void read_setup_ran(void* data, const ngran_node_t node_type)
     // E1AP
     dst->cca[2] = fill_e1ap_e2ap_node_component_config_add();
   } else if(node_type == ngran_gNB_CUUP){
-    wait_for_setup_capture(E2AP_SETUP_MSG_NGAP, "NGAP");
-    wait_for_setup_capture(E2AP_SETUP_MSG_F1AP, "F1AP");
+    // A gNB-CU-UP terminates E1 only: NG-C and F1-C end at the CU-CP, and
+    // nr-cuup never runs NGAP or F1AP at all.  Waiting for their Setup
+    // messages here blocked the agent thread forever, so the CU-UP never
+    // sent E2 SETUP and never appeared at the RIC.
     wait_for_setup_capture(E2AP_SETUP_MSG_E1AP, "E1AP");
-    dst->len_cca = 3;
-    dst->cca = calloc(3, sizeof(e2ap_node_component_config_add_t));
+    dst->len_cca = 1;
+    dst->cca = calloc(1, sizeof(e2ap_node_component_config_add_t));
     assert(dst->cca != NULL);
-    // NGAP
-    dst->cca[0] = fill_ngap_e2ap_node_component_config_add();
-    // F1AP
-    dst->cca[1] = fill_f1ap_e2ap_node_component_config_add();
     // E1AP
-    dst->cca[2] = fill_e1ap_e2ap_node_component_config_add();
+    dst->cca[0] = fill_e1ap_e2ap_node_component_config_add();
   } else if(node_type == ngran_eNB){
     dst->len_cca = 1;
     dst->cca = calloc(1, sizeof(e2ap_node_component_config_add_t));
