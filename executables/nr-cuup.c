@@ -121,6 +121,13 @@ int main(int argc, char **argv)
   if ((uniqCfg = load_configmodule(argc, argv, CONFIG_ENABLECMDLINEONLY)) == NULL) {
     exit_fun("[SOFTMODEM] Error, configuration module init failed\n");
   }
+  // Line-buffer stdout/stderr.  In a container without a tty stdout is fully
+  // buffered, and nr-cuup prints so little after start-up that the 4 KiB buffer
+  // may never fill: the E2 agent's printf()s (enabled/disabled, RIC address, the
+  // FlexRIC agent's own E2 SETUP lines) then never reach "docker logs", which
+  // makes a CU-UP that is or is not registering with the RIC indistinguishable.
+  setvbuf(stdout, NULL, _IOLBF, 0);
+  setvbuf(stderr, NULL, _IOLBF, 0);
   logInit();
 
   // start time manager with some reasonable default for the running mode
