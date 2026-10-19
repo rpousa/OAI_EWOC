@@ -14,6 +14,7 @@
 #include "openair2/RRC/NR/rrc_cell_management.h"
 #include "openair2/RRC/NR/rrc_gNB_du.h"
 #include "openair2/RRC/NR/rrc_gNB_mobility.h"
+#include "openair2/RRC/NR/rrc_gNB_cuup_reloc.h"
 #include "openair2/RRC/NR/nr_rrc_proto.h"
 
 #include <stdio.h>
@@ -486,6 +487,21 @@ typedef enum {
   RC_CTRL_STYLE_CONN_MODE_MOBILITY = 3,
 } rc_ctrl_style_type_e;
 
+/* Change of gNB-CU-UP (TS 38.401 8.9.5) as a CONTROL action of Style 3.
+ *
+ * E2SM-RC has no action for this: every Style 3 action moves the UE to another
+ * cell, and a CU-UP change leaves the cell, the keys and the DRB configuration
+ * alone -- it is internal to the gNB. So it is a vendor-specific action, under
+ * Style 3 because that is where "move this UE's connection" lives. Its ID is far
+ * above the three 7.6.4.1 defines so a future standard action cannot collide.
+ *
+ * One optional RAN parameter, also vendor-specific: the gNB-CU-UP ID to move to.
+ * Absent, or negative, means any connected gNB-CU-UP other than the current one
+ * -- nr_rrc_trigger_cuup_reloc()'s -1. The UE is named in the header as for
+ * Handover Control: a gNB UE ID whose RAN UE ID is the CU-CP's rrc_ue_id. */
+#define RC_CTRL_ACT_CUUP_CHANGE 1000
+#define RC_PARAM_TARGET_CUUP_ID 1000
+
 /** @brief Add a leaf RAN parameter (no nested definition) to a LIST/STRUCTURE item */
 static void fill_ran_param_leaf(ran_param_lst_struct_t* dst, uint32_t id, const char* name)
 {
@@ -539,10 +555,22 @@ static void fill_rc_conn_mode_mobility_ctrl(seq_ctrl_style_t* ctrl_style)
   ctrl_style->call_proc_id_type = NULL;
 
   // Sequence of Control Actions. [0-65535]
-  ctrl_style->sz_seq_ctrl_act = 1;
+  ctrl_style->sz_seq_ctrl_act = 2;
   ctrl_style->seq_ctrl_act = calloc(ctrl_style->sz_seq_ctrl_act, sizeof(seq_ctrl_act_2_t));
   AssertFatal(ctrl_style->seq_ctrl_act != NULL, "Memory exhausted");
 
+  /* Action 2 of 2: change of gNB-CU-UP, see RC_CTRL_ACT_CUUP_CHANGE. */
+  seq_ctrl_act_2_t* cuup_act = &ctrl_style->seq_ctrl_act[1];
+  cuup_act->id = RC_CTRL_ACT_CUUP_CHANGE;
+  cuup_act->name = cp_str_to_ba("gNB-CU-UP Change Control");
+  cuup_act->sz_seq_assoc_ran_param = 1;
+  cuup_act->assoc_ran_param = calloc(cuup_act->sz_seq_assoc_ran_param, sizeof(seq_ran_param_3_t));
+  AssertFatal(cuup_act->assoc_ran_param != NULL, "Memory exhausted");
+  cuup_act->assoc_ran_param[0].id = RC_PARAM_TARGET_CUUP_ID;
+  cuup_act->assoc_ran_param[0].name = cp_str_to_ba("Target gNB-CU-UP ID");
+  cuup_act->assoc_ran_param[0].def = NULL; // ELEMENT, INTEGER
+
+  /* Action 1 of 2: Handover Control, 7.6.4.1. */
   seq_ctrl_act_2_t* ctrl_act = &ctrl_style->seq_ctrl_act[0];
 
   // Control Action ID. Mandatory. 9.3.6. [1-65535]
@@ -1329,12 +1357,57 @@ static uint64_t nr_cgi_cell_id(const byte_array_t* nr_cgi)
   return ((uint64_t)b[3] << 28) | ((uint64_t)b[4] << 20) | ((uint64_t)b[5] << 12) | ((uint64_t)b[6] << 4) | ((uint64_t)b[7] >> 4);
 }
 
+/* Style 3, RC_CTRL_ACT_CUUP_CHANGE: move the UE's bearers to another gNB-CU-UP. */
+static void write_ctrl_cuup_change(rc_ctrl_req_data_t const* ctrl)
+{
+  if (ctrl->hdr.frmt_1.ue_id.type != GNB_UE_ID_E2SM || ctrl->hdr.frmt_1.ue_id.gnb.ran_ue_id == NULL) {
+    printf("[E2 AGENT] RC Control: gNB-CU-UP Change needs a gNB UE ID with a RAN UE ID\n");
+    return;
+  }
+  const uint32_t rrc_ue_id = *ctrl->hdr.frmt_1.ue_id.gnb.ran_ue_id;
+  rrc_gNB_ue_context_t *ue_context_p = rrc_gNB_get_ue_context(RC.nrrrc[0], rrc_ue_id);
+  if (ue_context_p == NULL) {
+    printf("[E2 AGENT] RC Control: gNB-CU-UP Change for unknown UE %u\n", rrc_ue_id);
+    return;
+  }
+
+  int64_t target_cuup_id = -1;
+  for (size_t i = 0; i < ctrl->msg.frmt_1.sz_ran_param; i++) {
+    const seq_ran_param_t* p = &ctrl->msg.frmt_1.ran_param[i];
+    if (p->ran_param_id != RC_PARAM_TARGET_CUUP_ID)
+      continue;
+    const ran_parameter_value_t* v = NULL;
+    if (p->ran_param_val.type == ELEMENT_KEY_FLAG_FALSE_RAN_PARAMETER_VAL_TYPE)
+      v = p->ran_param_val.flag_false;
+    else if (p->ran_param_val.type == ELEMENT_KEY_FLAG_TRUE_RAN_PARAMETER_VAL_TYPE)
+      v = p->ran_param_val.flag_true;
+    if (v == NULL || v->type != INTEGER_RAN_PARAMETER_VALUE) {
+      printf("[E2 AGENT] RC Control: Target gNB-CU-UP ID is not an INTEGER element\n");
+      return;
+    }
+    target_cuup_id = v->int_ran;
+  }
+
+  printf("[E2 AGENT] RC Control: gNB-CU-UP Change for UE %u to %s%ld\n",
+         rrc_ue_id,
+         target_cuup_id < 0 ? "any other gNB-CU-UP " : "gNB-CU-UP ID ",
+         target_cuup_id < 0 ? 0L : (long)target_cuup_id);
+  if (nr_rrc_trigger_cuup_reloc(RC.nrrrc[0], &ue_context_p->ue_context, target_cuup_id < 0 ? -1 : target_cuup_id) != 0)
+    printf("[E2 AGENT] RC Control: gNB-CU-UP Change for UE %u could not be started (see RRC log)\n", rrc_ue_id);
+}
+
 /* Connected mode mobility control, 7.6.4: hand the UE over to the cell the RIC
- * names in Target Primary Cell ID. */
+ * names in Target Primary Cell ID, or -- vendor-specific action -- move its
+ * bearers to another gNB-CU-UP. */
 static void write_ctrl_conn_mode_mobility(rc_ctrl_req_data_t const* ctrl)
 {
+  if (ctrl->hdr.frmt_1.ctrl_act_id == RC_CTRL_ACT_CUUP_CHANGE) {
+    write_ctrl_cuup_change(ctrl);
+    return;
+  }
   if (ctrl->hdr.frmt_1.ctrl_act_id != HANDOVER_CONTROL_7_6_4_1) {
-    printf("[E2 AGENT] RC Control: Style 3 Action %d not supported, only Handover Control\n", ctrl->hdr.frmt_1.ctrl_act_id);
+    printf("[E2 AGENT] RC Control: Style 3 Action %d not supported, only Handover Control and gNB-CU-UP Change\n",
+           ctrl->hdr.frmt_1.ctrl_act_id);
     return;
   }
 

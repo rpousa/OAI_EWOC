@@ -233,6 +233,30 @@ static meas_record_lst_t fill_DRB_RlcSduDelayDl(__attribute__((unused)) const la
   return meas_record;
 }
 
+/* DRB.RlcBufOccDl -- vendor-specific, not a TS 28.552 measurement.
+ * Bytes waiting in the UE's DL RLC entity right now: new data plus data queued
+ * for retransmission (nr_rlc_statistics_t.txbuf_occ_bytes). A snapshot taken
+ * when the report is built, not an average over the granularity period, so a
+ * consumer looking for a backlog should require it on several reports in a row.
+ * DRB.RlcSduDelayDl measures the same queue as time spent in it; this one says
+ * how much is in it. */
+static meas_record_lst_t fill_DRB_RlcBufOccDl(__attribute__((unused)) const label_info_lst_t label,
+                                              __attribute__((unused)) uint32_t gran_period_ms,
+                                              cudu_ue_info_pair_t ue_info,
+                                              __attribute__((unused)) const size_t ue_idx,
+                                              __attribute__((unused)) e2_node_level_stats_t* node_stats)
+{
+  meas_record_lst_t meas_record = {0};
+
+  const int rb_id = 1; // at the moment, only 1 DRB is supported
+  nr_rlc_statistics_t rlc = get_rlc_stats_per_drb(ue_info.ue->rnti, rb_id);
+
+  meas_record.value = INTEGER_MEAS_VALUE;
+  meas_record.int_val = rlc.txbuf_occ_bytes; // [bytes]
+
+  return meas_record;
+}
+
 /* 3GPP TS 28.522 - section 5.1.1.3.1
   note: per spec, average UE throughput in DL (taken into consideration values from all UEs, and averaged)
         here calculated as: UE specific throughput in DL */
@@ -394,6 +418,7 @@ static kv_measure_t lst_measure[] = {
   {.key = "RRC.ConnMean",        .value = fill_RRC_ConnMean },
 #if defined (NGRAN_GNB_DU)
   {.key = "DRB.RlcSduDelayDl", .value =  fill_DRB_RlcSduDelayDl }, 
+  {.key = "DRB.RlcBufOccDl", .value = fill_DRB_RlcBufOccDl },
   {.key = "DRB.UEThpDl", .value =  fill_DRB_UEThpDl }, 
   {.key = "DRB.UEThpUl", .value =  fill_DRB_UEThpUl }, 
   {.key = "RRU.PrbTotDl", .value =  fill_RRU_PrbTotDl }, 

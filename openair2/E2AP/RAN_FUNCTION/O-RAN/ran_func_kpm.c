@@ -477,6 +477,7 @@ static const char* kpm_node_meas_gnb[] = {
 
 static const char* kpm_meas_du[] = {
   "DRB.RlcSduDelayDl",
+  "DRB.RlcBufOccDl",
   "DRB.UEThpDl",
   "DRB.UEThpUl",
   "RRU.PrbTotDl",
@@ -488,6 +489,7 @@ static const char* kpm_meas_gnb[] = {
   "DRB.PdcpSduVolumeDL",
   "DRB.PdcpSduVolumeUL",
   "DRB.RlcSduDelayDl",
+  "DRB.RlcBufOccDl",
   "DRB.UEThpDl",
   "DRB.UEThpUl",
   "RRU.PrbTotDl",
