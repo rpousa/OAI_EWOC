@@ -276,8 +276,15 @@ static meas_record_lst_t fill_DRB_RlcBufOccDl(__attribute__((unused)) const labe
 {
   meas_record_lst_t meas_record = {0};
 
+  /* Read the RLC stats directly, not through get_rlc_stats_per_drb(): that
+   * helper also (re)activates the DRB's sojourn-time average, which resets it,
+   * and DRB.RlcSduDelayDl on the same report would then read an empty window. */
   const int rb_id = 1; // at the moment, only 1 DRB is supported
-  nr_rlc_statistics_t rlc = get_rlc_stats_per_drb(ue_info.ue->rnti, rb_id);
+  nr_rlc_statistics_t rlc = {0};
+  if (!nr_rlc_get_statistics(ue_info.ue->rnti, 0, rb_id, &rlc)) {
+    meas_record.value = NO_VALUE_MEAS_VALUE;
+    return meas_record;
+  }
 
   meas_record.value = INTEGER_MEAS_VALUE;
   meas_record.int_val = rlc.txbuf_occ_bytes; // [bytes]
