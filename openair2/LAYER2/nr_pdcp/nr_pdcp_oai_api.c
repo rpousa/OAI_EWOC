@@ -5,6 +5,7 @@
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
 #endif
+#include "common/utils/time_stat.h"
 #include "nr_pdcp_oai_api.h"
 #include <errno.h>
 #include <fcntl.h>
@@ -917,6 +918,12 @@ bool nr_pdcp_data_req_drb(protocol_ctxt_t *ctxt_pP,
 {
   DevAssert(srb_flagP == SRB_FLAG_NO);
 
+  /* Start of this SDU's DL time in the gNB: its NG-U arrival when it came from
+   * GTP-U on this thread (kernel receive stamp), otherwise now. */
+  uint64_t t_in_us = gtpv1u_current_rx_time_us();
+  if (t_in_us == 0)
+    t_in_us = time_average_now();
+
   LOG_D(PDCP, "%s() called, size %d\n", __func__, sdu_buffer_size);
   nr_pdcp_ue_t *ue;
   nr_pdcp_entity_t *rb;
@@ -956,6 +963,17 @@ bool nr_pdcp_data_req_drb(protocol_ctxt_t *ctxt_pP,
   nr_pdcp_manager_unlock(nr_pdcp_ue_manager);
 
   deliver_pdu_cb(NULL, ue_id, rb_id, pdu_buf, pdu_size, muiP);
+
+  /* The SDU has now left towards the DU (F1-U send returned, or queued to RLC in
+   * a monolithic gNB): record its delay, TS 28.552 5.1.3.3.1. The entity is
+   * looked up again because the lock was dropped for the send. */
+  const uint64_t t_out_us = time_average_now();
+  nr_pdcp_manager_lock(nr_pdcp_ue_manager);
+  ue = nr_pdcp_manager_get_ue(nr_pdcp_ue_manager, ue_id);
+  rb = nr_pdcp_get_rb(ue, rb_id, false);
+  if (rb != NULL && rb->txsdu_delay != NULL && t_out_us >= t_in_us)
+    time_average_add(rb->txsdu_delay, t_out_us, t_out_us - t_in_us);
+  nr_pdcp_manager_unlock(nr_pdcp_ue_manager);
 
   return 1;
 }

@@ -580,6 +580,8 @@ static void nr_pdcp_entity_delete(nr_pdcp_entity_t *entity)
     entity->free_security(entity->security_context);
   if (entity->free_integrity != NULL)
     entity->free_integrity(entity->integrity_context);
+  if (entity->txsdu_delay != NULL)
+    time_average_free(entity->txsdu_delay);
   free(entity);
 }
 
@@ -587,6 +589,8 @@ static void nr_pdcp_entity_get_stats(nr_pdcp_entity_t *entity,
                                      nr_pdcp_statistics_t *out)
 {
   *out = entity->stats;
+  out->txsdu_avg_delay_us =
+      entity->txsdu_delay != NULL ? time_average_get_average(entity->txsdu_delay, time_average_now()) : 0;
 }
 
 /** @note: this function applies to the gNB only */
@@ -749,6 +753,11 @@ nr_pdcp_entity_t *new_nr_pdcp_entity(
   ret->window_size   = 1 << (sn_size - 1);
 
   ret->is_gnb = is_gnb;
+
+  /* DL delay through the gNB (DRB.PdcpSduDelayDl): DRBs on the gNB side only.
+   * Sized for ~1k packets in the window, it grows when the traffic is heavier. */
+  if (is_gnb && type != NR_PDCP_SRB)
+    ret->txsdu_delay = time_average_new(NR_PDCP_TXSDU_DELAY_WINDOW_US, 1024);
 
   nr_pdcp_entity_set_security(ret, security_parameters);
 

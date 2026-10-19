@@ -90,6 +90,34 @@ static meas_record_lst_t fill_DRB_PdcpSduVolumeUL(__attribute__((unused)) const 
   return meas_record;
 }
 
+/* DRB.PdcpSduDelayDl -- 3GPP TS 28.552 section 5.1.3.3.1, "Average delay DL in
+ * CU-UP": per DL PDCP SDU, the time it is sent towards the gNB-DU (F1-U egress)
+ * minus its arrival at NG-U ingress, averaged; unit 0.1 ms as the spec has it.
+ * Both instants are stamped in this process on one clock (the NG-U one is the
+ * kernel's socket receive stamp), so no clock synchronisation is involved.
+ *
+ * The average is over the PDCP entity's own sliding window
+ * (NR_PDCP_TXSDU_DELAY_WINDOW_US), not over the time since this subscription's
+ * previous report: it keeps no per-report state, so several subscriptions on
+ * the same UE -- the DB monitor and a trigger xApp, say -- do not disturb each
+ * other. 0 when no DL SDU passed in the window. */
+static meas_record_lst_t fill_DRB_PdcpSduDelayDl(__attribute__((unused)) const label_info_lst_t label,
+                                                 __attribute__((unused)) uint32_t gran_period_ms,
+                                                 cudu_ue_info_pair_t ue_info,
+                                                 __attribute__((unused)) const size_t ue_idx,
+                                                 __attribute__((unused)) e2_node_level_stats_t* node_stats)
+{
+  meas_record_lst_t meas_record = {0};
+
+  const int rb_id = 1; // at the moment, only 1 DRB is supported
+  nr_pdcp_statistics_t pdcp = get_pdcp_stats_per_drb(ue_info.rrc_ue_id, rb_id);
+
+  meas_record.value = REAL_MEAS_VALUE;
+  meas_record.real_val = pdcp.txsdu_avg_delay_us / 100.0; // [0.1 ms]
+
+  return meas_record;
+}
+
 /* L1M.SS-RSRP — 3GPP TS 28.552 - section 5.1.1.22.1 */
 static meas_record_lst_t fill_L1M_SS_RSRP(const label_info_lst_t label,
                                           __attribute__((unused)) uint32_t gran_period_ms,
@@ -413,6 +441,7 @@ static meas_record_lst_t fill_CARR_PUSCHMCSDist(const label_info_lst_t label,
 static kv_measure_t lst_measure[] = {
   {.key = "DRB.PdcpSduVolumeDL", .value = fill_DRB_PdcpSduVolumeDL },
   {.key = "DRB.PdcpSduVolumeUL", .value = fill_DRB_PdcpSduVolumeUL },
+  {.key = "DRB.PdcpSduDelayDl",  .value = fill_DRB_PdcpSduDelayDl },
   {.key = "L1M.SS-RSRP",         .value = fill_L1M_SS_RSRP },
   {.key = "MR.NRScSSSINR",       .value = fill_MR_NRScSSSINR },
   {.key = "RRC.ConnMean",        .value = fill_RRC_ConnMean },

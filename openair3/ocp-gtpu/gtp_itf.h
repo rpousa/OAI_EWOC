@@ -20,6 +20,10 @@
 extern "C" {
 #endif
 
+/** Arrival time (CLOCK_REALTIME, microseconds) of the G-PDU the calling thread is
+ * delivering upwards right now, or 0 when it is not inside a GTP-U receive. */
+uint64_t gtpv1u_current_rx_time_us(void);
+
 /* forward declaration */
 struct protocol_ctxt_s;
 typedef struct protocol_ctxt_s protocol_ctxt_t;

@@ -14,6 +14,7 @@ extern "C" {
 #include <sys/types.h>
 #include <netdb.h>
 #include <string.h>
+#include <time.h>
 
 #include "common/platform_types.h"
 #include "common/utils/system.h"
@@ -108,6 +109,19 @@ typedef struct Gtpv1uExtHeader {
 #define VLEN 8
 /** buffer size for each packet */
 #define BUFSIZE 65536
+
+/* Arrival time (CLOCK_REALTIME, us) of the G-PDU this thread is handling, or 0.
+ * Taken from the kernel's SO_TIMESTAMPNS receive stamp, so it includes the time
+ * the packet waited in the socket queue -- the part of the delay that grows when
+ * the process falls behind. Set only around Gtpv1uHandleGpdu(): everything it
+ * calls into (SDAP, PDCP, the F1-U send) runs on this thread, which is what lets
+ * PDCP measure "NG-U ingress to F1-U egress" (TS 28.552 5.1.3.3.1). */
+static thread_local uint64_t gtpv1u_rx_time_us_tls = 0;
+
+extern "C" uint64_t gtpv1u_current_rx_time_us(void)
+{
+  return gtpv1u_rx_time_us_tls;
+}
 
 /** GTP bearer context: for sending data */
 typedef struct gtpv1u_bearer_s {
@@ -603,6 +617,9 @@ static int udpServerSocket(openAddr_s addr)
 
   int sendbuff = 1000 * 1000 * 10;
   AssertFatal(0 == setsockopt(sockfd, SOL_SOCKET, SO_SNDBUF, &sendbuff, sizeof(sendbuff)), "%s", strerror(errno));
+  const int on = 1;
+  if (setsockopt(sockfd, SOL_SOCKET, SO_TIMESTAMPNS, &on, sizeof(on)) != 0)
+    LOG_W(GTPU, "[%d] SO_TIMESTAMPNS not available (%s): packet delays will start at user-space receive\n", sockfd, strerror(errno));
   LOG_D(GTPU,
         "[%d] Created listener for paquets to: %s:%s, send buffer size: %d\n",
         sockfd,
@@ -1579,6 +1596,10 @@ static bool gtpv1uReceiveHandleMessage(int h, uint8_t buf[VLEN][BUFSIZE])
   struct iovec iovecs[VLEN];
   struct mmsghdr msgs[VLEN];
   struct sockaddr_in addr[VLEN];
+  union {
+    char buf[CMSG_SPACE(sizeof(struct timespec))];
+    struct cmsghdr align;
+  } ctrl[VLEN];
 
   for (size_t i = 0; i < VLEN; ++i) {
     iovecs[i].iov_base = buf[i];
@@ -1587,6 +1608,9 @@ static bool gtpv1uReceiveHandleMessage(int h, uint8_t buf[VLEN][BUFSIZE])
     msgs[i].msg_hdr.msg_iovlen = 1;
     msgs[i].msg_hdr.msg_name = &addr[i];
     msgs[i].msg_hdr.msg_namelen = (socklen_t)sizeof(struct sockaddr_in);
+    msgs[i].msg_hdr.msg_control = ctrl[i].buf;
+    msgs[i].msg_hdr.msg_controllen = sizeof(ctrl[i].buf);
+    msgs[i].msg_hdr.msg_flags = 0;
   };
 
   int ret = recvmmsg(h, msgs, VLEN, MSG_WAITFORONE, NULL);
@@ -1594,6 +1618,10 @@ static bool gtpv1uReceiveHandleMessage(int h, uint8_t buf[VLEN][BUFSIZE])
     LOG_E(GTPU, "[%d] Recvfrom failed (%s)\n", h, strerror(errno));
     return false;
   }
+
+  struct timespec now_ts;
+  clock_gettime(CLOCK_REALTIME, &now_ts);
+  const uint64_t now_us = (uint64_t)now_ts.tv_sec * 1000000 + now_ts.tv_nsec / 1000;
 
   for (int i = 0; i < ret; ++i) {
     int udpDataLen = msgs[i].msg_len;
@@ -1628,9 +1656,21 @@ static bool gtpv1uReceiveHandleMessage(int h, uint8_t buf[VLEN][BUFSIZE])
         Gtpv1uHandleEndMarker(h, udpData);
         break;
 
-      case GTP_GPDU:
+      case GTP_GPDU: {
+        uint64_t rx_us = now_us;
+        for (struct cmsghdr *c = CMSG_FIRSTHDR(&msgs[i].msg_hdr); c != NULL; c = CMSG_NXTHDR(&msgs[i].msg_hdr, c)) {
+          if (c->cmsg_level == SOL_SOCKET && c->cmsg_type == SCM_TIMESTAMPNS) {
+            struct timespec ts;
+            memcpy(&ts, CMSG_DATA(c), sizeof(ts));
+            rx_us = (uint64_t)ts.tv_sec * 1000000 + ts.tv_nsec / 1000;
+            break;
+          }
+        }
+        gtpv1u_rx_time_us_tls = rx_us;
         Gtpv1uHandleGpdu(h, udpData, udpDataLen, &addr[i]);
+        gtpv1u_rx_time_us_tls = 0;
         break;
+      }
 
       default:
         LOG_E(GTPU, "[%d] Received a GTP packet of unknown type: %d\n", h, msg->msgType);

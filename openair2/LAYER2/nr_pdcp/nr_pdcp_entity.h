@@ -5,6 +5,7 @@
 #ifndef _NR_PDCP_ENTITY_H_
 #define _NR_PDCP_ENTITY_H_
 
+#include "common/utils/time_stat.h"
 #include <stdbool.h>
 #include <stdint.h>
 #include "common/platform_types.h"
@@ -73,7 +74,15 @@ typedef struct {
   uint32_t rxsdu_bytes;    /* number of bytes of SDUs received */
 
   uint8_t  mode;               /* 0: PDCP AM, 1: PDCP UM, 2: PDCP TM */
+
+  /* DL SDU delay through the gNB: from arrival at NG-U to hand-off towards the
+   * DU (F1-U, or RLC in a monolithic gNB). Mean over the last
+   * NR_PDCP_TXSDU_DELAY_WINDOW_US, in microseconds; 0 when nothing passed in
+   * that window. Feeds DRB.PdcpSduDelayDl, TS 28.552 5.1.3.3.1. gNB side only. */
+  double   txsdu_avg_delay_us;
 } nr_pdcp_statistics_t;
+
+#define NR_PDCP_TXSDU_DELAY_WINDOW_US (1000 * 1000)
 
 typedef struct nr_pdcp_entity_s {
   nr_pdcp_entity_type_t type;
@@ -167,6 +176,8 @@ typedef struct nr_pdcp_entity_s {
   int           rx_size;
   int           rx_maxsize;
   nr_pdcp_statistics_t stats;
+  /* per-SDU DL delays (us) behind stats.txsdu_avg_delay_us; NULL on the UE side */
+  time_average_t *txsdu_delay;
 
   /* Keep tracks of whether the PDCP entity was suspended or not */
   bool entity_suspended;
