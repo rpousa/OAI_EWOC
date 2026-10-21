@@ -16,7 +16,15 @@
 #include "utils.h"
 #include "common/utils/threadPool/pthread_utils.h"
 
-#define CIRCULAR_BUFFER_SIZE (30720 * 20)
+/* Ring length per antenna stream, in samples. Must hold the writer's lead
+ * (the gNB writes min_rxtxtime slots ahead of the shared clock) plus one
+ * write, and the reader's lag. 30720*20 = 614400 was 20 ms at 30.72 Msps but
+ * only 5 ms at 122.88 Msps and 3.3 ms at 184.32 Msps (273 PRB), so a gNB with
+ * min_rxtxtime 8 at 100 MHz had every DL write rejected as too early.
+ * 30720*100 = 25 ms at 122.88 Msps, 16.7 ms at 184.32 Msps; memory is
+ * 4 B x 3072000 x (TX + RX streams), about 150 MB for 3 UEs at 2x2. Both
+ * ends map the same segment, so the gNB and UE binaries must agree. */
+#define CIRCULAR_BUFFER_SIZE (30720 * 100)
 
 typedef struct {
   int magic;
