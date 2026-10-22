@@ -11,10 +11,21 @@
 
 typedef void nr_pdcp_ue_manager_t;
 
+#define NR_PDCP_MAX_PDU_NSSAI 16
+
 typedef struct nr_pdcp_ue_t {
   ue_id_t ue_id;
   nr_pdcp_entity_t *srb[3];
   nr_pdcp_entity_t *drb[MAX_DRBS_PER_UE];
+  /* S-NSSAI of each PDU session, as given by the CU-CP in E1 Bearer Context
+   * Setup, so per-slice measurements (E2SM-KPM) can find the slice's DRBs.
+   * PDCP itself does not use it. sd 0xffffff = no SD. */
+  struct {
+    long pdusession_id;
+    uint8_t sst;
+    uint32_t sd;
+  } pdu_nssai[NR_PDCP_MAX_PDU_NSSAI];
+  int n_pdu_nssai;
 } nr_pdcp_ue_t;
 
 /***********************************************************************/

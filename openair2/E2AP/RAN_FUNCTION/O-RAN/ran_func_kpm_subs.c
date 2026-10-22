@@ -30,7 +30,52 @@ typedef struct uldlcounter {
   uint32_t ul;
 } uldlcounter_t;
 
-static uldlcounter_t last_pdcp_sdu_total_bytes[MAX_MOBILES_PER_GNB] = {0};
+/* Previous-period counters are kept per (UE, DRB): get_kpm_meas_value() turns
+ * both into the slot it passes as ue_idx. A UE with one PDU session per slice
+ * is reported by three subscriptions, one per S-NSSAI, each on its own DRB;
+ * a per-UE slot would take every delta against another DRB's count. */
+#define KPM_DRB_SLOTS 8
+#define KPM_SLOTS (MAX_MOBILES_PER_GNB * KPM_DRB_SLOTS)
+
+static uldlcounter_t last_pdcp_sdu_total_bytes[KPM_SLOTS] = {0};
+
+#if defined(NGRAN_GNB_DU)
+/* DRB of a DU/gNB UE on S-NSSAI (sst, sd), from the MAC's logical channels. */
+static int du_drb_for_nssai(NR_UE_info_t *ue, uint8_t sst, uint32_t sd)
+{
+  NR_UE_sched_ctrl_t *sched_ctrl = &ue->UE_sched_ctrl;
+  for (size_t l = 0; l < seq_arr_size(&sched_ctrl->lc_config); ++l) {
+    const nr_lc_config_t *c = seq_arr_at(&sched_ctrl->lc_config, l);
+    if (c->lcid >= 4 && c->nssai.sst == sst && c->nssai.sd == sd)
+      return c->lcid - 3; // LCID = DRB ID + 3
+  }
+  return -1;
+}
+#endif
+
+/* The DRB a per-UE measurement is about: the slice of the measurement's
+ * sliceID label if it has one (TS 28.552 "per S-NSSAI" measurements), else
+ * the slice of the report's matching condition, else DRB 1 as before. */
+static int kpm_drb(const label_info_lst_t *label, cudu_ue_info_pair_t ue_info)
+{
+  if (label->sliceID != NULL) {
+    const uint8_t sst = label->sliceID->sST;
+    const uint32_t sd = label->sliceID->sD != NULL ? *label->sliceID->sD : 0xffffff;
+    int drb = -1;
+#if defined(NGRAN_GNB_DU)
+    if (ue_info.ue != NULL)
+      drb = du_drb_for_nssai(ue_info.ue, sst, sd);
+#endif
+    /* CU-UP / CU: the PDCP knows the sessions' S-NSSAI. Not for node-level
+     * reports (no UE: rrc_ue_id 0), and never on a DU, where per-UE reports
+     * always carry the MAC UE and there is no PDCP to ask. */
+    if (ue_info.ue == NULL && ue_info.rrc_ue_id != 0)
+      drb = nr_pdcp_get_drb_for_nssai(ue_info.rrc_ue_id, sst, sd);
+    if (drb > 0)
+      return drb;
+  }
+  return ue_info.drb_id > 0 ? ue_info.drb_id : 1;
+}
 
 static nr_pdcp_statistics_t get_pdcp_stats_per_drb(const uint32_t rrc_ue_id, const int rb_id)
 {
@@ -55,7 +100,7 @@ static meas_record_lst_t fill_DRB_PdcpSduVolumeDL(__attribute__((unused)) const 
   meas_record_lst_t meas_record = {0};
 
   // Get PDCP stats per DRB
-  const int rb_id = 1;  // at the moment, only 1 DRB is supported
+  const int rb_id = kpm_drb(&label, ue_info);
   nr_pdcp_statistics_t pdcp = get_pdcp_stats_per_drb(ue_info.rrc_ue_id, rb_id);
 
   meas_record.value = INTEGER_MEAS_VALUE;
@@ -78,7 +123,7 @@ static meas_record_lst_t fill_DRB_PdcpSduVolumeUL(__attribute__((unused)) const 
   meas_record_lst_t meas_record = {0};
 
   // Get PDCP stats per DRB
-  const int rb_id = 1;  // at the moment, only 1 DRB is supported
+  const int rb_id = kpm_drb(&label, ue_info);
   nr_pdcp_statistics_t pdcp = get_pdcp_stats_per_drb(ue_info.rrc_ue_id, rb_id);
 
   meas_record.value = INTEGER_MEAS_VALUE;
@@ -109,7 +154,7 @@ static meas_record_lst_t fill_DRB_PdcpSduDelayDl(__attribute__((unused)) const l
 {
   meas_record_lst_t meas_record = {0};
 
-  const int rb_id = 1; // at the moment, only 1 DRB is supported
+  const int rb_id = kpm_drb(&label, ue_info);
   nr_pdcp_statistics_t pdcp = get_pdcp_stats_per_drb(ue_info.rrc_ue_id, rb_id);
 
   meas_record.value = REAL_MEAS_VALUE;
@@ -221,8 +266,11 @@ static meas_record_lst_t fill_RRC_ConnMean(__attribute__((unused)) const label_i
 }
 
 #if defined (NGRAN_GNB_DU)
-static uldlcounter_t last_rlc_pdu_total_bytes[MAX_MOBILES_PER_GNB] = {0};
-static uldlcounter_t last_total_prbs[MAX_MOBILES_PER_GNB] = {0};
+static uldlcounter_t last_rlc_pdu_total_bytes[KPM_SLOTS] = {0};
+static uldlcounter_t last_total_prbs[KPM_SLOTS] = {0};
+/* node-wide PRB total at this slot's previous report: each subscription takes
+ * its own period, not the interval since whichever report came last */
+static struct { uint64_t dl, ul; } last_node_prbs[KPM_SLOTS] = {0};
 
 static nr_rlc_statistics_t get_rlc_stats_per_drb(const rnti_t rnti, const int rb_id)
 {
@@ -250,7 +298,7 @@ static meas_record_lst_t fill_DRB_RlcSduDelayDl(__attribute__((unused)) const la
   meas_record_lst_t meas_record = {0};
   
   // Get RLC stats per DRB
-  const int rb_id = 1;  // at the moment, only 1 DRB is supported
+  const int rb_id = kpm_drb(&label, ue_info);
   nr_rlc_statistics_t rlc = get_rlc_stats_per_drb(ue_info.ue->rnti, rb_id);
 
   meas_record.value = REAL_MEAS_VALUE;
@@ -279,7 +327,7 @@ static meas_record_lst_t fill_DRB_RlcBufOccDl(__attribute__((unused)) const labe
   /* Read the RLC stats directly, not through get_rlc_stats_per_drb(): that
    * helper also (re)activates the DRB's sojourn-time average, which resets it,
    * and DRB.RlcSduDelayDl on the same report would then read an empty window. */
-  const int rb_id = 1; // at the moment, only 1 DRB is supported
+  const int rb_id = kpm_drb(&label, ue_info);
   nr_rlc_statistics_t rlc = {0};
   if (!nr_rlc_get_statistics(ue_info.ue->rnti, 0, rb_id, &rlc)) {
     meas_record.value = NO_VALUE_MEAS_VALUE;
@@ -303,7 +351,7 @@ static meas_record_lst_t fill_DRB_UEThpDl(__attribute__((unused)) const label_in
 {
   meas_record_lst_t meas_record = {0};
   
-  const int rb_id = 1;  // at the moment, only 1 DRB is supported
+  const int rb_id = kpm_drb(&label, ue_info);
   nr_rlc_statistics_t rlc = get_rlc_stats_per_drb(ue_info.ue->rnti, rb_id);
   meas_record.value = REAL_MEAS_VALUE;
 
@@ -326,7 +374,7 @@ static meas_record_lst_t fill_DRB_UEThpUl(__attribute__((unused)) const label_in
   meas_record_lst_t meas_record = {0};
   
   // Get RLC stats per DRB
-  const int rb_id = 1;  // at the moment, only 1 DRB is supported
+  const int rb_id = kpm_drb(&label, ue_info);
   nr_rlc_statistics_t rlc = get_rlc_stats_per_drb(ue_info.ue->rnti, rb_id);
 
   meas_record.value = REAL_MEAS_VALUE;
@@ -351,9 +399,10 @@ static meas_record_lst_t fill_RRU_PrbTotDl(__attribute__((unused)) const label_i
   meas_record.value = INTEGER_MEAS_VALUE;
 
   // Get the number of DL PRBs
-  const uint64_t tot_prb_dl_aggr = node_stats[1].mac_stats.dl.total_prb_aggregate - node_stats[0].mac_stats.dl.total_prb_aggregate;
+  const uint64_t tot_prb_dl_aggr = node_stats[1].mac_stats.dl.total_prb_aggregate - last_node_prbs[ue_idx].dl;
   meas_record.int_val = (tot_prb_dl_aggr == 0) ? 0 : (ue_info.ue->mac_stats.dl.total_rbs - last_total_prbs[ue_idx].dl) * 100 / tot_prb_dl_aggr;   // [%]
   last_total_prbs[ue_idx].dl = ue_info.ue->mac_stats.dl.total_rbs;
+  last_node_prbs[ue_idx].dl = node_stats[1].mac_stats.dl.total_prb_aggregate;
 
   return meas_record;
 }
@@ -371,9 +420,10 @@ static meas_record_lst_t fill_RRU_PrbTotUl(__attribute__((unused)) const label_i
   meas_record.value = INTEGER_MEAS_VALUE;
 
   // Get the number of UL PRBs
-  const uint64_t tot_prb_ul_aggr = node_stats[1].mac_stats.ul.total_prb_aggregate - node_stats[0].mac_stats.ul.total_prb_aggregate;
+  const uint64_t tot_prb_ul_aggr = node_stats[1].mac_stats.ul.total_prb_aggregate - last_node_prbs[ue_idx].ul;
   meas_record.int_val = (tot_prb_ul_aggr == 0) ? 0 : (ue_info.ue->mac_stats.ul.total_rbs - last_total_prbs[ue_idx].ul) * 100 / tot_prb_ul_aggr;   // [%]
   last_total_prbs[ue_idx].ul = ue_info.ue->mac_stats.ul.total_rbs;
+  last_node_prbs[ue_idx].ul = node_stats[1].mac_stats.ul.total_prb_aggregate;
 
   return meas_record;
 }
@@ -500,7 +550,10 @@ meas_record_lst_t get_kpm_meas_value(char* kpm_meas_name, const label_info_lst_t
    * the second one in a period reads a zero delta.  Fixing that needs the counter
    * keyed by ric_req_id as well, which this call does not receive. */
   (void)ue_idx;
-  const size_t slot = ue_info.rrc_ue_id % MAX_MOBILES_PER_GNB;
+  /* ...and by DRB: a UE reported once per slice has one slot per DRB.
+   * RRU.PrbTot* is a per-UE value (MAC), reported the same on each slice. */
+  const int drb_slot = kpm_drb(&label, ue_info) % KPM_DRB_SLOTS;
+  const size_t slot = (ue_info.rrc_ue_id % MAX_MOBILES_PER_GNB) * KPM_DRB_SLOTS + drb_slot;
 
   kv_measure_t *kv_found = (kv_measure_t *)found_entry->data;
   meas_record_lst_t meas_record = kv_found->value(label, gran_period_ms, ue_info, slot, node_stats);

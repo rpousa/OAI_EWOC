@@ -14,7 +14,11 @@
 typedef struct {
   uint32_t rrc_ue_id;
   NR_UE_info_t* ue;
-
+  /* DRB that the report's S-NSSAI (Style 4 matching condition) maps to for
+   * this UE; 0 = unknown, DRB measurements then use DRB 1. A UE with one PDU
+   * session per slice is reported once per slice, each time with that
+   * slice's DRB. A sliceID label on a measurement overrides it. */
+  int drb_id;
 } cudu_ue_info_pair_t;
 
 typedef struct {

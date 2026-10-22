@@ -664,6 +664,45 @@ int nr_pdcp_get_drb_ids_for_pdusession(ue_id_t ue_id, long pdusession_id, int *d
   return num_found;
 }
 
+void nr_pdcp_set_pdusession_nssai(ue_id_t ue_id, long pdusession_id, uint8_t sst, uint32_t sd)
+{
+  nr_pdcp_manager_lock(nr_pdcp_ue_manager);
+  nr_pdcp_ue_t *ue = nr_pdcp_manager_get_ue(nr_pdcp_ue_manager, ue_id);
+  int i = 0;
+  while (i < ue->n_pdu_nssai && ue->pdu_nssai[i].pdusession_id != pdusession_id)
+    i++;
+  if (i == ue->n_pdu_nssai) {
+    if (ue->n_pdu_nssai == NR_PDCP_MAX_PDU_NSSAI) {
+      LOG_W(PDCP, "UE %lx: no room for the S-NSSAI of PDU session %ld\n", ue_id, pdusession_id);
+      nr_pdcp_manager_unlock(nr_pdcp_ue_manager);
+      return;
+    }
+    ue->n_pdu_nssai++;
+  }
+  ue->pdu_nssai[i].pdusession_id = pdusession_id;
+  ue->pdu_nssai[i].sst = sst;
+  ue->pdu_nssai[i].sd = sd;
+  nr_pdcp_manager_unlock(nr_pdcp_ue_manager);
+}
+
+int nr_pdcp_get_drb_for_nssai(ue_id_t ue_id, uint8_t sst, uint32_t sd)
+{
+  int found = -1;
+  nr_pdcp_manager_lock(nr_pdcp_ue_manager);
+  nr_pdcp_ue_t *ue = nr_pdcp_manager_get_ue(nr_pdcp_ue_manager, ue_id);
+  for (int i = 0; i < ue->n_pdu_nssai; i++) {
+    if (ue->pdu_nssai[i].sst != sst || ue->pdu_nssai[i].sd != sd)
+      continue;
+    for (int d = 0; d < MAX_DRBS_PER_UE; d++) {
+      nr_pdcp_entity_t *drb = ue->drb[d];
+      if (drb != NULL && drb->pdusession_id == ue->pdu_nssai[i].pdusession_id && (found < 0 || drb->rb_id < found))
+        found = drb->rb_id;
+    }
+  }
+  nr_pdcp_manager_unlock(nr_pdcp_ue_manager);
+  return found;
+}
+
 uint64_t get_pdcp_optmask(void)
 {
   return pdcp_optmask;

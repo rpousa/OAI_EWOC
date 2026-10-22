@@ -50,6 +50,11 @@ void nr_pdcp_reconfigure_drb(ue_id_t ue_id, int drb_id, NR_PDCP_Config_t *pdcp_c
 void nr_pdcp_release_srb(ue_id_t ue_id, int srb_id);
 void nr_pdcp_release_drb(ue_id_t ue_id, int drb_id);
 int nr_pdcp_get_drb_ids_for_pdusession(ue_id_t ue_id, long pdusession_id, int *drb_ids);
+/* Remember the S-NSSAI of a PDU session (sd 0xffffff = no SD). */
+void nr_pdcp_set_pdusession_nssai(ue_id_t ue_id, long pdusession_id, uint8_t sst, uint32_t sd);
+/* Lowest DRB ID of the UE that belongs to a PDU session on S-NSSAI (sst, sd),
+ * or -1 if there is none. sd 0xffffff = no SD; it must match exactly. */
+int nr_pdcp_get_drb_for_nssai(ue_id_t ue_id, uint8_t sst, uint32_t sd);
 
 void add_srb(int is_gnb,
              ue_id_t UEid,

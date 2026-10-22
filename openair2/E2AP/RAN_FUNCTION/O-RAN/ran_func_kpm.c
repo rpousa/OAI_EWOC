@@ -11,6 +11,7 @@
 #include "openair2/E2AP/flexric/src/util/time_now_us.h"
 #include "openair2/F1AP/f1ap_ids.h"
 #include "ds/seq_arr.h"
+#include "common/platform_constants.h" // MAX_DRBS_PER_UE
 
 static pthread_once_t once_kpm_mutex = PTHREAD_ONCE_INIT;
 
@@ -40,6 +41,11 @@ typedef struct {
   // only used to retrieve MAC/RLC stats
   NR_UE_info_t* ue_info_list[MAX_MOBILES_PER_GNB];
 }arr_ue_id_t;
+
+/* DRB of the matched S-NSSAI for UE k of the arr_ue_id_t being built; filled
+ * by the filter_ues_by_s_nssai_* matchers and read in fill_ue_related_info().
+ * Reports are built one at a time, so one array is enough. */
+static int matched_drb[MAX_MOBILES_PER_GNB];
 
 static void free_arr_ue_id(arr_ue_id_t arr_ue_id)
 {
@@ -123,6 +129,7 @@ static cudu_ue_info_pair_t fill_ue_related_info(arr_ue_id_t* arr_ue_id, const si
     ue_info.rrc_ue_id = *arr_ue_id->ue_id[ue_idx].gnb_du.ran_ue_id;  // rrc_ue_id
     ue_info.ue = arr_ue_id->ue_info_list[ue_idx];
   }
+  ue_info.drb_id = matched_drb[ue_idx];
   
   return ue_info;
 }
@@ -228,6 +235,9 @@ static arr_ue_id_t filter_ues_by_s_nssai_in_cu(const test_info_lst_t test_info)
       pdusession_t* pdu = &item->param;
       if (nssai_matches(pdu->nssai, sst, sd)) {
         arr_ue_id.ue_id[arr_ue_id.sz] = fill_ue_id_data[ngran_gNB_CU](ue, 0, 0);
+        int drb_ids[MAX_DRBS_PER_UE];
+        const int n_drb = nr_pdcp_get_drb_ids_for_pdusession(ue->rrc_ue_id, pdu->pdusession_id, drb_ids);
+        matched_drb[arr_ue_id.sz] = n_drb > 0 ? drb_ids[0] : 0;
 
         arr_ue_id.sz++;
         break;
@@ -258,18 +268,25 @@ static arr_ue_id_t filter_ues_by_s_nssai_in_cuup(const test_info_lst_t test_info
   const instance_t e1_inst = 0;
   const e1ap_upcp_inst_t *e1inst = getCxtE1(e1_inst);
 
-  // currently the CU-UP does not store the slices, so we can only do this "coarse filtering"
-  for(int s = 0; s < e1inst->cuup.setupReq.plmn[0].supported_slices; s++) {
-    if (nssai_matches(e1inst->cuup.setupReq.plmn[0].slice[s], sst, sd)) {
-      ue_id_t *pdcp_ue_id_list = calloc(MAX_MOBILES_PER_GNB, sizeof(ue_id_t));
-      assert(pdcp_ue_id_list != NULL);
-
-      arr_ue_id.sz = nr_pdcp_get_num_ues(pdcp_ue_id_list, MAX_MOBILES_PER_GNB);
-      for (size_t i = 0; i < arr_ue_id.sz; i++) {
-        arr_ue_id.ue_id[i] = fill_ue_id_data[ngran_gNB_CUUP](NULL, 0, pdcp_ue_id_list[i]);
-      }
-      free(pdcp_ue_id_list);
+  /* The CU-UP records each PDU session's S-NSSAI at E1 Bearer Context Setup
+   * (nr_pdcp_set_pdusession_nssai), so report exactly the UEs that have a DRB
+   * on this slice, each with that DRB -- not every UE of a CU-UP that
+   * supports the slice, which counted a 3-slice UE three times over. */
+  bool cuup_supports = false;
+  for (int s = 0; s < e1inst->cuup.setupReq.plmn[0].supported_slices; s++)
+    cuup_supports |= nssai_matches(e1inst->cuup.setupReq.plmn[0].slice[s], sst, sd);
+  if (cuup_supports) {
+    ue_id_t *pdcp_ue_id_list = calloc(MAX_MOBILES_PER_GNB, sizeof(ue_id_t));
+    assert(pdcp_ue_id_list != NULL);
+    const int n_ues = nr_pdcp_get_num_ues(pdcp_ue_id_list, MAX_MOBILES_PER_GNB);
+    for (int i = 0; i < n_ues; i++) {
+      const int drb = nr_pdcp_get_drb_for_nssai(pdcp_ue_id_list[i], sst, sd ? *sd : 0xffffff);
+      if (drb <= 0)
+        continue;
+      matched_drb[arr_ue_id.sz] = drb;
+      arr_ue_id.ue_id[arr_ue_id.sz++] = fill_ue_id_data[ngran_gNB_CUUP](NULL, 0, pdcp_ue_id_list[i]);
     }
+    free(pdcp_ue_id_list);
   }
 
   free(sd); // if NULL, nothing happens
@@ -301,6 +318,7 @@ static arr_ue_id_t filter_ues_by_s_nssai_in_du_or_monolithic(const test_info_lst
     for (size_t l = 0; l < seq_arr_size(&sched_ctrl->lc_config); ++l) {
       const nr_lc_config_t *c = seq_arr_at(&sched_ctrl->lc_config, l);
       if (nssai_matches(c->nssai, sst, sd)) {
+        matched_drb[arr_ue_id.sz] = c->lcid >= 4 ? c->lcid - 3 : 0; // LCID = DRB ID + 3
         if (node_type == ngran_gNB_DU) {
           f1_ue_data_t rrc_ue_id = du_get_f1_ue_data(ue->rnti); // gNB CU UE ID = rrc_ue_id
           arr_ue_id.ue_id[arr_ue_id.sz] = fill_ue_id_data[ngran_gNB_DU](NULL, rrc_ue_id.secondary_ue, 0);

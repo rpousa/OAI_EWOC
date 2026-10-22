@@ -296,6 +296,8 @@ void e1_bearer_context_setup(const e1ap_bearer_setup_req_t *req)
     memcpy(security_parameters.integrity_key, req->secInfo.integrityProtectionKey, NR_K_KEY_SIZE);
     e1_add_bearers(cu_up_ue_id, &DRB_configList, &security_parameters);
     ASN_STRUCT_RESET(asn_DEF_NR_DRB_ToAddModList, &DRB_configList.list);
+    /* per-slice E2SM-KPM needs the session's S-NSSAI to find its DRBs */
+    nr_pdcp_set_pdusession_nssai(cu_up_ue_id, req_pdu->sessionId, req_pdu->nssai.sst, req_pdu->nssai.sd);
 
     /** GTP tunnel for N3/to core: one GTP-U tunnel per PDU session. */
     LOG_D(E1AP, "In %s: GTP tunnel for N3/to core for PDU Session %ld\n", __func__, req_pdu->sessionId);
