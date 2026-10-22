@@ -1995,6 +1995,24 @@ static void send_nas_5gmm_ind(instance_t instance, const Guti5GSMobileIdentity_t
   itti_send_msg_to_task(TASK_RRC_NRUE, instance, msg);
 }
 
+/* Request the next queued PDU session, if any (see nr_ue_nas_t.pdu_queue). */
+static void request_next_pdusession(nr_ue_nas_t *nas)
+{
+  if (nas->pdu_queue_next >= nas->n_pdu_queue)
+    return;
+  const pdu_session_config_t *pdu = &nas->uicc->pdu_sessions[nas->pdu_queue[nas->pdu_queue_next++]];
+  LOG_I(NAS,
+        "requested PDU session ID %d type %d NSSAI %d.%d DNN %s (%d/%d)\n",
+        pdu->id,
+        pdu->type,
+        pdu->nssai.sst,
+        pdu->nssai.sd,
+        pdu->dnn,
+        nas->pdu_queue_next,
+        nas->n_pdu_queue);
+  request_pdusession(nas, pdu);
+}
+
 void request_pdusession(nr_ue_nas_t *nas, const pdu_session_config_t *pdu)
 {
   int t = pdu->type;
@@ -2099,7 +2117,10 @@ static void handle_registration_accept(nr_ue_nas_t *nas, const uint8_t *pdu_buff
   }
   if (nas->uicc->n_pdu_sessions == 0)
     LOG_W(SIM, "no PDU sessions to request configured\n");
-  for (const pdu_session_config_t *pdu = nas->uicc->pdu_sessions; pdu < nas->uicc->pdu_sessions + nas->uicc->n_pdu_sessions; ++pdu) {
+  nas->n_pdu_queue = 0;
+  nas->pdu_queue_next = 0;
+  for (int i = 0; i < nas->uicc->n_pdu_sessions && nas->n_pdu_queue < (int)sizeofArray(nas->pdu_queue); ++i) {
+    const pdu_session_config_t *pdu = &nas->uicc->pdu_sessions[i];
     if (get_user_nssai_idx(pdu->nssai, msg.nas_allowed_nssai) < 0) {
       LOG_E(NAS,
             "PDU session ID %d NSSAI %d.%d: mismatch for allowed NSSAI. Couldn't request PDU session.\n",
@@ -2107,10 +2128,10 @@ static void handle_registration_accept(nr_ue_nas_t *nas, const uint8_t *pdu_buff
             pdu->nssai.sst,
             pdu->nssai.sd);
     } else {
-      LOG_I(NAS, "requested PDU session ID %d type %d NSSAI %d.%d DNN %s\n", pdu->id, pdu->type, pdu->nssai.sst, pdu->nssai.sd, pdu->dnn);
-      request_pdusession(nas, pdu);
+      nas->pdu_queue[nas->n_pdu_queue++] = i;
     }
   }
+  request_next_pdusession(nas); // the rest follow, one per Accept/Reject
   // Free local message after processing
   free_fgmm_registration_accept(&msg);
 }
@@ -2391,6 +2412,10 @@ void *nas_nrue(void *args_p)
           handle_registration_accept(nas, ba.buf, ba.len);
         } else if (msg_type == FGS_PDU_SESSION_ESTABLISHMENT_ACC) {
           handle_pdu_session_accept(nas, ba.buf, ba.len, nas->UE_id);
+          request_next_pdusession(nas);
+        } else if (msg_type == FGS_PDU_SESSION_ESTABLISHMENT_REJ) {
+          LOG_E(NAS, "Received PDU Session Establishment reject\n");
+          request_next_pdusession(nas);
         } else if (msg_type == FGS_SERVICE_ACCEPT) {
           handle_service_accept(nas, &ba);
         }
@@ -2493,9 +2518,11 @@ void *nas_nrue(void *args_p)
             break;
           case FGS_PDU_SESSION_ESTABLISHMENT_ACC:
             handle_pdu_session_accept(nas, pdu_buffer, pdu_length, nas->UE_id);
+            request_next_pdusession(nas);
             break;
           case FGS_PDU_SESSION_ESTABLISHMENT_REJ:
             LOG_E(NAS, "Received PDU Session Establishment reject\n");
+            request_next_pdusession(nas);
             break;
           case FGS_REGISTRATION_REJECT:
             handle_registration_reject(nas, &buffer);

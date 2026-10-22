@@ -77,6 +77,15 @@ typedef struct {
   /* NAS Key Set Identifier associated to the security context */
   uint8_t *ksi;
   plmn_id_t *sn_id;
+  /* PDU sessions to establish after Registration Accept, as indexes into
+   * uicc->pdu_sessions, requested one at a time: the next one only after the
+   * previous one's Establishment Accept/Reject. Requested together, the
+   * network answered them out of order (session 3's accept before session
+   * 2's), the late one carried a lower DL NAS SQN, the UE took it for a
+   * wrap-around (TS 24.501 4.4.3.1), and its integrity check failed. */
+  int pdu_queue[256];
+  int n_pdu_queue;
+  int pdu_queue_next;
 } nr_ue_nas_t;
 
 nr_ue_nas_t *get_ue_nas_info(module_id_t module_id);
