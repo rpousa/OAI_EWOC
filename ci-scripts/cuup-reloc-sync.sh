@@ -22,6 +22,12 @@
 #            so they win.  The usual need is relaxing warnings-as-errors while
 #            the E2 agent is being fixed:
 #              EXTRA='--cmake-opt -DCMAKE_C_FLAGS= --cmake-opt -DCMAKE_CXX_FLAGS='
+#   FLEXRIC=auto  also rebuild the RIC images (flexric_test:comnetsemu from this
+#            tree's FlexRIC submodule, then comnetsemu_flexric:comnetsemu from
+#            DFS) -- only where the RIC runs.  auto = when this machine is the
+#            core (owns CORE_IP); 1 = always; 0 = never.
+#   CORE_IP=192.168.0.200   the core's address, as docker-compose-core.yml binds it
+#   DFS_DIR=../DFS          DFS checkout, for Dockerfile.comnetsemu_flexric
 #   BRANCH, TAG
 
 set -euo pipefail
@@ -32,6 +38,8 @@ EXTRA=${EXTRA:-}
 TAG=${TAG:-reloc}
 JOBS=${JOBS:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || nproc)}
 LOGDIR=${LOGDIR:-/tmp/cuup-reloc-logs}
+FLEXRIC=${FLEXRIC:-auto}
+CORE_IP=${CORE_IP:-192.168.0.200}
 
 full=0; build=1; force=0
 for a in "$@"; do
@@ -39,7 +47,7 @@ for a in "$@"; do
     --full)      full=1 ;;
     --force)     force=1 ;;
     --no-build)  build=0 ;;
-    -h|--help)   sed -n '2,22p' "$0"; exit 0 ;;
+    -h|--help)   sed -n '2,28p' "$0"; exit 0 ;;
     *) echo "unknown option: $a" >&2; exit 2 ;;
   esac
 done
@@ -59,8 +67,26 @@ self_sum=$(md5sum "$self" | cut -d' ' -f1)
 
 cd "$(dirname "$self")/.."
 mkdir -p "$LOGDIR"
+DFS_DIR=$(readlink -f "${DFS_DIR:-$PWD/../DFS}")
+
+# The RIC (FlexRIC daemon + xApps) runs on the core only, and its images carry
+# the same service-model libraries as the RAN's E2 agent: an xApp and an agent
+# built from different FlexRIC commits can disagree on the encoding (e.g. an
+# old agent asserts on a sliceID label). So on the core they are rebuilt with
+# the RAN images, from the same commit.
+case "$FLEXRIC" in
+  auto) if ip -4 -o addr show 2>/dev/null | grep -q " ${CORE_IP}/"; then ric=1; else ric=0; fi ;;
+  1|yes|on|ON) ric=1 ;;
+  *) ric=0 ;;
+esac
+if [ "$ric" -eq 1 ] && [ ! -f "$DFS_DIR/dockerfiles/Dockerfile.comnetsemu_flexric" ]; then
+  echo "FlexRIC images requested but $DFS_DIR/dockerfiles/Dockerfile.comnetsemu_flexric" >&2
+  echo "is missing -- set DFS_DIR to the DFS checkout, or FLEXRIC=0." >&2
+  exit 1
+fi
+
 echo "== repo   $PWD"
-echo "== branch $BRANCH    jobs $JOBS    E2 $E2"
+echo "== branch $BRANCH    jobs $JOBS    E2 $E2    RIC images $([ "$ric" -eq 1 ] && echo "yes ($DFS_DIR)" || echo no)"
 
 if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
   echo
@@ -106,8 +132,10 @@ echo
 # nothing to do says so instead of spending an hour proving it.
 stamp_of() { docker image inspect -f '{{index .Config.Labels "reloc.commit"}}' "$1" 2>/dev/null || true; }
 
+images=(ran-build:latest "oai-gnb:$TAG" "oai-nr-cuup:$TAG" "oai-nr-ue:$TAG")
+[ "$ric" -eq 1 ] && images+=(flexric_test:comnetsemu comnetsemu_flexric:comnetsemu)
 current=1
-for i in ran-build:latest "oai-gnb:$TAG" "oai-nr-cuup:$TAG" "oai-nr-ue:$TAG"; do
+for i in "${images[@]}"; do
   [ "$(stamp_of "$i")" = "$stamp" ] || current=0
 done
 if [ "$current" -eq 1 ] && [ "$force" -eq 0 ] && [ "$full" -eq 0 ]; then
@@ -115,11 +143,11 @@ if [ "$current" -eq 1 ] && [ "$force" -eq 0 ] && [ "$full" -eq 0 ]; then
   exit 0
 fi
 
-run() {   # run <logname> <docker build args...>
+run() {   # run <logname> <docker build args...>   (context: this repo; CTX= to change)
   local name=$1; shift
   local log="$LOGDIR/$name.log"
   echo "== $name   ($log)"
-  if ! docker build --progress=plain "$@" . 2>&1 | tee "$log" | grep -E '^#[0-9]+ (DONE|ERROR)|^ERROR' ; then
+  if ! docker build --progress=plain "$@" "${CTX:-.}" 2>&1 | tee "$log" | grep -E '^#[0-9]+ (DONE|ERROR)|^ERROR' ; then
     echo "   -- $name failed, last 40 lines:" >&2
     tail -40 "$log" >&2
     return 1
@@ -156,8 +184,25 @@ for p in "${pids[@]}"; do
 done
 [ "$fail" -eq 0 ] || exit 1
 
+if [ "$ric" -eq 1 ]; then
+  # flexric_test: FlexRIC from this tree's submodule (context openair2/E2AP,
+  # where the Dockerfile COPYs ./flexric), linked against ran-build's ASN.1.
+  CTX=openair2/E2AP run flexric_test -t flexric_test:comnetsemu \
+      -f openair2/E2AP/Dockerfile.asn_flexric --label "reloc.commit=$stamp"
+  # comnetsemu_flexric: FROM flexric_test, plus the test bed's tools; built
+  # the way DFS's adapt_docker_images.sh builds it.
+  CTX="$DFS_DIR" run comnetsemu_flexric -t comnetsemu_flexric:comnetsemu \
+      -f "$DFS_DIR/dockerfiles/Dockerfile.comnetsemu_flexric" \
+      --network=host --build-arg APT_FORCE_IPV4=true --label "reloc.commit=$stamp"
+fi
+
 echo
 docker images --filter "reference=oai-*:$TAG" \
   --format '   {{.Repository}}:{{.Tag}}  {{.ID}}  {{.CreatedSince}}  {{.Size}}'
+if [ "$ric" -eq 1 ]; then
+  for i in flexric_test:comnetsemu comnetsemu_flexric:comnetsemu; do
+    docker images --format '   {{.Repository}}:{{.Tag}}  {{.ID}}  {{.CreatedSince}}  {{.Size}}' "$i"
+  done
+fi
 echo
 echo "built from $short on $BRANCH    logs in $LOGDIR"
