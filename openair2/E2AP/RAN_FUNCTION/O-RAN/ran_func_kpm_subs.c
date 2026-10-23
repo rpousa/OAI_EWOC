@@ -8,6 +8,7 @@
 #include <search.h>
 
 #include "openair2/RRC/NR/rrc_gNB_UE_context.h"
+#include "openair2/E2AP/flexric/src/util/time_now_us.h"
 
 e2_node_level_stats_t cp_node_level_stats(const e2_node_level_stats_t *src)
 {
@@ -267,6 +268,27 @@ static meas_record_lst_t fill_RRC_ConnMean(__attribute__((unused)) const label_i
 
 #if defined (NGRAN_GNB_DU)
 static uldlcounter_t last_rlc_pdu_total_bytes[KPM_SLOTS] = {0};
+/* when each slot's byte count was last taken, per direction [0]=DL [1]=UL */
+static int64_t last_rlc_read_us[KPM_SLOTS][2] = {0};
+
+/* Throughput from a byte delta over the time since this slot was last read.
+ * Several subscriptions on the same UE and DRB (the DB monitor and the
+ * relocation trigger, say) share the slot, so each one's delta covers only the
+ * time since the previous read by *any* of them. Dividing by the subscription's
+ * own granularity period then under-reports: with a second reader every
+ * ~80 ms, a 1 s subscriber saw 80 Mbit/s as ~6.4 Mbit/s. Dividing by the time
+ * actually elapsed gives every reader the right rate. The uint32 subtraction
+ * is modulo 2^32, so it survives the RLC counter wrapping. */
+static double kpm_rate_kbps(uint32_t delta_bytes, int64_t *last_read_us, uint32_t gran_period_ms)
+{
+  const int64_t now = time_now_us();
+  const int64_t prev = *last_read_us;
+  *last_read_us = now;
+  double ms = (prev > 0 && now > prev) ? (now - prev) / 1000.0 : (double)gran_period_ms;
+  if (ms < 1.0)
+    ms = 1.0;
+  return delta_bytes * 8.0 / ms; // bit/ms = kbit/s
+}
 static uldlcounter_t last_total_prbs[KPM_SLOTS] = {0};
 /* node-wide PRB total at this slot's previous report: each subscription takes
  * its own period, not the interval since whichever report came last */
@@ -356,7 +378,7 @@ static meas_record_lst_t fill_DRB_UEThpDl(__attribute__((unused)) const label_in
   meas_record.value = REAL_MEAS_VALUE;
 
   // Calculate DL Thp
-  meas_record.real_val = (double)(rlc.txpdu_bytes - last_rlc_pdu_total_bytes[ue_idx].dl)*8/gran_period_ms;  // [kbps]
+  meas_record.real_val = kpm_rate_kbps(rlc.txpdu_bytes - last_rlc_pdu_total_bytes[ue_idx].dl, &last_rlc_read_us[ue_idx][0], gran_period_ms); // [kbps]
   last_rlc_pdu_total_bytes[ue_idx].dl = rlc.txpdu_bytes;
 
   return meas_record;
@@ -380,7 +402,7 @@ static meas_record_lst_t fill_DRB_UEThpUl(__attribute__((unused)) const label_in
   meas_record.value = REAL_MEAS_VALUE;
 
   // Calculate UL Thp
-  meas_record.real_val = (double)(rlc.rxpdu_bytes - last_rlc_pdu_total_bytes[ue_idx].ul)*8/gran_period_ms;  // [kbps]
+  meas_record.real_val = kpm_rate_kbps(rlc.rxpdu_bytes - last_rlc_pdu_total_bytes[ue_idx].ul, &last_rlc_read_us[ue_idx][1], gran_period_ms); // [kbps]
   last_rlc_pdu_total_bytes[ue_idx].ul = rlc.rxpdu_bytes;
   
   return meas_record;
