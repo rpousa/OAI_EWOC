@@ -944,6 +944,375 @@ void nr_pdcp_reestablishment(ue_id_t ue_id,
   nr_pdcp_manager_unlock(nr_pdcp_ue_manager);
 }
 
+/** @brief Run one downlink SDU through PDCP and hand the PDU to the lower
+ * layer (F1-U, or RLC in a monolithic gNB).
+ *
+ * Called with the manager lock held, and releases it: the PDU is delivered
+ * outside the lock. The COUNT is assigned under the lock, so SDUs processed in
+ * the order they were taken get consecutive COUNTs. */
+static bool dl_process_and_deliver_locked(ue_id_t ue_id,
+                                          nr_pdcp_entity_t *rb,
+                                          rb_id_t rb_id,
+                                          mui_t mui,
+                                          const unsigned char *sdu,
+                                          int size,
+                                          uint64_t t_in_us)
+{
+  int max_size = nr_max_pdcp_pdu_size(size);
+  char pdu_buf[max_size];
+  int pdu_size = rb->process_sdu(rb, (char *)sdu, size, mui, pdu_buf, max_size);
+  if (pdu_size == -1) {
+    nr_pdcp_manager_unlock(nr_pdcp_ue_manager);
+    return false;
+  }
+
+  deliver_pdu deliver_pdu_cb = rb->deliver_pdu;
+
+  nr_pdcp_manager_unlock(nr_pdcp_ue_manager);
+
+  deliver_pdu_cb(NULL, ue_id, rb_id, pdu_buf, pdu_size, mui);
+
+  /* The SDU has now left towards the DU (F1-U send returned, or queued to RLC in
+   * a monolithic gNB): record its delay, TS 28.552 5.1.3.3.1. The entity is
+   * looked up again because the lock was dropped for the send. */
+  const uint64_t t_out_us = time_average_now();
+  nr_pdcp_manager_lock(nr_pdcp_ue_manager);
+  nr_pdcp_ue_t *ue = nr_pdcp_manager_get_ue(nr_pdcp_ue_manager, ue_id);
+  rb = nr_pdcp_get_rb(ue, rb_id, false);
+  if (rb != NULL && rb->txsdu_delay != NULL && t_out_us >= t_in_us)
+    time_average_add(rb->txsdu_delay, t_out_us, t_out_us - t_in_us);
+  nr_pdcp_manager_unlock(nr_pdcp_ue_manager);
+
+  return true;
+}
+
+/* ---- change of gNB-CU-UP with data forwarding (TS 38.401 8.9.5 step 9) ---- */
+
+static void held_push(nr_pdcp_held_queue_t *q, const unsigned char *sdu, int size, int sdu_id, uint64_t t_in_us)
+{
+  nr_pdcp_held_sdu_t *e = malloc_or_fail(sizeof(*e) + size);
+  e->next = NULL;
+  e->t_in_us = t_in_us;
+  e->sdu_id = sdu_id;
+  e->size = size;
+  memcpy(e->data, sdu, size);
+  if (q->tail != NULL)
+    q->tail->next = e;
+  else
+    q->head = e;
+  q->tail = e;
+  q->count++;
+}
+
+static nr_pdcp_held_sdu_t *held_pop(nr_pdcp_held_queue_t *q)
+{
+  nr_pdcp_held_sdu_t *e = q->head;
+  if (e == NULL)
+    return NULL;
+  q->head = e->next;
+  if (q->head == NULL)
+    q->tail = NULL;
+  q->count--;
+  return e;
+}
+
+static int env_ms(const char *name, int def)
+{
+  const char *v = getenv(name);
+  if (v == NULL || *v == 0)
+    return def;
+  int ms = atoi(v);
+  return ms > 0 ? ms : def;
+}
+
+/** Release the new-path SDUs once the forwarding tunnel has been idle this long
+ * after the new N3 path came up. Stands in for the End Marker, which the UPF
+ * only sends when the SMF asks for it. */
+static uint64_t dl_fwd_idle_us(void)
+{
+  static int ms = -1;
+  if (ms < 0)
+    ms = env_ms("OAI_CUUP_FWD_IDLE_MS", 5);
+  return (uint64_t)ms * 1000;
+}
+
+/** Upper bound on holding new-path SDUs, counted from the COUNT arriving. */
+static uint64_t dl_fwd_max_hold_us(void)
+{
+  static int ms = -1;
+  if (ms < 0)
+    ms = env_ms("OAI_CUUP_FWD_MAX_HOLD_MS", 200);
+  return (uint64_t)ms * 1000;
+}
+
+/** Upper bound on waiting for the COUNT at all: past this the change of
+ * gNB-CU-UP has been given up, and the target sends what it holds. */
+#define DL_FWD_WAIT_COUNT_MAX_US (2 * 1000 * 1000)
+
+/** Send what an entity holds, in order: forwarded SDUs first (they are older),
+ * then, once forwarding is over, the SDUs held from the new N3 path. */
+static void dl_fwd_pump(ue_id_t ue_id, rb_id_t rb_id)
+{
+  for (;;) {
+    nr_pdcp_manager_lock(nr_pdcp_ue_manager);
+    nr_pdcp_ue_t *ue = nr_pdcp_manager_get_ue(nr_pdcp_ue_manager, ue_id);
+    nr_pdcp_entity_t *rb = nr_pdcp_get_rb(ue, rb_id, false);
+    if (rb == NULL) {
+      nr_pdcp_manager_unlock(nr_pdcp_ue_manager);
+      return;
+    }
+    nr_pdcp_held_sdu_t *e = NULL;
+    if (rb->dl_fwd.mode != NR_PDCP_DL_FWD_TARGET_WAIT)
+      e = held_pop(&rb->dl_fwd.fwd_q);
+    if (e == NULL && rb->dl_fwd.mode == NR_PDCP_DL_FWD_NONE)
+      e = held_pop(&rb->dl_fwd.n3_q);
+    if (e == NULL) {
+      nr_pdcp_manager_unlock(nr_pdcp_ue_manager);
+      return;
+    }
+    dl_process_and_deliver_locked(ue_id, rb, rb_id, e->sdu_id, e->data, e->size, e->t_in_us);
+    free(e);
+  }
+}
+
+/** Entities on the target that are waiting for forwarding to end. */
+#define DL_FWD_MAX_WATCH 64
+static struct {
+  bool used;
+  ue_id_t ue_id;
+  rb_id_t rb_id;
+} dl_fwd_watch[DL_FWD_MAX_WATCH];
+static pthread_mutex_t dl_fwd_watch_lock = PTHREAD_MUTEX_INITIALIZER;
+
+/** @brief Check whether forwarding to one target entity is over, and if so go
+ * back to normal operation and send what is held.
+ * @return true when the entity no longer needs watching */
+static bool dl_fwd_check(ue_id_t ue_id, rb_id_t rb_id, uint64_t now)
+{
+  nr_pdcp_manager_lock(nr_pdcp_ue_manager);
+  nr_pdcp_ue_t *ue = nr_pdcp_manager_get_ue(nr_pdcp_ue_manager, ue_id);
+  nr_pdcp_entity_t *rb = nr_pdcp_get_rb(ue, rb_id, false);
+  if (rb == NULL) {
+    nr_pdcp_manager_unlock(nr_pdcp_ue_manager);
+    return true;
+  }
+  nr_pdcp_dl_fwd_t *f = &rb->dl_fwd;
+  const char *reason = NULL;
+  if (f->mode == NR_PDCP_DL_FWD_TARGET_WAIT) {
+    if (now - f->t_start_us > DL_FWD_WAIT_COUNT_MAX_US)
+      reason = "no COUNT from the source";
+  } else if (f->mode == NR_PDCP_DL_FWD_TARGET_DRAIN) {
+    const uint64_t last = f->t_last_fwd_us > f->t_count_us ? f->t_last_fwd_us : f->t_count_us;
+    if (f->end_marker)
+      reason = "End Marker";
+    else if (f->t_first_n3_us != 0 && now - last >= dl_fwd_idle_us())
+      reason = "forwarding tunnel idle";
+    else if (now - f->t_count_us >= dl_fwd_max_hold_us())
+      reason = "hold limit reached";
+  } else {
+    nr_pdcp_manager_unlock(nr_pdcp_ue_manager);
+    return true;
+  }
+  if (reason == NULL) {
+    nr_pdcp_manager_unlock(nr_pdcp_ue_manager);
+    return false;
+  }
+  f->mode = NR_PDCP_DL_FWD_NONE;
+  LOG_I(PDCP,
+        "UE %lx DRB %ld: downlink forwarding over (%s): %u SDUs forwarded by the source, %u held from the new path for %.1f ms\n",
+        ue_id,
+        rb_id,
+        reason,
+        f->n_forwarded,
+        f->n_held,
+        f->t_first_n3_us != 0 && now > f->t_first_n3_us ? (now - f->t_first_n3_us) / 1000.0 : 0.0);
+  nr_pdcp_manager_unlock(nr_pdcp_ue_manager);
+  dl_fwd_pump(ue_id, rb_id);
+  return true;
+}
+
+static void *dl_fwd_watch_thread(void *arg)
+{
+  (void)arg;
+  for (;;) {
+    usleep(1000);
+    ue_id_t ues[DL_FWD_MAX_WATCH];
+    rb_id_t rbs[DL_FWD_MAX_WATCH];
+    int idx[DL_FWD_MAX_WATCH];
+    int n = 0;
+    pthread_mutex_lock(&dl_fwd_watch_lock);
+    for (int i = 0; i < DL_FWD_MAX_WATCH; i++) {
+      if (!dl_fwd_watch[i].used)
+        continue;
+      ues[n] = dl_fwd_watch[i].ue_id;
+      rbs[n] = dl_fwd_watch[i].rb_id;
+      idx[n] = i;
+      n++;
+    }
+    pthread_mutex_unlock(&dl_fwd_watch_lock);
+    const uint64_t now = time_average_now();
+    for (int k = 0; k < n; k++) {
+      if (!dl_fwd_check(ues[k], rbs[k], now))
+        continue;
+      pthread_mutex_lock(&dl_fwd_watch_lock);
+      if (dl_fwd_watch[idx[k]].used && dl_fwd_watch[idx[k]].ue_id == ues[k] && dl_fwd_watch[idx[k]].rb_id == rbs[k])
+        dl_fwd_watch[idx[k]].used = false;
+      pthread_mutex_unlock(&dl_fwd_watch_lock);
+    }
+  }
+  return NULL;
+}
+
+static pthread_once_t dl_fwd_thread_once = PTHREAD_ONCE_INIT;
+static void dl_fwd_start_thread(void)
+{
+  pthread_t t;
+  threadCreate(&t, dl_fwd_watch_thread, NULL, "pdcp_dl_fwd", -1, OAI_PRIORITY_RT_LOW);
+}
+
+static void dl_fwd_watch_add(ue_id_t ue_id, rb_id_t rb_id)
+{
+  pthread_once(&dl_fwd_thread_once, dl_fwd_start_thread);
+  pthread_mutex_lock(&dl_fwd_watch_lock);
+  int free_slot = -1;
+  for (int i = 0; i < DL_FWD_MAX_WATCH; i++) {
+    if (dl_fwd_watch[i].used && dl_fwd_watch[i].ue_id == ue_id && dl_fwd_watch[i].rb_id == rb_id) {
+      pthread_mutex_unlock(&dl_fwd_watch_lock);
+      return;
+    }
+    if (!dl_fwd_watch[i].used && free_slot < 0)
+      free_slot = i;
+  }
+  if (free_slot >= 0)
+    dl_fwd_watch[free_slot] = (typeof(dl_fwd_watch[0])){.used = true, .ue_id = ue_id, .rb_id = rb_id};
+  else
+    LOG_E(PDCP, "UE %lx DRB %ld: too many DRBs waiting for downlink forwarding, it will end at the next packet\n", ue_id, rb_id);
+  pthread_mutex_unlock(&dl_fwd_watch_lock);
+}
+
+/** @brief The UPF closed the old N3 tunnel of a PDU session (End Marker, TS
+ * 29.281 clause 7.3.2): pass it on to the target for every DRB being relayed. */
+static void dl_fwd_end_marker_from_core(ue_id_t ue_id, long pdusession_id)
+{
+  int drb_ids[MAX_DRBS_PER_UE];
+  nr_pdcp_dl_fwd_send_t sends[MAX_DRBS_PER_UE];
+  int n = 0;
+  nr_pdcp_manager_lock(nr_pdcp_ue_manager);
+  nr_pdcp_ue_t *ue = nr_pdcp_manager_get_ue(nr_pdcp_ue_manager, ue_id);
+  for (int i = 0; ue != NULL && i < MAX_DRBS_PER_UE; i++) {
+    nr_pdcp_entity_t *drb = ue->drb[i];
+    if (drb == NULL || drb->pdusession_id != pdusession_id || drb->dl_fwd.mode != NR_PDCP_DL_FWD_SOURCE)
+      continue;
+    drb_ids[n] = drb->rb_id;
+    sends[n] = drb->dl_fwd.send;
+    n++;
+  }
+  nr_pdcp_manager_unlock(nr_pdcp_ue_manager);
+  if (n == 0)
+    LOG_D(PDCP, "UE %lx: End Marker on PDU session %ld, no DRB is being relayed\n", ue_id, pdusession_id);
+  for (int i = 0; i < n; i++) {
+    LOG_I(PDCP, "UE %lx DRB %d: End Marker from the core, passing it on to the target gNB-CU-UP\n", ue_id, drb_ids[i]);
+    sends[i](ue_id, drb_ids[i], NULL, 0);
+  }
+}
+
+bool nr_pdcp_dl_fwd_start_source(ue_id_t ue_id,
+                                 rb_id_t drb_id,
+                                 nr_pdcp_dl_fwd_send_t send,
+                                 nr_pdcp_count_t *ul_count,
+                                 nr_pdcp_count_t *dl_count)
+{
+  DevAssert(send != NULL);
+  nr_pdcp_manager_lock(nr_pdcp_ue_manager);
+  nr_pdcp_ue_t *ue = nr_pdcp_manager_get_ue(nr_pdcp_ue_manager, ue_id);
+  nr_pdcp_entity_t *rb = nr_pdcp_get_rb(ue, drb_id, false);
+  if (rb == NULL) {
+    nr_pdcp_manager_unlock(nr_pdcp_ue_manager);
+    LOG_E(PDCP, "UE %lx: no DRB %ld to forward downlink from\n", ue_id, drb_id);
+    return false;
+  }
+  /* Read the COUNT and switch to relaying in one go: no SDU may be numbered
+   * here after the COUNT the target will continue from. */
+  *dl_count = rb->get_pdcp_count_dl(rb);
+  *ul_count = rb->get_pdcp_count_ul(rb);
+  rb->dl_fwd.mode = NR_PDCP_DL_FWD_SOURCE;
+  rb->dl_fwd.send = send;
+  rb->dl_fwd.t_start_us = time_average_now();
+  nr_pdcp_manager_unlock(nr_pdcp_ue_manager);
+  LOG_I(PDCP,
+        "UE %lx DRB %ld: downlink stops at COUNT %u/%u, relaying what still arrives to the target gNB-CU-UP\n",
+        ue_id,
+        drb_id,
+        dl_count->hfn,
+        dl_count->sn);
+  return true;
+}
+
+void nr_pdcp_dl_fwd_expect(ue_id_t ue_id, rb_id_t drb_id)
+{
+  nr_pdcp_manager_lock(nr_pdcp_ue_manager);
+  nr_pdcp_ue_t *ue = nr_pdcp_manager_get_ue(nr_pdcp_ue_manager, ue_id);
+  nr_pdcp_entity_t *rb = nr_pdcp_get_rb(ue, drb_id, false);
+  if (rb == NULL) {
+    nr_pdcp_manager_unlock(nr_pdcp_ue_manager);
+    LOG_E(PDCP, "UE %lx: no DRB %ld to receive forwarded downlink on\n", ue_id, drb_id);
+    return;
+  }
+  rb->dl_fwd.mode = NR_PDCP_DL_FWD_TARGET_WAIT;
+  rb->dl_fwd.t_start_us = time_average_now();
+  nr_pdcp_manager_unlock(nr_pdcp_ue_manager);
+  dl_fwd_watch_add(ue_id, drb_id);
+}
+
+bool nr_pdcp_dl_fwd_rx(protocol_ctxt_t *ctxt_pP,
+                       const srb_flag_t srb_flagP,
+                       const rb_id_t rb_id,
+                       const mui_t muiP,
+                       const confirm_t confirmP,
+                       const sdu_size_t sdu_buffer_size,
+                       unsigned char *const sdu_buffer,
+                       const pdcp_transmission_mode_t mode,
+                       const uint32_t *const sourceL2Id,
+                       const uint32_t *const destinationL2Id)
+{
+  DevAssert(srb_flagP == SRB_FLAG_NO);
+  const ue_id_t ue_id = ctxt_pP->rntiMaybeUEid;
+  uint64_t t_in_us = gtpv1u_current_rx_time_us();
+  const uint64_t now = time_average_now();
+  if (t_in_us == 0)
+    t_in_us = now;
+
+  nr_pdcp_manager_lock(nr_pdcp_ue_manager);
+  nr_pdcp_ue_t *ue = nr_pdcp_manager_get_ue(nr_pdcp_ue_manager, ue_id);
+  nr_pdcp_entity_t *rb = nr_pdcp_get_rb(ue, rb_id, false);
+  if (rb == NULL) {
+    nr_pdcp_manager_unlock(nr_pdcp_ue_manager);
+    LOG_W(PDCP, "UE %lx: forwarded downlink for unknown DRB %ld dropped\n", ue_id, rb_id);
+    return false;
+  }
+  nr_pdcp_dl_fwd_t *f = &rb->dl_fwd;
+
+  if (sdu_buffer_size == 0) { /* End Marker relayed by the source */
+    f->end_marker = true;
+    nr_pdcp_manager_unlock(nr_pdcp_ue_manager);
+    dl_fwd_check(ue_id, rb_id, now);
+    return true;
+  }
+
+  f->n_forwarded++;
+  f->t_last_fwd_us = now;
+  if (f->mode == NR_PDCP_DL_FWD_TARGET_WAIT || f->fwd_q.count > 0) {
+    held_push(&f->fwd_q, sdu_buffer, sdu_buffer_size, muiP, t_in_us);
+    const bool can_send = f->mode != NR_PDCP_DL_FWD_TARGET_WAIT;
+    nr_pdcp_manager_unlock(nr_pdcp_ue_manager);
+    if (can_send)
+      dl_fwd_pump(ue_id, rb_id);
+    return true;
+  }
+  /* forwarding is under way (or a late straggler after it ended): send now */
+  return dl_process_and_deliver_locked(ue_id, rb, rb_id, muiP, sdu_buffer, sdu_buffer_size, t_in_us);
+}
+
 bool nr_pdcp_data_req_drb(protocol_ctxt_t *ctxt_pP,
                           const srb_flag_t srb_flagP,
                           const rb_id_t rb_id,
@@ -978,6 +1347,13 @@ bool nr_pdcp_data_req_drb(protocol_ctxt_t *ctxt_pP,
     exit(1);
   }
 
+  /* An End Marker on N3 reaches here with no payload, and GTP-U gives the PDU
+   * session ID of the tunnel as rb_id. */
+  if (sdu_buffer_size == 0) {
+    dl_fwd_end_marker_from_core(ue_id, rb_id);
+    return 1;
+  }
+
   nr_pdcp_manager_lock(nr_pdcp_ue_manager);
 
   ue = nr_pdcp_manager_get_ue(nr_pdcp_ue_manager, ue_id);
@@ -989,32 +1365,38 @@ bool nr_pdcp_data_req_drb(protocol_ctxt_t *ctxt_pP,
     return 0;
   }
 
-  int max_size = nr_max_pdcp_pdu_size(sdu_buffer_size);
-  char pdu_buf[max_size];
-  int pdu_size = rb->process_sdu(rb, (char *)sdu_buffer, sdu_buffer_size, muiP, pdu_buf, max_size);
-  if (pdu_size == -1) {
-    nr_pdcp_manager_unlock(nr_pdcp_ue_manager);
-    return 0;
+  nr_pdcp_dl_fwd_t *f = &rb->dl_fwd;
+  switch (f->mode) {
+    case NR_PDCP_DL_FWD_SOURCE: {
+      /* source of a change of gNB-CU-UP: relay, the target numbers it */
+      nr_pdcp_dl_fwd_send_t send = f->send;
+      f->n_relayed++;
+      nr_pdcp_manager_unlock(nr_pdcp_ue_manager);
+      send(ue_id, rb_id, sdu_buffer, sdu_buffer_size);
+      return 1;
+    }
+    case NR_PDCP_DL_FWD_TARGET_WAIT:
+    case NR_PDCP_DL_FWD_TARGET_DRAIN:
+      /* target: the new path is live, but what the source forwards goes first */
+      if (f->t_first_n3_us == 0)
+        f->t_first_n3_us = time_average_now();
+      f->n_held++;
+      held_push(&f->n3_q, sdu_buffer, sdu_buffer_size, muiP, t_in_us);
+      nr_pdcp_manager_unlock(nr_pdcp_ue_manager);
+      return 1;
+    case NR_PDCP_DL_FWD_NONE:
+    default:
+      if (f->n3_q.count > 0 || f->fwd_q.count > 0) {
+        /* still sending what was held: queue behind it to keep the order */
+        held_push(&f->n3_q, sdu_buffer, sdu_buffer_size, muiP, t_in_us);
+        nr_pdcp_manager_unlock(nr_pdcp_ue_manager);
+        dl_fwd_pump(ue_id, rb_id);
+        return 1;
+      }
+      break;
   }
 
-  deliver_pdu deliver_pdu_cb = rb->deliver_pdu;
-
-  nr_pdcp_manager_unlock(nr_pdcp_ue_manager);
-
-  deliver_pdu_cb(NULL, ue_id, rb_id, pdu_buf, pdu_size, muiP);
-
-  /* The SDU has now left towards the DU (F1-U send returned, or queued to RLC in
-   * a monolithic gNB): record its delay, TS 28.552 5.1.3.3.1. The entity is
-   * looked up again because the lock was dropped for the send. */
-  const uint64_t t_out_us = time_average_now();
-  nr_pdcp_manager_lock(nr_pdcp_ue_manager);
-  ue = nr_pdcp_manager_get_ue(nr_pdcp_ue_manager, ue_id);
-  rb = nr_pdcp_get_rb(ue, rb_id, false);
-  if (rb != NULL && rb->txsdu_delay != NULL && t_out_us >= t_in_us)
-    time_average_add(rb->txsdu_delay, t_out_us, t_out_us - t_in_us);
-  nr_pdcp_manager_unlock(nr_pdcp_ue_manager);
-
-  return 1;
+  return dl_process_and_deliver_locked(ue_id, rb, rb_id, muiP, sdu_buffer, sdu_buffer_size, t_in_us);
 }
 
 bool cu_f1u_data_req(protocol_ctxt_t  *ctxt_pP,
@@ -1099,7 +1481,24 @@ void nr_pdcp_count_update(ue_id_t ue_id,
   entity->set_pdcp_count_dl(entity, dl_count, sn_size);
   entity->set_pdcp_count_ul(entity, ul_count, sn_size);
 
+  /* target of a change of gNB-CU-UP: forwarded SDUs can go out from here on */
+  const bool fwd_ready = entity->dl_fwd.mode == NR_PDCP_DL_FWD_TARGET_WAIT;
+  if (fwd_ready) {
+    entity->dl_fwd.mode = NR_PDCP_DL_FWD_TARGET_DRAIN;
+    entity->dl_fwd.t_count_us = time_average_now();
+    LOG_I(PDCP,
+          "UE %lx DRB %ld: downlink continues from COUNT %u/%u, %d forwarded SDU(s) waiting\n",
+          ue_id,
+          drb_id,
+          dl_count.hfn,
+          dl_count.sn,
+          entity->dl_fwd.fwd_q.count);
+  }
+
   nr_pdcp_manager_unlock(nr_pdcp_ue_manager);
+
+  if (fwd_ready)
+    dl_fwd_pump(ue_id, drb_id);
 }
 
 /** * @brief Get PDCP COUNT values (PDCP-SN and HFN) for UL and DL from the PDCP entity

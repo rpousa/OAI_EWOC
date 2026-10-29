@@ -557,6 +557,25 @@ static void gtpv1uEndTunnel(instance_t instance, gtpv1u_enb_end_marker_req_t *re
   }
 }
 
+/** @brief Send an End Marker (TS 29.281 clause 7.3.2) on one tunnel of a UE, e.g.
+ * to close a data forwarding tunnel after its last G-PDU. */
+void gtpv1uSendEndMarker(instance_t instance, ue_id_t ue_id, int bearer_id)
+{
+  pthread_mutex_lock(&globGtp.gtp_lock);
+  getInstRetVoid(compatInst(instance));
+  getUeRetVoid(inst, ue_id);
+  auto ptr2 = ptrUe->second.bearers.find(bearer_id);
+  if (ptr2 == ptrUe->second.bearers.end()) {
+    LOG_E(GTPU, "[%ld] End Marker for a non existent UE:bearer %lx/%d\n", instance, ue_id, bearer_id);
+    pthread_mutex_unlock(&globGtp.gtp_lock);
+    return;
+  }
+  gtpv1u_bearer_t bearer = ptr2->second;
+  pthread_mutex_unlock(&globGtp.gtp_lock);
+  LOG_I(GTPU, "[%ld] UE %lx: End Marker on bearer %d, TEID 0x%x\n", instance, ue_id, bearer_id, bearer.teid_outgoing);
+  gtpv1uCreateAndSendMsg(&bearer, GTP_END_MARKER, NULL, 0, false, false, NULL, 0);
+}
+
 static int udpServerSocket(openAddr_s addr)
 {
   LOG_I(GTPU, "Initializing UDP for local address %s with port %s\n", addr.originHost, addr.originService);

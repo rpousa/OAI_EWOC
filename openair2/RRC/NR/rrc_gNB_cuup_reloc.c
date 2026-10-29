@@ -25,13 +25,17 @@
  *          Setup has no IE to carry.
  *   10-12. NGAP PDU Session Resource Modify Indication, so the core moves the
  *          NG-U downlink to the target's endpoint.
- *   13-14. E1 Bearer Context Release on the source.
+ *   9.     Data forwarding: step 2 asks the target for a downlink forwarding
+ *          endpoint per DRB, and step 5 hands it to the source, which from
+ *          then on relays the downlink still reaching it instead of sending it
+ *          to the DU. The target numbers it from the COUNT of step 7, ahead of
+ *          what the new N3 path brings. OAI_CUUP_RELOC_FWD=0 turns it off.
+ *   13-14. E1 Bearer Context Release on the source, after a short drain
+ *          (OAI_CUUP_RELOC_FWD_DRAIN_MS) when forwarding is used.
  *
- * Step 9, data forwarding between the two gNB-CU-UPs, is not performed: the E1
- * messages here carry no data-forwarding IEs.
- *
- * Uplink recovers at step 4 (its destination, the UPF, never changed); downlink
- * recovers when the core answers step 10-12. Packets in flight are lost.
+ * Uplink recovers at step 4 (its destination, the UPF, never changed). Without
+ * forwarding, the downlink in flight between step 5 and the core's answer to
+ * step 10-12 is lost; with it, that downlink is relayed through the target.
  */
 
 #include "rrc_gNB_cuup_reloc.h"
@@ -39,6 +43,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "assertions.h"
@@ -67,6 +72,8 @@ static const char *reloc_state2str(cuup_reloc_state_t state)
       return "waiting for the target to acknowledge the PDCP SN status";
     case CUUP_RELOC_WAIT_PATH_UPDATE:
       return "waiting for the PDU Session Resource Modify Confirm";
+    case CUUP_RELOC_WAIT_FWD_DRAIN:
+      return "letting the source relay its last downlink";
     case CUUP_RELOC_WAIT_PUTBACK:
       return "waiting for the DU to point back at the source";
     default:
@@ -107,15 +114,26 @@ static void disarm_guard(cuup_reloc_context_t *ctx)
  * @return false when no timer could be armed. The caller must not proceed
  *         unguarded: a context that never completes blocks every later change
  *         of gNB-CU-UP for this UE. */
-static bool arm_guard(gNB_RRC_UE_t *ue, cuup_reloc_context_t *ctx)
+static bool arm_timer(gNB_RRC_UE_t *ue, cuup_reloc_context_t *ctx, uint32_t sec, uint32_t usec)
 {
   disarm_guard(ctx);
-  timer_setup(CUUP_RELOC_GUARD_S, 0, TASK_RRC_GNB, 0, TIMER_ONE_SHOT, NULL, &ctx->guard_timer);
+  timer_setup(sec, usec, TASK_RRC_GNB, 0, TIMER_ONE_SHOT, NULL, &ctx->guard_timer);
   if (ctx->guard_timer == 0) {
     LOG_E(NR_RRC, "UE %d: could not arm the guard timer of the change of gNB-CU-UP\n", ue->rrc_ue_id);
     return false;
   }
   return true;
+}
+
+static bool arm_guard(gNB_RRC_UE_t *ue, cuup_reloc_context_t *ctx)
+{
+  return arm_timer(ue, ctx, CUUP_RELOC_GUARD_S, 0);
+}
+
+static int env_int(const char *name, int def)
+{
+  const char *v = getenv(name);
+  return v != NULL && *v != 0 ? atoi(v) : def;
 }
 
 /** @brief Steps 13-14: release the bearer context the source still holds. */
@@ -168,7 +186,7 @@ void nr_rrc_cuup_reloc_abort(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue, const char *re
   /* Up to and including step 4 the source still holds the user plane, so the UE
    * can be put back on it: its F1-U endpoints were kept for exactly this. */
   const bool source_can_serve = ctx->state != CUUP_RELOC_WAIT_SOURCE_STATUS && ctx->state != CUUP_RELOC_WAIT_TARGET_STATUS
-                                && ctx->state != CUUP_RELOC_WAIT_PATH_UPDATE;
+                                && ctx->state != CUUP_RELOC_WAIT_PATH_UPDATE && ctx->state != CUUP_RELOC_WAIT_FWD_DRAIN;
 
   if (!source_can_serve) {
     /* The source has reported its PDCP COUNTs, so it must not resume: the two
@@ -234,7 +252,7 @@ void nr_rrc_cuup_reloc_cuup_lost(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue, sctp_assoc
   /* From step 5 on the target holds the user plane and the source has given up
    * its PDCP state. */
   const bool target_is_serving = ctx->state == CUUP_RELOC_WAIT_SOURCE_STATUS || ctx->state == CUUP_RELOC_WAIT_TARGET_STATUS
-                                 || ctx->state == CUUP_RELOC_WAIT_PATH_UPDATE;
+                                 || ctx->state == CUUP_RELOC_WAIT_PATH_UPDATE || ctx->state == CUUP_RELOC_WAIT_FWD_DRAIN;
 
   if (assoc_id == ctx->source_assoc) {
     ctx->source_released = true; /* nothing may be sent to it any more */
@@ -313,6 +331,8 @@ int nr_rrc_trigger_cuup_reloc(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue, int64_t targe
   ctx->source_cuup_id = rrc_get_cuup_id_by_assoc(rrc, source);
   ctx->target_cuup_id = rrc_get_cuup_id_by_assoc(rrc, target);
   ctx->state = CUUP_RELOC_WAIT_TARGET_SETUP;
+  /* Step 9: ask the target for downlink forwarding endpoints (step 2) */
+  ctx->fwd_requested = env_int("OAI_CUUP_RELOC_FWD", 1) != 0;
   /* Keep the source's F1-U endpoints: the target's Bearer Context Setup Response
    * overwrites them, and giving up before step 5 means putting them back. */
   ctx->n_source_tunnels = rrc_save_cuup_tunnels(ue, ctx->source_tunnel_drb, ctx->source_tunnel);
@@ -331,13 +351,14 @@ int nr_rrc_trigger_cuup_reloc(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue, int64_t targe
   ue->cuup_reloc = ctx;
 
   LOG_A(NR_RRC,
-        "UE %d: moving %d PDU session(s) from gNB-CU-UP ID %ld (assoc_id %d) to gNB-CU-UP ID %ld (assoc_id %d)\n",
+        "UE %d: moving %d PDU session(s) from gNB-CU-UP ID %ld (assoc_id %d) to gNB-CU-UP ID %ld (assoc_id %d)%s\n",
         ue->rrc_ue_id,
         n_sessions,
         ctx->source_cuup_id,
         source,
         ctx->target_cuup_id,
-        target);
+        target,
+        ctx->fwd_requested ? ", with data forwarding" : "");
 
   /* Steps 2-3: build the whole bearer context on the target. The source keeps
    * serving the UE until step 4. */
@@ -345,7 +366,10 @@ int nr_rrc_trigger_cuup_reloc(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue, int64_t targe
   return 0;
 }
 
-bool nr_rrc_cuup_reloc_e1_setup_resp(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue, sctp_assoc_t assoc_id)
+bool nr_rrc_cuup_reloc_e1_setup_resp(gNB_RRC_INST *rrc,
+                                     gNB_RRC_UE_t *ue,
+                                     sctp_assoc_t assoc_id,
+                                     const e1ap_bearer_setup_resp_t *resp)
 {
   cuup_reloc_context_t *ctx = ue->cuup_reloc;
   if (ctx == NULL)
@@ -368,7 +392,27 @@ bool nr_rrc_cuup_reloc_e1_setup_resp(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue, sctp_a
   }
 
   ctx->target_has_context = true;
-  LOG_I(NR_RRC, "UE %d: target gNB-CU-UP assoc_id %d holds the bearers, repointing the DU\n", ue->rrc_ue_id, ctx->target_assoc);
+
+  /* Step 3: keep the downlink forwarding endpoints for step 5 */
+  ctx->n_fwd = 0;
+  for (int i = 0; ctx->fwd_requested && resp != NULL && i < resp->numPDUSessions; i++) {
+    const pdu_session_setup_t *pdu = &resp->pduSession[i];
+    for (int j = 0; j < pdu->numDRBSetup && ctx->n_fwd < MAX_DRBS_PER_UE; j++) {
+      if (!pdu->DRBnGRanList[j].has_dl_fwd)
+        continue;
+      ctx->fwd_drb[ctx->n_fwd] = pdu->DRBnGRanList[j].id;
+      ctx->fwd_tl[ctx->n_fwd] = pdu->DRBnGRanList[j].dl_fwd;
+      ctx->n_fwd++;
+    }
+  }
+  if (ctx->fwd_requested && ctx->n_fwd == 0)
+    LOG_W(NR_RRC, "UE %d: the target gNB-CU-UP offers no data forwarding, the downlink in flight will be lost\n", ue->rrc_ue_id);
+
+  LOG_I(NR_RRC,
+        "UE %d: target gNB-CU-UP assoc_id %d holds the bearers (%d forwarding endpoint(s)), repointing the DU\n",
+        ue->rrc_ue_id,
+        ctx->target_assoc,
+        ctx->n_fwd);
 
   /* Step 4 */
   ctx->state = CUUP_RELOC_WAIT_F1_MOD;
@@ -422,7 +466,7 @@ bool nr_rrc_cuup_reloc_f1_mod_resp(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue)
     nr_rrc_cuup_reloc_abort(rrc, ue, "could not re-arm the guard timer");
     return true;
   }
-  e1_request_pdcp_status_on(rrc, ue, ctx->source_assoc);
+  e1_request_pdcp_status_fwd_on(rrc, ue, ctx->source_assoc, ctx->n_fwd, ctx->fwd_drb, ctx->fwd_tl);
   return true;
 }
 
@@ -550,7 +594,17 @@ bool nr_rrc_cuup_reloc_path_update_confirm(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue, 
         ctx->target_assoc);
 
   /* Steps 13-14, once the core no longer sends downlink to the source: releasing
-   * it earlier would leave the UPF sending to a TEID that no longer exists. */
+   * it earlier would leave the UPF sending to a TEID that no longer exists.
+   * With forwarding, what was already on its way to the source still has to be
+   * relayed: give it a moment before releasing. */
+  const int drain_ms = env_int("OAI_CUUP_RELOC_FWD_DRAIN_MS", CUUP_RELOC_FWD_DRAIN_MS);
+  if (ctx->n_fwd > 0 && drain_ms > 0) {
+    ctx->state = CUUP_RELOC_WAIT_FWD_DRAIN;
+    if (arm_timer(ue, ctx, drain_ms / 1000, (drain_ms % 1000) * 1000)) {
+      LOG_I(NR_RRC, "UE %d: releasing the source gNB-CU-UP in %d ms, once it has relayed its last downlink\n", ue->rrc_ue_id, drain_ms);
+      return true;
+    }
+  }
   nr_rrc_cuup_reloc_finalize(rrc, ue);
   return true;
 }
@@ -585,6 +639,11 @@ bool nr_rrc_cuup_reloc_timer_expired(gNB_RRC_INST *rrc, long timer_id)
       continue;
     /* the timer fired, so it is gone: do not try to remove it */
     ue->cuup_reloc->guard_timer = 0;
+    if (ue->cuup_reloc->state == CUUP_RELOC_WAIT_FWD_DRAIN) {
+      /* not a guard: the source has had its time to relay, steps 13-14 */
+      nr_rrc_cuup_reloc_finalize(rrc, ue);
+      return true;
+    }
     char reason[64];
     snprintf(reason, sizeof(reason), "no answer within %ds", CUUP_RELOC_GUARD_S);
     nr_rrc_cuup_reloc_abort(rrc, ue, reason);

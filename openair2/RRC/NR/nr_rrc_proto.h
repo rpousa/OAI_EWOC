@@ -94,6 +94,12 @@ void trigger_bearer_setup_on_cuup(gNB_RRC_INST *rrc,
 /* E1 helpers used by the inter-CU-UP relocation state machine. A zero assoc_id
  * means "the CU-UP this UE is bound to". */
 void e1_request_pdcp_status_on(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE, sctp_assoc_t assoc_id);
+void e1_request_pdcp_status_fwd_on(gNB_RRC_INST *rrc,
+                                   gNB_RRC_UE_t *UE,
+                                   sctp_assoc_t assoc_id,
+                                   int n_fwd,
+                                   const int *fwd_drb,
+                                   const UP_TL_information_t *fwd_tl);
 void e1_notify_pdcp_status_drbs(gNB_RRC_INST *rrc,
                                 gNB_RRC_UE_t *UE,
                                 sctp_assoc_t assoc_id,

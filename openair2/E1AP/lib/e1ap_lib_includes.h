@@ -26,6 +26,7 @@
 #include "E1AP_Non-Dynamic5QIDescriptor.h"
 #include "E1AP_SecurityResult.h"
 #include "E1AP_Data-Forwarding-Information.h"
+#include "E1AP_Data-Forwarding-Information-Request.h"
 #include "E1AP_PDCP-SN-Status-Information.h"
 #include "E1AP_PDCP-Count.h"
 

@@ -573,9 +573,22 @@ static void nr_pdcp_entity_release(nr_pdcp_entity_t *entity)
   deliver_all_sdus(entity);
 }
 
+static void free_held_queue(nr_pdcp_held_queue_t *q)
+{
+  while (q->head != NULL) {
+    nr_pdcp_held_sdu_t *next = q->head->next;
+    free(q->head);
+    q->head = next;
+  }
+  q->tail = NULL;
+  q->count = 0;
+}
+
 static void nr_pdcp_entity_delete(nr_pdcp_entity_t *entity)
 {
   free_rx_list(entity);
+  free_held_queue(&entity->dl_fwd.fwd_q);
+  free_held_queue(&entity->dl_fwd.n3_q);
   if (entity->free_security != NULL)
     entity->free_security(entity->security_context);
   if (entity->free_integrity != NULL)

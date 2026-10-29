@@ -119,4 +119,34 @@ void nr_pdcp_count_update(ue_id_t ue_id,
 
 void nr_pdcp_get_drb_count_values(ue_id_t ue_id, rb_id_t rb_id, nr_pdcp_count_t *ul_count, nr_pdcp_count_t *dl_count);
 
+/* Change of gNB-CU-UP with data forwarding (TS 38.401 clause 8.9.5 step 9) */
+
+/** @brief Source: read the DRB's PDCP COUNTs and, in the same step, stop running
+ * PDCP on its downlink. Every downlink SDU that still reaches the DRB is then
+ * handed to @p send unprocessed, for the target to number from that COUNT.
+ * @return false when the DRB does not exist */
+bool nr_pdcp_dl_fwd_start_source(ue_id_t ue_id,
+                                 rb_id_t drb_id,
+                                 nr_pdcp_dl_fwd_send_t send,
+                                 nr_pdcp_count_t *ul_count,
+                                 nr_pdcp_count_t *dl_count);
+
+/** @brief Target: hold the DRB's downlink until nr_pdcp_count_update() gives
+ * it the source's COUNT, then send the forwarded SDUs before any from the new
+ * N3 path. */
+void nr_pdcp_dl_fwd_expect(ue_id_t ue_id, rb_id_t drb_id);
+
+/** @brief Target: GTP-U receive callback of a forwarding tunnel (rb_id = DRB).
+ * A zero-length SDU is the End Marker the source relays. */
+bool nr_pdcp_dl_fwd_rx(protocol_ctxt_t *ctxt_pP,
+                       const srb_flag_t srb_flagP,
+                       const rb_id_t rb_id,
+                       const mui_t muiP,
+                       const confirm_t confirmP,
+                       const sdu_size_t sdu_buffer_size,
+                       unsigned char *const sdu_buffer,
+                       const pdcp_transmission_mode_t mode,
+                       const uint32_t *const sourceL2Id,
+                       const uint32_t *const destinationL2Id);
+
 #endif /* NR_PDCP_OAI_API_H */

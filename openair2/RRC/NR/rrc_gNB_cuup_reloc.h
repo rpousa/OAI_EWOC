@@ -44,7 +44,11 @@ typedef struct gNB_RRC_UE_s gNB_RRC_UE_t;
  *   PATH_UPDATE    (steps 10-12) NGAP PDU Session Resource Modify Confirm, the
  *                                core having moved the NG-U downlink over. The
  *                                source is released once it arrives (steps
- *                                13-14).
+ *                                13-14), or after FWD_DRAIN with forwarding.
+ *   FWD_DRAIN      (step 9)      with data forwarding, a short wait after the
+ *                                Modify Confirm so that the downlink still in
+ *                                flight to the source is relayed to the target
+ *                                before the source is released.
  *
  * PUTBACK is not part of clause 8.9.5: it is the F1 UE Context Modification
  * that points the gNB-DU back at the source after giving up, and the context
@@ -54,9 +58,13 @@ typedef struct gNB_RRC_UE_s gNB_RRC_UE_t;
  * the forward path deliberately avoids -- and the guard timer still covers the
  * gNB-DU not answering at all.
  *
- * Step 9, data forwarding from source to target, is not performed: the E1
- * messages in this implementation carry no data-forwarding IEs, so the packets
- * in flight at the source are lost.
+ * Step 9, data forwarding from source to target, is performed unless
+ * OAI_CUUP_RELOC_FWD=0: the Bearer Context Setup asks the target for a
+ * downlink forwarding endpoint per DRB, and the SN status request hands it to
+ * the source. From then on the source relays the downlink that still reaches
+ * it, unprocessed, and the target numbers it from the source's COUNT, ahead of
+ * what arrives on the new N3 path. A target that returns no endpoint gets the
+ * change without forwarding, and the packets in flight at the source are lost.
  */
 typedef enum cuup_reloc_state_e {
   CUUP_RELOC_IDLE = 0,
@@ -65,6 +73,7 @@ typedef enum cuup_reloc_state_e {
   CUUP_RELOC_WAIT_SOURCE_STATUS,
   CUUP_RELOC_WAIT_TARGET_STATUS,
   CUUP_RELOC_WAIT_PATH_UPDATE,
+  CUUP_RELOC_WAIT_FWD_DRAIN,
   CUUP_RELOC_WAIT_PUTBACK,
 } cuup_reloc_state_t;
 
@@ -96,6 +105,12 @@ typedef struct cuup_reloc_context_s {
   bool target_has_context;
   /// the source's bearer context has been released (steps 13-14 are done)
   bool source_released;
+  /// data forwarding (step 9) was asked of the target in step 2
+  bool fwd_requested;
+  /// downlink forwarding endpoints the target returned in step 3, per DRB
+  int n_fwd;
+  int fwd_drb[MAX_DRBS_PER_UE];
+  UP_TL_information_t fwd_tl[MAX_DRBS_PER_UE];
   /** The gNB-DU answered step 4 with a UE Context Modification Failure, so it
    * applied none of it and never stopped sending uplink to the source. Giving
    * up then needs no F1 put-back -- unlike a step 4 that simply timed out,
@@ -120,6 +135,12 @@ typedef struct cuup_reloc_context_s {
  * Generous: the whole procedure takes ~12 ms on rfsim, so this only ever fires
  * on a peer that is not answering at all. */
 #define CUUP_RELOC_GUARD_S 5
+
+/** Default wait between the core's Modify Confirm and releasing the source
+ * when data forwarding is used (OAI_CUUP_RELOC_FWD_DRAIN_MS): enough for the
+ * downlink in flight to the source to be relayed, well inside the target's own
+ * hold limit. */
+#define CUUP_RELOC_FWD_DRAIN_MS 50
 
 /** @brief Start moving a UE's bearers to another gNB-CU-UP.
  * @param target_cuup_id gNB-CU-UP ID to move to, or -1 to pick any connected
@@ -147,7 +168,10 @@ void nr_rrc_cuup_reloc_cuup_lost(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue, sctp_assoc
  * true when the event belonged to a relocation and has been consumed, in which
  * case the caller must not run its normal handling. */
 
-bool nr_rrc_cuup_reloc_e1_setup_resp(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue, sctp_assoc_t assoc_id);
+bool nr_rrc_cuup_reloc_e1_setup_resp(gNB_RRC_INST *rrc,
+                                     gNB_RRC_UE_t *ue,
+                                     sctp_assoc_t assoc_id,
+                                     const e1ap_bearer_setup_resp_t *resp);
 
 bool nr_rrc_cuup_reloc_e1_modif_resp(gNB_RRC_INST *rrc,
                                      gNB_RRC_UE_t *ue,

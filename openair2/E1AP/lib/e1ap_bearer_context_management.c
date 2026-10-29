@@ -119,6 +119,26 @@ static bool e1_decode_up_tnl_info(UP_TL_information_t *out, const E1AP_UP_TNL_In
   return true;
 }
 
+/** @brief Encode Data Forwarding Information (9.3.1.48 of 3GPP TS 38.463), downlink endpoint only */
+static E1AP_Data_Forwarding_Information_t *e1_encode_dl_data_forwarding_info(const UP_TL_information_t *dl)
+{
+  E1AP_Data_Forwarding_Information_t *out = calloc_or_fail(1, sizeof(*out));
+  out->dL_Data_Forwarding = calloc_or_fail(1, sizeof(*out->dL_Data_Forwarding));
+  *out->dL_Data_Forwarding = e1_encode_up_tnl_info(dl);
+  return out;
+}
+
+/** @brief Decode the downlink endpoint of Data Forwarding Information (9.3.1.48 of 3GPP TS 38.463)
+ * @return true when a downlink endpoint is present and was decoded */
+static bool e1_decode_dl_data_forwarding_info(UP_TL_information_t *dl, const E1AP_Data_Forwarding_Information_t *in)
+{
+  if (in == NULL || in->dL_Data_Forwarding == NULL)
+    return false;
+  if (in->dL_Data_Forwarding->present != E1AP_UP_TNL_Information_PR_gTPTunnel || in->dL_Data_Forwarding->choice.gTPTunnel == NULL)
+    return false;
+  return e1_decode_up_tnl_info(dl, in->dL_Data_Forwarding);
+}
+
 /** @brief Encode PDCP Configuration IE */
 static E1AP_PDCP_Configuration_t e1_encode_pdcp_config(const bearer_context_pdcp_config_t *in)
 {
@@ -398,6 +418,7 @@ static bool eq_drb_to_setup(const DRB_nGRAN_to_setup_t *a, const DRB_nGRAN_to_se
     return false;
   if (!eq_sdap_config(&a->sdap_config, &b->sdap_config))
     return false;
+  _EQ_CHECK_INT(a->dl_fwd_requested, b->dl_fwd_requested);
   return true;
 }
 
@@ -437,6 +458,11 @@ static bool e1_encode_pdu_session_to_setup_item(E1AP_PDU_Session_Resource_To_Set
     for (const qos_flow_to_setup_t *k = j->qosFlows; k < j->qosFlows + j->numQosFlow2Setup; k++) {
       asn1cSequenceAdd(ieC6_1_1->qos_flow_Information_To_Be_Setup.list, E1AP_QoS_Flow_QoS_Parameter_Item_t, ieC6_1_1_2);
       *ieC6_1_1_2 = e1_encode_qos_flow_to_setup(k);
+    }
+    // DRB Data Forwarding Information Request (O)
+    if (j->dl_fwd_requested) {
+      asn1cCalloc(ieC6_1_1->dRB_Data_Forwarding_Information_Request, fwdReq);
+      fwdReq->data_Forwarding_Request = E1AP_Data_Forwarding_Request_dL;
     }
   }
   return true;
@@ -490,6 +516,11 @@ static bool e1_decode_pdu_session_to_setup_item(pdu_session_to_setup_t *out, E1A
     for (int k = 0; k < qos2SetupList->list.count; k++) {
       CHECK_E1AP_DEC(e1_decode_qos_flow_to_setup(drb->qosFlows + k, qos2SetupList->list.array[k]));
     }
+    // DRB Data Forwarding Information Request (O)
+    const E1AP_Data_Forwarding_Information_Request_t *fwdReq = drb2Setup->dRB_Data_Forwarding_Information_Request;
+    drb->dl_fwd_requested = fwdReq != NULL
+                            && (fwdReq->data_Forwarding_Request == E1AP_Data_Forwarding_Request_dL
+                                || fwdReq->data_Forwarding_Request == E1AP_Data_Forwarding_Request_both);
   }
   return true;
 }
@@ -512,6 +543,7 @@ static DRB_nGRAN_to_setup_t cp_drb_to_setup_item(const DRB_nGRAN_to_setup_t *msg
     cp.qosFlows[k].qfi = msg->qosFlows[k].qfi;
     cp.qosFlows[k].qos_params = msg->qosFlows[k].qos_params;
   }
+  cp.dl_fwd_requested = msg->dl_fwd_requested;
   return cp;
 }
 
@@ -876,6 +908,8 @@ static bool e1_decode_pdu_session_setup_item(pdu_session_setup_t *pduSetup, E1AP
       E1AP_QoS_Flow_Item_t *in_qosflowSetup = drb->flow_Setup_List.list.array[q];
       qosflowSetup->qfi = in_qosflowSetup->qoS_Flow_Identifier;
     }
+    // DRB Data Forwarding Information Response (O)
+    drbSetup->has_dl_fwd = e1_decode_dl_data_forwarding_info(&drbSetup->dl_fwd, drb->dRB_data_Forwarding_Information_Response);
   }
   // DRB Failed to Setup List (O)
   if (in->dRB_Failed_List_NG_RAN) {
@@ -924,6 +958,9 @@ static bool e1_encode_pdu_session_setup_item(E1AP_PDU_Session_Resource_Setup_Ite
       asn1cSequenceAdd(ieC3_1_1->flow_Setup_List.list, E1AP_QoS_Flow_Item_t, ieC3_1_1_1);
       ieC3_1_1_1->qoS_Flow_Identifier = k->qfi;
     }
+    // DRB Data Forwarding Information Response (O)
+    if (j->has_dl_fwd)
+      ieC3_1_1->dRB_data_Forwarding_Information_Response = e1_encode_dl_data_forwarding_info(&j->dl_fwd);
   }
   // DRB Failed List (O)
   if (in->numDRBFailed > 0)
@@ -1103,6 +1140,9 @@ bool eq_bearer_context_setup_response(const e1ap_bearer_setup_resp_t *a, const e
       _EQ_CHECK_LONG(drb_a->id, drb_b->id);
       _EQ_CHECK_INT(drb_a->numUpParam, drb_b->numUpParam);
       _EQ_CHECK_INT(drb_a->numQosFlowSetup, drb_b->numQosFlowSetup);
+      _EQ_CHECK_INT(drb_a->has_dl_fwd, drb_b->has_dl_fwd);
+      if (drb_a->has_dl_fwd && !eq_up_tl_info(&drb_a->dl_fwd, &drb_b->dl_fwd))
+        return false;
     }
     // Check DRB Failed
     for (int j = 0; j < ps_a->numDRBFailed; j++) {
@@ -1488,6 +1528,9 @@ static E1AP_PDU_Session_Resource_To_Modify_Item_t e1_encode_pdu_session_to_mod_i
       asn1cSequenceAdd(flow_Mapping_Information->list, E1AP_QoS_Flow_QoS_Parameter_Item_t, ie1_2);
       *ie1_2 = e1_encode_qos_flow_to_setup(k);
     }
+    // DRB Data Forwarding Information (O)
+    if (j->has_dl_fwd)
+      drb2Mod->dRB_Data_Forwarding_Information = e1_encode_dl_data_forwarding_info(&j->dl_fwd);
   }
   // DRB To Remove List (O)
   if (in->n_drb_to_remove > 0) {
@@ -1782,6 +1825,8 @@ static bool e1_decode_pdu_session_to_mod_item(pdu_session_to_mod_t *out, const E
         CHECK_E1AP_DEC(e1_decode_qos_flow_to_setup(drb->qosFlows + k, qos2SetupList->list.array[k]));
       }
     }
+    // DRB Data Forwarding Information (O)
+    drb->has_dl_fwd = e1_decode_dl_data_forwarding_info(&drb->dl_fwd, drb2Mod->dRB_Data_Forwarding_Information);
   }
   // DRB To Remove List (O)
   if (in->dRB_To_Remove_List_NG_RAN) {
@@ -2070,6 +2115,9 @@ static bool eq_drb_to_mod(const DRB_nGRAN_to_mod_t *a, const DRB_nGRAN_to_mod_t 
     if (!eq_pdcp_info(a->pdcp_status, b->pdcp_status))
       return false;
   }
+  _EQ_CHECK_INT(a->has_dl_fwd, b->has_dl_fwd);
+  if (a->has_dl_fwd && !eq_up_tl_info(&a->dl_fwd, &b->dl_fwd))
+    return false;
   return true;
 }
 

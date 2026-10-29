@@ -451,7 +451,11 @@ void trigger_bearer_setup_on_cuup(gNB_RRC_INST *rrc,
               session->pdusession_id);
         break;
       }
-      pdu->DRBnGRanList[pdu->numDRB2Setup++] = fill_e1_drb_to_setup(drb, session, rrc->configuration.um_on_default_drb, UE->redcap_cap);
+      DRB_nGRAN_to_setup_t *drb_setup = &pdu->DRBnGRanList[pdu->numDRB2Setup++];
+      *drb_setup = fill_e1_drb_to_setup(drb, session, rrc->configuration.um_on_default_drb, UE->redcap_cap);
+      /* change of gNB-CU-UP: ask the target where the source may forward to */
+      drb_setup->dl_fwd_requested =
+          scope == E1_BEARER_SETUP_ESTABLISHED_SESSIONS && UE->cuup_reloc != NULL && UE->cuup_reloc->fwd_requested;
     }
     DevAssert(pdu->numDRB2Setup > 0);
   }

@@ -197,6 +197,8 @@ static void test_bearer_context_setup_request(void)
   orig.pduSession[0].DRBnGRanList[0].sdap_config = sdap;
   orig.pduSession[0].DRBnGRanList[0].pdcp_config = pdcp;
   orig.pduSession[0].DRBnGRanList[0].qosFlows[0] = qos;
+  /* change of gNB-CU-UP: ask the target for a downlink forwarding endpoint */
+  orig.pduSession[0].DRBnGRanList[0].dl_fwd_requested = true;
 
   orig.pduSession[1] = pdu_session_to_setup_req_template(2, E1AP_PDU_Session_Type_ipv6);
   orig.pduSession[1].nssai.sd = 0x02;
@@ -252,6 +254,9 @@ static void test_bearer_context_setup_response(void)
   orig.pduSession[0].DRBnGRanList[0].id = 1;
   orig.pduSession[0].DRBnGRanList[0].qosFlows[0].qfi = 1;
   orig.pduSession[0].DRBnGRanList[0].UpParamList[0].tl_info = create_up_tl_info(0x2345);
+  /* the target's downlink forwarding endpoint for this DRB */
+  orig.pduSession[0].DRBnGRanList[0].has_dl_fwd = true;
+  orig.pduSession[0].DRBnGRanList[0].dl_fwd = create_up_tl_info(0x7777);
 
   orig.pduSession[1] = pdu_session_setup_resp_template(2);
   orig.pduSession[1].tl_info = create_up_tl_info(0x9999);
@@ -570,6 +575,9 @@ static void test_bearer_context_modification_request(void)
   *drb_to_mod.pdcp_config = dummy_pdcp_config;
   *drb_to_mod.pdcp_status = dummy_pdcp_status;
   drb_to_mod.qosFlows[0] = dummy_qos_flows;
+  /* the source forwards its downlink to the target's endpoint */
+  drb_to_mod.has_dl_fwd = true;
+  drb_to_mod.dl_fwd = create_up_tl_info(0x8888);
 
   DRB_nGRAN_to_mod_t drb_to_mod_2 = drb_to_mod_template(2);
   *drb_to_mod_2.pdcp_config = dummy_pdcp_config;

@@ -26,6 +26,59 @@
 /* K keys have 128 bits length */
 #define NR_K_KEY_SIZE 16
 
+/** @brief One downlink SDU held during a change of gNB-CU-UP (TS 38.401
+ * clause 8.9.5 step 9). */
+typedef struct nr_pdcp_held_sdu_s {
+  struct nr_pdcp_held_sdu_s *next;
+  /// arrival over GTP-U, so the PDCP SDU delay includes the time held
+  uint64_t t_in_us;
+  int sdu_id;
+  int size;
+  unsigned char data[];
+} nr_pdcp_held_sdu_t;
+
+typedef struct {
+  nr_pdcp_held_sdu_t *head;
+  nr_pdcp_held_sdu_t *tail;
+  int count;
+} nr_pdcp_held_queue_t;
+
+/** @brief Downlink role of a DRB in a change of gNB-CU-UP with data forwarding.
+ *
+ * SOURCE        the source no longer runs PDCP on downlink: every SDU that
+ *               still reaches it from the UPF is relayed, unprocessed, to the
+ *               target over the forwarding tunnel.
+ * TARGET_WAIT   the target holds everything, forwarded and new-path SDUs
+ *               alike, until it is given the COUNT the source stopped at.
+ * TARGET_DRAIN  forwarded SDUs go out from that COUNT on; SDUs from the new
+ *               N3 path are held until forwarding is over (End Marker, or
+ *               the forwarding tunnel idle once the new path is live).
+ * NONE          normal operation. Held new-path SDUs, if any, go out first. */
+typedef enum {
+  NR_PDCP_DL_FWD_NONE = 0,
+  NR_PDCP_DL_FWD_SOURCE,
+  NR_PDCP_DL_FWD_TARGET_WAIT,
+  NR_PDCP_DL_FWD_TARGET_DRAIN,
+} nr_pdcp_dl_fwd_mode_t;
+
+/** @brief Relay one downlink SDU to the target; size 0 means End Marker. */
+typedef void (*nr_pdcp_dl_fwd_send_t)(ue_id_t ue_id, int drb_id, const unsigned char *sdu, int size);
+
+typedef struct {
+  nr_pdcp_dl_fwd_mode_t mode;
+  nr_pdcp_dl_fwd_send_t send;
+  nr_pdcp_held_queue_t fwd_q;
+  nr_pdcp_held_queue_t n3_q;
+  uint64_t t_start_us;
+  uint64_t t_count_us;
+  uint64_t t_last_fwd_us;
+  uint64_t t_first_n3_us;
+  bool end_marker;
+  uint32_t n_relayed;
+  uint32_t n_forwarded;
+  uint32_t n_held;
+} nr_pdcp_dl_fwd_t;
+
 typedef enum {
   NR_PDCP_DRB_AM,
   NR_PDCP_DRB_UM,
@@ -181,6 +234,9 @@ typedef struct nr_pdcp_entity_s {
 
   /* Keep tracks of whether the PDCP entity was suspended or not */
   bool entity_suspended;
+
+  /* change of gNB-CU-UP with data forwarding (TS 38.401 clause 8.9.5 step 9) */
+  nr_pdcp_dl_fwd_t dl_fwd;
 
   /* PDCP Count API */
   nr_pdcp_count_t (*get_pdcp_count_dl)(struct nr_pdcp_entity_s *entity);

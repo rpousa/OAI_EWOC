@@ -374,6 +374,10 @@ typedef struct DRB_nGRAN_to_setup_s {
   // QoS Flows Information To Be Setup (M) (clause 9.3.1.25, 9.3.1.26)
   int numQosFlow2Setup;
   qos_flow_to_setup_t qosFlows[E1AP_MAX_NUM_QOS_FLOWS];
+  /* DRB Data Forwarding Information Request (O) (clause 9.3.1.47), downlink
+   * only: the target of a change of gNB-CU-UP is asked for an endpoint the
+   * source can forward its downlink to (TS 38.401 clause 8.9.5 step 9). */
+  bool dl_fwd_requested;
 } DRB_nGRAN_to_setup_t;
 
 /**
@@ -396,6 +400,11 @@ typedef struct DRB_nGRAN_to_modify_s {
   // Flow Mapping Information (O) (clause 9.3.1.25, 9.3.1.26)
   int numQosFlowsMod;
   qos_flow_to_setup_t qosFlows[E1AP_MAX_NUM_QOS_FLOWS];
+  /* DRB Data Forwarding Information (O) (clause 9.3.1.48), downlink only:
+   * where the source of a change of gNB-CU-UP forwards the downlink that still
+   * reaches it (TS 38.401 clause 8.9.5 step 9). */
+  bool has_dl_fwd;
+  UP_TL_information_t dl_fwd;
 } DRB_nGRAN_to_mod_t;
 
 /* DRB To Remove Item (NG-RAN) clause 9.3.1.11 */
@@ -591,6 +600,10 @@ typedef struct DRB_nGRAN_setup_s {
   // Flow Failed List (O)
   int numQosFlowFailed;
   qos_flow_failed_t qosFlowsFailed[E1AP_MAX_NUM_QOS_FLOWS];
+  /* DRB Data Forwarding Information Response (O) (clause 9.3.1.48), downlink
+   * only: the endpoint this gNB-CU-UP receives forwarded downlink on. */
+  bool has_dl_fwd;
+  UP_TL_information_t dl_fwd;
 } DRB_nGRAN_setup_t;
 
 /* DRB Modified Item */

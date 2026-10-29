@@ -162,6 +162,78 @@ static UP_TL_information_t n3_gtpu_create(const gtpv1u_gnb_create_tunnel_req_t *
   return out;
 }
 
+/* ---- change of gNB-CU-UP with data forwarding (TS 38.401 8.9.5 step 9) ----
+ *
+ * The forwarding tunnels live on the N3 GTP-U instance: its address is the one
+ * the other gNB-CU-UP reaches, as the UPF does. They are keyed apart from the
+ * N3 tunnels, which use the PDU session ID (1..255). One tunnel per DRB, and
+ * separate keys for the two roles: a gNB-CU-UP that was the target of one change
+ * can be the source of the next while still holding its receiving end. */
+#define CUUP_FWD_RX_KEY(drb_id) (1000 + (drb_id))
+#define CUUP_FWD_TX_KEY(drb_id) (2000 + (drb_id))
+
+/** @brief Source: relay one downlink SDU to the target unprocessed, or close the
+ * forwarding tunnel with an End Marker (size 0). */
+static void cuup_fwd_send(ue_id_t ue_id, int drb_id, const unsigned char *sdu, int size)
+{
+  instance_t n3inst = get_n3_gtp_instance();
+  if (size == 0)
+    gtpv1uSendEndMarker(n3inst, ue_id, CUUP_FWD_TX_KEY(drb_id));
+  else
+    gtpv1uSendDirect(n3inst, ue_id, CUUP_FWD_TX_KEY(drb_id), (uint8_t *)sdu, size, false, false);
+}
+
+/** @brief Source: nothing is expected back on a forwarding tunnel. */
+static bool cuup_fwd_unexpected_rx(protocol_ctxt_t *ctxt_pP,
+                                   const srb_flag_t srb_flagP,
+                                   const rb_id_t rb_id,
+                                   const mui_t muiP,
+                                   const confirm_t confirmP,
+                                   const sdu_size_t sdu_buffer_size,
+                                   unsigned char *const sdu_buffer,
+                                   const pdcp_transmission_mode_t mode,
+                                   const uint32_t *const sourceL2Id,
+                                   const uint32_t *const destinationL2Id)
+{
+  LOG_W(GTPU, "UE %lx DRB %ld: unexpected packet on the outgoing forwarding tunnel, dropped\n", ctxt_pP->rntiMaybeUEid, rb_id);
+  return false;
+}
+
+/** @brief Target: open the endpoint the source forwards one DRB's downlink to.
+ * The PDCP entity must exist already: it holds the downlink from here on. */
+static UP_TL_information_t cuup_fwd_open_target(uint32_t ue_id, long drb_id)
+{
+  gtpv1u_gnb_create_tunnel_req_t req = {.ue_id = ue_id,
+                                        .outgoing_teid = 0, /* nothing is sent back */
+                                        .pdusession_id = CUUP_FWD_RX_KEY(drb_id),
+                                        .incoming_rb_id = drb_id,
+                                        .dst_addr.length = 32};
+  gtpv1u_gnb_create_tunnel_resp_t resp = {0};
+  int ret = gtpv1u_create_ngu_tunnel(get_n3_gtp_instance(), &req, &resp, nr_pdcp_dl_fwd_rx, NULL, NULL);
+  AssertFatal(ret >= 0, "Unable to create the GTP-U data forwarding tunnel\n");
+  AssertFatal(resp.gnb_addr.length == sizeof(in_addr_t), "data forwarding tunnel: IPv4 only\n");
+  UP_TL_information_t out = {.teId = resp.gnb_NGu_teid};
+  memcpy(&out.tlAddress, resp.gnb_addr.buffer, sizeof(in_addr_t));
+  nr_pdcp_dl_fwd_expect(ue_id, drb_id);
+  LOG_I(E1AP, "UE %u DRB %ld: downlink data forwarding endpoint TEID 0x%08x\n", ue_id, drb_id, out.teId);
+  return out;
+}
+
+/** @brief Source: point a DRB's forwarding tunnel at the target. */
+static void cuup_fwd_open_source(uint32_t ue_id, long drb_id, const UP_TL_information_t *target)
+{
+  gtpv1u_gnb_create_tunnel_req_t req = {.ue_id = ue_id,
+                                        .outgoing_teid = target->teId,
+                                        .pdusession_id = CUUP_FWD_TX_KEY(drb_id),
+                                        .incoming_rb_id = drb_id,
+                                        .dst_addr.length = 32};
+  memcpy(req.dst_addr.buffer, &target->tlAddress, sizeof(in_addr_t));
+  gtpv1u_gnb_create_tunnel_resp_t resp = {0};
+  int ret = gtpv1u_create_ngu_tunnel(get_n3_gtp_instance(), &req, &resp, cuup_fwd_unexpected_rx, NULL, NULL);
+  AssertFatal(ret >= 0, "Unable to create the GTP-U data forwarding tunnel\n");
+  LOG_I(E1AP, "UE %u DRB %ld: forwarding downlink to the target gNB-CU-UP, TEID 0x%08x\n", ue_id, drb_id, target->teId);
+}
+
 static instance_t get_f1_gtp_instance(void)
 {
   const f1ap_cudu_inst_t *inst = getCxt(0);
@@ -296,6 +368,16 @@ void e1_bearer_context_setup(const e1ap_bearer_setup_req_t *req)
     memcpy(security_parameters.integrity_key, req->secInfo.integrityProtectionKey, NR_K_KEY_SIZE);
     e1_add_bearers(cu_up_ue_id, &DRB_configList, &security_parameters);
     ASN_STRUCT_RESET(asn_DEF_NR_DRB_ToAddModList, &DRB_configList.list);
+    /* Target of a change of gNB-CU-UP: give the source somewhere to forward
+     * the downlink that still reaches it (TS 38.401 clause 8.9.5 step 9). */
+    for (int d = 0; d < resp_pdu->numDRBSetup; d++) {
+      const DRB_nGRAN_to_setup_t *req_drb = &req_pdu->DRBnGRanList[d];
+      if (!req_drb->dl_fwd_requested)
+        continue;
+      DRB_nGRAN_setup_t *resp_drb = &resp_pdu->DRBnGRanList[d];
+      resp_drb->dl_fwd = cuup_fwd_open_target(cu_up_ue_id, req_drb->id);
+      resp_drb->has_dl_fwd = true;
+    }
     /* per-slice E2SM-KPM needs the session's S-NSSAI to find its DRBs */
     nr_pdcp_set_pdusession_nssai(cu_up_ue_id, req_pdu->sessionId, req_pdu->nssai.sst, req_pdu->nssai.sd);
 
@@ -520,11 +602,29 @@ void e1_bearer_context_modif(const e1ap_bearer_mod_req_t *req)
         modified->pdcp_status = malloc_or_fail(sizeof(*modified->pdcp_status));
         nr_pdcp_count_t dl_count = {0};
         nr_pdcp_count_t ul_count = {0};
-        nr_pdcp_get_drb_count_values(req->gNB_cu_cp_ue_id, to_modif->id, &ul_count, &dl_count);
+        if (to_modif->has_dl_fwd) {
+          /* Source of a change of gNB-CU-UP with data forwarding: the COUNT
+           * reported is where the target continues, and from this point on the
+           * downlink is relayed to it instead of going to the DU. */
+          cuup_fwd_open_source(req->gNB_cu_up_ue_id, to_modif->id, &to_modif->dl_fwd);
+          if (!nr_pdcp_dl_fwd_start_source(req->gNB_cu_cp_ue_id, to_modif->id, cuup_fwd_send, &ul_count, &dl_count))
+            nr_pdcp_get_drb_count_values(req->gNB_cu_cp_ue_id, to_modif->id, &ul_count, &dl_count);
+        } else {
+          nr_pdcp_get_drb_count_values(req->gNB_cu_cp_ue_id, to_modif->id, &ul_count, &dl_count);
+        }
         modified->pdcp_status->dl_count.hfn = dl_count.hfn;
         modified->pdcp_status->dl_count.sn = dl_count.sn;
         modified->pdcp_status->ul_count.hfn = ul_count.hfn;
         modified->pdcp_status->ul_count.sn = ul_count.sn;
+      }
+
+      /* Loop through DL UP Transport Layer params list and update GTP tunnel
+       * outgoing addr and TEID. Before the PDCP status below: the target of a
+       * change of gNB-CU-UP with data forwarding sends what it holds as soon
+       * as it gets the COUNT, so it must know where the gNB-DU is by then. */
+      for (int k = 0; f1inst >= 0 && k < to_modif->numDlUpParam; k++) {
+        in_addr_t addr = to_modif->DlUpParamList[k].tl_info.tlAddress;
+        GtpuUpdateTunnelOutgoingAddressAndTeid(f1inst, req->gNB_cu_cp_ue_id, to_modif->id, addr, to_modif->DlUpParamList[k].tl_info.teId);
       }
 
       // PDCP Status received (from source CU-UP)
@@ -539,16 +639,6 @@ void e1_bearer_context_modif(const e1ap_bearer_mod_req_t *req)
                              dl_count,
                              ul_count,
                              is_sn_len_18 ? LONG_SN_SIZE : SHORT_SN_SIZE);
-      }
-
-      if (f1inst < 0) // no F1-U?
-        continue; // nothing to do
-
-      /* Loop through DL UP Transport Layer params list
-       * and update GTP tunnel outgoing addr and TEID */
-      for (int k = 0; k < to_modif->numDlUpParam; k++) {
-        in_addr_t addr = to_modif->DlUpParamList[k].tl_info.tlAddress;
-        GtpuUpdateTunnelOutgoingAddressAndTeid(f1inst, req->gNB_cu_cp_ue_id, to_modif->id, addr, to_modif->DlUpParamList[k].tl_info.teId);
       }
     }
 

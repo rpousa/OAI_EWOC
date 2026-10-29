@@ -2703,6 +2703,19 @@ void e1_send_bearer_updates(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE, int n, f1ap_drb
  * E1). @param assoc_id CU-UP to ask, or 0 for the one the UE is bound to. */
 void e1_request_pdcp_status_on(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE, sctp_assoc_t assoc_id)
 {
+  e1_request_pdcp_status_fwd_on(rrc, UE, assoc_id, 0, NULL, NULL);
+}
+
+/** @brief As e1_request_pdcp_status_on(), also giving the CU-UP, per DRB, where
+ * to forward the downlink that still reaches it (DRB Data Forwarding
+ * Information, TS 38.401 clause 8.9.5 step 9). DRBs not listed get none. */
+void e1_request_pdcp_status_fwd_on(gNB_RRC_INST *rrc,
+                                   gNB_RRC_UE_t *UE,
+                                   sctp_assoc_t assoc_id,
+                                   int n_fwd,
+                                   const int *fwd_drb,
+                                   const UP_TL_information_t *fwd_tl)
+{
   if (!is_cuup_associated(rrc))
     return;
 
@@ -2716,6 +2729,13 @@ void e1_request_pdcp_status_on(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE, sctp_assoc_t
 
   FOR_EACH_SEQ_ARR(drb_t *, drb, &UE->drbs) {
     DRB_nGRAN_to_mod_t drb_to_mod = {.id = drb->drb_id, .pdcp_sn_status_requested = true};
+    for (int i = 0; i < n_fwd; i++) {
+      if (fwd_drb[i] != drb->drb_id)
+        continue;
+      drb_to_mod.has_dl_fwd = true;
+      drb_to_mod.dl_fwd = fwd_tl[i];
+      LOG_I(NR_RRC, "UE %d: DRB %d forwards its downlink to TEID 0x%08x\n", UE->rrc_ue_id, drb->drb_id, fwd_tl[i].teId);
+    }
     LOG_D(NR_RRC, "PDCP Status requested (drb_id=%d)\n", drb->drb_id);
     if (!append_e1_drb_mod_req(&req, UE, drb->drb_id, &drb_to_mod)) {
       LOG_W(NR_RRC, "UE %d: Failed to append E1 DRB mod for PDCP status request (DRB=%d)\n", UE->rrc_ue_id, drb->drb_id);
@@ -3739,7 +3759,7 @@ static void rrc_gNB_process_e1_bearer_context_setup_resp(e1ap_bearer_setup_resp_
 
   /* An inter-CU-UP relocation set this context up on the target CU-UP: the
    * tunnels above are the target's, and the relocation drives what comes next. */
-  if (nr_rrc_cuup_reloc_e1_setup_resp(rrc, UE, assoc_id))
+  if (nr_rrc_cuup_reloc_e1_setup_resp(rrc, UE, assoc_id, resp))
     return;
 
   // If HO Preparation Info is stored, N2 handover is ongoing
