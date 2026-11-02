@@ -88,10 +88,12 @@ fi
 echo "== repo   $PWD"
 echo "== branch $BRANCH    jobs $JOBS    E2 $E2    RIC images $([ "$ric" -eq 1 ] && echo "yes ($DFS_DIR)" || echo no)"
 
-if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
+# Submodules are left out: a plain "git pull" moves the FlexRIC pointer without
+# checking it out, and the "submodule update" below puts it right anyway.
+if [ -n "$(git status --porcelain --untracked-files=no --ignore-submodules=all)" ]; then
   echo
   echo "working tree is dirty -- this machine is supposed to be a pure consumer."
-  git status --short --untracked-files=no
+  git status --short --untracked-files=no --ignore-submodules=all
   echo
   echo "commit it somewhere, or 'git checkout -- .', then rerun."
   exit 1
