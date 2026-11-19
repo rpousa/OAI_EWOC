@@ -1024,7 +1024,13 @@ static rrc_action_t rrc_gNB_action_from_pdusession_status(gNB_RRC_UE_t *ue_p,
                                                           const nr_rrc_reconfig_param_t *params,
                                                           bool is_reestablishment)
 {
-  rrc_action_t action = is_reestablishment ? RRC_REESTABLISH_COMPLETE : RRC_ACTION_NONE;
+  /* A re-establishment can arrive while a PDU session procedure is still
+   * pending (e.g. UL failure during PDU Session Resource Setup). Upstream
+   * asserted on that combination and the CU-CP exited. Let the pending session
+   * action drive the transaction (its RRC Reconfiguration Complete then sends
+   * the NGAP response); fall back to REESTABLISH_COMPLETE when nothing is
+   * pending. */
+  rrc_action_t action = RRC_ACTION_NONE;
   FOR_EACH_SEQ_ARR (rrc_pdu_session_param_t *, item, &ue_p->pduSessions) {
     /* Only sessions that participate in this transaction get the current xid. */
     if (item->status != PDU_SESSION_STATUS_FAILED && item->status != PDU_SESSION_STATUS_ESTABLISHED) {
@@ -1053,6 +1059,15 @@ static rrc_action_t rrc_gNB_action_from_pdusession_status(gNB_RRC_UE_t *ue_p,
       action = RRC_PDUSESSION_RESOURCE_NOTIFY;
     }
     /* ESTABLISHED and FAILED do not drive transaction action */
+  }
+  if (is_reestablishment) {
+    if (action != RRC_ACTION_NONE)
+      LOG_W(NR_RRC,
+            "UE %d: re-establishment with a pending PDU session procedure (action %d): completing it in the first reconfiguration\n",
+            ue_p->rrc_ue_id,
+            action);
+    else
+      action = RRC_REESTABLISH_COMPLETE;
   }
   return action;
 }

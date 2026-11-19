@@ -48,7 +48,12 @@
 /* FFS_NR_TODO it defines ue capability which is the number of slots        */
 /* - between reception of pdsch and transmission of its acknowlegment  (k1) */
 /* - between reception of un uplink grant and its related transmission (k2) */
-#define NR_UE_CAPABILITY_SLOT_RX_TO_TX (3)
+/* EWOC: 3 -> 6. With a USRP N310 over the kernel UDP stack on the 1.9 GHz Xeon D
+ * hosts, 3 slots (1.5 ms at 30 kHz) is not enough to process a DL slot, build the
+ * UL slot and get it to the radio: the UE's TX arrived late ("L", write-queue
+ * overflow, PUCCH ACKs lost, Msg4 repeated, SR failures). 6 slots = 3 ms. Must
+ * stay <= the gNB's min_rxtxtime (8 in the DU config), which bounds k1/k2. */
+#define NR_UE_CAPABILITY_SLOT_RX_TO_TX (6)
 
 #define R(k) k ,
 typedef enum { RNTI_NAMES } nr_rnti_type_t;
